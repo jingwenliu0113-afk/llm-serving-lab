@@ -26,6 +26,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import tomllib
 from pathlib import Path
 from typing import Callable
@@ -36,7 +37,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import disk_guard  # noqa: E402
 import quality_parse as qp  # noqa: E402
-from run_core_a import default_run_proc, env_problems, make_env_capture, sha256_json, write_raw_manifest  # noqa: E402
+from run_core_a import (charge_gate, default_run_proc, env_problems, make_env_capture, read_mac_power,  # noqa: E402
+                        sha256_json, write_raw_manifest)
 
 SCHEMA_VERSION = 1
 MAC_HEAVY_LOCK = "/tmp/ai-portfolio-mac-heavy.lock"
@@ -164,6 +166,8 @@ def run_quality(
     disk_ok: Callable = _default_disk_ok,
     run_proc: Callable = default_run_proc,
     delete_file: Callable = os.remove,
+    read_power: Callable = read_mac_power,
+    sleep: Callable = time.sleep,
     timeout_s: float = 6 * 3600,
     now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(),
 ) -> dict:
@@ -189,7 +193,7 @@ def run_quality(
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "mode": plan["mode"],
                "plan_sha256": sha256_json(plan), "pins_sha256": plan.get("pins_sha256"),
                "mac_lock_held": mac_lock_held, "started_at": now()}
-    rows, by_id, skipped_sizes, env_flags = [], {}, set(), []
+    rows, by_id, skipped_sizes, env_flags, charge_pauses = [], {}, set(), [], []
     resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace("{data}", data_dir)  # noqa: E731
     with open(out / "rows.jsonl", "w") as fh:
         for job in plan["jobs"]:
@@ -219,6 +223,9 @@ def run_quality(
                 argv = [resolve(a) for a in job["argv"]]
                 rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
                        "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json"}
+                pause = charge_gate(read_power, sleep)  # 016
+                if pause:
+                    charge_pauses.append({"job_id": jid, **pause})
                 env_before = capture_env(llama_bin=exe, out_path=out / rel["env_before"], gpu_lock_held=False)
                 code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
                 env_after = capture_env(llama_bin=exe, out_path=out / rel["env_after"], gpu_lock_held=False)
@@ -236,7 +243,8 @@ def run_quality(
     outcomes = {"ok": 0, "oom": 0, "error": 0, "skipped": 0}
     for r in rows:
         outcomes[r["outcome"]] += 1
-    session.update({"finished_at": now(), "outcomes": outcomes, "env_flags": env_flags, "env_valid": not env_flags})
+    session.update({"finished_at": now(), "outcomes": outcomes, "env_flags": env_flags, "env_valid": not env_flags,
+                    "charge_pauses": charge_pauses})
     write_raw_manifest(out)
     (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
     return session

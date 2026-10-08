@@ -2,211 +2,73 @@
 
 ## 目前位置
 
-**Core — SPEC Day 1 已完成（NVIDIA 環境 smoke test 通過）；Week 1 進行中。**
+**Core — Week 1 收尾，Stage A（Mac）凍結前最後一步；NVIDIA 端平行推進。** Advanced / Optional 皆未觸碰。
 
-- 模型已依使用者指示重新選擇（**decision 008**，使用者已確認）：Core A 為 Qwen3.5 4B + 9B，Core B 為 RedHatAI Qwen3.5-9B W4A16。
-- 凍結前的一致性修訂（**decision 009**）已完成；hypothesis 的結構與門檻不變。
-- Week 1 中 Mac 可做、不需大型下載的部分已完成：harness、輸出格式、quality 子集工具。
-- Advanced / Optional 皆未觸碰。
+- 模型（008，使用者已確認）：Core A 為 Qwen3.5 4B + 9B；Core B 為 RedHatAI/Qwen3.5-9B-quantized.w4a16；context 2K / 8K / 32K。
+- Decision log 001–016。詳細內容以 decision log 為準，這裡只記現況與下一步。
+- GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
+  權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
-## 上次完成（2026-10-08）
+## 現況（2026-10-09 00:45）
 
-### Commit 狀態
+### Mac（Core A / quality）
 
-- 所有已驗證的工作都已 commit 並 push 到 private `origin/main`（最新：decision 013 的三個 commit）。
-- 目前 `uv run pytest -q`：**365 passed、2 skipped**（skip 的是兩個 freeze 階段的檢查，屬預期）。
+- GGUF ×8 全部 pin 並附 recipe（4B、9B 各為 BF16 加 Q8_0 / Q6_K / Q4_K_M）。
+  兩個 size 的 safetensors 都已依規則刪除，紀錄在 `results/artifacts/deletions.jsonl`。
+- Pilot（遮蔽版報告，012 及其補充）：
+  - 4B Core A：22 / 22 ok。
+  - 4B `-fa` probe：ok。
+  - 4B quality：26 / 26 ok。
+  - **9B Core A：22 / 22 ok**。FA 已啟用，graph splits = 2，CV 1.03%，KV 增量 +958 MiB，正式 Core A 上限 **17.39 h**。
+  - 9B smoke：正常。
+- **quality pilot（4B + 9B）**：00:06 起在 Mac lock 下執行（`results/quality/pilot-20261008-both`），完成後算 H-A5 ΔNLL 的 SD / MDE 與總時數。
+- **電源**：70 W adapter 滿載時電量仍會下降，9B pilot 38 分鐘內從 100% 掉到 73%。
+  因此加上 **016 充電閘門**：電量 < 40% 時閒置充電到 90% 再繼續，讓長 session 不會因為電量 < 20% 作廢。
 
-### 模型重新選擇（decision 008）
+### NVIDIA（Core B / Core A RTX）
 
-- Qwen3.6 / 3.8 延續 Qwen3.5 的 architectural foundation（hybrid：3 層 Gated-DeltaNet + 1 層 full attention，VLM 封裝）。
-  但 3.6 / 3.8 只有 27B dense，沒有適合本實驗 4B / 9B 與 RTX 16 GB 條件的組合，因此 Core 選 **Qwen3.5** 4B + 9B。
-- 兩個候選：
-  - **候選 1：4B + 9B（選定）**。兩台機器 18 格全部 fit。
-  - **候選 2：9B + 27B（不選）**。27B 在 RTX 上每個 quant 都 OOM，Core B 也不可行。
-- Core B：`RedHatAI/Qwen3.5-9B-quantized.w4a16`（GPTQ W4A16 g128），C_KV(2K / 8K / 32K) 約 19–28 / 7–10 / 2（009 更正）。
-  沒有官方 9B 以下的 quant。
-- 主要取捨：
-  - 現有 context 下 RTX 沒有 fit 邊界，改以 headroom 報告；不延伸到 256K，因為 Mac 端成本不可行。
-  - KV 每 token 只有 32 KiB，每條序列另有約 50 MiB 的 recurrent 狀態。
-  - vLLM 的 GDN kernel 需要 JIT，WSL2 + sm_120 上的可用性還沒驗證。
-- 不需要更換 runtime pin（llama.cpp b11146、vLLM 0.30.0 都已支援 `Qwen3_5ForConditionalGeneration`）。
-- 已處理：
-  - `pins.toml` 的 Core A / B 已換成新模型（revision 與 shard sha256 由 HF API 核對）；`test_pins` 強制 Core B 沒有 fallback，而且 base 必須是 Core A 的其中一個 size。
-  - 003 / 004 / 005 / 007 / PREREGISTRATION 開頭都加了「已由 008 取代 / 需重新推導」的說明，原內容保留作為歷史。
-  - MACHINE_POLICY 的 Core B 模型行已更新。
+- 使用者已裝 `gcc g++ libc6-dev`（2026-10-08 23:38）。`wsl_toolchain_check.sh`（`JIT=0`）全部通過。
+- Core B：
+  - FlashInfer 的 JIT 透過 user-space `CUDA_HOME` shim，使用 vLLM lock 中的 pip CUDA 13.4.92（014）。
+  - 啟動前會先檢查工具鏈。
+  - `mixed` dataset ×2 已建好並 pin（013 補充）。
+- llama.cpp CUDA：改用 user-space CUDA 13.4.1（pip wheels，`configs/llama-cuda.lock.txt`）加 Ninja（015）。configure 已通過。
+- **GPU lock 從 23:38 起由 Text-to-SQL 持有**（`inference.generate`）。
+  背景輪詢只用唯讀的 `lslocks`，lock 釋放且 GPU 閒置後，自動依序跑 `JIT=1` 檢查與 S1。
 
-### Week 1（Mac，不需下載）
+## 下一步（依序；Mac 重負載都經 `tools/with-mac-lock`，不搶 lock）
 
-- **Benchmark harness**（先寫測試）：
-  - `benchmarks/core_a_plan.py`：依 pins 產生 job；sentinel 由 pins 推導。
-  - `benchmarks/core_a_parse.py`：OOM 字串取自 pinned source。
-  - `benchmarks/run_core_a.py`：一個 job 一個 process；每個 process 前後擷取環境；sentinel drift 檢查；檢查 GPU / Mac lock；開跑前驗證 build。
-  - parse 與 runner 只用 stdlib，相容 Python 3.10，遠端 WSL 也能直接跑。
-- **輸出格式**：`docs/RESULTS_FORMAT.md`（Week 1 #3）。
-- **Quality 子集**：
-  - `quality/mc_subset.py`。
-  - HellaSwag / MMLU 的 4000 題清單（seed 20261008，與模型無關）。這些清單與研究階段的獨立實作 byte 相同。
-  - HellaSwag 子集的 sha256 已寫入 pins。
-- **MACHINE_POLICY**：
-  - Mac Hard Lock：已實作 `tools/with-mac-lock`。
-  - Docker：Core 階段不使用 Mac Docker Desktop，不得在 Mac 啟動 model serving container。
-  - 遠端環境資訊。
-- **Day 1 NVIDIA 環境 smoke test**：PyTorch 2.14.1+cu130、sm_120、bf16 matmul 都正常（001）。
+1. quality pilot 完成後：
+   - 用遮蔽版報告算 H-A5 MDE 與 quality 總時數，寫進 012 補充。
+   - 補完 PREREGISTRATION §5 checklist：GGUF ×8、9B probe / 校準 / 記憶體、MDE。
+   - 記錄 harness commit，設 `freeze.mac = true`，第 1–5 節標為 **FROZEN (Stage A)**，然後 commit。
+2. **正式 Core A（Mac）：DEFERRED**。使用者 2026-10-09 指示：Mac 今晚是「自動」電力模式，供電只有約 68 W，
+   暫停所有新的正式 Mac performance benchmark 與 Mac heavy run，等使用者通知解除再跑。
+   - 已備妥：凍結後的指令在 scratchpad 的 `batch_formal_a.sh`：plan seed 20261008、`-t 8`、`--poll 0`，經 `tools/with-mac-lock`，含 016 充電閘門。
+   - 跑完後用 `core_a_report.py` 出 analysis，並出圖。
+3. NVIDIA：
+   - `JIT=1` 檢查 → S1 → S2 → S3（008；每段通過才進下一段；smoke 不取 lock，lock 被占用時不啟動）。
+   - 之後在 `flock -n` 下跑 llama.cpp CUDA build，並把 6 個 quant 傳到 WSL（約 33 GB，在 Mac lock 下進行）。
+   - 然後是 Stage B 的量測（B / C_ctx、超量測試、vLLM 的 JIT 計時與 pin-memory A/B），以及 §6 addendum。
+4. 正式 quality（Mac）：磁碟不足，見下方 Blocked。
 
-## 進行中（2026-10-08 晚）
+## Blocked / 需要使用者
 
-### GitHub
+0. **解除 Mac 正式 benchmark 的暫停**（使用者 2026-10-09 指示）：正式 Core A、正式 quality、任何 Mac heavy run 都等使用者通知。
+   - 正式 run 時建議：電力模式設為「高效能」或至少不要用「自動」（這屬於系統設定，我不會修改），並接上 ≥ 96 W adapter。
 
-- `origin` = `https://github.com/jingwenliu0113-afk/llm-serving-lab.git`（**Private**），`main` 已設 upstream。
-- 每個 coherent、測試通過的 commit 自動 push；禁止 force push、改寫 history。
-- 不進 git：權重 / HF cache、GGUF、KLD、`results/**/raw/`（以 `raw_manifest.json` 的 sha256 驗證）、venv、credential（`.gitignore` 與測試）。
+1. **正式 quality 的磁碟空間**（Mac；不影響 Core A）
+   - 目前可用 94 GiB。每個 size 的 KLD logits 約需 70 GiB，加上 `disk_guard` 的 50 GiB 保留量，共 120 GiB。
+   - 即使依 STORAGE_PLAN 暫時刪掉另一個 size 的 quant（4B 約 11 GB，9B 約 23 GB；之後可從 BF16 重建），仍不夠。
+     BF16 不能刪：safetensors 已刪，BF16 無法重建。
+   - 需要使用者擇一：
+     - 釋出約 30 GiB 以上的空間；
+     - 或同意把 KLD 檔放到外接 / 其他磁碟。
+   - 降低 50 GiB 保留量屬於規則變更，我不會自行修改。
+2. **建議（非 blocker）**：Mac 換 ≥ 96 W 的 adapter。
+   - 016 已讓長 session 在 70 W 下仍有效，但充電暫停會讓正式 Core A 從約 17 h 拉長到約 1.5–2 倍。
+3. **建議（非 blocker）**：正式 Mac run 期間盡量少開前景程式。
+   - 4B pilot 時前景負載的 loadavg 為 6–9，CV 5.9%；9B pilot 在深夜，CV 1.0%。
+   - 前景負載不會讓 session 作廢，但會增加 noise。
 
-### 本輪重點（2026-10-08 晚，皆已 push）
-
-- **4B 全流程完成**：GGUF ×4 已產出並 pin → tokenizer 交叉驗證 → `delete-source`（`results/artifacts/deletions.jsonl`）
-  → Mac smoke 正常 → Core A pilot（22 / 22 ok）→ quality pilot（26 / 26 ok）。
-- **tokenizer 交叉驗證**（`quality/subsets/tokenizer-crosscheck.json`）：llama.cpp 與 HF 完全一致。
-  WikiText 580 chunks；MMLU 排除清單相同（3 題），HellaSwag 與 ARC 也走同一 scorer，皆 0 題。
-- **Core A pilot（decision 012）**：
-  - Mac P = 0。
-  - sentinel CV 5.9%，兩格 MDE 約 9.6%。
-  - graph splits = 2，GDN 沒有退回 CPU。
-  - 記憶體三種量測一致：breakdown 得到驗證，footprint 不含權重。
-  - fit run 加 `-lv 4`。
-  - 新增電源有效性規則。
-  - 第一張圖：`results/core_a/figures/memory-vs-context-macos-4b-pilot.svg`。
-- **quality pilot**：determinism ✓；self-KLD 0；Q8_0 KLD 0.0014（fa on / off 相同）；downstream CI 半寬 0.2–1.7 pp；
-  4B 正式約 5.1 h。
-- **分析程式先於數據寫定**（decision 011）：Core A H-A1–H-A4、quality H-A5、Core B H-B1–H-B4、Core B grid / runner / mixed dataset。
-- 其他：
-  - raw outputs 不進 git，改以 `raw_manifest.json` 驗證。
-  - `produce_gguf` 可以只從 BF16 重新量化。
-  - GGUF header reader。
-  - Core A report CLI。
-- **凍結前第二輪 review（decision 013）**，皆在任何數據前修正。vLLM 的兩項已對照 v0.30.0 原始碼確認：
-  - Core B client：
-    - 補 `--temperature 0`（0.30.0 不再預設）。
-    - `mixed` 補 `--custom-output-len 128`（預設 256 會覆蓋每列）。
-    - `--tokenizer` 改用 pinned snapshot，bench 加 `HF_HUB_OFFLINE=1`。
-    - `mixed` dataset 逐列檢查長度。
-  - Core B 分析：
-    - 只計入 `ok` 的 run。
-    - 任一 grid C 缺 3 次有效 restart，該 L 記為 not testable。
-    - plan 的 `str(L)` key 可直接使用。
-  - Core A：
-    - prefill 改為 process-level（先算 L ÷ TTFT 再平均）。
-    - H-A3 的「相鄰」以 32K fit 的配置為準。
-    - 缺 metric 時記為 not testable，不再 crash。
-  - Mac env 紀錄若電源或 thermal 狀態未知，視為 env-invalid。
-  - 分析 CLI 只處理有效的正式 session（pilot / env-invalid / drift 一律拒絕）。
-  - 照實記錄：4B pilot 依 quant 列出的 KLD SE 使 H-A5(b) 的順序在凍結前可推得（規則未改）。
-    之後 pilot 只報每個 size 的最大 SE。
-  - 更正 011 的描述：`mixed` 短類與 `uniform` 分布相同，token 內容不保證相同。
-- 4B `-fa auto` probe 以 `-lv 4` 重跑：三個 quant 都是 "Flash Attention enabled"、graph splits = 2（`pilot-20261008-4b-fa`）。
-
-### 下載與 artifact
-
-| 項目 | 位置 | 狀態 |
-|---|---|---|
-| 4B GGUF ×4 | Mac `models/gguf/` | ✅ pin + recipe；safetensors 已依規則刪除 |
-| 9B safetensors（19.33 GB） | Mac `models/hf/Qwen__Qwen3.5-9B@c2022362/` | ⏳ shard 1–3 已驗證 sha256；shard 4（約 3.35 GB）下載中，22:07 時約 2.03 GB。網路不穩（curl 自動續傳 / 重試），完成後 log 會出現 `ALL_SHARDS_VERIFIED`（scratchpad `fetch_9b.log`） |
-| Core B checkpoint | WSL HF cache | ✅ sha256 已驗證 |
-
-## 下一步（依序；Mac 重負載都經 `tools/with-mac-lock`）
-
-1. ~~4B 的 `-fa auto` probe 以 `-lv 4` 重跑~~ → ✅ 已完成並 push。
-2. 9B 下載完成後，依序執行：
-   - ✅ `produce --size 9B`：23:16–23:20 在 lock 下完成，GGUF ×4 已 pin，recipe 已 commit。
-     大小：Q8_0 9.53 GB、Q6_K 7.36 GB、Q4_K_M 5.63 GB、BF16 17.9 GB，與 008 的預估一致。
-   - ✅ commit pins 與 recipe。
-   - `batch_9b_pilot.sh`：**已排隊**（`queue_9b_pilot.sh`）。每 2 分鐘試一次 `tools/with-mac-lock`；lock 被占用就放棄該次，不等待、不碰 lock。
-     - delete-source；
-     - 9B smoke；
-     - 9B Core A pilot（含 fa probe / memory / calib）；
-     - 兩個 size 的 quality pilot，用來估 H-A5 ΔNLL 的 SD 與總時數。
-3. 補完 PREREGISTRATION §5：
-   - 8 個 GGUF hash；
-   - `-fa auto` probe；
-   - throughput 校準（9B）；
-   - H-A5 MDE；
-   - harness commit。
-   完成後：
-   - `freeze.mac = true`；
-   - PREREGISTRATION 第 1–5 節標為 FROZEN (Stage A)；
-   - commit。
-4. 正式 run 前，**向使用者報告並建議**（不是 blocker，但會影響數據品質與筆電使用）：
-   - 正式 Core A（Mac）約 ≤ 11 h（9B 後更新），quality 兩個 size 合計約 10–15 h，期間持有 Mac heavy lock。
-   - pilot 期間前景程式（ChatGPT / Codex、Chrome 影片、WindowServer）讓 loadavg 達 6–9，是 noise 的主因。
-   - 70 W adapter 滿載時電池仍會下降（28 分鐘內 80% → 76%）；電量 < 20% 會使 session 作廢。建議用 ≥ 96 W adapter。
-   - 磁碟：正式 quality 的 KLD（68.4 GiB / size）會比 50 GiB 餘量少約 15 GiB，依 STORAGE_PLAN 暫時刪另一個 size 的
-     quant，之後從 BF16 重建。
-5. **NVIDIA 端**（與 Mac Core A 平行推進）：
-   - 已完成（不需 sudo，2026-10-08）：
-     - 部署 HEAD 到 WSL。
-     - 遠端 venv 與 `configs/vllm.lock.txt` 完全一致（196 / 196）。
-     - pinned llama.cpp 原始碼已抓好，cmake 4.4.3 已快取。
-     - `mixed` dataset ×2 已建好並 pin。
-     - CUDA_HOME shim 已建（014）。
-     - `scripts/wsl_toolchain_check.sh` 的安裝前基準：只缺 compiler。
-   - 2026-10-08 23:38：使用者已裝 `gcc g++ libc6-dev`（沒有裝 CUDA 12.8 子集與 make，並指示 user-space 路線失敗前不再要求系統 CUDA）。
-     - `wsl_toolchain_check.sh`（`JIT=0`）全部通過：Triton stub 能編譯，shim 的 nvcc 13.4 搭配 gcc 11 能編譯。
-     - llama.cpp 改用 user-space CUDA 13.4.1 加 Ninja（015）。configure 已通過：nvcc 13.4.92 / GNU 11.4.0 / `120a-real`。
-     - GPU lock 從 23:38 起由 Text-to-SQL 持有（`inference.generate`）。S1 與 build 都在等它釋放。
-       輪詢只用唯讀的 `lslocks` 檢查，不碰 lock。
-   - 接下來依序：
-     1. `JIT=1 bash scripts/wsl_toolchain_check.sh`：compiler、Triton stub、shim nvcc、FlashInfer sampling JIT（暫存 workspace）。
-     2. S1（2K）smoke，用新的 session 目錄（例如 `results/core_b/smoke/20261009-s1`）；通過後才跑 S2 → S3（008）。
-     3. llama.cpp CUDA build：在 `flock -n /tmp/ai-portfolio-gpu.lock` 下執行 `scripts/build_llama_cpp.sh cuda`。
-        CPU 負擔重，持有 lock 才不會干擾別人。toolkit 為 user-space 的 CUDA 13.4.1（015：`.venv-cuda134` 加 `.cuda-root-13.4`，均已建好）。
-        最多 8 個 nvcc job。
-     4. 6 個 quant 傳到 WSL（約 33 GB，008 已列入計畫）。傳輸期間的 SSH 加密會持續占用 CPU，所以在 Mac lock 下進行。
-6. Core B：S1–S3 通過後（舊的說明保留如下）：
-   - 用 `scripts/deploy_bundle.py` 部署；
-   - 在新的 session 重跑 S1 → S2 → S3；
-   - 通過後進入 Stage B（量 B / C_ctx、超量測試、vLLM lock、`mixed` dataset sha256）。
-
-## Blocked
-
-- ~~`ssh gpu-server`~~ → **resolved**（2026-10-08）。
-- **遠端 C compiler（需使用者以 sudo 安裝；2026-10-08 22:05 檢查：gcc / cc / g++ / make / nvcc 都不存在）**
-  - S1 失敗的原因：Triton 在 profile_run 時要編譯 `CudaUtils` 的 C stub，找不到 C compiler。
-  - 2026-10-08 的盤點（唯讀 workflow，加上兩個對抗式驗證，在隔離環境模擬 apt）得出 Core B **唯一**需要 sudo 的是 `gcc g++ libc6-dev`：
-    - `g++` 是 FlashInfer sampling JIT 需要的 host / link compiler。
-    - `libc6-dev` 提供 C headers 與 crt。
-    - 不需要：`python3-dev`（uv 的 CPython 自帶 `Python.h`）、apt cmake、ninja（cmake 用 uvx，ninja 用 venv 內的），
-      以及任何給 vLLM 用的 apt CUDA。
-  - 裝完 compiler 之後的下一關：vLLM 的 V2 warmup 一定會 JIT 編譯 FlashInfer sampling module，需要 CUDA ≥ 12.9 的 nvcc、
-    cuRAND headers，PATH 上也要有 ninja。
-    - 預計不需要 sudo：venv 已 hash-lock 的 pip nvcc 13.4.92（`nvidia/cu13`，含 `curand*.h`）。
-      建一個 user-space `CUDA_HOME` shim，launcher 設定 `CUDA_HOME` 並把 `.venv/bin` 放在 PATH 最前面；
-      nvcc **不放進 PATH**，以免改變 vLLM 的 `has_flashinfer()`。
-    - 這會改變 Core B 的啟動 env，寫 decision 014，再從新的 session 目錄重跑 S1。
-  - llama.cpp CUDA build（Core A RTX）另外需要 NVIDIA keyring、`make`，以及 CUDA 12.8 的最小子集（nvcc 12.8.93 與 cuBLAS 12.8.5.5，
-    版本與完整 toolkit 相同），約 2.3 GiB。完整的 `cuda-toolkit-12-8` 至少 7.76 GiB，還會帶入 JRE / X11。這要在 002 補 addendum。
-
-## 待使用者處理
-
-在 **WSL Ubuntu-22.04 的終端機**內執行（桌機直接開 Ubuntu，或從 Mac 執行 `ssh -t gpu-server wsl.exe -d Ubuntu-22.04`）。
-sudo 密碼由使用者自己輸入。避免在其他專案於 WSL 跑正式 GPU 工作時執行，因為 `libc6` 會從 2.35-0ubuntu3.13 升到 3.15。
-不要裝 `cuda`、`cuda-drivers`、`nvidia-driver-*`（WSL 的 driver 由 Windows 提供），也不要 `apt upgrade`。
-
-1. **Core B 必要**（下載約 58.5 MiB）：
-
-   ```bash
-   sudo apt-get -o DPkg::Lock::Timeout=300 update && sudo apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends gcc g++ libc6-dev
-   ```
-
-2. **llama.cpp CUDA build（Core A RTX）**：建議在同一次接著裝，讓 S1–S3 前後的環境一致。下載約 986 MiB，安裝約 2.3 GiB。
-
-   ```bash
-   wget -q -O /tmp/cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb && echo 'eea6cc5f0eaeb99082d054b8c05ae206a378e31e88048df0310d59f651dceed2  /tmp/cuda-keyring_1.1-1_all.deb' | sha256sum -c - && sudo dpkg -i /tmp/cuda-keyring_1.1-1_all.deb
-   ```
-
-   ```bash
-   sudo apt-get -o DPkg::Lock::Timeout=300 update && sudo apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends make cuda-nvcc-12-8=12.8.93-1 cuda-cudart-dev-12-8=12.8.90-1 cuda-driver-dev-12-8=12.8.90-1 cuda-cccl-12-8=12.8.90-1 libcublas-dev-12-8=12.8.5.5-1 libcublas-12-8=12.8.5.5-1
-   ```
-
-3. 裝完告訴我。之後的驗證全部不需要 sudo，依序是：
-   - NVIDIA / CUDA toolchain；
-   - project WSL env（含 CUDA_HOME shim 與 FlashInfer JIT 預編譯）；
-   - vLLM 啟動與 S1（2K）smoke。
+已解決：遠端 SSH（2026-10-08）、WSL compiler（使用者已安裝）。llama.cpp 的 CUDA 12.8 系統套件已改用 user-space 路線，不再需要（015）。

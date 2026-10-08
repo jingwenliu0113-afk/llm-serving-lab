@@ -221,6 +221,8 @@ request throughput（req/s）；output token throughput 與 total token throughp
   - **電源有效性（012）**：任一 process 前後出現「電源不是 AC」、「電量 < 20%」或 thermal / performance warning，
     該 session 標為 env-invalid，整個 session 重跑（與 drift 相同）。quality session 同樣適用。
     env 紀錄無法判定電源來源或 thermal 狀態（probe 失敗）時，同樣視為 env-invalid（013）。
+  - **充電閘門（016）**：Mac 上每個 process 開始前，若在 AC 上且電量 < 40%，閒置充電到 ≥ 90%（最多 4 小時）再開始。
+    暫停記入 `session.json` 的 `charge_pauses`。有效性規則不變。
 - **RTX**：
   - 在 GPU lock 下執行，`env_capture --gpu-lock-held`。
   - `enforced.power.limit` 必須等於 `power.default_limit`。

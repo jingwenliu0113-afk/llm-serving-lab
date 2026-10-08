@@ -118,6 +118,7 @@ GOOD_POWER = {"source": "AC", "battery_pct": 80,
 
 def run(tmp_path, plan, monkeypatch=None, env=None, **kw):
     out = tmp_path / "session"
+    kw.setdefault("read_power", lambda: {"source": "AC", "battery_pct": 100})
     summary = rc.run_session(
         plan, bin_dir=make_bin(tmp_path), models_dir=tmp_path / "models", out_dir=out,
         capture_env=env or EnvRecorder(), sleep=lambda s: None, session_id="s1", **kw,
@@ -385,3 +386,57 @@ def test_mac_session_with_a_failed_env_probe_is_env_invalid(tmp_path):
     _, summary, _ = run(tmp_path, small_plan(platform="macos-metal", contexts=(2048,)), env=Broken(),
                         mac_lock_held=True, path_exists=lambda p: True)
     assert summary["env_valid"] is False
+
+
+class Battery:
+    """Fake pmset: returns the given battery percentages in order, then the last one forever."""
+
+    def __init__(self, *pcts, source="AC"):
+        self.pcts, self.source, self.calls = list(pcts), source, 0
+
+    def __call__(self):
+        self.calls += 1
+        pct = self.pcts.pop(0) if len(self.pcts) > 1 else self.pcts[0]
+        return {"source": self.source, "battery_pct": pct}
+
+
+def test_charge_gate_idles_until_the_resume_level():
+    """016: on AC below 40%, idle (charging) until >= 90% before the next process."""
+    slept = []
+    pause = rc.charge_gate(Battery(35, 50, 70, 91), slept.append)
+    assert pause == {"from_pct": 35, "to_pct": 91, "waited_s": 180, "timed_out": False}
+    assert slept == [rc.CHARGE_POLL_S] * 3
+
+
+def test_charge_gate_does_nothing_when_charged_off_ac_or_unknown():
+    for power in (Battery(40), Battery(95), Battery(10, source="Battery")):
+        slept = []
+        assert rc.charge_gate(power, slept.append) is None and slept == []
+    assert rc.charge_gate(lambda: {"source": None, "battery_pct": None}, lambda s: None) is None
+
+
+def test_charge_gate_gives_up_after_the_max_wait():
+    pause = rc.charge_gate(Battery(30), lambda s: None)
+    assert pause["timed_out"] is True and pause["waited_s"] == rc.CHARGE_MAX_WAIT_S and pause["to_pct"] == 30
+
+
+def test_parse_pmset_batt_matches_env_capture():
+    import env_capture as ec
+
+    text = "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t37%; charging; 1:02 remaining present: true\n"
+    assert rc.parse_pmset_batt(text) == ec.parse_pmset_batt(text) == {"source": "AC", "battery_pct": 37}
+
+
+def test_mac_session_pauses_to_charge_and_records_it(tmp_path):
+    power = Battery(100, 35, 60, 92, 92)
+    _, summary, rows = run(tmp_path, small_plan(platform="macos-metal", contexts=(2048,)), read_power=power,
+                           mac_lock_held=True, path_exists=lambda p: True)
+    (pause,) = summary["charge_pauses"]
+    assert pause["job_id"] == rows[1]["job_id"] and pause["from_pct"] == 35 and pause["to_pct"] == 92
+    assert summary["env_valid"] is True
+
+
+def test_rtx_session_never_reads_the_battery(tmp_path):
+    power = Battery(10)
+    _, summary, _ = run(tmp_path, small_plan(), read_power=power)
+    assert power.calls == 0 and summary["charge_pauses"] == []

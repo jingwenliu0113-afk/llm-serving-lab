@@ -152,6 +152,8 @@ def run(tmp_path, monkeypatch, plan_obj, **kw):
     monkeypatch.setenv("FAKE_TASKS", str(plan_obj["expected"]["pilot_tasks"]))
     kw.setdefault("path_exists", lambda p: False)
     kw.setdefault("disk_ok", lambda path, need_gib: {"ok": True})
+    kw.setdefault("read_power", lambda: {"source": "AC", "battery_pct": 100})
+    kw.setdefault("sleep", lambda s: None)
     summary = rq.run_quality(plan_obj, bin_dir=bin_dir, models_dir=tmp_path / "models", data_dir=data,
                              out_dir=tmp_path / "out", capture_env=Env(), session_id="q1", **kw)
     rows = [json.loads(x) for x in (tmp_path / "out" / "rows.jsonl").read_text().splitlines()]
@@ -224,3 +226,11 @@ def test_pilot_can_be_limited_to_available_sizes(pins):
 def test_quality_session_reports_env_validity(tmp_path, monkeypatch, pins):
     summary, rows, data = run(tmp_path, monkeypatch, small(pins))
     assert summary["env_valid"] is True and summary["env_flags"] == []
+
+
+def test_quality_session_pauses_to_charge(tmp_path, monkeypatch, pins):
+    """016 applies to quality sessions too (they run on the Mac only)."""
+    levels = iter([100, 30, 95] + [95] * 1000)
+    summary, rows, _ = run(tmp_path, monkeypatch, small(pins),
+                           read_power=lambda: {"source": "AC", "battery_pct": next(levels)})
+    assert len(summary["charge_pauses"]) == 1 and summary["charge_pauses"][0]["to_pct"] == 95

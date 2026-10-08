@@ -26,6 +26,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -118,6 +119,47 @@ def env_problems(rec: dict, platform: str) -> list:
     return problems
 
 
+# decision 016: on the Mac, a process starts only with charge to spare. Under full load the 70 W adapter
+# loses ~25-40 %/h (pilots), so long sessions would cross the 20 % validity floor (012); below the pause
+# level the harness idles (charging) until the resume level. Pauses are recorded in session.json.
+CHARGE_PAUSE_BELOW_PCT = 40
+CHARGE_RESUME_AT_PCT = 90
+CHARGE_POLL_S = 60
+CHARGE_MAX_WAIT_S = 4 * 3600
+_PMSET_SOURCE = re.compile(r"Now drawing from '(AC|Battery) Power'")
+_PMSET_PCT = re.compile(r"\t(\d+)%;")
+
+
+def parse_pmset_batt(text: str) -> dict:
+    """Same parse as scripts/env_capture.py (kept local: the runner must not depend on that script's path)."""
+    m, pct = _PMSET_SOURCE.search(text), _PMSET_PCT.search(text)
+    return {"source": m.group(1) if m else None, "battery_pct": int(pct.group(1)) if pct else None}
+
+
+def read_mac_power() -> dict:
+    try:
+        out = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {"source": None, "battery_pct": None}
+    return parse_pmset_batt(out)
+
+
+def charge_gate(read_power: Callable, sleep: Callable) -> dict | None:
+    """Before a Mac process (016): on AC below the pause level, idle until the resume level (or the max
+    wait). Off AC or unknown -> no pause (env_problems flags it). Returns the pause record or None."""
+    p = read_power()
+    pct = p.get("battery_pct")
+    if p.get("source") != "AC" or pct is None or pct >= CHARGE_PAUSE_BELOW_PCT:
+        return None
+    start, waited = pct, 0
+    while pct is not None and pct < CHARGE_RESUME_AT_PCT and waited < CHARGE_MAX_WAIT_S:
+        sleep(CHARGE_POLL_S)
+        waited += CHARGE_POLL_S
+        pct = read_power().get("battery_pct")
+    return {"from_pct": start, "to_pct": pct, "waited_s": waited,
+            "timed_out": pct is None or pct < CHARGE_RESUME_AT_PCT}
+
+
 def write_raw_manifest(out: Path) -> dict:
     """raw/ is kept in the local archive, not in git; this committed manifest pins its content."""
     files = {}
@@ -178,6 +220,7 @@ def run_session(
     gpu_sampler: Callable | None = None,
     sleep: Callable = time.sleep,
     path_exists: Callable = os.path.exists,
+    read_power: Callable = read_mac_power,
     timeout_s: float = JOB_TIMEOUT_S,
     now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(),
 ) -> dict:
@@ -226,7 +269,7 @@ def run_session(
     params = plan["params"]
     bench_expect = {"build_commit": want["build_commit"], "n_threads": params["n_thr"], "poll": params["poll"],
                     "reps": params["bench_r"]}
-    rows, env_flags = [], []
+    rows, env_flags, charge_pauses = [], [], []
     with open(out / "rows.jsonl", "w") as rows_file:
         for i, job in enumerate(plan["jobs"]):
             if i:
@@ -245,6 +288,10 @@ def run_session(
                 "stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
                 "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json",
             }
+            if platform == "macos-metal":
+                pause = charge_gate(read_power, sleep)
+                if pause:
+                    charge_pauses.append({"job_id": jid, **pause})
             ext_kind = job.get("external_memory")
             sampler = None
             if ext_kind == "nvidia-smi" and gpu_sampler is not None:
@@ -291,7 +338,7 @@ def run_session(
     for row in rows:
         outcomes[row["outcome"]] += 1
     session.update({"finished_at": now(), "outcomes": outcomes, "sentinel": _sentinel_summary(rows),
-                    "env_flags": env_flags, "env_valid": not env_flags})
+                    "env_flags": env_flags, "env_valid": not env_flags, "charge_pauses": charge_pauses})
     write_raw_manifest(out)
     (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
     return session
