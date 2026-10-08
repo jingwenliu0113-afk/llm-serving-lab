@@ -1,0 +1,18 @@
+{
+ "rule": "exclude a task if min_s len(tok(question + ' ' + answer_s)) == common_prefix over all options (pinned perplexity.cpp reads seq_tokens[s][common_prefix]; out of bounds otherwise)",
+ "tokenizer": {
+  "repo": "Qwen/Qwen3.5-9B@c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+  "library": "tokenizers",
+  "add_special_tokens": false
+ },
+ "source_sha256": "88bbb0b99f0ac75dc63b82017d301be2e6b1b922b6a6eb508df41e5ac4396b5c",
+ "indices_file": "quality/subsets/mmlu-test-4000.json",
+ "n_subset": 4000,
+ "excluded": [
+  2151,
+  2189,
+  13184
+ ],
+ "n_after": 3997
+}

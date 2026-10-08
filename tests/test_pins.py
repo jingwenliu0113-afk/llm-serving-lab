@@ -207,3 +207,12 @@ def test_quality_subset_index_files_exist(pins):
             record = json.loads(path.read_text())
             assert record["indices"] == sorted(set(record["indices"]))
             assert len(record["indices"]) == record["n"]
+
+
+def test_quality_exclusions_are_a_subset_of_the_index_list(pins):
+    for name, sub in pins["quality"]["subsets"].items():
+        if sub.get("exclude_file"):
+            excl = json.loads((ROOT / sub["exclude_file"]).read_text())
+            idx = json.loads((ROOT / sub["index_file"]).read_text())
+            assert set(excl["excluded"]) <= set(idx["indices"]), name
+            assert excl["n_after"] == len(idx["indices"]) - len(excl["excluded"]), name

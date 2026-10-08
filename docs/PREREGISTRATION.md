@@ -229,8 +229,9 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
 - [ ] converter 的 Python lock 已 commit，`pins.toml` 的 `core_a.converter_lock` 指向它（004）
 - [ ] Quality：HellaSwag / MMLU 子集的題號清單、子集 `.bin` 的 sha256、MMLU 排除清單已 commit（005）
   - 題號清單與 HellaSwag 子集 sha256 已完成（`pins.toml`）
-  - MMLU 結構性排除清單要用 Qwen3.5 tokenizer 計算（008）
-  - WikiText chunk 數 / 計分 token 數要依 Qwen3.5 tokenizer 確認（008）
+  - [x] MMLU 結構性排除清單：用 Qwen3.5 tokenizer 計算，排除 3 題，剩 3997 題，sha256 已寫入 pins（005）
+  - [ ] 以 llama.cpp tokenizer 交叉驗證 MMLU 排除清單（pilot）
+  - [ ] WikiText chunk 數：HF tokenizer 算出 580 chunks，pilot 時以 llama-perplexity 的 log 確認
 - [ ] Mac pilot 完成：
   - [ ] `-fa auto` probe
   - [ ] `--poll` 依規則選定

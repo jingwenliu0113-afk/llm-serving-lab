@@ -1,6 +1,12 @@
 # 005 — Quality 指標與 task set v1
 
-> **2026-10-08（008）**：模型改為 Qwen3.5，tokenizer 改變（vocab 248,320）。WikiText 的 chunk 數 / 計分 token 數、MMLU 結構性排除清單、KLD 檔大小（約 74 GB / size）都要依新 tokenizer 重算；指標與 task set 的設計不變。
+> **2026-10-08（008）**：模型改為 Qwen3.5，tokenizer 改變（vocab 248,320）。指標與 task set 的設計不變。依新 tokenizer 重算的結果如下：
+> - WikiText：297,193 tokens → **580 chunks**，計分 147,900 個 token；KLD base 檔約 **73.5 GB / size**。
+>   這是用 HF tokenizers 算的，pilot 時以 llama-perplexity 的 log 確認。
+> - MMLU 結構性排除：4000 題中排除 **3 題**（source index 2151、2189、13184），剩 3997 題。
+>   清單在 `quality/subsets/mmlu-test-4000.exclude.json`（`quality/mmlu_exclusions.py`），子集 sha256 `209ee07d…` 已寫入 pins。
+>   4B 與 9B 的 `tokenizer.json` 相同，兩個 size 共用。與 llama.cpp tokenizer 的交叉驗證在 pilot 進行。
+> - 下文中的 584 chunks、148,920 個 token、45 GB 等 Qwen3 數字保留作為歷史。
 
 - 狀態：Accepted（v1 **草案**；pilot 校準後於 Stage A pre-registration commit 時凍結，凍結後不得依結果修改）
 - 日期：2026-10-08（同日依 review 修訂：統計方法、章節、資料 pin）
