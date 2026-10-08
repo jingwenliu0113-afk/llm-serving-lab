@@ -117,3 +117,27 @@ def downstream(rows: list, *, n_boot: int = N_BOOT, seed: int = SEED) -> list:
                         "ci95": [lo, hi], "resolved": lo > 0 or hi < 0,
                         "flip_rate": sum(v != 0 for v in d) / len(d), "n_boot": n_boot, "seed": seed})
     return out
+
+
+def main(argv: list | None = None) -> int:
+    import argparse
+    import json
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description="H-A5 and downstream analysis of a quality session")
+    parser.add_argument("--session", required=True)
+    parser.add_argument("--n-boot", type=int, default=N_BOOT)
+    args = parser.parse_args(argv)
+    session = Path(args.session)
+    meta = json.loads((session / "session.json").read_text())
+    rows = [json.loads(x) for x in (session / "rows.jsonl").read_text().splitlines()]
+    rows = [r for r in rows if r["kind"] != "delete_kld"]
+    out = {"session": meta.get("session_id"), "mode": meta.get("mode"), "env_valid": meta.get("env_valid"),
+           "h_a5": h_a5(rows, n_boot=args.n_boot), "downstream": downstream(rows, n_boot=args.n_boot)}
+    (session / "analysis.json").write_text(json.dumps(out, indent=1) + "\n")
+    print(json.dumps({"h_a5": out["h_a5"]["verdict"]}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

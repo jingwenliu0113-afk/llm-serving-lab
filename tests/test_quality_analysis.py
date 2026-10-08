@@ -87,3 +87,19 @@ def test_downstream_pairs_ci_and_flip_rate():
     assert d["resolved"] is True and d["ci95"][1] < 0
     same = qa.downstream([mc("arc", "4B", "BF16", bf16), mc("arc", "4B", "Q8_0", list(bf16))], n_boot=500, seed=1)
     assert same[0]["resolved"] is False and same[0]["flip_rate"] == 0
+
+
+def test_quality_report_cli_writes_analysis(tmp_path):
+    import json
+
+    a = [2.0 - 0.01 * (i % 7) for i in range(580)]
+    rows = kld_rows(GOOD_KLD) + ppl_rows(a, [2.05] * 580) + [
+        mc("mmlu", "4B", "BF16", [1, 0] * 200), mc("mmlu", "4B", "Q8_0", [1, 0] * 200)]
+    for i, r in enumerate(rows):
+        r["job_id"] = f"j{i}"
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (tmp_path / "session.json").write_text(json.dumps({"session_id": "q", "mode": "formal", "env_valid": True}))
+    assert qa.main(["--session", str(tmp_path), "--n-boot", "200"]) == 0
+    out = json.loads((tmp_path / "analysis.json").read_text())
+    assert out["h_a5"]["verdict"] == "not refuted" and out["downstream"][0]["pair"] == ["BF16", "Q8_0"]
+    assert out["session"] == "q" and out["env_valid"] is True
