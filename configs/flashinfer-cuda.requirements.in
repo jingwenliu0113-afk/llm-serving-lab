@@ -1,0 +1,14 @@
+# User-space CUDA 13.0 toolchain for FlashInfer's JIT in the Core B server (decision 014 addendum). No sudo.
+# Matches the CUDA runtime vLLM / torch load (nvidia-cuda-runtime 13.0.96, nvidia-curand 10.4.0.35 in
+# configs/vllm.lock.txt): FlashInfer's vendored CCCL requires nvcc major.minor == the toolkit headers', and the
+# vLLM venv itself mixes nvcc 13.4 with cudart 13.0 headers. Installed into ~/llm-serving-lab/.venv-fi-cuda130;
+# scripts/wsl_cuda_home_shim.sh lays it out as CUDA_HOME.
+# Lock with (inside WSL, linux x86_64):
+#   uv pip compile configs/flashinfer-cuda.requirements.in --python-version 3.12 \
+#     --exclude-newer 2026-10-08T00:00:00Z --generate-hashes -o configs/flashinfer-cuda.lock.txt
+nvidia-cuda-nvcc==13.0.88
+nvidia-cuda-crt==13.0.88
+nvidia-nvvm==13.0.88
+nvidia-cuda-runtime==13.0.96
+nvidia-curand==10.4.0.35
+nvidia-cuda-cccl==13.0.85

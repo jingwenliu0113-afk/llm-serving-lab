@@ -63,6 +63,9 @@ for p in ('bin/nvcc', 'include/curand.h', 'lib64/libcudart.so', 'lib64/stubs/lib
     print(p, 'ok' if os.path.exists(os.path.join(h, p)) else 'MISSING')" 2>&1 | tail -6
   printf '__global__ void k(float*x){x[threadIdx.x]*=2.f;}\n' > "$T/k.cu"
   "$SHIM/bin/nvcc" -arch=sm_120f -std=c++17 -c "$T/k.cu" -o "$T/k13.o" && ok "shim nvcc sm_120f compile (host $(gcc -dumpversion))" || bad "shim nvcc compile"
+  nv=$("$SHIM/bin/nvcc" --version | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/\1 \2/p' | awk '{print $1 * 1000 + $2 * 10}')
+  rt=$(sed -n 's/^#define CUDART_VERSION *\([0-9]*\)/\1/p' "$SHIM/include/cuda_runtime_api.h")
+  [ "$nv" = "$rt" ] && ok "shim nvcc ${nv} matches CUDART_VERSION ${rt}" || bad "shim nvcc ${nv} vs CUDART_VERSION ${rt} (CCCL #error)"
 else
   bad "CUDA_HOME shim $SHIM missing (bash scripts/wsl_cuda_home_shim.sh)"
 fi
@@ -72,7 +75,13 @@ if [ "${JIT:-0}" = 1 ] && [ -d "$SHIM" ]; then
   env CUDA_HOME="$SHIM" PATH="$V/bin:$PATH" FLASHINFER_WORKSPACE_BASE="$T/fi" "$V/bin/python" -I -c "
 import time; t = time.time()
 from flashinfer.jit.sampling import gen_sampling_module
-gen_sampling_module().build_and_load(); print('sampling JIT OK in %.0f s' % (time.time() - t))" 2>&1 | tail -3
+gen_sampling_module().build_and_load(); print('sampling JIT OK in %.0f s' % (time.time() - t))" > "$T/jit.log" 2>&1
+  if grep -q "sampling JIT OK" "$T/jit.log"; then
+    ok "$(grep 'sampling JIT OK' "$T/jit.log")"
+  else
+    grep -E "error|Error|fatal" "$T/jit.log" | grep -v "^\[" | sort -u | head -8
+    bad "FlashInfer sampling JIT build failed"
+  fi
 fi
 
 echo; [ "$FAIL" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"

@@ -81,3 +81,26 @@
 - 只影響 server 的啟動工具鏈，不影響任何 hypothesis、metric 或 grid。Core B 目前沒有任何數據。
 - 之後 003 的 JIT 計時要以全新的 cache 量測：Triton 用 `TRITON_CACHE_DIR`，FlashInfer 用 `FLASHINFER_WORKSPACE_BASE`。
   `wsl_toolchain_check.sh` 的 JIT 測試只編譯到暫存目錄，不會預熱正式 cache。
+
+## 補充（2026-10-09）：shim 改指向版本一致的 CUDA 13.0（仍在 user space，不需 sudo）
+
+- **原設計失敗**：第一次 S1（`results/core_b/smoke/20261008-s1s3-014`，WSL 端）已經能過 Triton stub。
+  - log 顯示 KV cache 為 33,060 tokens、attention backend FLASH_ATTN。
+  - 之後 server 在 warmup 編譯 FlashInfer sampling module 時失敗。
+  - 錯誤訊息：FlashInfer 內附 CCCL 的 `cuda_toolkit.h` 報出 `#error "CUDA compiler and CUDA toolkit headers are incompatible"`。
+- **原因**：該檢查要求 nvcc 的 major.minor 等於 headers 的 `CUDART_VERSION`。
+  vLLM venv 的 pip `nvidia/cu13` 是混合版本：nvcc 13.4.92 搭配 cudart 13.0.96 的 headers（13.4 對 13000）。
+  這正是當初盤點時列為「未驗證」的 header 混用風險。
+- **修正**（仍是 user space，不需 sudo，也不關掉檢查）：
+  - 另建一個版本一致的 CUDA 13.0 組合：`configs/flashinfer-cuda.requirements.in`，附 hash lock，安裝在 `.venv-fi-cuda130`。
+    - nvcc / crt / nvvm：13.0.88。
+    - cudart：13.0.96。
+    - cuRAND：10.4.0.35。
+    - CCCL：13.0.85。
+  - cudart 13.0.96 與 cuRAND 10.4.0.35 都與 vLLM / torch 執行時載入的版本相同，所以 JIT 出來的 module 與執行時期一致。
+  - `scripts/wsl_cuda_home_shim.sh` 改指向這組，並在建立時檢查 nvcc 的 major.minor 是否等於 `CUDART_VERSION`。
+    `wsl_toolchain_check.sh` 也加上同一項檢查；第 6 節的 JIT 編譯失敗時會標 FAIL，並保留錯誤行（先前只看最後 3 行而漏報）。
+- `CUDA_HOME` 的路徑（`.cuda-home-cu13`）與其他 env 規則都不變。S1 在新的 session 目錄重跑。
+- 不採用：
+  - `CCCL_DISABLE_CTK_COMPATIBILITY_CHECK`：CCCL 自己標明這樣做的風險由使用者承擔。
+  - apt 的 CUDA 13.0 fallback：需要 sudo，而 user-space 的組合已經足夠。

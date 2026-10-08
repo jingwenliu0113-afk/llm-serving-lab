@@ -59,3 +59,14 @@ def test_llama_cuda_lock_pins_one_cuda_13_4_1_set():
     assert pins["nvidia-cublas"] == "13.4.2.4" and pins["nvidia-cuda-cccl"] == "13.3.4.3.1"
     assert pins["ninja"] == "1.13.2"  # CMake generator; WSL has no make (015)
     assert "--hash=sha256:" in lock
+
+
+def test_flashinfer_shim_uses_one_coherent_cuda_13_0_set():
+    """014 addendum: nvcc major.minor must equal the cudart headers' (FlashInfer's CCCL #errors otherwise);
+    the set matches the runtime vLLM / torch load (vllm.lock: cuda-runtime 13.0.96, curand 10.4.0.35)."""
+    lock = (ROOT / "configs" / "flashinfer-cuda.lock.txt").read_text()
+    pins = dict(re.findall(r"^([a-z0-9-]+)==(\S+) \\$", lock, re.MULTILINE))
+    vllm = dict(re.findall(r"^([a-z0-9-]+)==(\S+) \\$", (ROOT / "configs" / "vllm.lock.txt").read_text(), re.MULTILINE))
+    assert pins["nvidia-cuda-nvcc"].startswith("13.0.") and pins["nvidia-cuda-runtime"].startswith("13.0.")
+    assert pins["nvidia-cuda-runtime"] == vllm["nvidia-cuda-runtime"] and pins["nvidia-curand"] == vllm["nvidia-curand"]
+    assert ".venv-fi-cuda130" in SHIM.read_text() and "CUDART_VERSION" in SHIM.read_text()
