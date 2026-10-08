@@ -139,3 +139,11 @@ ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "flock -n /tmp/ai-portfolio-
   目前依 008 為 `RedHatAI/Qwen3.5-9B-quantized.w4a16`（取代原本的 `Qwen3-8B-AWQ`）。
 - Mac / RTX 結果明確標示 hardware / backend。
 - 不做「誰比較快」排行榜。
+
+## 外部費用（2026-10-08 使用者指示）
+
+- 任何會產生外部費用的操作（付費 API、雲端 GPU、付費資料服務等），**第一次執行前**必須先停下來向使用者說明：
+  用途、預估請求數、token / 運算量、預估成本。**未經明確批准不得產生付費用量。**
+- 不受此限：既有本地硬體運算（Mac、`gpu-server` 的 RTX 5070 Ti）、一般網路下載、Claude Code 本身的用量。
+  大型下載仍需事先同意（見上文）。
+- 目前 Core 的所有步驟都只用本地硬體與公開下載，沒有付費用量。
