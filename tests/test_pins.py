@@ -154,6 +154,28 @@ def test_stage_a_freeze_requires_derived_hashes_and_mac_toolchain(pins):
         assert subsets[name]["index_file"], name
 
 
+def stage_b_unmeasured(sb: dict) -> list:
+    """[stage_b] keys still at their "not measured" placeholder (0 / "" / -1; pins.toml). C_ctx is peak - B - self
+    (004 / 009) and may legitimately be negative (2026-10-09: -89 MiB, PREREGISTRATION §6), so only its 0
+    placeholder counts as unmeasured (018)."""
+    missing = [k for k in ("b_mib", "v_total_mib", "kv_cache_memory_bytes", "num_gpu_blocks", "block_size", "rtx_n_thr")
+               if not sb[k] > 0]
+    missing += [k for k in ("c_ctx_mib",) if sb[k] == 0]
+    missing += [k for k in ("rtx_poll",) if sb[k] < 0]
+    missing += [k for k in ("gdn_prefill_backend", "gpu_memory_utilization") if not sb[k]]
+    missing += [k for k in ("wsl2_pin_memory",) if sb[k] not in ("0", "1")]
+    return missing
+
+
+def test_stage_b_unmeasured_accepts_a_negative_c_ctx():
+    sb = {"b_mib": 811.0, "v_total_mib": 16303, "kv_cache_memory_bytes": 1, "num_gpu_blocks": 1, "block_size": 1,
+          "rtx_n_thr": 6, "c_ctx_mib": -89.0, "rtx_poll": 0, "gdn_prefill_backend": "triton",
+          "gpu_memory_utilization": "0.91", "wsl2_pin_memory": "0"}
+    assert stage_b_unmeasured(sb) == []
+    assert stage_b_unmeasured({**sb, "c_ctx_mib": 0, "rtx_poll": -1, "wsl2_pin_memory": ""}) == [
+        "c_ctx_mib", "rtx_poll", "wsl2_pin_memory"]
+
+
 def test_stage_b_freeze_requires_verified_nvidia_stack(pins):
     if not pins["freeze"]["nvidia"]:
         pytest.skip("stage B (NVIDIA) addendum not frozen yet")
@@ -164,9 +186,7 @@ def test_stage_b_freeze_requires_verified_nvidia_stack(pins):
     assert pins["core_b"]["status"] == "verified"
     mix = pins["core_b"]["mix_dataset_sha256"]
     assert set(mix) == {"2048", "8192"} and all(SHA256.fullmatch(v) for v in mix.values())
-    sb = pins["stage_b"]
-    assert sb["b_mib"] > 0 and sb["c_ctx_mib"] > 0 and sb["kv_cache_memory_bytes"] > 0 and sb["num_gpu_blocks"] > 0
-    assert sb["wsl2_pin_memory"] in ("0", "1") and sb["gdn_prefill_backend"] and sb["rtx_poll"] >= 0
+    assert stage_b_unmeasured(pins["stage_b"]) == []
 
 
 def test_core_b_single_fixed_precision(pins):

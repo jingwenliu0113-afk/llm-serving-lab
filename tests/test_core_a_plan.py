@@ -168,8 +168,9 @@ def test_formal_plans_use_the_frozen_seed_and_platform_parameters(pins):
         plan(frozen, mode="formal", seed=1)
     with pytest.raises(cp.PlanError, match="N_thr / P"):
         plan(frozen, mode="formal", seed=20261008, poll=50)
+    frozen["stage_b"]["rtx_poll"] = -1  # P not decided yet
     with pytest.raises(cp.PlanError, match="rtx_poll"):
-        plan(frozen, mode="formal", seed=20261008, platform="wsl2-cuda", n_thr=6, poll=0)  # P not decided yet
+        plan(frozen, mode="formal", seed=20261008, platform="wsl2-cuda", n_thr=6, poll=0)
     frozen["stage_b"]["rtx_poll"] = 0
     p = plan(frozen, mode="formal", seed=20261008, platform="wsl2-cuda", n_thr=6, poll=0)
     assert p["expect"]["frozen_b_mib"] == frozen["stage_b"]["b_mib"]

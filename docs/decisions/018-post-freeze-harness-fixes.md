@@ -97,3 +97,19 @@
 
 - 規則本身都不變。正式 run 會被更嚴格地擋在規則之外，例如 powermode 0 時不能開始正式 Mac run。
 - PREREGISTRATION §4 只加註記，指向本文與 014 補充；不改原文。
+
+## 補充（2026-10-09 07:3x）：凍結後又發現的兩處程式與規則不一致
+
+兩處都只修程式，規則不變。
+
+- **Stage B 凍結測試假設 C_ctx > 0**
+  - `tests/test_pins.py` 要求 `c_ctx_mib > 0`，原意是「已量測」（pins 用 0 代表還沒量測）。
+  - 但 004 / 009 的定義是峰值 − B − self，本來就可能為負。實測值 −89 MiB 已照實記在 §6。
+  - 不修的話，Stage B 凍結時測試會擋下一個合法的實測值；只有在「重量 C_ctx 直到得到正值」時才會通過，而那等於挑選結果。
+  - 改成只把佔位值 0 視為未量測（`stage_b_unmeasured`）。順帶把 `block_size` 與 U 也納入凍結檢查。
+  - 分析程式（`core_a_analysis` 的 spill 記憶體條件）原本就能處理負值。
+- **pilot report 的正式 plan 計數**
+  - 018 讓 `build_plan` 拒絕非 §4 的正式 seed，以及 P 未定時的 RTX plan。
+  - pilot report 只為計算 job 數就建立了這樣的 plan，所以在 RTX pilot 之後失敗。
+  - 已改用 `formal_job_counts`；job 集合不受 seed / N_thr / P 影響（見 012 的 RTX 補充）。
+
