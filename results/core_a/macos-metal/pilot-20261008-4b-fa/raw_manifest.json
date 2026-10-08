@@ -1,0 +1,45 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/pilot-fa-4B-Q4_K_M.stderr.txt": {
+   "sha256": "930c9ebcf1d356ebdbb0f9bf462d656907db4847da7338a9cd7efcad2376fa4f",
+   "size_bytes": 777
+  },
+  "raw/pilot-fa-4B-Q4_K_M.stdout.txt": {
+   "sha256": "28463e49e2603abce8cc66fb122fe2e35149401bd045df43831d730f99584644",
+   "size_bytes": 147732
+  },
+  "raw/pilot-fa-4B-Q6_K.stderr.txt": {
+   "sha256": "60f309695d9458185eb6f98e907fe7f1a7c5ec140c471b59b83ecefe563539e8",
+   "size_bytes": 777
+  },
+  "raw/pilot-fa-4B-Q6_K.stdout.txt": {
+   "sha256": "a0a885efcb23fbd390d2ebfe05895af3dc5d17e8e22253ab24b986362ac1628d",
+   "size_bytes": 147950
+  },
+  "raw/pilot-fa-4B-Q8_0.stderr.txt": {
+   "sha256": "88d14a0da192253b9d3fd73316f15ae6413366496ff2fbc8ecd769d0b6455a3f",
+   "size_bytes": 777
+  },
+  "raw/pilot-fa-4B-Q8_0.stdout.txt": {
+   "sha256": "4bb44c3cd0ead417733f8e2fcf4590627e5f2bc9fbd2e2c5765f9ead6d70cc4a",
+   "size_bytes": 147950
+  },
+  "raw/sentinel-end.stderr.txt": {
+   "sha256": "c620d982317d639e235d424a55cd0ac2b3c99da218d873e0afd533271c38c439",
+   "size_bytes": 125072
+  },
+  "raw/sentinel-end.stdout.txt": {
+   "sha256": "155af1a76ac398ce0ee29c34ef512f136ad1d7ea7d61a56b27e47c15b0646a3b",
+   "size_bytes": 1159
+  },
+  "raw/sentinel-start.stderr.txt": {
+   "sha256": "8779b90ec241e80b29083f29a0f4b67b435e4fb838becf4319c8a259c1cdd0f8",
+   "size_bytes": 125072
+  },
+  "raw/sentinel-start.stdout.txt": {
+   "sha256": "9e7a5d340306aac7135d593efb3ce4628c3f4deb10a287cb6650a8bd10bf8e63",
+   "size_bytes": 1158
+  }
+ }
+}

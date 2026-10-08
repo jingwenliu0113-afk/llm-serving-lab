@@ -244,7 +244,7 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
   - [x] 以 llama.cpp tokenizer 交叉驗證 MMLU 排除清單：16,000 個字串的 token 完全一致，排除清單相同；HellaSwag、ARC 走同一 scorer，皆 0 題（`quality/subsets/tokenizer-crosscheck.json`，2026-10-08）
   - [x] WikiText chunk 數：llama.cpp tokenizer 與 HF 完全一致（297,194 tokens，比照 `-f` 去掉一個結尾換行），580 chunks（同上檔案）
 - [ ] Mac pilot 完成：
-  - [ ] `-fa auto` probe（4B 的 probe 因 log verbosity 無法判定，需以 `-lv 4` 重跑；012）
+  - [ ] `-fa auto` probe：4B 三個 quant 在 Metal 皆為 "Flash Attention enabled"、graph splits = 2（`-lv 4` 重跑，`pilot-20261008-4b-fa`；012）；9B 待補
   - [x] `--poll` 依規則選定：Mac P = 0（012）
   - [ ] throughput 校準：Core A 上限 10.65 h、quality 4B 約 5.1 h（012）；9B 待補
   - [x] determinism：KLD 與 MMLU 重跑完全相同（4B；012）

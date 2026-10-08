@@ -1,0 +1,115 @@
+{
+ "fa_probe": [
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  }
+ ],
+ "graph_splits": {
+  "values": {
+   "2": 5
+  },
+  "max_splits": 2
+ },
+ "poll": {
+  "poll": null,
+  "median_tok_s": {},
+  "note": "poll block incomplete"
+ },
+ "noise": {
+  "n": 0,
+  "cv_pct": null,
+  "mde_pct": null
+ },
+ "memory": [
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 4875,
+   "host_self_mib": 656,
+   "footprint_mib": 351.2696533203125,
+   "max_rss_mib": 4511.75,
+   "footprint_over_self": 0.06350924847591982,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3904,
+   "host_self_mib": 509,
+   "footprint_mib": 351.2376937866211,
+   "max_rss_mib": 3556.25,
+   "footprint_over_self": 0.07959159161264924,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3184,
+   "host_self_mib": 509,
+   "footprint_mib": 350.86219024658203,
+   "max_rss_mib": 2847.203125,
+   "footprint_over_self": 0.0950073626446201,
+   "graph_splits": "2"
+  }
+ ],
+ "calibration": {
+  "upper_bound_hours": null,
+  "method": "n_jobs x (slowest pilot wall time of that kind + idle) per kind"
+ },
+ "outcomes": {
+  "ok": 5,
+  "oom": 0,
+  "error": 0
+ }
+}
