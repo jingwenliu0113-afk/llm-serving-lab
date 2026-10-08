@@ -120,7 +120,13 @@ GPU lock 依 MACHINE_POLICY：步驟 1–2 是小型啟動 smoke test，**不需
 **Gate 進度（2026-10-09）**：
 - 第 1 項通過：專案 venv 中 torch 2.13.0+cu130 的 capability 為 (12, 0)，arch list 含 sm_120。
 - 第 2 項通過：008 的 S1 → S2 → S3 全部通過，見 008 補充。
-- 第 3–6 項依 017 在 GPU lock 下進行（`benchmarks/coreb_stage_b.py`、`benchmarks/stage_b.py`），結果寫入 Stage B addendum。
+- 第 5 項通過（2026-10-09，`results/stage_b/20261009/bench-check`）：
+  - 在 008 的 S1 smoke server 上跑一次 `vllm bench serve`（uniform，L = 2048，C = 4，200 個 request），JSON 正常寫出。
+    run_core_b 的驗證全部通過：completed 200、failed 0，input 全為 1920，output 全為 128。
+  - `/metrics` 有 `vllm:kv_cache_usage_perc`、`vllm:num_preemptions_total`、`vllm:cache_config_info`。
+  - 這是工具檢查，不是量測。
+- 第 6 項的 idle baseline 已量（B = 811 MiB，見 Stage B 結果）。
+- 第 3–4 項依 017 執行，但被 `--max-num-seqs 264` 的啟動問題擋住，見 NEXT 的 Blocked 2。
 
 ## 放棄的替代方案
 
