@@ -54,7 +54,8 @@
 5. **Core B**：`RedHatAI/Qwen3.5-9B-quantized.w4a16` @ `a398088c…`。
    - 格式：compressed-tensors GPTQ W4A16、group 128。GDN projection、embed、lm_head 維持 BF16。
    - 純文字 GPU 權重約 9.35 GiB，KV 池約 2.2–3.2 GiB。
-   - C_KV(2K / 8K / 32K) 約 23–28 / 8–10 / 2–3。舊方案 Qwen3-8B-AWQ 約 22–24 / 5–6 / 1，新方案在每個 L 都不比它差。
+   - C_KV(2K / 8K / 32K) 約 19–28 / 7–10 / 2（1 block = 16.5 MiB，池 2.2–3.2 GiB = 136–198 blocks；32K 要到 3 需 ≥ 3.21 GiB）。
+     舊方案 Qwen3-8B-AWQ 約 22–24 / 5–6 / 1。池的高端在每個 L 都不比它差；低端的 2K 可能略少（009 更正，原寫 23–28 / 8–10 / 2–3）。
 6. **最大風險**：
    - **H-A1 在 RTX 上退化**，沒有 fit 邊界。
    - KV/token 比舊方案小 4.5 倍，而且兩個 size 相同，context 對記憶體與 decode 的影響明顯變小。
@@ -100,7 +101,7 @@
 2. 兩個 size 的 KV / 狀態幾何相同，size 軸只改變權重，size 與 quant 對記憶體的效果可以乾淨分解。
 3. hybrid attention 正是 2026 年部署的重點。「長 context 的 KV 成本大幅下降，換來每條序列固定的 recurrent 狀態」
    本身就是本研究問題（memory frontier、KV pressure、concurrency）值得報告的結果。
-4. Core B 的 9B W4A16 與 Core A 的 9B 是同一個 base；在 16 GB 上，它在每個 L 的 KV 容量都不比舊方案差。
+4. Core B 的 9B W4A16 與 Core A 的 9B 是同一個 base；在 16 GB 上，8K / 32K 的 KV 容量優於舊方案，2K 大致相當（009 更正）。
 
 ## 放棄的替代方案
 

@@ -38,7 +38,9 @@ re-review 另外指出：如果 mix 的長度、比例與 concurrency grid 留�
 
 ### 3. Concurrency grid（確定性規則；只代入實測的 C_KV）
 
-- C_KV(L) = ⌊KV 池 tokens ÷ ⌈L ÷ 16⌉·16⌋，KV 池 tokens 取 server log 的 `GPU KV cache size`。
+- C_KV(L) = ⌊(num_gpu_blocks − 1) ÷ (⌈L ÷ block_size⌉ + 3)⌋（hybrid 版；008 / 009）。num_gpu_blocks 與 block_size 取自
+  `/metrics` 的 `vllm:cache_config_info`，`GPU KV cache size` 只作交叉核對（PREREGISTRATION §2）。
+  （歷史：008 之前為 ⌊KV 池 tokens ÷ ⌈L ÷ 16⌉·16⌋，KV 池 tokens 取 server log 的 `GPU KV cache size`。）
 - grid = {1, 2, 4, …, C_hi}，其中 C_hi = 大於等於 max(8, 8 × C_KV) 的最小 2 的冪次，上限 256。
   8 × C_KV 等於 H-B2 預測區間上界（2 × C_KV）的 4 倍。
 - 另外加入 round(C_KV × 2^(k/2))，k ∈ {−2, −1, 0, 1, 2}（≥ 1，去除重複），讓預測的 knee 附近比 2 倍更細。

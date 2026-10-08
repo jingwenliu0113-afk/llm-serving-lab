@@ -7,6 +7,8 @@
 >   清單在 `quality/subsets/mmlu-test-4000.exclude.json`（`quality/mmlu_exclusions.py`），子集 sha256 `209ee07d…` 已寫入 pins。
 >   4B 與 9B 的 `tokenizer.json` 相同，兩個 size 共用。與 llama.cpp tokenizer 的交叉驗證在 pilot 進行。
 > - 下文中的 584 chunks、148,920 個 token、45 GB 等 Qwen3 數字保留作為歷史。
+> - **H-A5 的跨 size 配對改為 9B-Q4_K_M − 4B-Q8_0**（PREREGISTRATION H-A5(a)；009）。下文所有 8B / 14B 字樣
+>   （含 confirmatory family、per-chunk PPL 的執行、污染風險與成本估計）皆為歷史。
 
 - 狀態：Accepted（v1 **草案**；pilot 校準後於 Stage A pre-registration commit 時凍結，凍結後不得依結果修改）
 - 日期：2026-10-08（同日依 review 修訂：統計方法、章節、資料 pin）

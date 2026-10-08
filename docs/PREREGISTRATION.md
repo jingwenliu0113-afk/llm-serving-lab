@@ -3,6 +3,8 @@
 > **2026-10-08：模型已依 decision 008 改為 Qwen3.5 4B + 9B（Core A）與 RedHatAI Qwen3.5-9B W4A16（Core B）。**
 > 同日已依 008「對實驗的影響」重新推導：H-A1 至 H-A5 的預測、fit 規則中的 KV 與 recurrent 狀態、Core B 的 C_KV 公式、
 > sentinel 與超量測試。仍待 pilot 才能凍結的 tokenizer 常數：WikiText chunk 數、MMLU 結構性排除清單。本文其餘結構不變。
+> 同日依 review 做凍結前的一致性修訂（decision 009）：H-A4(b) 預測值、token_embd 扣除的適用範圍、
+> fit run prompt、C_KV 的資料來源、H-A3 相鄰差距的寫法。hypothesis 的結構與門檻不變。
 
 > **狀態：DRAFT v1（2026-10-08，同日依兩輪 review 修訂）— 尚未凍結。**
 > 依 decision 006 分兩階段凍結：
@@ -12,7 +14,7 @@
 >
 > 凍結後，hypothesis、metrics、task set、protocol 都不得依結果修改。任何變更都要先寫 decision log，並標明是 post-hoc。
 
-決策依據：`docs/decisions/001`–`007`；機器可讀 pin：`configs/pins.toml`。
+決策依據：`docs/decisions/001`–`009`；機器可讀 pin：`configs/pins.toml`。
 
 符號：
 
@@ -53,10 +55,11 @@
 - KV(L) = 32,768 B × L：f16，只計 8 層 full attention。
 - S = 每條序列的 recurrent 狀態約 50.25 MiB（24 層 GDN，f32）。
 - token_embd 只對 untied 的 9B 扣除：tied 的 4B 在 decode 時會把整個 output（即 token_embd）讀一次，CUDA 上也有一份副本。
+  適用範圍（009）：H-A2 的 bytes 在兩平台都扣（decode 只讀一列）；H-A1 的 N 只在 CUDA 扣，Mac 是 unified memory，不扣（004）。
 
 **H-A1（fit boundary 由記憶體容量決定）**
 
-- 預測依 004 的規則（008 修訂）：N = 檔案 − token_embd（僅 9B）+ KV(L) + S；
+- 預測依 004 的規則（008 修訂）：N = 檔案 − token_embd（僅 9B、僅 CUDA；Mac 不扣）+ KV(L) + S；
   predicted fit：N + 1.5 ≤ V_total − B；predicted OOM：N + 0.8 > V_total − B。
   - RTX 的 V_total、B 依第 4 節的程序在 Stage B 實測後代入，規則本身不得再改。
     以 V_total = 15.92 GiB 試算，最大的 N 是 9B-Q8_0 @ 32K 的 8.90 GiB，
@@ -77,7 +80,7 @@
 - 定義降幅 D = 1 − tok/s(L = 32768) ÷ tok/s(L = 2048)。
 - 預測：同一平台、同一 size 內，D(Q4_K_M) > D(Q6_K) > D(Q8_0)。依 H-A2 的頻寬模型，KV 在讀取 bytes 中的占比越高，D 越大；
   模型預測值（Q4_K_M / Q6_K / Q8_0）：4B 為 0.260 / 0.218 / 0.178，9B 為 0.162 / 0.131 / 0.105。
-  相鄰差距約 0.03–0.04；差距落在 noise 內時屬於「不推翻、也不確認」，照實報告。
+  相鄰差距約 0.026–0.042（最小為 9B 的 Q6_K vs Q8_0）；差距落在 noise 內時屬於「不推翻、也不確認」，照實報告。
 - *推翻條件*：任一相鄰配對的順序相反，而且差距超出 noise。若某 (平台, size) 在 32K fit 的配置少於 2 個，記為 not testable。
 
 **H-A4（prefill 受算力限制）**
@@ -86,7 +89,10 @@
   spread_decode 同理。預測 spread_prefill < spread_decode。
   *推翻條件*：任一符合條件的單位出現 spread_prefill ≥ spread_decode。
 - (b) 對每個 32K 會 fit 的配置，預測 TTFT(32768) ÷ TTFT(8192) > 4（attention 為 O(L²)，呈超線性）。
-  hybrid 架構只有 1/4 的層是 full attention，FLOP 模型的預測值為 9B 約 4.68、4B 約 5.36，離門檻 4 不遠。
+  hybrid 架構只有 1/4 的層是 full attention，FLOP 模型的預測值為 9B 約 4.45、4B 約 4.84，離門檻 4 不遠（9B 約 11%）。
+  FLOP 模型（009）：TTFT ∝ 2·P_nonembed·L + 65,536·L²，P_nonembed = 9B 6.92B / 4B 3.57B
+  （`llama-bench` 只算最後一個 token 的 logits，token_embd 只查表）；65,536 = 2 × 8 層 full attention × 16 heads × 256，
+  attention 為 causal（KV view 逐 ubatch 增長）。GDN 的 chunk 計算與 L 成線性，未計入，計入後比值更接近 4。
   *推翻條件*：任一配置的比值 ≤ 4。
 
 **H-A5（quality–memory frontier）**
@@ -110,7 +116,9 @@
   - mix 分為 `uniform` 與 `mixed`。**H-B1 至 H-B3 只用 `uniform`；`mixed` 只用於 H-B4。**
   - 每個 `uniform` request 的 tokens = L，(input, output) = (L − 128, 128)。
   - C_KV(L) = ⌊(num_gpu_blocks − 1) ÷ (⌈L ÷ block_size⌉ + 3)⌋（hybrid 版，008）。
-    num_gpu_blocks 與 block_size（預期約 528）取自 server log 或 `/metrics` 的 `vllm:cache_config_info`；
+    num_gpu_blocks 與 block_size（預期約 528）取自 `/metrics` 的 `vllm:cache_config_info`（INFO log 不含 num_gpu_blocks）；
+    交叉核對：num_gpu_blocks = ⌈GPU KV cache size × (⌈max_model_len ÷ block_size⌉ + 3) ÷ max_model_len⌉（009）。
+    這是 Core B 唯一的 C_KV 規則；007 §3 已改為同一公式。
     每個 request 另需 3 個 GDN 狀態 block（每條序列約 49.5 MiB）。
   - 「KV cache usage %」包含 GDN 狀態 block，報告時要註明。
   - C_knee = grid 中「3 次 restart 平均」output throughput 達到 grid 最大值 95% 的最小 C。
@@ -147,7 +155,7 @@
 
 | Metric | 定義 | 產生的 process |
 |---|---|---|
-| fit / OOM / spill | 004「Fit 的操作定義」與 spill 定義 | `llama-completion`（同 cell 的 bench process 若失敗也記為 OOM） |
+| fit / OOM / spill | 004「Fit 的操作定義」與 spill 定義（anchor 與 C_ctx 為 4B-Q4_K_M，bytes 同 H-A2；009） | `llama-completion`（同 cell 的 bench process 若失敗也記為 OOM） |
 | engine TTFT(L) | `-p L -n 0` 的 `avg_ns`，同時保留 `samples_ns`；不含 tokenize / HTTP / sampling | `llama-bench` |
 | prefill tok/s(L) | L ÷ TTFT(L) | 同上 |
 | decode tok/s(L) | `-p 0 -n 128 -d (L-128)` 的 `avg_ts` | `llama-bench` |
@@ -174,7 +182,7 @@ request throughput（req/s）；output token throughput 與 total token throughp
 | 工具 | flags |
 |---|---|
 | `llama-bench` | `-ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 512 -lm mmap -t N_thr --poll P -r 5 --delay 5 -o jsonl -v`，context 只由 `-p/-n/-d` 決定（`llama-bench` 不接受 `-c/-np/--fit`）；**一個 config 一個 process** |
-| `llama-completion`（fit / memory） | 004 的指令：`-c L -np 1 --fit off -ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 512 -lm mmap -t N_thr --poll P -n 128 --ignore-eos -no-cnv`；prompt 為 WikiText-2 test 的前 L − 128 個 token（harness 從 log 驗證 token 數） |
+| `llama-completion`（fit / memory） | 004 的指令：`-c L -np 1 --fit off -ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 512 -lm mmap -t N_thr --poll P -n 128 --ignore-eos -no-cnv`；prompt 為 `" the"` 重複 L − 128 次（Qwen3.5 tokenizer 下每個單位恰為 1 token，id 279；harness 從 log 驗證 token 數；009） |
 | `llama-perplexity`（quality） | 005 的 flags |
 
 - **N_thr、P 依平台各自固定**：
@@ -214,7 +222,7 @@ request throughput（req/s）；output token throughput 與 total token throughp
 ### Prompt 與 sampling
 
 - Core A 效能：`llama-bench` 的合成 token（不經 chat template；token 內容由 libc `rand()` 產生，兩平台不同，對 dense 模型影響可忽略）。
-- fit run：固定的 WikiText-2 token 序列。
+- fit run：固定的重複 token 序列（`" the"` × (L − 128)；記憶體與 token 內容無關；009）。
 - quality：log-likelihood scoring，沒有 sampling。
 - Core B：`uniform` 用 random dataset，`mixed` 用自訂 dataset，seed 皆為 20261008（007）；
   `temperature 0`、`--ignore-eos`、`--generation-config vllm`。
@@ -241,21 +249,21 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
   - [ ] quality 數值 sanity check
   - [ ] MDE（遮蔽方向）
 - [ ] Benchmark harness 與輸出格式固定，記錄 harness 的 git commit
-- [ ] Mac 重負載 lock 的參與方式已由使用者決定，並寫入 MACHINE_POLICY 或 decision log
+- [x] Mac 重負載 lock 的參與方式已由使用者決定，並寫入 MACHINE_POLICY 或 decision log（共享 `/tmp/ai-portfolio-mac-heavy.lock`，經 `tools/with-mac-lock`）
 - [ ] 本文件第 1–5 節狀態改為 FROZEN (Stage A) 並 commit
 
 ## 6. Stage B addendum（任何 NVIDIA 正式數據之前；只能代入實測值與執行參數）
 
 待填（遠端可用後；所有 GPU 步驟都在 GPU lock 下）：
 
-- [ ] RTX 實測：V_total（`memory.total`）、B（依第 4 節程序）、C_ctx（004）、是否接螢幕、HAGS、`.wslconfig`
+- [ ] RTX 實測：V_total（`memory.total`）、B（依第 4 節程序）、C_ctx（004；4B-Q4_K_M @ 2048，009）、是否接螢幕、HAGS、`.wslconfig`
 - [ ] sysmem 超量測試（9B-Q8_0、`-c 262144`，不屬於 18 格；N 約 15.90 GiB，任何 B 下都超量；008）：hard OOM 或 spill
 - [ ] llama.cpp CUDA build：toolkit 版本、`wsl2-cuda` verified、RTX 的 N_thr / P（依第 4 節規則）
 - [ ] vLLM：smoke test 通過（003 gate）、lock 檔已 commit（`vllm.lock_file`）、`VLLM_WSL2_ENABLE_PIN_MEMORY`（依 003 規則）、
       attention backend、performance mode / async scheduling 的實際生效值
 - [ ] Core B：
-  - KV 池 tokens（`GPU KV cache size`）
-  - 依 007 規則算出每個 L 的 C_KV 與 grid
+  - num_gpu_blocks 與 block_size（`/metrics` 的 `vllm:cache_config_info`；`GPU KV cache size` 只作紀錄與交叉核對）
+  - 依 §2 的 C_KV 公式與 007 的 grid 規則，算出每個 L 的 C_KV 與 grid
   - `mixed` dataset 的 sha256（`core_b.mix_dataset_sha256`）
   - `--kv-cache-memory-bytes`、`--gpu-memory-utilization`
 - [ ] 本節狀態改為 FROZEN (Stage B) 並 commit

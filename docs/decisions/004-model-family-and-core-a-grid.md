@@ -1,6 +1,10 @@
 # 004 — Model family、Core A 的 size × quant × context grid、量化來源、fit 規則
 
 > **2026-10-08：model family / size / 來源 repo / fit 預測表已由 008 取代**（改為 Qwen3.5 4B + 9B，hybrid attention）。量化方式（本地 Q8_0 / Q6_K / Q4_K_M、不用 imatrix）、context set 與 fit 規則的結構仍有效；KV 與 recurrent 狀態的算法依 008 修訂。下方的 Qwen3 數字保留作為決策歷史。
+>
+> **2026-10-08（009）**：
+> - 超量測試改為 9B-Q8_0 搭配 `-c 262144`（006 / 008），下文的 14B-Q8_0 `-c 65536` 為歷史。
+> - spill 定義改寫：C_ctx 與速度 anchor 改用 4B-Q4_K_M，bytes 完全採用 PREREGISTRATION H-A2 的定義。見下文「spill」段的 009 版本。
 
 - 狀態：Accepted（v1；在 Stage A pre-registration commit 前仍可修改，修改需留 log）
 - 日期：2026-10-08（同日依 review 修訂：fit 規則、quant set 理由、轉換 pipeline）
@@ -105,11 +109,12 @@ llama-completion -m <gguf> -c L -np 1 --fit off -ngl 999 -fa on -ctk f16 -ctv f1
   spill cell 不進入 H-A2 / H-A3 / H-A4 的比較單位（該單位記為 not testable）。
   1. 記憶體：fit run 的 llama.cpp breakdown 中 GPU device 的 self（model + context + compute）+ C_ctx + B > V_total。
      其中 C_ctx（CUDA context 等 breakdown 以外的 overhead）於 Stage B 在 GPU lock 下量一次：
-     8B-Q4_K_M @ 2048 fit run 期間 `memory.used` 的峰值減 B，再減該 run 的 self。
+     **4B-Q4_K_M @ 2048** fit run 期間 `memory.used` 的峰值減 B，再減該 run 的 self（009；原為 8B-Q4_K_M）。
   2. 速度：該 cell 的 `llama-bench` decode `avg_ts` < 0.5 × expected。
      expected = anchor 的實測 decode `avg_ts` × bytes(anchor) ÷ bytes(cell)。
-     anchor 為同平台、同 L 的 8B-Q4_K_M（若 anchor 本身是 spill，改用 L = 2048 的 8B-Q4_K_M）；
-     bytes 定義同 H-A2：(檔案 − token_embd) + KV bytes/token × (L − 64)。
+     anchor 為同平台、同 L 的 **4B-Q4_K_M**（若 anchor 本身是 spill，改用 L = 2048 的 4B-Q4_K_M）（009）。
+     bytes **完全採用 PREREGISTRATION H-A2 的定義**：(檔案 − token_embd，僅 9B 扣除) + 32,768 × (L − 64) + 2·S（009）。
+     （009 之前的版本：anchor 與 C_ctx 為 8B-Q4_K_M，bytes 為 (檔案 − token_embd) + KV bytes/token × (L − 64)，屬歷史。）
 
 ## Fit 預測規則（H-A1 的依據；規則在 Stage A 凍結，輸入在 Stage B 實測）
 

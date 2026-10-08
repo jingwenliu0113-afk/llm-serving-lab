@@ -37,8 +37,9 @@ REPS = 3
 BENCH_R = 5
 DELAY_S = 5
 IDLE_S = 30
-# Prompt for fit runs: one Qwen3 token per unit; the runner checks the logged
-# prompt token count equals L - 128 (decision 004).
+# Prompt for fit runs: exactly one Qwen3.5 token per unit (id 279; checked against the
+# pinned tokenizer.json by tests/test_core_a_plan.py); the runner checks the logged
+# prompt token count equals L - 128 (decisions 004 / 009).
 PROMPT_UNIT = " the"
 
 BENCH_COMMON = {

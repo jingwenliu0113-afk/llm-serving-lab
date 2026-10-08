@@ -155,3 +155,22 @@ def test_main_writes_plan(tmp_path):
     p = json.loads(out.read_text())
     assert p["seed"] == 3 and len(p["jobs"]) == 164
     assert len(p["pins_sha256"]) == 64
+
+
+def test_prompt_unit_is_one_qwen35_token_per_unit():
+    """Decision 009: the fit-run prompt is PROMPT_UNIT x (L - 128); that is L - 128 tokens
+    only if each unit is exactly one token under the pinned Qwen3.5 tokenizer."""
+    import subprocess
+
+    root = Path(__file__).resolve().parent.parent
+    py = root / "third_party" / "convert-venv" / "bin" / "python"
+    tok = sorted((root / "models" / "hf").glob("Qwen__Qwen3.5-*/tokenizer.json"))
+    if not py.exists() or not tok:
+        pytest.skip("converter venv or pinned tokenizer.json not present")
+    code = ("import sys; from tokenizers import Tokenizer; t = Tokenizer.from_file(sys.argv[1]); "
+            "u = sys.argv[2]; print([len(t.encode(u * n, add_special_tokens=False).ids) for n in (1, 1920, 32640)], "
+            "t.encode(u, add_special_tokens=False).ids)")
+    for path in tok:
+        out = subprocess.run([str(py), "-I", "-c", code, str(path), cp.PROMPT_UNIT],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        assert out == "[1, 1920, 32640] [279]", (path, out)
