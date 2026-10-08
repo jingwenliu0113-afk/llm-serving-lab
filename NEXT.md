@@ -40,7 +40,15 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
   - `mixed` dataset 已 pin。
 - llama.cpp CUDA：user-space CUDA 13.4.1 + Ninja（015）。configure 已通過。RTX 的 N_thr = 6（Ryzen 5 7600，6 核）。
 - Stage B 工具已備妥並有測試：`benchmarks/stage_b.py`（B、C_ctx、超量）、`benchmarks/coreb_stage_b.py`（boots、pin-ab）。
-- **GPU lock 從 2026-10-08 23:38 起由 Text-to-SQL 持有**。輪詢只用唯讀的 `lslocks`，lock 釋放後自動跑 `JIT=1` 檢查與 S1。
+- GPU lock 01:10 釋放後跑了第一次 S1（`results/core_b/smoke/20261008-s1s3-014`，失敗，已 commit）：
+  - Triton stub 已能編譯，KV cache 33,060 tokens，FLASH_ATTN，GDN 走 Triton/FLA。
+  - 但 FlashInfer sampler 的 JIT 撞上 CCCL 的版本檢查：vLLM venv 的 pip nvcc 13.4 搭配 cudart 13.0 headers。
+  - 修正（014 補充，仍在 user space）：shim 改指向版本一致的 CUDA 13.0（`.venv-fi-cuda130`，`configs/flashinfer-cuda.lock.txt`）。
+    01:27 起在 WSL 安裝中（網路慢）。
+  - 裝好後：部署 → `bash scripts/wsl_cuda_home_shim.sh` → `JIT=1` 檢查 → 在新目錄 `20261009-s1s3-014b` 重跑 S1。
+- **WSL 會在 wsl.exe 結束時終止背景 process**（`nohup` 加 `setsid` 也一樣）。遠端長時間工作必須在 ssh session 的前景執行，
+  並讓連線保持開啟（`ServerAliveInterval`）。
+- Mac ↔ 桌機的傳輸只有約 0.7–0.9 MB/s。6 個 quant（30.9 GiB）的傳輸 01:06 起在背景進行，估計要 10 小時以上。
 
 ## 下一步（依序；Mac 重負載經 `tools/with-mac-lock`，GPU 重負載經 `flock -n`，不搶 lock）
 
