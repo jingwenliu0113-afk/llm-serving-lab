@@ -1,0 +1,23 @@
+{
+ "stage": "S1",
+ "ok": false,
+ "reasons": [
+  "server exited during startup (code 1)"
+ ],
+ "timings": {
+  "startup_s": 186.2,
+  "release_s": 0.1
+ },
+ "log_facts": {
+  "attention_backend": "FLASH_ATTN",
+  "attn_block_size": 528,
+  "text_only": true,
+  "gdn_prefill_kernel": "Triton/FLA",
+  "gdn_prefill_requested": "triton",
+  "gdn_decode_kernel": "triton",
+  "gdn_warmup_failed": null,
+  "kv_cache_tokens": 33060,
+  "max_concurrency": 16.14,
+  "max_model_len_logged": 2048
+ }
+}

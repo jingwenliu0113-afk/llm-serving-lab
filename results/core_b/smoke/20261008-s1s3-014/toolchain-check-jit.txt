@@ -1,0 +1,50 @@
+
+===== 1. host compilers (apt: gcc g++ libc6-dev) =====
+PASS  cc -> /usr/bin/cc
+PASS  gcc -> /usr/bin/gcc
+PASS  c++ -> /usr/bin/c++
+PASS  g++ -> /usr/bin/g++
+g++-11 11.4.0-1ubuntu1~22.04.3
+gcc-11 11.4.0-1ubuntu1~22.04.3
+libc6 2.35-0ubuntu3.15
+libc6-dev 2.35-0ubuntu3.15
+libstdc++-11-dev 11.4.0-1ubuntu1~22.04.3
+make 
+PASS  gcc compile+link+run
+PASS  c++17 compile+link+run
+
+===== 2. Triton launcher stub (the S1 failure of 2026-10-08) =====
+CudaUtils built
+PASS  triton cuda_utils .so built
+
+===== 3. CUDA 13.4.1 toolkit root for llama.cpp (015; scripts/wsl_cuda134_root.sh) =====
+Build cuda_13.4.r13.4/compiler.38855100_0
+PASS  nvcc 13.4 sm_120a compile
+PASS  toolkit root lib64/libcudart.so
+PASS  toolkit root lib64/libcublas.so
+PASS  toolkit root lib64/libcublasLt.so
+PASS  toolkit root lib64/libcudart_static.a
+PASS  toolkit root lib64/stubs/libcuda.so
+PASS  cub headers
+PASS  ninja 1.13.2.git.kitware.jobserver-pipe-1 (CMake generator)
+
+===== 4. Core B server invariants (014) =====
+PASS  no nvcc on PATH
+PASS  ldconfig: WSL libcuda.so.1
+INFO  ldconfig libcudart.so.12 entries: 0 (cuDNN frontend may warn 'Multiple libcudart'; see server log)
+vllm 0.30.0 | torch 2.13.0+cu130 13.0 | triton 3.7.1 | flashinfer 0.6.18.post1
+
+===== 5. FlashInfer JIT environment, as the launcher sets it (core_b_plan.server_env) =====
+cuda_home /home/wenn0113/llm-serving-lab/.cuda-home-cu13 | nvcc 13.4 | ninja /home/wenn0113/llm-serving-lab/.venv/bin/ninja | nvcc on PATH None
+bin/nvcc ok
+include/curand.h ok
+lib64/libcudart.so ok
+lib64/stubs/libcuda.so ok
+PASS  shim nvcc sm_120f compile (host 11)
+
+===== 6. FlashInfer sampling module: real JIT build into a throwaway workspace =====
+[3/4]  /home/wenn0113/llm-serving-lab/.cuda-home-cu13/bin/nvcc --generate-dependencies-with-compile -MF /tmp/llmsl-check.O6vJck/fi/.cache/flashinfer/0.6.18.post1/120f/cached_ops/sampling/csrc_flashinfer_sampling_binding.cuda.o.d -DPy_LIMITED_API=0x03090000 -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/cccl/cub -I/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/cccl/libcudacxx/include -I/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/cccl/thrust -isystem /home/wenn0113/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/include/python3.12 -isystem /home/wenn0113/llm-serving-lab/.cuda-home-cu13/include -isystem /home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/tvm_ffi/include -isystem /home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/tvm_ffi/include -isystem /home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/include -isystem /home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/csrc -isystem /home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/cutlass/include -isystem /home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/cutlass/tools/util/include -isystem /home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/spdlog/include --compiler-options=-fPIC --expt-relaxed-constexpr -static-global-template-stub=false -gencode=arch=compute_120f,code=sm_120f -DFLASHINFER_ENABLE_FP8_E8M0 -DFLASHINFER_ENABLE_FP4_E2M1 -std=c++17 --threads=1 -use_fast_math -Xfatbin=-compress-all --compress-mode=size -DFLASHINFER_ENABLE_F16 -DFLASHINFER_ENABLE_BF16 -DFLASHINFER_ENABLE_FP8_E4M3 -DFLASHINFER_ENABLE_FP8_E5M2 -DNDEBUG -O3 -c /home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/flashinfer/data/csrc/flashinfer_sampling_binding.cu -o /tmp/llmsl-check.O6vJck/fi/.cache/flashinfer/0.6.18.post1/120f/cached_ops/sampling/csrc_flashinfer_sampling_binding.cuda.o 
+ninja: build stopped: subcommand failed.
+
+
+ALL CHECKS PASSED

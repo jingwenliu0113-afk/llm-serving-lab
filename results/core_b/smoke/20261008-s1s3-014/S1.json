@@ -1,0 +1,63 @@
+{
+ "stage": "S1",
+ "max_model_len": 2048,
+ "prompt_tokens": 1800,
+ "ok": false,
+ "reasons": [
+  "server exited during startup (code 1)"
+ ],
+ "argv": [
+  ".venv/bin/vllm",
+  "serve",
+  "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "--revision",
+  "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "--language-model-only",
+  "--dtype",
+  "bfloat16",
+  "--max-model-len",
+  "2048",
+  "--max-num-seqs",
+  "8",
+  "--gpu-memory-utilization",
+  "0.85",
+  "--no-enable-prefix-caching",
+  "--gdn-prefill-backend",
+  "triton",
+  "--generation-config",
+  "vllm",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "8765"
+ ],
+ "env": {
+  "HF_HOME": "/home/wenn0113/.cache/huggingface",
+  "HF_HUB_OFFLINE": "1",
+  "VLLM_GDN_DECODE_KERNEL": "triton",
+  "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+  "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin"
+ },
+ "timings": {
+  "startup_s": 186.2,
+  "release_s": 0.1
+ },
+ "log_facts": {
+  "attention_backend": "FLASH_ATTN",
+  "attn_block_size": 528,
+  "text_only": true,
+  "gdn_prefill_kernel": "Triton/FLA",
+  "gdn_prefill_requested": "triton",
+  "gdn_decode_kernel": "triton",
+  "gdn_warmup_failed": null,
+  "kv_cache_tokens": 33060,
+  "max_concurrency": 16.14,
+  "max_model_len_logged": 2048
+ },
+ "idle_mib": 1000,
+ "mem_before_mib": 756,
+ "mem_during_mib": null,
+ "mem_after_mib": 751,
+ "server_log": "S1.server.log",
+ "log_tail": "(APIServer pid=11167)                ^^^^^^^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/contextlib.py\", line 210, in __aenter__\n(APIServer pid=11167)     return await anext(self.gen)\n(APIServer pid=11167)            ^^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/entrypoints/launchers/api_server/entry.py\", line 58, in build_async_engine_client\n(APIServer pid=11167)     async with build_async_engine_client_from_engine_args(\n(APIServer pid=11167)                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/contextlib.py\", line 210, in __aenter__\n(APIServer pid=11167)     return await anext(self.gen)\n(APIServer pid=11167)            ^^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/entrypoints/launchers/api_server/entry.py\", line 94, in build_async_engine_client_from_engine_args\n(APIServer pid=11167)     async_llm = AsyncLLM.from_vllm_config(\n(APIServer pid=11167)                 ^^^^^^^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py\", line 235, in from_vllm_config\n(APIServer pid=11167)     return cls(\n(APIServer pid=11167)            ^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py\", line 169, in __init__\n(APIServer pid=11167)     self.engine_core = EngineCoreClient.make_async_mp_client(\n(APIServer pid=11167)                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/tracing/otel.py\", line 178, in sync_wrapper\n(APIServer pid=11167)     return func(*args, **kwargs)\n(APIServer pid=11167)            ^^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py\", line 163, in make_async_mp_client\n(APIServer pid=11167)     return AsyncMPClient(\n(APIServer pid=11167)            ^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/tracing/otel.py\", line 178, in sync_wrapper\n(APIServer pid=11167)     return func(*args, **kwargs)\n(APIServer pid=11167)            ^^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py\", line 1060, in __init__\n(APIServer pid=11167)     super().__init__(\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py\", line 656, in __init__\n(APIServer pid=11167)     with launch_core_engines(\n(APIServer pid=11167)          ^^^^^^^^^^^^^^^^^^^^\n(APIServer pid=11167)   File \"/home/wenn0113/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/contextlib.py\", line 144, in __exit__\n(APIServer pid=11167)     next(self.gen)\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py\", line 1240, in launch_core_engines\n(APIServer pid=11167)     wait_for_engine_startup(\n(APIServer pid=11167)   File \"/home/wenn0113/llm-serving-lab/.venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py\", line 1320, in wait_for_engine_startup\n(APIServer pid=11167)     raise RuntimeError(\n(APIServer pid=11167) RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}"
+}
