@@ -59,52 +59,55 @@
 
 ## 進行中（2026-10-08 晚）
 
-### Commit（最新在上；皆未 push）
+### GitHub
 
-- （本次）decision 009：凍結前一致性修訂（H-A4(b) 4.45 / 4.84、spill anchor 改 4B-Q4_K_M、C_KV 單一規則、fit prompt 對齊 harness）
-- `9f37785` Core B smoke：process group teardown、真實 log fact、GPU lock / idle 1000 MiB、不覆寫證據；deploy bundle + manifest
-- `57c5b74` produce_gguf：刪 source 前驗證 GGUF 與 commit、`.tmp` staging 不覆寫 pinned 檔、toolchain 檢查、每步重查 lock
-- `b7863a9` NEXT 更新
-- `61a5984` quality runner（`quality/run_quality.py`、`quality_parse.py`）與 `[quality.expected]`
-- `a2785df` MMLU 結構性排除（3 題）與子集 hash
-- `df9c720` Core B S1 失敗證據（WSL 缺 C compiler）
-- `0c0e099` PREREG 依 008 重新推導
-- `0d72a98` Core B 分段 smoke runner、GGUF 產出工具、env `DEPLOYED_COMMIT` fallback
-- `94190f5` converter / vLLM 的 hashed lock
-- 目前 `uv run pytest -q`：244 passed、2 skipped
+- `origin` = `https://github.com/jingwenliu0113-afk/llm-serving-lab.git`（**Private**），`main` 已設 upstream。
+- 每個 coherent、測試通過的 commit 自動 push；禁止 force push、改寫 history。
+- 不進 git：權重 / HF cache、GGUF、KLD、`results/**/raw/`（以 `raw_manifest.json` 的 sha256 驗證）、venv、credential（`.gitignore` 與測試）。
+
+### Commit（最新在上）
+
+- `a1a2200` raw outputs 不進 git，改 commit `raw_manifest.json`；`.gitignore` 加強
+- `f98ac5d` 分析程式先於數據寫定（decision 011）：`core_a_analysis.py`（H-A1–H-A4、spill）、`quality_analysis.py`（H-A5 + Holm、downstream CI）
+- `d60b3c8` quality pilot：`-fa off` / 重跑 determinism job，遮蔽式 pilot 報告（`quality/quality_pilot.py`）
+- `033f4b8` Core A pilot plan 與遮蔽式報告（`benchmarks/core_a_pilot.py`）
+- `3ee94ca` tokenizer 交叉驗證工具（`quality/tokenizer_crosscheck.py`）；build 加 `llama-tokenize`
+- `0d678ba` results schema v2（decision 010）：Mac `/usr/bin/time -l`、RTX `memory.used` 取樣、graph splits
+- `0353d7c` **4B 的 BF16 / Q8_0 / Q6_K / Q4_K_M 已產出並 pin**（4.48 / 3.46 / 2.71 GB，符合 008）
+- `b409bcd` decision 009：凍結前一致性修訂（review 後）
+- `9f37785`、`57c5b74` review 的 code 修正（Core B smoke teardown、produce_gguf 安全性）
+- 目前 `uv run pytest -q`：**297 passed、2 skipped**
 
 ### 下載與 artifact
 
 | 項目 | 位置 | 狀態 |
 |---|---|---|
-| 9B 的小檔（config / tokenizer / README / LICENSE 等） | Mac `models/hf/Qwen__Qwen3.5-9B@c2022362/` | ✅ 與 4B 的小檔集合相同（README 會寫入 GGUF metadata） |
-| 4B 權重 | Mac `models/hf/Qwen__Qwen3.5-4B@851bf6e8/` | ✅ 2 個 shard sha256 已驗證（18:24） |
-| 9B 權重（19.33 GB） | 同上 9B 目錄 | ⏳ curl 續傳下載中（scratchpad `fetch_9b.log`） |
+| 4B safetensors | Mac `models/hf/Qwen__Qwen3.5-4B@851bf6e8/` | ✅ 已驗證；GGUF 已產出。`delete-source` 待 Mac lock 空出（要 hash 約 19 GB） |
+| 4B GGUF ×4 | Mac `models/gguf/` | ✅ sha256 已寫入 pins，recipe 在 `results/artifacts/` |
+| 9B safetensors（19.33 GB） | Mac `models/hf/Qwen__Qwen3.5-9B@c2022362/` | ⏳ curl 續傳中（約 2 MB/s，預計 21:30 前後完成；scratchpad `fetch_9b.log`）；小檔集合已與 4B 相同 |
 | Core B checkpoint | WSL HF cache `…/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c…/` | ✅ sha256 已驗證 |
-| quality 資料集 | Mac `data/datasets/`（git-ignored） | ✅ 全部依 pins 驗證；pilot 子集在 `data/datasets/pilot/` |
-| converter / vLLM 環境 | Mac `third_party/convert-venv`、WSL `~/llm-serving-lab/.venv` | ✅ |
+| quality 資料集 | Mac `data/datasets/`（git-ignored） | ✅ 依 pins 驗證；pilot 子集在 `data/datasets/pilot/` |
 
 ### Tokenizer 相關（Qwen3.5）
 
-- MMLU 排除 3 題（2151、2189、13184），4B 與 9B 的 tokenizer 相同。
-- WikiText 依 HF tokenizer 為 580 chunks。這兩項都需要以 llama.cpp tokenizer 交叉驗證（要先 build `llama-tokenize`）。
+- HF tokenizer：MMLU 排除 3 題（2151、2189、13184）；HellaSwag、ARC 也走同一個 `--multiple-choice` scorer，檢查結果為 0 題。
+- WikiText 依 HF tokenizer 為 580 chunks。
+- 以上要用 `quality/tokenizer_crosscheck.py` 對 pinned llama.cpp tokenizer 驗證（需先 rebuild 出 `llama-tokenize`）。
 
 ## 下一步（依序；Mac 重負載都要等 Mac heavy lock 沒被他人占用）
 
-1. Mac lock 空出時：
-   - 把 `llama-tokenize` 加進 build targets，重新 build metal。
-   - 以 llama.cpp tokenizer 驗證 WikiText 的 580 chunks 與 MMLU 排除清單；若不同就修正 pins，以 llama.cpp 為準。
-2. 4B（已下載）：`produce --size 4B` → commit `configs/pins.toml` 與 `results/artifacts/` → `delete-source --size 4B`
-   → commit `results/artifacts/deletions.jsonl`。順序由 `delete-source` 強制（STORAGE_PLAN）。
-3. 9B 下載完成後同上。
-4. Mac 模型 smoke test（4B-Q4_K_M），以及 Core A 與 quality 的 pilot：
-   - Core A pilot：`benchmarks/core_a_plan.py --mode pilot`。
-   - quality pilot：`quality/run_quality.py plan --mode pilot`。
-   - 決定 `--poll`。
-   - 檢查 GDN 的 graph splits。
-   - 交叉核對 memory metric。
-5. 完成 PREREGISTRATION §5 Stage A checklist → `freeze.mac = true` → commit → 用 `tools/with-mac-lock` 跑正式 Core A（Mac）與 quality。
-6. Core B：使用者裝好 `build-essential` 後，在新的 session 目錄重跑 S1 → S2 → S3。
+1. Mac lock 空出時（incident-investigator 的 soak 每輪約 35 分鐘，持續在取 lock）：
+   - 重新 build metal（`scripts/build_llama_cpp.sh`，多了 `llama-tokenize`），跑 `tokenizer_crosscheck.py`，
+     結果 commit 到 `quality/subsets/tokenizer-crosscheck.json`；若與 pins 不同，以 llama.cpp 為準修正並寫 log。
+   - `produce_gguf.py delete-source --size 4B` → commit `deletions.jsonl`。
+   - Mac 模型 smoke（4B-Q4_K_M 一次 `llama-completion`）。
+   - Core A pilot（4B）：`core_a_pilot.py plan --sizes 4B` → `run_core_a.py` → `core_a_pilot.py report`；
+     決定 `--poll`、確認 `-fa auto` 與 graph splits、memory 交叉核對。
+   - quality pilot（4B）：`run_quality.py plan --mode pilot` → run → `quality_pilot.py`（只看遮蔽量）。
+2. 9B 下載完成後：`tools/with-mac-lock uv run python scripts/produce_gguf.py produce --size 9B` → commit pins / recipe
+   → `delete-source --size 9B` → commit；之後補 9B 的 pilot。
+3. 完成 PREREGISTRATION §5 Stage A checklist → `freeze.mac = true` → commit → 用 `tools/with-mac-lock` 跑正式 Core A（Mac）與 quality。
+4. Core B：使用者裝好 `build-essential` 後，用 `scripts/deploy_bundle.py` 部署，再在新的 session 目錄重跑 S1 → S2 → S3。
 
 ## Blocked
 
