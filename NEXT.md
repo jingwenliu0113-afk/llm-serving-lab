@@ -51,9 +51,12 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
     `max_num_seqs (264) exceeds available Mamba cache blocks (134)`（`vllm/config/compilation.py`：FULL CUDA graph 加上 Mamba 層時，
     要求 max_num_seqs ≤ num_gpu_blocks）。可用 KV 記憶體 2.17 GiB，66,528 tokens，num_gpu_blocks = 134。
     **見 Blocked 2，需要使用者決定**；Core B 的 Stage B（K、JIT 計時、pin-memory A/B）與正式 Core B 都暫停。
+- **003 gate 第 5 項通過**（02:34，`results/stage_b/20261009/bench-check`）：在 S1 smoke server 上 `vllm bench serve` 完成並通過完整驗證，
+  `/metrics` 的三個 metric 名稱都存在。
 - WSL 會在 wsl.exe 結束時終止背景 process，所以遠端長時間工作都在 ssh 前景執行（`ServerAliveInterval`）。
 - Mac ↔ 桌機約 0.7–0.9 MB/s，而且會斷線。GGUF 傳輸已改成可續傳（`sync_gguf_to_wsl.py`）。
-  為了不讓 GPU 工作的 ssh session 被擠斷，傳輸等 Stage B 結束後再進行。
+  02:37 起在 Mac lock 下傳輸（可續傳）。之後的嘗試會先傳 Stage B 需要的 4B-Q4_K_M 與 9B-Q8_0。
+  傳完後依序：`stage_b.py cctx` → `overflow` → RTX Core A pilot（`--n-thr 6`）。
 
 ## 下一步（依序；Mac 重負載經 `tools/with-mac-lock`，GPU 重負載經 `flock -n`，不搶 lock）
 
