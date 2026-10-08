@@ -14,7 +14,7 @@
 >
 > 凍結後，hypothesis、metrics、task set、protocol 都不得依結果修改。任何變更都要先寫 decision log，並標明是 post-hoc。
 
-決策依據：`docs/decisions/001`–`009`；機器可讀 pin：`configs/pins.toml`。
+決策依據：`docs/decisions/001`–`011`；機器可讀 pin：`configs/pins.toml`。
 
 符號：
 
@@ -249,6 +249,7 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
   - [ ] quality 數值 sanity check
   - [ ] MDE（遮蔽方向）
 - [ ] Benchmark harness 與輸出格式固定，記錄 harness 的 git commit
+- [x] 判定規則的分析程式在任何數據前 commit（`benchmarks/core_a_analysis.py`、`quality/quality_analysis.py`；011）
 - [x] Mac 重負載 lock 的參與方式已由使用者決定，並寫入 MACHINE_POLICY 或 decision log（共享 `/tmp/ai-portfolio-mac-heavy.lock`，經 `tools/with-mac-lock`）
 - [ ] 本文件第 1–5 節狀態改為 FROZEN (Stage A) 並 commit
 
