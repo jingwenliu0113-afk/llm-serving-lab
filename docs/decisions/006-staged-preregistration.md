@@ -30,7 +30,8 @@ Pre-registration 分兩階段 commit：
   因此 Stage B 代入實測值之後，預測完全由規則決定，沒有事後調整空間。
 - **Stage B commit 之前在 RTX 上得到的任何數字**（smoke test、`VLLM_WSL2_ENABLE_PIN_MEMORY` A/B、sysmem 超量測試、
   `--poll` 選擇）只能用於 pass/fail 與事先寫定的選擇規則，不得用來檢視任何 hypothesis 的結果。
-  超量測試必須用 **18 格以外**的配置（14B-Q8_0 搭配 `-c 65536`），避免提前看到 H-A1 的格子。
+  超量測試必須用 **18 格以外**的配置，避免提前看到 H-A1 的格子。原為 14B-Q8_0 搭配 `-c 65536`；
+  依 008 改為 9B-Q8_0 搭配 `-c 262144`。
 
 ## 為什麼
 

@@ -1,6 +1,8 @@
 # Pre-registration — Local LLM Serving Lab
 
-> **2026-10-08：模型已依 decision 008 改為 Qwen3.5 4B + 9B（Core A）與 RedHatAI Qwen3.5-9B W4A16（Core B）。** 下列與模型綁定的內容在 Stage A 凍結前必須依 008「對實驗的影響」重新推導：H-A1 至 H-A5 的數值預測與範例、fit 規則中的 KV / recurrent 狀態、Core B 的 C_KV 公式、sentinel 與超量測試的配置。本文其餘結構不變。
+> **2026-10-08：模型已依 decision 008 改為 Qwen3.5 4B + 9B（Core A）與 RedHatAI Qwen3.5-9B W4A16（Core B）。**
+> 同日已依 008「對實驗的影響」重新推導：H-A1 至 H-A5 的預測、fit 規則中的 KV 與 recurrent 狀態、Core B 的 C_KV 公式、
+> sentinel 與超量測試。仍待 pilot 才能凍結的 tokenizer 常數：WikiText chunk 數、MMLU 結構性排除清單。本文其餘結構不變。
 
 > **狀態：DRAFT v1（2026-10-08，同日依兩輪 review 修訂）— 尚未凍結。**
 > 依 decision 006 分兩階段凍結：
@@ -44,27 +46,38 @@
   - H-A1 不適用本規則，因為 fit / OOM / spill 本身就是它的結果。
 - **inconclusive**：grid 沒有涵蓋判定所需的範圍時，記為 inconclusive，同樣只報告、不計入。
 
-### Core A — single-user（Qwen3 8B / 14B × Q8_0 / Q6_K / Q4_K_M × 2048 / 8192 / 32768 × {M4 Pro Metal, RTX 5070 Ti CUDA}）
+### Core A — single-user（Qwen3.5 4B / 9B × Q8_0 / Q6_K / Q4_K_M × 2048 / 8192 / 32768 × {M4 Pro Metal, RTX 5070 Ti CUDA}）
+
+共用量（008；兩個 size 的 attention 與 GDN 幾何相同）：
+
+- KV(L) = 32,768 B × L：f16，只計 8 層 full attention。
+- S = 每條序列的 recurrent 狀態約 50.25 MiB（24 層 GDN，f32）。
+- token_embd 只對 untied 的 9B 扣除：tied 的 4B 在 decode 時會把整個 output（即 token_embd）讀一次，CUDA 上也有一份副本。
 
 **H-A1（fit boundary 由記憶體容量決定）**
 
-- 預測依 004「Fit 預測規則」：N = 檔案 − token_embd + KV；predicted fit：N + 1.5 ≤ V_total − B；predicted OOM：N + 0.8 > V_total − B。
+- 預測依 004 的規則（008 修訂）：N = 檔案 − token_embd（僅 9B）+ KV(L) + S；
+  predicted fit：N + 1.5 ≤ V_total − B；predicted OOM：N + 0.8 > V_total − B。
   - RTX 的 V_total、B 依第 4 節的程序在 Stage B 實測後代入，規則本身不得再改。
+    以 V_total = 15.92 GiB 試算，最大的 N 是 9B-Q8_0 @ 32K 的 8.90 GiB，
+    **所以只要 B ≤ 5.52 GiB，18 格全部預測 fit**（在 2K–32K 範圍內 16 GB 上沒有邊界；008）。
   - Mac：V_total = 37.44 GiB、B = 0，18 格全部預測 fit。
 - *推翻條件*：任何 predicted-fit 的 cell OOM 或 spill；或任何 predicted-OOM 的 cell fit。boundary cell 只報告。
 
 **H-A2（decode 受記憶體頻寬限制）**
 
-- 定義 bytes = (檔案大小 − token_embd) + KV bytes/token × (L − 64)。L − 64 是 128 個生成 token 的平均 depth。
+- 定義 bytes = (檔案大小 − token_embd，僅 9B 扣除) + KV(L − 64) + 2·S。
+  L − 64 是 128 個生成 token 的平均 depth；2·S 是每個 token 對 recurrent 狀態的讀與寫。
 - 預測：同一平台上，L = 2048 時兩個都 fit 且都不是 spill 的配置 A、B，滿足 tok/s(A) ÷ tok/s(B) ≈ bytes(B) ÷ bytes(A)。
-- 例：14B-Q4_K_M 與 8B-Q8_0 的權重記憶體接近；依上式，前者 decode 預測約慢 6%。
+- 例：4B-Q8_0 與 9B-Q4_K_M 依上式，前者 decode 預測快約 1.125 倍。
 - *推翻條件*：任一配對 |觀測比 ÷ 預測比 − 1| > 20%（以 process-level mean 計）。
 
 **H-A3（context 的 decode 成本隨 KV 占比增加）**
 
 - 定義降幅 D = 1 − tok/s(L = 32768) ÷ tok/s(L = 2048)。
 - 預測：同一平台、同一 size 內，D(Q4_K_M) > D(Q6_K) > D(Q8_0)。依 H-A2 的頻寬模型，KV 在讀取 bytes 中的占比越高，D 越大；
-  模型預測值為 8B：0.48 / 0.41 / 0.35，14B：0.36 / 0.30 / 0.25。
+  模型預測值（Q4_K_M / Q6_K / Q8_0）：4B 為 0.260 / 0.218 / 0.178，9B 為 0.162 / 0.131 / 0.105。
+  相鄰差距約 0.03–0.04；差距落在 noise 內時屬於「不推翻、也不確認」，照實報告。
 - *推翻條件*：任一相鄰配對的順序相反，而且差距超出 noise。若某 (平台, size) 在 32K fit 的配置少於 2 個，記為 not testable。
 
 **H-A4（prefill 受算力限制）**
@@ -73,11 +86,14 @@
   spread_decode 同理。預測 spread_prefill < spread_decode。
   *推翻條件*：任一符合條件的單位出現 spread_prefill ≥ spread_decode。
 - (b) 對每個 32K 會 fit 的配置，預測 TTFT(32768) ÷ TTFT(8192) > 4（attention 為 O(L²)，呈超線性）。
+  hybrid 架構只有 1/4 的層是 full attention，FLOP 模型的預測值為 9B 約 4.68、4B 約 5.36，離門檻 4 不遠。
   *推翻條件*：任一配置的比值 ≤ 4。
 
 **H-A5（quality–memory frontier）**
 
-- (a) 權重記憶體接近時（約 9 GB），14B-Q4_K_M 優於 8B-Q8_0：WikiText-2 上 584 個 chunk 的配對 ΔNLL（14B-Q4_K_M − 8B-Q8_0）< 0。
+- (a) 較大的模型在 4-bit 下優於較小的模型在 8-bit 下：9B-Q4_K_M（約 5.62 GB，比 4B-Q8_0 多約 26%）
+  在 WikiText-2 全部 chunk 上的配對 ΔNLL（9B-Q4_K_M − 4B-Q8_0）< 0。chunk 數依 Qwen3.5 tokenizer 於 pilot 確認後凍結。
+  4B / 9B 之間沒有權重記憶體相近的配對（008），因此報告時要並列兩者的記憶體與 decode 速度（H-A2）。
   p 值以 chunk bootstrap（10,000 次，雙尾）計算（005）。
 - (b) 同一 size 內，KLD 單調遞增：Q8_0 < Q6_K < Q4_K_M，共 4 個 z 檢定（005）。
 - **判定只用 Holm**：(a) 與 (b) 共 5 個 p 值，α = 0.05 雙尾，做 Holm step-down；校正後顯著且方向符合預測才算成立。
@@ -86,13 +102,17 @@
 - Downstream 是 descriptive，不屬於本 hypothesis。事先寫下的預期：在這個 N 下，Q8_0 vs Q6_K 在四個 task 上都是 not resolved
   （配對 95% CI 包含 0）。
 
-### Core B — multi-user（Qwen3-8B-AWQ / vLLM 0.30.0 / RTX 5070 Ti；以 003 smoke test 通過為前提）
+### Core B — multi-user（RedHatAI/Qwen3.5-9B-quantized.w4a16 / vLLM 0.30.0 / RTX 5070 Ti；以 008 的分段 smoke test 通過為前提）
 
-- Core B 模型固定為 `Qwen3-8B-AWQ`（使用者決定，003），沒有 fallback。AWQ 若在 smoke test 失敗，Core B 記為 blocked。
+- Core B 模型固定為 `RedHatAI/Qwen3.5-9B-quantized.w4a16`（008，`--language-model-only`），沒有 fallback。
+  smoke test 失敗時 Core B 記為 blocked，並回報使用者。
 - 定義（007）：
   - mix 分為 `uniform` 與 `mixed`。**H-B1 至 H-B3 只用 `uniform`；`mixed` 只用於 H-B4。**
   - 每個 `uniform` request 的 tokens = L，(input, output) = (L − 128, 128)。
-  - C_KV(L) = ⌊KV 池 tokens ÷ ⌈L ÷ 16⌉·16⌋。
+  - C_KV(L) = ⌊(num_gpu_blocks − 1) ÷ (⌈L ÷ block_size⌉ + 3)⌋（hybrid 版，008）。
+    num_gpu_blocks 與 block_size（預期約 528）取自 server log 或 `/metrics` 的 `vllm:cache_config_info`；
+    每個 request 另需 3 個 GDN 狀態 block（每條序列約 49.5 MiB）。
+  - 「KV cache usage %」包含 GDN 狀態 block，報告時要註明。
   - C_knee = grid 中「3 次 restart 平均」output throughput 達到 grid 最大值 95% 的最小 C。
   - C_max = grid 中最大的 C。
 
@@ -181,7 +201,7 @@ request throughput（req/s）；output token throughput 與 total token throughp
 - **Mac**：
   - 接 AC 電源；所有正式 run 的 `powermode` 都必須相同（目前為 2 = high power）；`iogpu.wired_limit_mb` 必須為 0。
   - process 之間至少閒置 30 秒。
-  - **sentinel cell**（8B-Q4_K_M decode @ L = 2048）在每個 session 開頭與結尾各量一次。兩次的 decode tok/s 相差 > 3% 時，
+  - **sentinel cell**（最小 size × 最低 bit × 最短 context，由 pins 推導；目前為 4B-Q4_K_M decode @ L = 2048）在每個 session 開頭與結尾各量一次。兩次的 decode tok/s 相差 > 3% 時，
     整個 session 標記為 drift，所有 cell 在新的 session 重跑。
   - 每個 process 前後都跑一次 `env_capture`（thermal / loadavg / Mac lock owner）。
 - **RTX**：
@@ -208,6 +228,9 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
 - [ ] 8 個衍生 GGUF 的 sha256 / size 都已填入 `pins.toml`（`freeze.mac = true` 由測試強制）
 - [ ] converter 的 Python lock 已 commit，`pins.toml` 的 `core_a.converter_lock` 指向它（004）
 - [ ] Quality：HellaSwag / MMLU 子集的題號清單、子集 `.bin` 的 sha256、MMLU 排除清單已 commit（005）
+  - 題號清單與 HellaSwag 子集 sha256 已完成（`pins.toml`）
+  - MMLU 結構性排除清單要用 Qwen3.5 tokenizer 計算（008）
+  - WikiText chunk 數 / 計分 token 數要依 Qwen3.5 tokenizer 確認（008）
 - [ ] Mac pilot 完成：
   - [ ] `-fa auto` probe
   - [ ] `--poll` 依規則選定
@@ -225,7 +248,7 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
 待填（遠端可用後；所有 GPU 步驟都在 GPU lock 下）：
 
 - [ ] RTX 實測：V_total（`memory.total`）、B（依第 4 節程序）、C_ctx（004）、是否接螢幕、HAGS、`.wslconfig`
-- [ ] sysmem 超量測試（14B-Q8_0、`-c 65536`，不屬於 18 格）：hard OOM 或 spill
+- [ ] sysmem 超量測試（9B-Q8_0、`-c 262144`，不屬於 18 格；N 約 15.90 GiB，任何 B 下都超量；008）：hard OOM 或 spill
 - [ ] llama.cpp CUDA build：toolkit 版本、`wsl2-cuda` verified、RTX 的 N_thr / P（依第 4 節規則）
 - [ ] vLLM：smoke test 通過（003 gate）、lock 檔已 commit（`vllm.lock_file`）、`VLLM_WSL2_ENABLE_PIN_MEMORY`（依 003 規則）、
       attention backend、performance mode / async scheduling 的實際生效值

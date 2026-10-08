@@ -57,26 +57,56 @@
   - 遠端環境資訊。
 - **Day 1 NVIDIA 環境 smoke test**：PyTorch 2.14.1+cu130、sm_120、bf16 matmul 都正常（001）。
 
+## 進行中（2026-10-08 傍晚）
+
+### Commit
+
+- `1d952c2`：harness、quality 子集、storage plan、decision 008，以及 7 項修正。
+- **之後尚未 commit 的修改**：
+  - converter 依賴：`configs/converter.requirements.in`、`configs/converter.lock.txt`（hashed，Mac arm64），以及 pins 中的 `converter_lock` 欄位
+  - vLLM 依賴：`configs/vllm.requirements.in`、`configs/vllm.lock.txt`（sha256 `4a424aa8…`，WSL 解析）
+  - `benchmarks/coreb_smoke.py` 與其測試
+  - `env_capture` 的 `DEPLOYED_COMMIT` fallback
+  - PREREGISTRATION 依 008 重新推導、006 的超量測試配置
+  - `results/core_b/smoke/20261008-s1-no-cc/`（S1 的失敗證據）
+  - `scripts/produce_gguf.py` 與其測試：驗證來源 sha256、檢查 Mac lock、跑 disk_guard，再依序轉 BF16 → 3 個 quant。
+    每個產物都會回填 pins 並寫 recipe 到 `results/artifacts/`。刪除來源檔需另外執行 `delete-source`，
+    而且必須在 recipe 與 hash 都存好之後。
+
+  目前 `uv run pytest -q`：172 passed、2 skipped。
+
+### 下載與 artifact
+
+| 項目 | 位置 | 狀態 |
+|---|---|---|
+| D0：9B 的 config 與 tokenizer | Mac `models/hf/Qwen__Qwen3.5-9B@c2022362/` | ✅ converter `--vocab-only` 驗證通過（qwen35，vocab 248,320） |
+| D1：4B 權重（9.34 GB） | Mac `models/hf/Qwen__Qwen3.5-4B@851bf6e8/` | ⏳ 下載中，約 2.6 MB/s。hf-xet 卡住、hf 的 HTTP 讀取逾時又丟失進度，已改用 curl：pinned revision URL、斷點續傳、每個檔案下載完立即驗 sha256 |
+| D2：9B 權重（19.33 GB） | Mac，與 D0 同目錄 | 待 D1 處理完 |
+| Core B checkpoint（11.46 GB） | WSL `/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c…/` | ✅ sha256 驗證通過 |
+| converter 環境 | Mac `third_party/convert-venv`（git-ignored） | ✅ torch 2.11.0、transformers 4.57.6 |
+| vLLM 環境 | WSL `/home/wenn0113/llm-serving-lab/.venv`（uv 0.11.8 user scope，Python 3.12.13，7.7 GB） | ✅ vllm 0.30.0、torch 2.13.0+cu130 |
+
+### Core B smoke
+
+- **S1（2K）❌**：`RuntimeError: Failed to find C compiler`。Triton 的 JIT 需要系統 C compiler。
+- 失敗之前都正常：模型載入（9.48 GiB，Marlin W4A16）、FA2、block size 528、GDN 走 Triton/FLA。
+  失敗後 GPU 記憶體回到 379 MiB，沒有殘留 process。
+- 依使用者指示，S1 沒通過就不進 S2 / S3。沒有用使用者空間的 compiler 繞過，因為那會在 pinned 環境中加入未記錄的元件。
+
 ## 下一步
 
-使用者已同意 008（2026-10-08），並要求下載前先完成 7 項修正：
-- 已完成：008 的架構敘述、storage plan、遠端 uv / 環境規範、HF cache 位置、smoke 分段程序、language-model-only。
-- 待完成：獨立 commit。
-
-1. **Staged download**（每一步先跑 `scripts/disk_guard.py`，依 `docs/STORAGE_PLAN.md` 處理）：
-   - D0：下載 9B 的 config / tokenizer 小檔，執行 converter `--vocab-only` 驗證。
-   - D1：4B → BF16 GGUF → 3 個 quant → 寫入 hash 與 recipe → 刪除 safetensors。
-   - D2：9B，步驟同 D1。
-   - 遠端：以 user scope 安裝 `uv`，建立 `/home/wenn0113/llm-serving-lab/.venv`，
-     把 RedHatAI 9B W4A16 下載到 `HF_HOME=/home/wenn0113/.cache/huggingface`。
-2. 依 008「對實驗的影響」修訂 PREREGISTRATION 中與模型綁定的部分。
-3. Mac 模型 smoke test → pilot（檢查 GDN graph splits）→ MMLU 排除清單 → Stage A 凍結 → 正式 run。
-4. Core B：S1（2K）→ S2（8K）→ S3（32K）smoke。前提是遠端有 C compiler。
+1. D1 下載完成後，執行 `uv run python scripts/produce_gguf.py produce --size 4B`（若 Mac heavy lock 被他人占用，工具會拒絕執行），
+   再執行 `delete-source --size 4B`。
+2. D2（9B），步驟相同。
+3. Mac 模型 smoke test → pilot（GDN graph splits、`--poll` 規則、MMLU 排除清單、WikiText chunk 數）→ Stage A 凍結 → 正式 run（用 `tools/with-mac-lock`）。
+4. 使用者裝好 `build-essential` 後，在新的 session 目錄重跑 S1 → S2 → S3。
 
 ## Blocked
 
 - ~~`ssh gpu-server`~~ → **resolved**（2026-10-08）。
-- **遠端建置工具（需使用者以 sudo 安裝）**：WSL `Ubuntu-22.04` 內沒有 `gcc` / `g++` / `make` / `nvcc` / `cmake` / `uv`。
+- **遠端 C compiler / CUDA toolkit（需使用者以 sudo 安裝）**：
+  - Core B 的 S1 smoke 已確認卡在缺 C compiler。
+  - llama.cpp CUDA build 需要 `cuda-toolkit-12-8`。
 
   ```bash
   sudo apt-get update && sudo apt-get install -y build-essential
@@ -85,9 +115,7 @@
   sudo apt-get install -y cuda-toolkit-12-8     # 002：只裝 toolkit，不要裝 Linux driver
   ```
 
-  - 受影響：llama.cpp CUDA build、vLLM 安裝與 smoke test（008 的 GDN kernel 驗證）、RTX 正式實測、Stage B。
-
 ## 待使用者確認
 
-1. 遠端 `build-essential`（C compiler）：vLLM 的 Triton / FlashInfer JIT 需要它，Core B 的 S1 smoke 很可能因此卡住。
-2. 遠端 `cuda-toolkit-12-8`：llama.cpp CUDA build 需要。
+1. 執行上面的 sudo 安裝（`build-essential` 是 Core B 的直接 blocker）。
+2. 是否要把 `1d952c2` 之後的修改另做一個 commit。
