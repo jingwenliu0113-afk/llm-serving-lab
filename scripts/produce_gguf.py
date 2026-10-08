@@ -201,35 +201,49 @@ def produce(
     check_toolchain(tc, pins)
 
     expected = shard_sha256_override or m["source_shards"]
-    missing = [n for n in REQUIRED_SOURCE_FILES if not (src / n).is_file()]
-    if missing:
-        raise ProduceError(f"source snapshot {src} lacks {missing}; fetch them at the pinned revision first")
-    small_files = {p.name: _sha256(p) for p in sorted(src.iterdir())
-                   if p.is_file() and p.name not in expected and not p.name.endswith(".part")}
-    for name, want in expected.items():
-        path = src / name
-        if not path.is_file() or _sha256(path) != want:
-            raise ProduceError(f"source shard {name} missing or sha256 mismatch (pinned {want})")
-
-    need_gib = NEED_FACTOR * sum((src / n).stat().st_size for n in expected) / GiB
     gguf_dir = root / "models" / "gguf"
+    recipes = root / "results" / "artifacts"
+    steps = plan_steps(pins, size, root, staging=gguf_dir / ".tmp")
+    done_cache: dict = {}
+
+    def is_done(name: str) -> bool:
+        if name not in done_cache:
+            done_cache[name] = _already_done(gguf_dir / name, _pin_entry(m, name), recipes / f"{name}.json")
+        return done_cache[name]
+
+    small_files = None
+    if not is_done(steps[0]["output"]):  # the BF16 must be (re)converted: sources are required
+        missing = [n for n in REQUIRED_SOURCE_FILES if not (src / n).is_file()]
+        if missing:
+            raise ProduceError(f"source snapshot {src} lacks {missing}; fetch them at the pinned revision first")
+        small_files = {p.name: _sha256(p) for p in sorted(src.iterdir())
+                       if p.is_file() and p.name not in expected and not p.name.endswith(".part")}
+        for name, want in expected.items():
+            path = src / name
+            if not path.is_file() or _sha256(path) != want:
+                raise ProduceError(f"source shard {name} missing or sha256 mismatch (pinned {want})")
+        need_gib = NEED_FACTOR * sum((src / n).stat().st_size for n in expected) / GiB
+    else:  # re-quantize from the kept, pinned BF16 (STORAGE_PLAN): only missing quants are rebuilt
+        bf16_bytes = (gguf_dir / steps[0]["output"]).stat().st_size
+        need_gib = sum(_pin_entry(m, st["output"])["size_bytes"] or bf16_bytes
+                       for st in steps[1:] if not is_done(st["output"])) / GiB
+
     guard = disk_ok(gguf_dir, need_gib)
     if not guard.get("ok"):
         raise ProduceError(f"not enough disk for {need_gib:.1f} GiB (docs/STORAGE_PLAN.md): {guard}")
 
     staging = gguf_dir / ".tmp"
     staging.mkdir(parents=True, exist_ok=True)
-    recipes = root / "results" / "artifacts"
     recipes.mkdir(parents=True, exist_ok=True)
     tc["converter_lock_sha256"] = _sha256(root / "configs" / "converter.lock.txt")
     tc["produce_python"] = platform.python_version()
 
     artifacts, bf16 = [], None
-    for step in plan_steps(pins, size, root, staging=staging):
+    for step in steps:
         out, tmp = gguf_dir / step["output"], staging / step["output"]
         recipe_path = recipes / f"{out.name}.json"
         entry = _pin_entry(m, out.name)
-        if _already_done(out, entry, recipe_path):
+        if is_done(out.name):
             digest, nbytes, reused = entry["sha256"], out.stat().st_size, True
         else:
             check_lock()

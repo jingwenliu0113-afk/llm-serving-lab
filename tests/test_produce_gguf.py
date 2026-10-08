@@ -307,3 +307,27 @@ def test_delete_source_refuses_when_a_gguf_is_missing_or_differs(tmp_path):
     q6.unlink()
     with pytest.raises(pg.ProduceError, match="Q6_K.*missing"):
         pg.delete_source(size="4B", root=root)
+
+
+def test_requantize_after_source_deletion_restores_identical_quants(tmp_path):
+    """STORAGE_PLAN: a size's quants may be deleted temporarily and rebuilt from the kept BF16."""
+    root = produced_and_committed(tmp_path)
+    pg.delete_source(size="4B", root=root, now=lambda: "T")
+    q6 = root / "models" / "gguf" / "Qwen3.5-4B-Q6_K.gguf"
+    pinned = hashlib.sha256(q6.read_bytes()).hexdigest()
+    q6.unlink()
+    tools = FakeTools()
+    summary = pg.produce(size="4B", root=root, run=tools.run, toolchain=GOOD_TC, now=lambda: "T",
+                         lock_held_by_other=lambda: False, disk_ok=lambda path, need_gib: {"ok": True})
+    assert [Path(a[-2]).name for a in tools.calls] == ["Qwen3.5-4B-Q6_K.gguf"]  # only the missing quant
+    assert hashlib.sha256(q6.read_bytes()).hexdigest() == pinned
+    assert [a["reused"] for a in summary["artifacts"]] == [True, True, False, True]
+
+
+def test_missing_bf16_without_sources_is_an_error(tmp_path):
+    root = produced_and_committed(tmp_path)
+    pg.delete_source(size="4B", root=root, now=lambda: "T")
+    (root / "models" / "gguf" / "Qwen3.5-4B-BF16.gguf").unlink()
+    with pytest.raises(pg.ProduceError, match="source shard"):
+        pg.produce(size="4B", root=root, run=FakeTools().run, toolchain=GOOD_TC, now=lambda: "T",
+                   lock_held_by_other=lambda: False, disk_ok=lambda path, need_gib: {"ok": True})

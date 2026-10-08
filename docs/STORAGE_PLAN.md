@@ -67,6 +67,15 @@ source safetensors 的刪除由 `scripts/produce_gguf.py delete-source` 強制�
 
 - Q4B 的峰值貼近上限。如果當時 `disk_guard` 不通過，就**先跑 9B quality**，或先把 4B 的 quant 暫時移出 Mac，
   不得刪除 K 級檔案。
+- **2026-10-08 依實際可用空間重估**（19:18 實測可用 134.0 GiB，9B 已下載 7.0 GiB）：
+  - 9B 下載完、產出 9B GGUF、刪掉 9B safetensors 之後，預估可用約 103 GiB。
+  - KLD base 每個 size 68.4 GiB（580 × 255 × 248,320 × 2 B），扣掉後只剩約 35 GiB，**低於 50 GiB 餘量約 15 GiB**。
+  - 處理方式（不動 K 級、不重新下載）：
+    1. Core A 正式 run 需要的 6 個 quant 先用完，RTX 端也先拷貝並驗證 sha256。
+    2. 跑某個 size 的 quality 時，**暫時刪除另一個 size 的 3 個 quant**（W 級，約 19.5 GiB）。
+    3. 那個 size 的 quality 做完、KLD 刪掉之後，用 `produce_gguf.py produce` 從仍保留的 BF16 重新量化。
+       `produce` 只在 sha256 與 pin 相同時才放回原位，不同就中止並保留現狀。
+  - 若屆時其他專案使空間再減少，先記為 blocker，不降低 50 GiB 餘量。
 - quality 正式 run 屬於 Mac heavy workload，必須用 `tools/with-mac-lock`（MACHINE_POLICY）。
 
 ## RTX（WSL2 `Ubuntu-22.04`，家目錄 ext4，可用約 928 GB）
