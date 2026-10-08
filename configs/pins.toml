@@ -149,7 +149,7 @@ v_total_mib = 16303                                      # nvidia-smi memory.tot
 gpu_memory_utilization = "0.91"                          # 017: largest 0.01 multiple with U x V <= V - B - 512 MiB
 gdn_prefill_backend = "triton"                           # 008: the backend the S1-S3 smoke ran with (Triton/FLA)
 rtx_n_thr = 6                                            # §4: physical cores in WSL (Ryzen 5 7600, 6 cores)
-rtx_poll = -1                                            # §4 rule, decided by the RTX Core A pilot
+rtx_poll = 0                                             # §4 rule: RTX pilot 2026-10-09, poll 0 median 184.37 vs poll 50 184.06 tok/s (012 addendum)
 c_ctx_mib = -89.0                                        # 004 / 009 rule: peak 3906 - B 811 - self 3184 (idle was 457 at that run; B + C_ctx = 722 is what the spill rule uses)
 kv_cache_memory_bytes = 0                                # 017 K (blocked: max-num-seqs, NEXT Blocked 2)
 num_gpu_blocks = 0

@@ -1,0 +1,420 @@
+{
+ "fa_probe": [
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  }
+ ],
+ "graph_splits": {
+  "values": {
+   "2": 34
+  },
+  "max_splits": 2
+ },
+ "poll": {
+  "poll": 0,
+  "median_tok_s": {
+   "0": 184.371118,
+   "50": 184.056251
+  },
+  "poll0_slower_pct": -0.171,
+  "rule": "50 only if poll 0 is > 3.0% slower"
+ },
+ "noise": {
+  "n": 3,
+  "cv_pct": 0.7985525078151829,
+  "mde_pct": 1.3040307846447161,
+  "note": "process-level CV of the sentinel cell; MDE = relative difference two cells need to be 'beyond noise' with n = 3 each"
+ },
+ "memory": [
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 4875,
+   "host_self_mib": 656,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3904,
+   "host_self_mib": 509,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3184,
+   "host_self_mib": 509,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 8662,
+   "host_self_mib": 1048,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 6829,
+   "host_self_mib": 813,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 5429,
+   "host_self_mib": 563,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 4875,
+   "host_self_mib": 656,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 5065,
+   "host_self_mib": 662,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 5870,
+   "host_self_mib": 686,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3904,
+   "host_self_mib": 509,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 4094,
+   "host_self_mib": 515,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 4899,
+   "host_self_mib": 539,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3184,
+   "host_self_mib": 509,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 3374,
+   "host_self_mib": 515,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 4179,
+   "host_self_mib": 539,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 8662,
+   "host_self_mib": 1048,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 8852,
+   "host_self_mib": 1054,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 9620,
+   "host_self_mib": 1078,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 6829,
+   "host_self_mib": 813,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 7019,
+   "host_self_mib": 819,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 7787,
+   "host_self_mib": 843,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 5429,
+   "host_self_mib": 563,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 5619,
+   "host_self_mib": 569,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 6387,
+   "host_self_mib": 593,
+   "footprint_mib": null,
+   "max_rss_mib": null,
+   "footprint_over_self": null,
+   "graph_splits": "2"
+  }
+ ],
+ "calibration": {
+  "upper_bound_hours": 3.62,
+  "method": "n_jobs x (slowest pilot wall time of that kind + idle) per kind"
+ },
+ "outcomes": {
+  "ok": 34,
+  "oom": 0,
+  "error": 0
+ }
+}

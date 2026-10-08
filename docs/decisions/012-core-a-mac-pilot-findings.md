@@ -121,3 +121,20 @@
 - **時間**：正式 quality（兩個 size）約 **14.2 小時**，取代 005 原估的 19.5 小時。
   不含 016 的充電暫停，也不含 KLD 檔案的磁碟處理。
 - 未發現需要修改 quality protocol 的問題。
+
+## 補充：Core A RTX pilot（`results/core_a/wsl2-cuda/pilot-20261009-rtx`，34 / 34 ok，2026-10-09 07:03–07:27）
+
+在 GPU lock 下執行，4B + 9B，N_thr = 6。內容只有遮蔽版報告。session 有效：env_valid，sentinel drift 1.47%（門檻 3%）。
+
+- **`-fa auto` probe**：CUDA 上 6 個 quant 都是 "Flash Attention enabled"，graph splits = 2；全部 34 個 process 的 splits 都是 2。
+- **`--poll` → RTX 的 P = 0**（§4 規則）：poll 0 為 184.37 tok/s，poll 50 為 184.06 tok/s，poll 0 快 0.17%，沒有慢超過 3%。
+  已寫入 pins `[stage_b] rtx_poll = 0`。
+- **noise**：sentinel 的 process-level CV 為 **0.80%**，兩格相對 MDE 約 **1.3%**。
+- **記憶體交叉核對**：breakdown 的 device self 從 2K 到 32K，4B 三個 quant 都增加 **+995 MiB**，9B 三個 quant 都增加 **+958 MiB**。
+  與 Mac 一致（4B 為 +990、9B 為 +958）。理論 KV 增量為 960 MiB。
+  RTX 沒有 footprint / max RSS 的外部量測，那是 Mac 才有的欄位。
+- **時間校準**：正式 RTX Core A 的上限估計為 **3.62 小時**（以各類 job 最慢的 wall time 換算）。
+- **報告程式的 bug**：pilot report 原本用 seed 0 建立正式 plan，只為了計算 job 數。018 之後這會被 `build_plan` 拒絕。
+  已修正（`formal_job_counts`，commit `b5dc1ea`），沒有重跑 pilot。
+  report 只讀 `rows.jsonl`，修正前後的結果相同。
+

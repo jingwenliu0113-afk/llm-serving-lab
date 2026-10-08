@@ -326,10 +326,12 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
   - 含意（只是套用既有規則，不改規則）：在這台 RTX 上，超出 VRAM 的 cell 不會 OOM，而是以 spill 完成。
     因此 RTX 的 fit 判定一律依 004 的兩條 spill 條件，也就是記憶體條件（self + C_ctx + B > V_total）與速度條件。
   - 照實記錄的觀察（依 004 只用來判斷行為，不作任何速度結論）：prompt eval 351.7 tok/s（1,024 tokens）、decode 39.4 tok/s（127 runs）。
-- [ ] llama.cpp CUDA build：toolkit 版本、`wsl2-cuda` verified、RTX 的 N_thr / P（依第 4 節規則）
+- [x] llama.cpp CUDA build：toolkit 版本、`wsl2-cuda` verified、RTX 的 N_thr / P（依第 4 節規則）
   - toolkit：user-space CUDA 13.4.1 pip wheels 加上 Ninja（015，`configs/llama-cuda.lock.txt`），host compiler 為 GNU 11.4.0。
   - b11146 在 `wsl2-cuda` 上 verified（2026-10-09 02:07，`CUDA0 RTX 5070 Ti 16275 MiB`）。
-  - N_thr = 6（Ryzen 5 7600，6 個 physical core）。P：待 RTX pilot 依第 4 節規則決定。
+  - N_thr = 6（Ryzen 5 7600，6 個 physical core）。
+  - **P = 0**：依第 4 節規則，RTX pilot 中 poll 0 為 184.37 tok/s、poll 50 為 184.06 tok/s（2026-10-09，`pilot-20261009-rtx`；012 補充）。
+  - pilot 34 / 34 ok，`-fa auto` 在 6 個 quant 上都是 enabled，sentinel CV 0.80%，正式 RTX Core A 上限約 3.62 小時。
 - [ ] vLLM：smoke test 通過（003 gate）、lock 檔已 commit（`vllm.lock_file`）、`VLLM_WSL2_ENABLE_PIN_MEMORY`（依 003 規則）、
       attention backend、performance mode / async scheduling 的實際生效值
   - smoke S1–S3 通過（2026-10-09 01:54–02:01，`results/core_b/smoke/20261009-s1s3-014b`）。
