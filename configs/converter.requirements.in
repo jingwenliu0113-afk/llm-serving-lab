@@ -1,0 +1,15 @@
+# Converter environment for Core A GGUF production (decision 004 / 008), Mac arm64 only.
+# Same pins as third_party/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt
+# (+ requirements-convert_legacy_llama.txt) at llama.cpp 7fe450e1, except the
+# `--extra-index-url .../whl/cpu`: that index serves Linux CPU-only torch builds; on
+# macOS arm64 torch comes from PyPI. The local gguf-py in the llama.cpp checkout is
+# used by convert_hf_to_gguf.py (sys.path), not the PyPI gguf below.
+# Lock: uv pip compile configs/converter.requirements.in --python-version 3.12 \
+#   --python-platform aarch64-apple-darwin --exclude-newer 2026-09-24T00:00:00Z \
+#   --generate-hashes -o configs/converter.lock.txt
+torch==2.11.0
+numpy~=2.2.6
+sentencepiece>=0.1.98,<0.3.0
+transformers==4.57.6
+gguf>=0.1.0
+protobuf>=4.21.0,<5.0.0

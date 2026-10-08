@@ -1,0 +1,11 @@
+# Core B serving environment (decision 003 / 008), WSL2 Ubuntu-22.04 x86_64, Python 3.12.
+# Versions from the vLLM v0.30.0 CI lock (requirements/test/cuda.txt). Lock with:
+#   uv pip compile configs/vllm.requirements.in --python-version 3.12 \
+#     --exclude-newer 2026-09-23T00:00:00Z --generate-hashes -o configs/vllm.lock.txt
+# (run inside WSL so markers resolve for linux x86_64; torch from PyPI = CUDA 13.0 build)
+vllm==0.30.0
+torch==2.13.0
+transformers==5.16.1
+tokenizers==0.23.1
+huggingface-hub==1.31.0
+triton==3.7.1
