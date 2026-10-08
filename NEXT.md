@@ -6,11 +6,11 @@
 NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
 
 - 模型（008，使用者已確認）：Core A 為 Qwen3.5 4B + 9B；Core B 為 RedHatAI/Qwen3.5-9B-quantized.w4a16；context 2K / 8K / 32K。
-- Decision log 001–017。詳細內容以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–018。詳細內容以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
-## 現況（2026-10-09 01:15）
+## 現況（2026-10-09 07:40）
 
 ### Mac（Core A / quality）
 
@@ -65,7 +65,14 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
   process 正常結束。RTX 的 fit 判定照 004 的 spill 規則；規則不變。
 - **HAGS 開啟**；`.wslconfig` 為 memory=31GB、swap=8GB。
   - 從 Windows 端唯讀查詢。WSL interop 執行 `.exe` 會出現 `Exec format error`，屬於系統設定，不修改。
-- 已排隊（背景，GPU lock 下）：6 個 quant 到齊後跑 RTX Core A pilot（`--n-thr 6`；決定 P，填入 `[stage_b] rtx_poll`）。
+- 6 個 quant 已全部在 WSL 驗證完畢（07:02）。
+- **RTX Core A pilot 完成**（07:03–07:27，`results/core_a/wsl2-cuda/pilot-20261009-rtx`，34 / 34 ok，遮蔽版報告；012 補充）：
+  - **P = 0**（poll 0 為 184.37 tok/s，poll 50 為 184.06 tok/s），已寫入 pins `[stage_b] rtx_poll = 0`。
+  - `-fa auto` 在 6 個 quant 上都是 enabled，graph splits 都是 2。
+  - sentinel CV 0.80%，記憶體增量與 Mac 一致；正式 RTX Core A 上限約 3.62 小時。
+  - 報告程式的 bug（018 之後用 seed 0 建正式 plan）已修正；凍結測試原本把 C_ctx > 0 當成「已量測」，也已修正。兩者都記在 018 補充。
+- **Core A 的 RTX Stage B 項目已全部量完**：B、V_total、C_ctx、HAGS / `.wslconfig`、超量測試、N_thr、P。
+  剩下的 §6 項目全是 Core B 的，都卡在 Blocked 2。
 - GGUF 傳輸會占滿上行頻寬，GitHub 的 TLS 連線因此逾時。現在 push 時會先短暫暫停 sender（SIGSTOP / SIGCONT，傳輸不中斷）。
 
 ## 下一步（依序；Mac 重負載經 `tools/with-mac-lock`，GPU 重負載經 `flock -n`，不搶 lock）
@@ -77,7 +84,7 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
       - `coreb_stage_b.py boots` 取得 JIT 冷 / 熱時間與 K。
       - ~~`stage_b.py cctx` 與 `overflow`~~ ✅（C_ctx −89 MiB；spill）。
       - `coreb_stage_b.py pin-ab`，同時取得 num_gpu_blocks / block_size。
-   4. RTX Core A pilot：`core_a_pilot.py plan --platform wsl2-cuda --sizes 4B 9B --n-thr 6`，在 lock 下跑，決定 P。
+   4. ~~RTX Core A pilot~~ ✅（P = 0）。
    5. 填 §6 → `freeze.nvidia = true` → 正式 Core A（RTX）與 Core B（uniform → 由 `core_b_plan.py mixed` 產生 mixed plan → report / 圖）。
 2. 正式 Core A（Mac）：等使用者解除暫停（見 Blocked 0）。
    指令在 scratchpad 的 `batch_formal_a.sh`（seed 20261008、`-t 8`、`--poll 0`、含 016）。
@@ -90,7 +97,7 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
    - §4 規定正式 run 的 **powermode 必須為 2（高效能）**、`iogpu.wired_limit_mb` 必須為 0。
      018 起 harness 會強制檢查；目前是 powermode 0（「自動」），正式 run 會在開跑前被拒絕。
      請使用者在正式 run 前切到「高效能」；這是系統設定，我不會修改。
-   - 建議接上 ≥ 96 W adapter（見 1 與 3）。
+   - 建議接上 ≥ 96 W adapter（見 1 與 4）。
 
 1. **正式 quality：磁碟空間，以及 016 的充電門檻**（Mac；不影響 Core A）
    - 充電門檻（018 第 6 點）：正式 quality 中 9B 的 MC job 長 38–59 分鐘，從 40% 開始跑可能跌破 20%，使整個 session 作廢。
@@ -117,9 +124,23 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
        decode 沒有 FULL graph，偏離 vLLM 預設，throughput 會偏低。
      - C：保留 264，加 `--enforce-eager`。完全沒有 CUDA graph，偏離最大，不建議。
    - 在決定之前不會跑任何 Core B 的 Stage B 或正式量測；baseline B 已量好，可以沿用。
-3. **建議（非 blocker）**：Mac 換 ≥ 96 W 的 adapter。
+   - **另一個選擇（Blocked 3）**：如果 Blocked 2 需要時間決定，可以先把 Stage B 拆開凍結。
+3. **（可選）Stage B 拆成兩段凍結，讓正式 RTX Core A 先跑**
+   - 現況：Core A 在 RTX 上需要的 Stage B 值都已量完，並依規則算出，沒有任何自由度。
+     §6 剩下的 K、num_gpu_blocks、pin-memory A/B 等都屬於 Core B，卡在 Blocked 2。
+   - 006 規定的是 Stage B 整段一次凍結（`freeze.nvidia`），所以正式 RTX Core A（約 3.6 小時）也要等。
+   - 拆成兩段是修改 006 的結構，所以不自行處理：
+     - B1：Core A RTX 部分，現在就能凍結。
+     - B2：Core B 部分，等 Blocked 2 決定後再凍結。
+   - 拆開不會產生事後調整的空間：B1 的值都是實測值或依凍結規則決定，Core B 的規則也已在 Stage A 凍結。
+   - 若使用者同意，我會：
+     - 寫 decision log；
+     - 把 `freeze.nvidia` 拆成 `nvidia_core_a` / `nvidia_core_b`，並加上測試；
+     - 凍結 B1 後，在 GPU lock 下跑正式 RTX Core A。
+   - 如果 Blocked 2 直接選 A，整段 Stage B 可以一次凍結，就不需要拆。
+4. **建議（非 blocker）**：Mac 換 ≥ 96 W 的 adapter。
    - 016 已讓長 session 在 70 W 下仍有效，但充電暫停會讓正式 Core A 從約 17 h 拉長到約 1.5–2 倍。
-4. **建議（非 blocker）**：正式 Mac run 期間盡量少開前景程式。
+5. **建議（非 blocker）**：正式 Mac run 期間盡量少開前景程式。
    - 4B pilot 時前景負載的 loadavg 為 6–9，CV 5.9%；9B pilot 在深夜，CV 1.0%。
    - 前景負載不會讓 session 作廢，但會增加 noise。
 
