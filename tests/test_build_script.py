@@ -77,3 +77,12 @@ def test_tree_guard_checks_untracked_files():
 
 def test_build_record_includes_compiler_versions():
     assert "COMPILER_VERSION" in text()
+
+
+def test_targets_include_the_tools_core_needs():
+    # llama-tokenize: cross-validates the Qwen3.5 tokenizer constants (WikiText chunks,
+    # MMLU exclusions) against the pinned llama.cpp tokenizer (decision 005 pilot step 3).
+    m = re.search(r"^TARGETS=\((.*)\)", text(), re.MULTILINE)
+    assert m
+    assert set(m.group(1).split()) == {"llama-bench", "llama-perplexity", "llama-completion", "llama-quantize",
+                                       "llama-tokenize"}

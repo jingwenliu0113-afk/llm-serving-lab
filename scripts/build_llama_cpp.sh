@@ -43,7 +43,7 @@ COMMON_FLAGS=(
   -DLLAMA_BUILD_TESTS=OFF
   -DLLAMA_BUILD_EXAMPLES=OFF
 )
-TARGETS=(llama-bench llama-perplexity llama-completion llama-quantize)
+TARGETS=(llama-bench llama-perplexity llama-completion llama-quantize llama-tokenize)
 
 # Bounded parallelism: a bare -j lets make start every nvcc job at once, which can
 # OOM the WSL2 VM (and kill another project's process). ~2 GiB per nvcc job.
