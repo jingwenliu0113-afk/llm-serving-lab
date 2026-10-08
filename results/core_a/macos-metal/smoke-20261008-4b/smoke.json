@@ -1,0 +1,44 @@
+{
+ "purpose": "Week 1 #1 Mac model smoke (non-formal): pinned 4B-Q4_K_M loads on Metal and generates coherent text",
+ "at": "2026-10-08T19:15:33+08:00",
+ "platform": "macos-metal",
+ "llama_cpp": {
+  "build_number": 11146,
+  "commit": "7fe450e19305b828c199d602c23a8337aaa1f03b"
+ },
+ "model": "Qwen3.5-4B-Q4_K_M.gguf",
+ "model_sha256": "cb62d0b611b093bc43e0d51774dda5bf1b234e565198d18da78043ca045e71ea",
+ "argv": [
+  "llama-completion",
+  "-m",
+  "Qwen3.5-4B-Q4_K_M.gguf",
+  "-p",
+  "The capital of France is",
+  "-n",
+  "32",
+  "--temp",
+  "0",
+  "-no-cnv",
+  "-ngl",
+  "999",
+  "-fa",
+  "on",
+  "-c",
+  "2048",
+  "-t",
+  "8"
+ ],
+ "result": {
+  "exit_code": 0,
+  "generated_starts_with": "The capital of France is Paris.",
+  "eval_runs": 31,
+  "ok": true
+ },
+ "raw": {
+  "raw/combined.txt": {
+   "sha256": "08e089398da0e402d3ba5d6b86340a28c111bd0b3f0ca266591c2a61e6af9264",
+   "size_bytes": 2103
+  }
+ },
+ "note": "the batch logged stdout+stderr together; raw/ is the local archive (not in git)"
+}

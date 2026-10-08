@@ -1,0 +1,74 @@
+{
+ "purpose": "decision 005 pilot step 3: HF-tokenizer constants vs the pinned llama.cpp tokenizer",
+ "llama_cpp": {
+  "version_line": "version: 0.5.0 (build 11146, commit 7fe450e19305b828c199d602c23a8337aaa1f03b)"
+ },
+ "gguf": {
+  "file": "Qwen3.5-4B-Q4_K_M.gguf",
+  "sha256": "cb62d0b611b093bc43e0d51774dda5bf1b234e565198d18da78043ca045e71ea"
+ },
+ "hf_tokenizer_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+ "mirrors": {
+  "wikitext": "-f pops one trailing newline; escape = false",
+  "multiple_choice": "question + ' ' + answer, add_special=true, parse_special=false"
+ },
+ "checks": {
+  "wikitext": {
+   "n_tokens_hf": 297194,
+   "n_tokens_llama": 297194,
+   "identical": true,
+   "chunks_llama": 580,
+   "expected_chunks": 580,
+   "ok": true
+  },
+  "mmlu": {
+   "n_tasks": 4000,
+   "n_strings": 16000,
+   "n_identical": 16000,
+   "tasks_with_differences": [],
+   "replacement_chars": 0,
+   "exclusions_hf": [
+    2151,
+    2189,
+    13184
+   ],
+   "exclusions_llama": [
+    2151,
+    2189,
+    13184
+   ],
+   "committed_exclusions": [
+    2151,
+    2189,
+    13184
+   ],
+   "per_string_fallback": 0,
+   "ok": true
+  },
+  "hellaswag": {
+   "n_tasks": 4000,
+   "n_strings": 16000,
+   "n_identical": 16000,
+   "tasks_with_differences": [],
+   "replacement_chars": 1,
+   "exclusions_hf": [],
+   "exclusions_llama": [],
+   "committed_exclusions": [],
+   "per_string_fallback": 0,
+   "ok": true
+  },
+  "arc": {
+   "n_tasks": 869,
+   "n_strings": 3475,
+   "n_identical": 3475,
+   "tasks_with_differences": [],
+   "replacement_chars": 0,
+   "exclusions_hf": [],
+   "exclusions_llama": [],
+   "committed_exclusions": [],
+   "per_string_fallback": 0,
+   "ok": true
+  }
+ },
+ "ok": true
+}

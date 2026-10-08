@@ -238,8 +238,8 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
 - [ ] Quality：HellaSwag / MMLU 子集的題號清單、子集 `.bin` 的 sha256、MMLU 排除清單已 commit（005）
   - 題號清單與 HellaSwag 子集 sha256 已完成（`pins.toml`）
   - [x] MMLU 結構性排除清單：用 Qwen3.5 tokenizer 計算，排除 3 題，剩 3997 題，sha256 已寫入 pins（005）
-  - [ ] 以 llama.cpp tokenizer 交叉驗證 MMLU 排除清單（pilot）
-  - [ ] WikiText chunk 數：HF tokenizer 算出 580 chunks，pilot 時以 llama-perplexity 的 log 確認
+  - [x] 以 llama.cpp tokenizer 交叉驗證 MMLU 排除清單：16,000 個字串的 token 完全一致，排除清單相同；HellaSwag、ARC 走同一 scorer，皆 0 題（`quality/subsets/tokenizer-crosscheck.json`，2026-10-08）
+  - [x] WikiText chunk 數：llama.cpp tokenizer 與 HF 完全一致（297,194 tokens，比照 `-f` 去掉一個結尾換行），580 chunks（同上檔案）
 - [ ] Mac pilot 完成：
   - [ ] `-fa auto` probe
   - [ ] `--poll` 依規則選定

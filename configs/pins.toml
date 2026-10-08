@@ -222,5 +222,5 @@ sha256 = "8c3678d996a329f857746937f9d9aa5698f90182ff57b5a05882f6d96d582984"
 [quality.subsets.mmlu]
 index_file = "quality/subsets/mmlu-test-4000.json"
 pre_exclusion_sha256 = "49e128209c344e359ccaed1c415f49857d3a8b66cf472f7eb9350c203e085ffa"
-exclude_file = "quality/subsets/mmlu-test-4000.exclude.json"  # 3 tasks, Qwen3.5 tokenizer (HF tokenizers; llama.cpp cross-check pending)
+exclude_file = "quality/subsets/mmlu-test-4000.exclude.json"  # 3 tasks, Qwen3.5 tokenizer; llama.cpp tokenizer agrees (quality/subsets/tokenizer-crosscheck.json)
 sha256 = "209ee07d5d7a918a6f9e8ad69e24e8222644edbe9141f65eee7db7a196a9bf89"  # 3997 tasks after exclusion
