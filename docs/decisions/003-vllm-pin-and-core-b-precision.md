@@ -117,6 +117,11 @@ GPU lock 依 MACHINE_POLICY：步驟 1–2 是小型啟動 smoke test，**不需
 5. `vllm bench serve` 能跑完並產出 JSON；在 `/metrics` 確認 KV usage 與 preemption 的 metric 名稱。
 6. 依 PREREGISTRATION §4 量 Windows idle VRAM baseline，並記錄螢幕是否接在這張卡上。
 
+**Gate 進度（2026-10-09）**：
+- 第 1 項通過：專案 venv 中 torch 2.13.0+cu130 的 capability 為 (12, 0)，arch list 含 sm_120。
+- 第 2 項通過：008 的 S1 → S2 → S3 全部通過，見 008 補充。
+- 第 3–6 項依 017 在 GPU lock 下進行（`benchmarks/coreb_stage_b.py`、`benchmarks/stage_b.py`），結果寫入 Stage B addendum。
+
 ## 放棄的替代方案
 
 見上表，以及：使用 vLLM 的 cu129 Docker image（#59157，torch 版本錯誤）、原生 Windows（vLLM 不支援）。

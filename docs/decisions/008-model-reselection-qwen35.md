@@ -188,3 +188,26 @@ pre-registration 的其餘結構（兩階段凍結、metrics、harness、env cap
 - BF16 GGUF：約 26.3 GB。
 - 6 個 quant：約 33.1 GB。這些檔案還要傳到 RTX 端；或在 WSL 重跑同一 pipeline，那樣 safetensors 要在遠端再下載一次，約 28.7 GB。
 - KLD logits：約 74 GB / size，只在 Stage A 凍結後的正式 quality run 才產生，用完即刪。
+
+## 補充（2026-10-09）：Core B 分段 smoke 結果
+
+- **S1 → S2 → S3 全部通過**（`results/core_b/smoke/20261009-s1s3-014b`；同一組 argv / env，依 014 的 JIT 工具鏈）。
+
+| 段 | startup | request | KV cache（log） | max concurrency | memory.used 前 → 中 → 後（MiB） |
+|---|---|---|---|---|---|
+| S1（2K） | 94 s | 1.8 s | 64,365 tokens | 31.43 | 811 → 14,960 → 799 |
+| S2（8K） | 94 s | 3.0 s | 48,720 tokens | 5.95 | 811 → 13,218 → 799 |
+| S3（32K） | 88 s | 8.0 s | 56,102 tokens | 1.71 | 799 → 13,220 → 811 |
+
+- 三段的 log 都顯示：
+  - text-only（`--language-model-only`）。
+  - `FLASH_ATTN`。
+  - attention block size 528。
+  - GDN prefill 為 Triton/FLA（requested triton），GDN decode 為 triton。
+  - 沒有 GDN warmup 失敗。
+- 關閉後 GPU 記憶體都回到啟動前 ±256 MiB 以內，沒有殘留 process。
+- smoke 用的是 008 的設定（`--gpu-memory-utilization 0.85`、`--max-num-seqs 8`、各段不同的 `--max-model-len`），
+  所以 KV 數字只是啟動紀錄，不是 Core B 的 C_KV。C_KV 依 017 在 Stage B 以 U / K 決定。
+- 先前兩次失敗照實保留：
+  - `20261008-s1-no-cc`：沒有 C compiler。
+  - `20261008-s1s3-014`：FlashInfer JIT 的 CCCL 版本檢查（014 補充）。

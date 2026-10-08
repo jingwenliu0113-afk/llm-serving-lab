@@ -1,0 +1,49 @@
+
+===== 1. host compilers (apt: gcc g++ libc6-dev) =====
+PASS  cc -> /usr/bin/cc
+PASS  gcc -> /usr/bin/gcc
+PASS  c++ -> /usr/bin/c++
+PASS  g++ -> /usr/bin/g++
+g++-11 11.4.0-1ubuntu1~22.04.3
+gcc-11 11.4.0-1ubuntu1~22.04.3
+libc6 2.35-0ubuntu3.15
+libc6-dev 2.35-0ubuntu3.15
+libstdc++-11-dev 11.4.0-1ubuntu1~22.04.3
+make 
+PASS  gcc compile+link+run
+PASS  c++17 compile+link+run
+
+===== 2. Triton launcher stub (the S1 failure of 2026-10-08) =====
+CudaUtils built
+PASS  triton cuda_utils .so built
+
+===== 3. CUDA 13.4.1 toolkit root for llama.cpp (015; scripts/wsl_cuda134_root.sh) =====
+Build cuda_13.4.r13.4/compiler.38855100_0
+PASS  nvcc 13.4 sm_120a compile
+PASS  toolkit root lib64/libcudart.so
+PASS  toolkit root lib64/libcublas.so
+PASS  toolkit root lib64/libcublasLt.so
+PASS  toolkit root lib64/libcudart_static.a
+PASS  toolkit root lib64/stubs/libcuda.so
+PASS  cub headers
+PASS  ninja 1.13.2.git.kitware.jobserver-pipe-1 (CMake generator)
+
+===== 4. Core B server invariants (014) =====
+PASS  no nvcc on PATH
+PASS  ldconfig: WSL libcuda.so.1
+INFO  ldconfig libcudart.so.12 entries: 0 (cuDNN frontend may warn 'Multiple libcudart'; see server log)
+vllm 0.30.0 | torch 2.13.0+cu130 13.0 | triton 3.7.1 | flashinfer 0.6.18.post1
+
+===== 5. FlashInfer JIT environment, as the launcher sets it (core_b_plan.server_env) =====
+cuda_home /home/wenn0113/llm-serving-lab/.cuda-home-cu13 | nvcc 13.0 | ninja /home/wenn0113/llm-serving-lab/.venv/bin/ninja | nvcc on PATH None
+bin/nvcc ok
+include/curand.h ok
+lib64/libcudart.so ok
+lib64/stubs/libcuda.so ok
+PASS  shim nvcc sm_120f compile (host 11)
+PASS  shim nvcc 13000 matches CUDART_VERSION 13000
+
+===== 6. FlashInfer sampling module: real JIT build into a throwaway workspace =====
+PASS  sampling JIT OK in 48 s
+
+ALL CHECKS PASSED

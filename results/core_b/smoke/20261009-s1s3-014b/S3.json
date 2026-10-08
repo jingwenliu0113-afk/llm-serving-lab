@@ -1,0 +1,62 @@
+{
+ "stage": "S3",
+ "max_model_len": 32768,
+ "prompt_tokens": 32500,
+ "ok": true,
+ "reasons": [],
+ "argv": [
+  ".venv/bin/vllm",
+  "serve",
+  "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "--revision",
+  "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "--language-model-only",
+  "--dtype",
+  "bfloat16",
+  "--max-model-len",
+  "32768",
+  "--max-num-seqs",
+  "8",
+  "--gpu-memory-utilization",
+  "0.85",
+  "--no-enable-prefix-caching",
+  "--gdn-prefill-backend",
+  "triton",
+  "--generation-config",
+  "vllm",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "8765"
+ ],
+ "env": {
+  "HF_HOME": "/home/wenn0113/.cache/huggingface",
+  "HF_HUB_OFFLINE": "1",
+  "VLLM_GDN_DECODE_KERNEL": "triton",
+  "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+  "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin"
+ },
+ "timings": {
+  "startup_s": 88.0,
+  "request_s": 8.0,
+  "release_s": 0.1
+ },
+ "log_facts": {
+  "attention_backend": "FLASH_ATTN",
+  "attn_block_size": 528,
+  "text_only": true,
+  "gdn_prefill_kernel": "Triton/FLA",
+  "gdn_prefill_requested": "triton",
+  "gdn_decode_kernel": "triton",
+  "gdn_warmup_failed": null,
+  "kv_cache_tokens": 56102,
+  "max_concurrency": 1.71,
+  "max_model_len_logged": 32768
+ },
+ "idle_mib": 1000,
+ "mem_before_mib": 799,
+ "mem_during_mib": 13220,
+ "mem_after_mib": 811,
+ "server_log": "S3.server.log",
+ "log_tail": "(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /ping, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /invocations, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /v1/chat/completions, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /v1/chat/completions/batch, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /v1/responses, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /v1/responses/{response_id}, Methods: GET\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /v1/responses/{response_id}/cancel, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /v1/completions, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /v1/messages, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /v1/messages/count_tokens, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /generative_scoring, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /scale_elastic_ep, Methods: POST\n(APIServer pid=13088) INFO 10-09 02:01:12 [launcher.py:70] Route: /is_scaling_elastic_ep, Methods: POST\n(APIServer pid=13088) INFO:     Started server process [13088]\n(APIServer pid=13088) INFO:     Waiting for application startup.\n(APIServer pid=13088) INFO:     Application startup complete.\n(APIServer pid=13088) INFO:     127.0.0.1:44464 - \"GET /health HTTP/1.1\" 200 OK\n(APIServer pid=13088) INFO:     127.0.0.1:44466 - \"POST /v1/completions HTTP/1.1\" 200 OK\n(EngineCore pid=13173) INFO 10-09 02:01:22 [core.py:1342] [shutdown] EngineCore: trigger received signal=SIGINT\n(APIServer pid=13088) INFO 10-09 02:01:22 [launcher.py:129] [shutdown] API server: shutdown triggered\n(APIServer pid=13088) INFO 10-09 02:01:22 [launcher.py:145] [shutdown] API server: stopping engine client mode=abort timeout=0s\n(EngineCore pid=13173) INFO 10-09 02:01:22 [core.py:1493] [shutdown] EngineCore: start mode=abort timeout=0s\n(EngineCore pid=13173) INFO 10-09 02:01:22 [core.py:1524] [shutdown] EngineCore: request processing complete; starting resource teardown\n(EngineCore pid=13173) INFO 10-09 02:01:22 [core.py:1355] [shutdown] EngineCore: exiting busy loop\n(APIServer pid=13088) INFO 10-09 02:01:22 [core_client.py:744] [shutdown] MPClient: start timeout=0s\n(APIServer pid=13088) INFO 10-09 02:01:22 [core_client.py:746] [shutdown] MPClient: stopping engine manager\n(APIServer pid=13088) INFO 10-09 02:01:22 [utils.py:632] [shutdown] Process manager: send sigterm to process EngineCore\n(APIServer pid=13088) WARNING 10-09 02:01:22 [utils.py:652] [shutdown] Process manager: force killing remaining processes count=1\n(APIServer pid=13088) WARNING 10-09 02:01:22 [utils.py:657] [shutdown] Process manager: force killing remaining process EngineCore pid 13173\n(APIServer pid=13088) INFO 10-09 02:01:22 [core_client.py:748] [shutdown] MPClient: engine manager stopped\n(APIServer pid=13088) INFO 10-09 02:01:22 [core_client.py:749] [shutdown] MPClient: cleaning up background resources\n(APIServer pid=13088) INFO 10-09 02:01:22 [core_client.py:751] [shutdown] MPClient: complete\n(APIServer pid=13088) INFO 10-09 02:01:22 [launcher.py:154] [shutdown] API server: engine client stopped\n(APIServer pid=13088) INFO 10-09 02:01:22 [launcher.py:157] [shutdown] API server: signalling HTTP server shutdown\n(APIServer pid=13088) INFO 10-09 02:01:22 [launcher.py:179] [shutdown] API server: shutting down FastAPI HTTP server\n(APIServer pid=13088) INFO:     Shutting down\n(APIServer pid=13088) INFO:     Waiting for application shutdown.\n(APIServer pid=13088) INFO:     Application shutdown complete.\n/home/wenn0113/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown\n  warnings.warn('resource_tracker: There appear to be %d '"
+}
