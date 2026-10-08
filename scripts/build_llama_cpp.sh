@@ -52,9 +52,13 @@ if [ "$BACKEND" = cuda ] && [ "$JOBS" -gt 8 ]; then
   JOBS=8
 fi
 
-# WSL's PATH carries the Windows CUDA bin dirs; name the pinned CUDA 12.8 nvcc (002) explicitly.
+# CUDA toolkit: the user-space CUDA 13.4.1 root built by scripts/wsl_cuda134_root.sh (decision 015).
+# Named explicitly: WSL's PATH carries the Windows CUDA bin dirs.
+TOOLKIT_FLAGS=()
 if [ "$BACKEND" = cuda ]; then
-  export CUDACXX=/usr/local/cuda-12.8/bin/nvcc
+  CUDA_ROOT=${CUDA_ROOT:-$ROOT/.cuda-root-13.4}
+  export CUDACXX="$CUDA_ROOT/bin/nvcc"
+  TOOLKIT_FLAGS=(-DCUDAToolkit_ROOT="$CUDA_ROOT")
 fi
 
 # GGML_NATIVE silently flips OFF when SOURCE_DATE_EPOCH is set; keep builds comparable.
@@ -85,7 +89,7 @@ if [ -n "$(git -C "$SRC" status --porcelain)" ]; then
 fi
 
 # 2. Configure + build.
-cmake_ -S "$SRC" -B "$BUILD" "${COMMON_FLAGS[@]}" "${BACKEND_FLAGS[@]}"
+cmake_ -S "$SRC" -B "$BUILD" "${COMMON_FLAGS[@]}" "${BACKEND_FLAGS[@]}" ${TOOLKIT_FLAGS[@]+"${TOOLKIT_FLAGS[@]}"}
 cmake_ --build "$BUILD" --config Release -j "$JOBS" --target "${TARGETS[@]}"
 
 # 3. Record what was actually built.
@@ -95,6 +99,7 @@ cmake_ --build "$BUILD" --config Release -j "$JOBS" --target "${TARGETS[@]}"
   echo "cmake: $(cmake_ --version | head -1)"
   echo "common_flags: ${COMMON_FLAGS[*]}"
   echo "backend_flags: ${BACKEND_FLAGS[*]}"
+  echo "toolkit_flags: ${TOOLKIT_FLAGS[*]+${TOOLKIT_FLAGS[*]}}"
   echo "jobs: $JOBS"
   echo "--- compiler versions (configure time) ---"
   grep -h 'COMPILER_VERSION "' "$BUILD"/CMakeFiles/*/CMake*Compiler.cmake 2>/dev/null || true

@@ -88,7 +88,11 @@ def test_targets_include_the_tools_core_needs():
                                        "llama-tokenize"}
 
 
-def test_cuda_build_names_the_pinned_nvcc_explicitly():
-    """WSL's PATH carries Windows CUDA bin dirs; the CUDA 12.8 nvcc (002) is passed as CUDACXX."""
-    m = re.search(r'^if \[ "\$BACKEND" = cuda \]; then\n\s*export CUDACXX=(\S+)\nfi$', text(), re.MULTILINE)
-    assert m and m.group(1) == "/usr/local/cuda-12.8/bin/nvcc"
+def test_cuda_build_names_the_user_space_toolkit_explicitly():
+    """015: CUDA 13.4.1 from NVIDIA's pip wheels laid out by scripts/wsl_cuda134_root.sh; named explicitly
+    because WSL's PATH carries the Windows CUDA bin dirs. Metal builds get no toolkit flags."""
+    t = text()
+    assert 'CUDA_ROOT=${CUDA_ROOT:-$ROOT/.cuda-root-13.4}' in t
+    assert 'export CUDACXX="$CUDA_ROOT/bin/nvcc"' in t
+    assert 'TOOLKIT_FLAGS=(-DCUDAToolkit_ROOT="$CUDA_ROOT")' in t
+    assert '${TOOLKIT_FLAGS[@]+"${TOOLKIT_FLAGS[@]}"}' in t  # empty-array safe under set -u (bash 3.2)

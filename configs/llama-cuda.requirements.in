@@ -1,0 +1,14 @@
+# User-space CUDA 13.4.1 toolchain for the llama.cpp CUDA build in WSL (decision 015). No sudo.
+# CUDA 13.4.1 is one of the two toolkits this llama.cpp pin's CI builds with (002); NVIDIA's pip wheels ship
+# it with the nvcc driver (the CUDA 12 nvcc wheel has only ptxas). Versions released together (2026-09-15/16).
+# Installed into ~/llm-serving-lab/.venv-cuda134; scripts/wsl_cuda134_root.sh lays it out as a toolkit root.
+# Lock with (inside WSL, linux x86_64):
+#   uv pip compile configs/llama-cuda.requirements.in --python-version 3.12 \
+#     --exclude-newer 2026-10-08T00:00:00Z --generate-hashes -o configs/llama-cuda.lock.txt
+nvidia-cuda-nvcc==13.4.92
+nvidia-cuda-crt==13.4.92
+nvidia-nvvm==13.4.92
+nvidia-cuda-runtime==13.4.92
+nvidia-cuda-cccl==13.3.4.3.1
+nvidia-cublas==13.4.2.4
+nvidia-cuda-nvrtc==13.4.92

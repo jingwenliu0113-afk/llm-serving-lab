@@ -10,6 +10,7 @@ import core_b_plan as bp
 ROOT = Path(__file__).resolve().parent.parent
 SHIM = ROOT / "scripts" / "wsl_cuda_home_shim.sh"
 CHECK = ROOT / "scripts" / "wsl_toolchain_check.sh"
+CUDA_ROOT_SCRIPT = ROOT / "scripts" / "wsl_cuda134_root.sh"
 
 
 def var(path, name):
@@ -25,7 +26,7 @@ def test_paths_match_core_b_plan():
 
 
 def test_scripts_never_use_sudo_and_parse():
-    for path in (SHIM, CHECK):
+    for path in (SHIM, CHECK, CUDA_ROOT_SCRIPT):
         code = "\n".join(ln.split("#", 1)[0] for ln in path.read_text().splitlines())
         assert not re.search(r"\bsudo\b", code), path.name
         subprocess.run(["bash", "-n", str(path)], check=True)
@@ -36,3 +37,24 @@ def test_shim_provides_what_toolchain_problems_checks():
     for rel in ("lib64/libcudart.so", "lib64/stubs/libcuda.so"):
         assert f'"$SHIM/{rel}"' in text
     assert 'for d in bin include nvvm lib' in text  # bin/nvcc, include/curand.h
+
+
+def test_llama_cuda_root_matches_the_build_script_default():
+    """015: scripts/wsl_cuda134_root.sh builds the toolkit root build_llama_cpp.sh uses by default."""
+    assert var(CUDA_ROOT_SCRIPT, "PROJECT") == bp.PROJECT_DIR
+    assert var(CUDA_ROOT_SCRIPT, "ROOT") == "$PROJECT/.cuda-root-13.4"
+    build = (ROOT / "scripts" / "build_llama_cpp.sh").read_text()
+    assert "$ROOT/.cuda-root-13.4" in build
+    text = CUDA_ROOT_SCRIPT.read_text()
+    for lib in ("libcudart", "libcublas", "libcublasLt"):
+        assert lib in text
+    assert '"$ROOT/lib64/stubs/libcuda.so"' in text and ".venv-cuda134" in text
+
+
+def test_llama_cuda_lock_pins_one_cuda_13_4_1_set():
+    lock = (ROOT / "configs" / "llama-cuda.lock.txt").read_text()
+    pins = dict(re.findall(r"^([a-z0-9-]+)==(\S+) \\$", lock, re.MULTILINE))
+    assert pins["nvidia-cuda-nvcc"] == pins["nvidia-cuda-runtime"] == pins["nvidia-cuda-crt"] == "13.4.92"
+    assert pins["nvidia-nvvm"] == pins["nvidia-cuda-nvrtc"] == "13.4.92"
+    assert pins["nvidia-cublas"] == "13.4.2.4" and pins["nvidia-cuda-cccl"] == "13.3.4.3.1"
+    assert "--hash=sha256:" in lock

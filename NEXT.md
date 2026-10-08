@@ -151,8 +151,8 @@
    - 使用者裝好 compiler（與 CUDA 12.8 子集）之後，依序：
      1. `JIT=1 bash scripts/wsl_toolchain_check.sh`：compiler、Triton stub、shim nvcc、FlashInfer sampling JIT（暫存 workspace）。
      2. S1（2K）smoke，用新的 session 目錄（例如 `results/core_b/smoke/20261009-s1`）；通過後才跑 S2 → S3（008）。
-     3. llama.cpp CUDA build：`scripts/build_llama_cpp.sh cuda`，nvcc 12.8 由 `CUDACXX` 指定。
-        要錯開其他專案的正式 GPU 工作，最多 8 個 nvcc job。
+     3. llama.cpp CUDA build：`scripts/build_llama_cpp.sh cuda`。toolkit 為 user-space 的 CUDA 13.4.1（015：
+        `.venv-cuda134` 加 `scripts/wsl_cuda134_root.sh`，均已建好）。要錯開其他專案的正式 GPU 工作，最多 8 個 nvcc job。
      4. 6 個 quant 傳到 WSL（約 33 GB，008 已列入計畫）。傳輸期間的 SSH 加密會持續占用 CPU，所以在 Mac lock 下進行。
 6. Core B：S1–S3 通過後（舊的說明保留如下）：
    - 用 `scripts/deploy_bundle.py` 部署；

@@ -101,6 +101,8 @@ backend device 能初始化。帶模型的 smoke test 屬於 Week 1 #1，不在�
 
 ## Addendum（2026-10-08）：CUDA 12.8 改裝最小子集，並明確指定 nvcc
 
+> **已由 decision 015 取代**：使用者只安裝了 Core B 需要的 compiler，toolkit 改為 user-space 的 CUDA 13.4.1（pip wheels）。以下內容保留作為歷史紀錄。
+
 - **不裝完整的 `cuda-toolkit-12-8`**，改裝 build 實際用到的子集（由 NVIDIA wsl-ubuntu repo 的 index 遞迴解析 Depends，並做 apt 模擬）。
   nvcc 與 cuBLAS 的版本與完整 toolkit **相同**：
   - 子集：`make cuda-nvcc-12-8=12.8.93-1 cuda-cudart-dev-12-8=12.8.90-1 cuda-driver-dev-12-8=12.8.90-1 cuda-cccl-12-8=12.8.90-1 libcublas-dev-12-8=12.8.5.5-1 libcublas-12-8=12.8.5.5-1`。

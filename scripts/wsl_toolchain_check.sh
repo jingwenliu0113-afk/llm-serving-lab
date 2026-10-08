@@ -31,17 +31,18 @@ from triton.backends.nvidia.driver import CudaUtils
 CudaUtils(); print('CudaUtils built')" 2>&1 | tail -2
 ls "$T"/triton/*/cuda_utils*.so >/dev/null 2>&1 && ok "triton cuda_utils .so built" || bad "triton cuda_utils not built"
 
-sec "3. CUDA 12.8 for llama.cpp (002)"
-if [ -x /usr/local/cuda-12.8/bin/nvcc ]; then
-  /usr/local/cuda-12.8/bin/nvcc --version | tail -1
+sec "3. CUDA 13.4.1 toolkit root for llama.cpp (015; scripts/wsl_cuda134_root.sh)"
+CR=$PROJECT/.cuda-root-13.4
+if [ -x "$CR/bin/nvcc" ]; then
+  "$CR/bin/nvcc" --version | tail -1
   printf '__global__ void k(float*x){x[threadIdx.x]*=2.f;}\n' > "$T/k.cu"
-  /usr/local/cuda-12.8/bin/nvcc -arch=sm_120a -c "$T/k.cu" -o "$T/k12.o" && ok "nvcc 12.8 sm_120a compile" || bad "nvcc 12.8 sm_120a"
-  for f in libcudart.so libcublas.so libcublasLt.so stubs/libcuda.so; do
-    [ -e "/usr/local/cuda-12.8/targets/x86_64-linux/lib/$f" ] && ok "cuda-12.8 $f" || bad "cuda-12.8 $f missing"
+  "$CR/bin/nvcc" -arch=sm_120a -c "$T/k.cu" -o "$T/k134.o" && ok "nvcc 13.4 sm_120a compile" || bad "nvcc 13.4 sm_120a"
+  for f in libcudart.so libcublas.so libcublasLt.so libcudart_static.a stubs/libcuda.so; do
+    [ -e "$CR/lib64/$f" ] && ok "toolkit root lib64/$f" || bad "toolkit root lib64/$f missing"
   done
-  command -v make >/dev/null && ok "make $(make --version | head -1)" || bad "make missing"
+  [ -e "$CR/include/cccl/cub/cub.cuh" ] && ok "cub headers" || bad "cub headers missing"
 else
-  echo "SKIP  CUDA 12.8 not installed (llama.cpp step not done)"
+  echo "SKIP  $CR not built yet (bash scripts/wsl_cuda134_root.sh)"
 fi
 
 sec "4. Core B server invariants (014)"
