@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Run a Mac heavy workload under the shared portfolio lock (MACHINE_POLICY "Mac Hard Lock").
+#
+# Usage: tools/with-mac-lock <command> [args...]
+#
+# Same lock path and semantics as the other portfolio projects (mkdir lock +
+# owner.txt), so formal runs here never overlap Incident Investigator / Rust HNSW
+# formal runs. This is llm-serving-lab's own copy, not a shared framework.
+#
+# - Lock held by someone else -> print the owner and exit 75; never wait, never delete it.
+# - Lock acquired -> run the command with LLM_SERVING_LAB_MAC_LOCK_HELD=1, release on exit,
+#   propagate the command's exit code.
+# AI_PORTFOLIO_MAC_LOCK_DIR overrides the path (tests only).
+set -uo pipefail
+
+LOCK_DIR=${AI_PORTFOLIO_MAC_LOCK_DIR:-/tmp/ai-portfolio-mac-heavy.lock}
+OWNER_FILE="$LOCK_DIR/owner.txt"
+
+if [ "$#" -eq 0 ]; then
+  echo "Usage: $0 <command> [args...]" >&2
+  exit 2
+fi
+
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "ERROR: Mac heavy resource is currently locked: $LOCK_DIR" >&2
+  if [ -f "$OWNER_FILE" ]; then
+    echo "Current lock info:" >&2
+    cat "$OWNER_FILE" >&2
+  fi
+  echo "Do not delete the lock. Switch to non-heavy work (MACHINE_POLICY)." >&2
+  exit 75
+fi
+
+release() {
+  rm -f "$OWNER_FILE" 2>/dev/null || true
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap release EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+{
+  echo "pid=$$"
+  echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "cwd=$(pwd)"
+  echo "project=llm-serving-lab"
+  echo "command=$*"
+} > "$OWNER_FILE"
+
+LLM_SERVING_LAB_MAC_LOCK_HELD=1 "$@"
+exit $?

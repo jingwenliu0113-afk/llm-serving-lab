@@ -1,0 +1,216 @@
+# Machine-readable Day 1 pins. Rationale lives in docs/decisions/002-007.
+# Invariants are enforced by tests/test_pins.py.
+schema_version = 1
+
+# Staged pre-registration (docs/decisions/006-staged-preregistration.md).
+# mac    = stage A committed: all hypotheses + Core A protocol + quality task set.
+#          Requires every derived GGUF sha256/size and the quality subsets below.
+# nvidia = stage B addendum committed: RTX / Core B protocol parameters only.
+#          Requires the CUDA toolchain, the vLLM lock file and Core B verified.
+[freeze]
+mac = false
+nvidia = false
+
+# ------------------------------------------------------------------ runtimes --
+
+[llama_cpp]
+# docs/decisions/002-llama-cpp-pin.md
+repo = "https://github.com/ggml-org/llama.cpp"
+tag = "b11146"
+release = "v0.5.0"                                       # same commit as b11146
+commit = "7fe450e19305b828c199d602c23a8337aaa1f03b"
+build_number = 11146
+published_utc = "2026-09-23T18:36:37Z"
+# verified = built at this pin via scripts/build_llama_cpp.sh, --version banner matches
+# (build 11146, full commit), backend device initialises (--list-devices). Model-level
+# smoke test is Week 1 #1.
+verified = ["macos-metal"]                               # 2026-10-08: MTL0 Apple M4 Pro, 38338 MiB
+pending = ["wsl2-cuda"]                                  # blocked: remote unavailable
+
+[llama_cpp.toolchain]
+cmake = "4.4.3"                                          # uvx --from cmake==4.4.3 (must match the build script)
+
+[llama_cpp.toolchain.macos_metal]
+compiler = "AppleClang 21.0.0.21000334"                  # Xcode 27.0 toolchain, macOS 27.0.1 (26A434)
+
+[llama_cpp.toolchain.wsl2_cuda]
+compiler = ""                                            # filled when the remote build runs
+cuda_toolkit = "12.8"                                    # decision 002 (2026-10-08): cuda-toolkit-12-8, nvcc 12.8.93; not installed yet
+# WSL2 Ubuntu-22.04.5, driver 617.42 (CUDA UMD 13.4), RTX 5070 Ti compute_cap 12.0, 16303 MiB
+
+[vllm]
+# docs/decisions/003-vllm-pin-and-core-b-precision.md
+version = "0.30.0"
+commit = "ced6857afa0ea7b2e3f0846a62e1394e90f15607"     # git tag v0.30.0
+wheel_sha256 = "ef52ee58c410ead0b8afb190838fa4cbcb52075596f67862a03859d984966ac4"  # cp38-abi3-manylinux_2_28_x86_64
+published_utc = "2026-09-22"
+verified = []
+pending = ["wsl2-cuda"]                                  # blocked: remote unavailable
+lock_file = ""                                           # hashed lock frozen after the smoke test (configs/)
+
+# Versions from the v0.30.0 CI lock (requirements/test/cuda.txt). Resolve with
+# `uv pip compile --exclude-newer <exclude_newer>` so transitive deps cannot float.
+[vllm.deps]
+torch = "2.13.0"                                         # PyPI build = CUDA 13.0
+transformers = "5.16.1"
+tokenizers = "0.23.1"
+huggingface-hub = "1.31.0"
+triton = "3.7.1"
+exclude_newer = "2026-09-23T00:00:00Z"                   # end of the vLLM 0.30.0 release day
+
+# -------------------------------------------------------------------- Core A --
+
+[core_a]
+# docs/decisions/004-model-family-and-core-a-grid.md
+family = "Qwen3"
+quants = ["Q8_0", "Q6_K", "Q4_K_M"]
+context_lengths = [2048, 8192, 32768]
+native_context = 32768                                   # Qwen3 native window; no YaRN
+converter_lock = ""                                      # hashed lock for convert_hf_to_gguf.py deps (configs/), before Week 1 conversion
+
+[[core_a.models]]
+size = "8B"
+family = "Qwen3"
+license = "apache-2.0"
+source_repo = "Qwen/Qwen3-8B"
+source_revision = "b968826d9c46dd6066d109eabc6255188de91218"
+# config.json: 36 layers, 8 KV heads, head_dim 128 -> f16 KV = 147456 B/token
+
+[core_a.models.source_shards]
+"model-00001-of-00005.safetensors" = "31d6a825ae35f11fb85b195b4c42c146c051e446433125a215336abdf95cbf5f"
+"model-00002-of-00005.safetensors" = "5991236cea6fe21f3d43cab0f0e84448734fbbe0789816202989f2ddc9d18282"
+"model-00003-of-00005.safetensors" = "c5185c4794be2d8a9784d5753c9922db38df478ce11f9ed0b415b7304d896836"
+"model-00004-of-00005.safetensors" = "b5ee7de71fbf17db3d5704e0c8f2bc7d005ca9e1d7ca2aeb19827b0cfcaa917a"
+"model-00005-of-00005.safetensors" = "20c2d6366ab85c90786ccdd829cd2b9e7d30ef3b2ebbb998280e7e4014b542ff"
+
+# Derived locally with the pinned llama.cpp (convert_hf_to_gguf.py -> llama-quantize, no imatrix).
+# sha256 / size_bytes are recorded when produced (Week 1).
+[core_a.models.reference]
+filename = "Qwen3-8B-BF16.gguf"
+sha256 = ""
+size_bytes = 0
+
+[core_a.models.files.Q8_0]
+filename = "Qwen3-8B-Q8_0.gguf"
+sha256 = ""
+size_bytes = 0
+
+[core_a.models.files.Q6_K]
+filename = "Qwen3-8B-Q6_K.gguf"
+sha256 = ""
+size_bytes = 0
+
+[core_a.models.files.Q4_K_M]
+filename = "Qwen3-8B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 0
+
+[[core_a.models]]
+size = "14B"
+family = "Qwen3"
+license = "apache-2.0"
+source_repo = "Qwen/Qwen3-14B"
+source_revision = "40c069824f4251a91eefaf281ebe4c544efd3e18"
+# config.json: 40 layers, 8 KV heads, head_dim 128 -> f16 KV = 163840 B/token
+
+[core_a.models.source_shards]
+"model-00001-of-00008.safetensors" = "e942bdbdf08857d16a8fef7d1dae9fceabeb4e84def6043485fe2f6f085dab0e"
+"model-00002-of-00008.safetensors" = "f7c9c6eee628f5ad831d2d1d292e120505e5fcadeb38f88b4d3c4cb86306ccf9"
+"model-00003-of-00008.safetensors" = "dfb8c5df9404b41ad6ae74e8b6b367135f017b4467b884cf71b17c71954f18a9"
+"model-00004-of-00008.safetensors" = "eab286fec759e3e59ab228621aefa0fef14ed56039e06f959e67257d5af7604d"
+"model-00005-of-00008.safetensors" = "97f0dc2992e59da95c466eff6f4fd0c8335843bbc36ed5c913a6f5150748c0e6"
+"model-00006-of-00008.safetensors" = "9e8e76a013cd5e253865b792991e0b410f869b136b3c500079b531b09198e99e"
+"model-00007-of-00008.safetensors" = "0aee70ee6e91dc00d818804fb47f124d13ee4ad5b4a64553e09dbf9391cd5750"
+"model-00008-of-00008.safetensors" = "0d6b92296e326d39bbbaeb32c3ec454ac606da843d4c8ffa8edf010b62b8c9e0"
+
+[core_a.models.reference]
+filename = "Qwen3-14B-BF16.gguf"
+sha256 = ""
+size_bytes = 0
+
+[core_a.models.files.Q8_0]
+filename = "Qwen3-14B-Q8_0.gguf"
+sha256 = ""
+size_bytes = 0
+
+[core_a.models.files.Q6_K]
+filename = "Qwen3-14B-Q6_K.gguf"
+sha256 = ""
+size_bytes = 0
+
+[core_a.models.files.Q4_K_M]
+filename = "Qwen3-14B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 0
+
+# -------------------------------------------------------------------- Core B --
+
+[core_b]
+# docs/decisions/003-vllm-pin-and-core-b-precision.md
+# Model fixed by user decision (2026-10-08): no fallback / alternatives.
+# status stays "proposed" until the 003 smoke-test gate passes on the RTX 5070 Ti.
+status = "proposed"
+family = "Qwen3"
+repo = "Qwen/Qwen3-8B-AWQ"
+revision = "4da05a8edb55c6046cce958586c33b61da07bb79"
+precision = "awq-w4a16"                                  # INT4 weight-only, group 128, Marlin kernels
+dtype = "float16"
+kv_cache_dtype = "auto"                                  # KV quantization is an Advanced item: off in Core
+mix_dataset_sha256 = ""                                  # seeded `mixed` dataset (decision 007), built at Stage B
+
+
+# ------------------------------------------------------------------- Quality --
+
+[quality]
+# docs/decisions/005-quality-metrics-and-task-set-v1.md
+# Data lives only in the git-ignored data/ archive; never commit item text.
+
+[quality.files.wikitext_zip]
+repo = "ggml-org/ci"                                     # HF dataset
+revision = "927b3642933080f1b0e811e2f916e14c292992f9"
+path = "wikitext-2-raw-v1.zip"
+sha256 = "ef7edb566e3e2b2d31b29c1fdb0c89a4cc683597484c3dc2517919c615435a11"
+size_bytes = 4721645
+
+[quality.files.wiki_test_raw]
+member_of = "wikitext_zip"
+path = "wikitext-2-raw/wiki.test.raw"
+sha256 = "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08"
+size_bytes = 1290590
+
+[quality.files.hellaswag]
+repo = "ikawrakow/validation-datasets-for-llama.cpp"
+revision = "37884b81b4957f1950a53b6ff48d77c8dd5e430c"
+path = "hellaswag-validation.bin"                        # 10042 tasks
+sha256 = "77604a3798bf851aaa3f70116c9a18d85c05be3484039c9ec916aae969995b5c"
+size_bytes = 8182403
+
+[quality.files.mmlu]
+repo = "ikawrakow/validation-datasets-for-llama.cpp"
+revision = "37884b81b4957f1950a53b6ff48d77c8dd5e430c"
+path = "mmlu-test.bin"                                   # 13943 tasks
+sha256 = "88bbb0b99f0ac75dc63b82017d301be2e6b1b922b6a6eb508df41e5ac4396b5c"
+size_bytes = 6864888
+
+[quality.files.arc]
+repo = "ikawrakow/validation-datasets-for-llama.cpp"
+revision = "37884b81b4957f1950a53b6ff48d77c8dd5e430c"
+path = "arc-combined-validation.bin"                     # 869 tasks: 570 Easy then 299 Challenge
+sha256 = "bb84f5e8cc78e73a8ff98aa58ceeee354d2628931659d4fa9ed266335eea1a4d"
+size_bytes = 250016
+
+[quality.files.winogrande]
+repo = "ikawrakow/winogrande-eval-for-llama.cpp"
+revision = "93f7fb0697ca6cd2c7e5727dcba3b7200fa4014c"
+path = "winogrande-debiased-eval.csv"                    # 1267 tasks; git blob 075cf493 (not LFS)
+sha256 = "6726173ef65ffdc4abb0d28b755375d288ffb3eb41633bd833288c411c8ebf7c"
+size_bytes = 155325
+
+# Frozen 4000-task subsets (Week 1): committed index list + sha256 of the built .bin.
+[quality.subsets.hellaswag]
+index_file = ""
+sha256 = ""
+
+[quality.subsets.mmlu]
+index_file = ""                                          # after the structural exclusion rule (005)
+sha256 = ""

@@ -1,0 +1,125 @@
+# MACHINE_POLICY
+
+## 核心原則
+
+**Claude Code 與專案控制中心都在 Mac。**
+
+Mac 是主要開發機：所有一般開發、Git、Claude Code session 都留在 Mac。
+
+桌機為 Windows + WSL2 + RTX 5070 Ti，只負責 NVIDIA-specific 執行。
+
+## Mac 上負責
+
+- benchmark harness
+- Core A Apple Silicon benchmark
+- quality evaluation
+- configs / scripts
+- 統一結果分析
+
+## RTX 桌機負責
+
+遠端可用時：
+
+- Core A NVIDIA benchmark
+- Core B vLLM benchmark
+- CUDA / GPU profiling
+
+路徑：
+
+```text
+Mac
+→ Tailscale / SSH
+→ Windows
+→ wsl.exe
+→ WSL2 Ubuntu
+→ RTX 5070 Ti
+```
+
+### 遠端環境（使用者已實測確認）
+
+| 項目 | 值 |
+|---|---|
+| SSH alias | `gpu-server`（Mac 已可免密執行 `ssh gpu-server`） |
+| 主機架構 | Windows + WSL2 |
+| WSL distro | `Ubuntu-22.04` |
+| WSL user | `wenn0113` |
+| GPU | NVIDIA GeForce RTX 5070 Ti 16GB |
+| GPU 可見性 | `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- nvidia-smi'` 可正常看到 RTX 5070 Ti |
+| flock | WSL 內已有 `/usr/bin/flock` |
+
+遠端命令的基本形式：
+
+```bash
+ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "<command>"'
+```
+
+### 遠端 Python 環境
+
+- `~/venvs/gpu-check` 只是 CUDA 驗證環境，**不是**本 Project 的正式 Python 環境。
+- 需要 GPU Python 環境時，建立本 Project 自己的隔離環境。
+
+## 遠端不可用
+
+若桌機關機、遠端 GPU 不可用，或 GPU lock 被占用：
+
+- 不得卡住整個 Project，改做其他可在 Mac 完成的 Core 工作。
+- NVIDIA-specific 工作標記 `blocked`；若確實造成 blocker，再記錄到 `NEXT.md`。
+- 繼續 Mac benchmark harness、quality、Apple Silicon benchmark、分析。
+
+## Credential 安全
+
+只使用：
+
+```bash
+ssh gpu-server
+```
+
+不得要求、索取、搜尋、讀取、保存或修改任何 credential，包括 SSH 密碼、SSH 私鑰、Tailscale key、sudo 密碼與 token。
+
+## GPU Hard Lock
+
+正式 NVIDIA / vLLM benchmark 必須取得 WSL 內：
+
+```text
+/tmp/ai-portfolio-gpu.lock
+```
+
+正式 Heavy 工作必須使用 `flock -n`，例如：
+
+```bash
+ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "flock -n /tmp/ai-portfolio-gpu.lock <heavy-command>"'
+```
+
+本 Project 中哪些工作需要 GPU lock：
+
+- **需要**：正式 NVIDIA serving benchmark，以及 vLLM throughput / TTFT / TPOT / P95 等重工作業。
+- **不需要**：一般程式開發、設定、文件，以及小型啟動 smoke test。
+
+若 Text-to-SQL 已取得 lock：
+
+- 不收正式 NVIDIA performance numbers。
+- 可繼續 Mac 端分析、code、tests、quality eval。
+- 不得搶鎖或終止對方 process。
+
+## Mac Hard Lock
+
+本 Project 的 Mac 正式長時間 run 屬於 Mac heavy workload，必須使用共享 lock：
+
+```text
+/tmp/ai-portfolio-mac-heavy.lock
+```
+
+- 適用：Core A Apple Silicon 正式 benchmark、正式 quality 評測（約 19.5 小時）。
+- 使用本 Project 的 `tools/with-mac-lock <heavy-command>`。它與 Incident Investigator / Rust HNSW 共用同一個 lock path
+  與相同語意（`mkdir` lock + `owner.txt`），是本 Project 自己的 script，不是跨專案共用 framework。
+- 不得與 Incident Investigator / Rust HNSW 的正式重工作業同時執行。lock 被占用時直接放棄，改做其他 Mac 輕量工作。
+- 不得自行刪除 lock，包括疑似殘留的 stale lock；需由使用者確認後手動清除。
+- pilot / smoke 等非正式 run 不取 lock；但若 lock 被他人占用，也不執行，避免干擾對方的正式量測。
+
+## Core A / Core B
+
+- Core A 才 sweep quantization。
+- Core B 固定一種 precision：固定使用 `Qwen3-8B-AWQ`，不擴大模型選擇矩陣。
+  原因是 RTX 5070 Ti 16GB 需要保留 KV cache / concurrency 空間（003）。
+- Mac / RTX 結果明確標示 hardware / backend。
+- 不做「誰比較快」排行榜。

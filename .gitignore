@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Large / machine-local artifacts (never commit weights, vendored builds or data)
+models/
+third_party/
+*.gguf
+*.safetensors
+
+# Quality data and KLD logits (decision 005): private local archive only.
+# Never commit dataset files or item text; commit only index lists + sha256.
+data/
+*.kld
+
+# Scratch
+.DS_Store
