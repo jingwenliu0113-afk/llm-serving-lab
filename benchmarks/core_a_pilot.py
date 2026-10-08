@@ -172,6 +172,21 @@ def fa_probe(rows: list) -> list:
             for r in rows if r.get("block") == "fa_probe"]
 
 
+def formal_job_counts(pins: dict, *, platform: str, n_thr: int) -> dict:
+    """Jobs per kind in the formal plan, for the duration calibration only. Seed, N_thr and P never change the
+    formal job set, and the RTX pilot runs before [stage_b] rtx_poll exists (it decides P), so the count uses
+    the §4 seed and placeholder N_thr / P that build_plan accepts; nothing here is written into a plan (018)."""
+    sb = {**(pins.get("stage_b") or {}), "rtx_n_thr": n_thr, "rtx_poll": 0}
+    sb["b_mib"] = sb.get("b_mib") or 1.0
+    want = cp.FORMAL_MAC if platform == "macos-metal" else {"n_thr": n_thr, "poll": 0}
+    formal = cp.build_plan({**pins, "freeze": {"mac": True, "nvidia": True}, "stage_b": sb}, platform=platform,
+                           mode="formal", seed=cp.FORMAL_SEED, n_thr=want["n_thr"], poll=want["poll"])
+    counts: dict = {}
+    for j in formal["jobs"]:
+        counts[j["kind"]] = counts.get(j["kind"], 0) + 1
+    return counts
+
+
 def report(rows: list, *, n_formal_jobs: dict, idle_s: float) -> dict:
     poll = poll_decision(rows)
     walls = {k: max((r["wall_s"] for r in rows if r.get("block") == "calib" and r["kind"] == k), default=None)
@@ -223,11 +238,7 @@ def main(argv: list | None = None) -> int:
     for row in rows:
         row.setdefault("block", blocks.get(row["job_id"]))
     pins = tomllib.loads(Path(args.pins).read_text())
-    formal = cp.build_plan({**pins, "freeze": {"mac": True, "nvidia": True}}, platform=plan["platform"],
-                           mode="formal", seed=0, n_thr=plan["params"]["n_thr"], poll=0)
-    n_jobs: dict = {}
-    for j in formal["jobs"]:
-        n_jobs[j["kind"]] = n_jobs.get(j["kind"], 0) + 1
+    n_jobs = formal_job_counts(pins, platform=plan["platform"], n_thr=plan["params"]["n_thr"])
     rep = report(rows, n_formal_jobs=n_jobs, idle_s=plan["params"]["idle_s"])
     out = session / "pilot_report.json"
     out.write_text(json.dumps(rep, indent=1) + "\n")

@@ -126,3 +126,32 @@ def test_blocks_can_be_selected(pins):
     plan = pl.build_pilot_plan(pins, platform="macos-metal", sizes=["4B"], n_thr=8, blocks=["fa_probe"])
     assert {j["block"] for j in plan["jobs"]} == {"fa_probe", "sentinel"}
     assert all(arg(j["argv"], "-lv") == "4" for j in plan["jobs"] if j["kind"] == "fit")
+
+
+@pytest.mark.parametrize("platform,n_thr", [("macos-metal", 8), ("wsl2-cuda", 6)])
+def test_report_cli_counts_formal_jobs_before_p_is_decided(pins, tmp_path, platform, n_thr):
+    # the report sizes the formal session; on RTX it runs before [stage_b] rtx_poll exists (the pilot decides P),
+    # and seed / N_thr / P never change the formal job set (018 made build_plan refuse a non-§4 formal seed or P)
+    import json
+    undecided = {**pins, "stage_b": {**pins.get("stage_b", {}), "rtx_poll": -1}}
+    counts = pl.formal_job_counts(undecided, platform=platform, n_thr=n_thr)
+    ref = cp.build_plan({**pins, "freeze": {"mac": True, "nvidia": True},
+                         "stage_b": {**pins.get("stage_b", {}), "rtx_n_thr": n_thr, "rtx_poll": 0, "b_mib": 811.0}},
+                        platform=platform, mode="formal", seed=cp.FORMAL_SEED,
+                        n_thr=cp.FORMAL_MAC["n_thr"] if platform == "macos-metal" else n_thr, poll=0)
+    want: dict = {}
+    for j in ref["jobs"]:
+        want[j["kind"]] = want.get(j["kind"], 0) + 1
+    assert counts == want and counts["decode"] > 0
+
+    plan = pl.build_pilot_plan(pins, platform=platform, sizes=["4B"], n_thr=n_thr, blocks=["poll"])
+    session = tmp_path / "s"
+    session.mkdir()
+    (session / "plan.json").write_text(json.dumps(plan))
+    rows = [row("poll", "decode", 100.0, 0, job_id="a"), row("poll", "decode", 99.0, 50, job_id="b")]
+    (session / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    pins_path = tmp_path / "pins.toml"
+    text = (ROOT / "configs" / "pins.toml").read_text()
+    pins_path.write_text(text)
+    assert pl.main(["report", "--session", str(session), "--pins", str(pins_path)]) == 0
+    assert (session / "pilot_report.json").is_file()
