@@ -84,6 +84,7 @@ def completion_argv(model: str, L: int, n_thr: int, poll: int) -> list:
         "{bin}/llama-completion", "-m", "{models}/" + model, "-c", str(L), "-np", "1", "--fit", "off",
         *_flags(COMPLETION_COMMON), "-t", str(n_thr), "--poll", str(poll),
         "-f", "{prompt}", "-n", str(N_GEN), "--ignore-eos", "-no-cnv", "--log-jsonl",
+        "-lv", "4",  # decision 012: library INFO logs (n_ctx, flash_attn, graph splits) are verbosity 4 here
     ]
 
 

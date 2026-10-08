@@ -14,7 +14,7 @@
 >
 > 凍結後，hypothesis、metrics、task set、protocol 都不得依結果修改。任何變更都要先寫 decision log，並標明是 post-hoc。
 
-決策依據：`docs/decisions/001`–`011`；機器可讀 pin：`configs/pins.toml`。
+決策依據：`docs/decisions/001`–`012`；機器可讀 pin：`configs/pins.toml`。
 
 符號：
 
@@ -159,7 +159,7 @@
 | engine TTFT(L) | `-p L -n 0` 的 `avg_ns`，同時保留 `samples_ns`；不含 tokenize / HTTP / sampling | `llama-bench` |
 | prefill tok/s(L) | L ÷ TTFT(L) | 同上 |
 | decode tok/s(L) | `-p 0 -n 128 -d (L-128)` 的 `avg_ts` | `llama-bench` |
-| peak memory | **只取 fit-run process**：llama.cpp memory breakdown（model / context / compute）逐 device 與 host 報告，另列合計。Mac 另記 `/usr/bin/time -l` 的 peak memory footprint；RTX 另記 `nvidia-smi memory.used` 峰值減 B。`-lm mmap` 固定 | `llama-completion` |
+| peak memory | **只取 fit-run process**：llama.cpp memory breakdown（model / context / compute）逐 device 與 host 報告，另列合計。Mac 另記 `/usr/bin/time -l` 的 peak memory footprint 與 maximum resident set size（pilot：footprint 不含 mmap 的權重、含 KV / compute；012）；RTX 另記 `nvidia-smi memory.used` 峰值減 B。`-lm mmap` 固定 | `llama-completion` |
 | quality | 005 | `llama-perplexity`（只在 Mac） |
 
 兩平台的 peak memory 依平台分別定義，**不互相比大小**（不做排名）。pilot 要先交叉核對 breakdown 與外部量測。
@@ -182,13 +182,14 @@ request throughput（req/s）；output token throughput 與 total token throughp
 | 工具 | flags |
 |---|---|
 | `llama-bench` | `-ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 512 -lm mmap -t N_thr --poll P -r 5 --delay 5 -o jsonl -v`，context 只由 `-p/-n/-d` 決定（`llama-bench` 不接受 `-c/-np/--fit`）；**一個 config 一個 process** |
-| `llama-completion`（fit / memory） | 004 的指令：`-c L -np 1 --fit off -ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 512 -lm mmap -t N_thr --poll P -n 128 --ignore-eos -no-cnv`；prompt 為 `" the"` 重複 L − 128 次（Qwen3.5 tokenizer 下每個單位恰為 1 token，id 279；harness 從 log 驗證 token 數；009） |
+| `llama-completion`（fit / memory） | 004 的指令：`-c L -np 1 --fit off -ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 512 -lm mmap -t N_thr --poll P -n 128 --ignore-eos -no-cnv --log-jsonl -lv 4`（`-lv 4` 只影響 log，讓 llama.cpp library 的 INFO 出現；012）；prompt 為 `" the"` 重複 L − 128 次（Qwen3.5 tokenizer 下每個單位恰為 1 token，id 279；harness 從 log 驗證 token 數；009） |
 | `llama-perplexity`（quality） | 005 的 flags |
 
 - **N_thr、P 依平台各自固定**：
   - Mac：N_thr = 8（M4 Pro 的 performance core 數，`hw.perflevel0.logicalcpu = 8`）。
   - P 的選擇規則（事先寫定）：pilot 在 sentinel cell 比較 `--poll 0` 與 `--poll 50`。只有在 `--poll 0` 的 decode tok/s 中位數低超過 3% 時才用 50，
     否則用 0（避免 CPU 空轉加熱 SoC）。
+  - **Mac 結果：P = 0**（2026-10-08 pilot：poll 0 中位數 54.89 vs poll 50 53.54 tok/s；012）。
   - RTX：N_thr = WSL 內 host CPU 的 physical core 數，P 用同一規則，皆於 Stage B 決定。
 - `-fa on` 之前，pilot 先以 `-fa auto` 確認兩個 backend 的 log 都出現 "Flash Attention enabled"。
 
@@ -211,7 +212,9 @@ request throughput（req/s）；output token throughput 與 total token throughp
   - process 之間至少閒置 30 秒。
   - **sentinel cell**（最小 size × 最低 bit × 最短 context，由 pins 推導；目前為 4B-Q4_K_M decode @ L = 2048）在每個 session 開頭與結尾各量一次。兩次的 decode tok/s 相差 > 3% 時，
     整個 session 標記為 drift，所有 cell 在新的 session 重跑。
-  - 每個 process 前後都跑一次 `env_capture`（thermal / loadavg / Mac lock owner）。
+  - 每個 process 前後都跑一次 `env_capture`（thermal / loadavg / Mac lock owner / 電源）。
+  - **電源有效性（012）**：任一 process 前後出現「電源不是 AC」、「電量 < 20%」或 thermal / performance warning，
+    該 session 標為 env-invalid，整個 session 重跑（與 drift 相同）。quality session 同樣適用。
 - **RTX**：
   - 在 GPU lock 下執行，`env_capture --gpu-lock-held`。
   - `enforced.power.limit` 必須等於 `power.default_limit`。
@@ -241,13 +244,13 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
   - [x] 以 llama.cpp tokenizer 交叉驗證 MMLU 排除清單：16,000 個字串的 token 完全一致，排除清單相同；HellaSwag、ARC 走同一 scorer，皆 0 題（`quality/subsets/tokenizer-crosscheck.json`，2026-10-08）
   - [x] WikiText chunk 數：llama.cpp tokenizer 與 HF 完全一致（297,194 tokens，比照 `-f` 去掉一個結尾換行），580 chunks（同上檔案）
 - [ ] Mac pilot 完成：
-  - [ ] `-fa auto` probe
-  - [ ] `--poll` 依規則選定
+  - [ ] `-fa auto` probe（4B 的 probe 因 log verbosity 無法判定，需以 `-lv 4` 重跑；012）
+  - [x] `--poll` 依規則選定：Mac P = 0（012）
   - [ ] throughput 校準
   - [ ] determinism
-  - [ ] memory metric 交叉核對
+  - [x] memory metric 交叉核對（4B）：breakdown 的 context 增量 990 MiB 與 footprint 1026 MiB、理論 960 MiB 一致（012）；9B 待補
   - [ ] quality 數值 sanity check
-  - [ ] MDE（遮蔽方向）
+  - [ ] MDE（遮蔽方向）：Core A 已估（sentinel CV 5.9%，兩格相對 MDE 約 9.6%；012）；quality 待 quality pilot
 - [ ] Benchmark harness 與輸出格式固定，記錄 harness 的 git commit
 - [x] 判定規則的分析程式在任何數據前 commit（`benchmarks/core_a_analysis.py`、`quality/quality_analysis.py`、`benchmarks/core_b_plan.py`、`benchmarks/core_b_analysis.py`；011）
 - [x] Mac 重負載 lock 的參與方式已由使用者決定，並寫入 MACHINE_POLICY 或 decision log（共享 `/tmp/ai-portfolio-mac-heavy.lock`，經 `tools/with-mac-lock`）

@@ -36,7 +36,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import disk_guard  # noqa: E402
 import quality_parse as qp  # noqa: E402
-from run_core_a import default_run_proc, make_env_capture, sha256_json, write_raw_manifest  # noqa: E402
+from run_core_a import default_run_proc, env_problems, make_env_capture, sha256_json, write_raw_manifest  # noqa: E402
 
 SCHEMA_VERSION = 1
 MAC_HEAVY_LOCK = "/tmp/ai-portfolio-mac-heavy.lock"
@@ -189,7 +189,7 @@ def run_quality(
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "mode": plan["mode"],
                "plan_sha256": sha256_json(plan), "pins_sha256": plan.get("pins_sha256"),
                "mac_lock_held": mac_lock_held, "started_at": now()}
-    rows, by_id, skipped_sizes = [], {}, set()
+    rows, by_id, skipped_sizes, env_flags = [], {}, set(), []
     resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace("{data}", data_dir)  # noqa: E731
     with open(out / "rows.jsonl", "w") as fh:
         for job in plan["jobs"]:
@@ -219,9 +219,11 @@ def run_quality(
                 argv = [resolve(a) for a in job["argv"]]
                 rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
                        "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json"}
-                capture_env(llama_bin=exe, out_path=out / rel["env_before"], gpu_lock_held=False)
+                env_before = capture_env(llama_bin=exe, out_path=out / rel["env_before"], gpu_lock_held=False)
                 code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
-                capture_env(llama_bin=exe, out_path=out / rel["env_after"], gpu_lock_held=False)
+                env_after = capture_env(llama_bin=exe, out_path=out / rel["env_after"], gpu_lock_held=False)
+                for phase, rec in (("before", env_before), ("after", env_after)):
+                    env_flags.extend({"job_id": jid, "phase": phase, "reason": why} for why in env_problems(rec))
                 res = qp.classify(kind, code, (out / rel["stdout"]).read_text(errors="replace"),
                                   (out / rel["stderr"]).read_text(errors="replace"), job["expect"])
                 row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, **res, "disk_guard": guard, **rel}
@@ -233,7 +235,7 @@ def run_quality(
     outcomes = {"ok": 0, "oom": 0, "error": 0, "skipped": 0}
     for r in rows:
         outcomes[r["outcome"]] += 1
-    session.update({"finished_at": now(), "outcomes": outcomes})
+    session.update({"finished_at": now(), "outcomes": outcomes, "env_flags": env_flags, "env_valid": not env_flags})
     write_raw_manifest(out)
     (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
     return session

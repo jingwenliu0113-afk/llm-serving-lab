@@ -320,3 +320,26 @@ def test_session_writes_a_raw_manifest(tmp_path):
     for rel, meta in manifest["files"].items():
         data = (out / rel).read_bytes()
         assert meta == {"sha256": hashlib.sha256(data).hexdigest(), "size_bytes": len(data)}
+
+
+def test_session_flags_processes_with_an_invalid_power_state(tmp_path):
+    """Decision 012: off AC, battery < 20% or a thermal / performance warning invalidates the session."""
+    class PowerEnv(EnvRecorder):
+        def __init__(self):
+            super().__init__()
+            self.n = 0
+
+        def __call__(self, llama_bin, out_path, gpu_lock_held):
+            rec = super().__call__(llama_bin, out_path, gpu_lock_held)
+            self.n += 1
+            rec["power"] = {"source": "AC", "battery_pct": 15 if self.n == 6 else 80,
+                            "thermal": {"thermal_warning_recorded": False, "performance_warning_recorded": False}}
+            Path(out_path).write_text(json.dumps(rec))
+            return rec
+
+    out, summary, rows = run(tmp_path, small_plan(), env=PowerEnv())
+    assert summary["env_valid"] is False
+    assert summary["env_flags"][0]["reason"] == "battery 15% < 20%"
+    (tmp_path / "b").mkdir()
+    _, ok_summary, _ = run(tmp_path / "b", small_plan())
+    assert ok_summary["env_valid"] is True and ok_summary["env_flags"] == []

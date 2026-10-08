@@ -228,10 +228,20 @@ def classify_completion(exit_code, parsed: ParsedLog, stderr: str, expected_prom
     return _result("ok", summary=summary)
 
 
+def _graph(lines: list):
+    graph = None
+    for line in lines:
+        m = _RE_GRAPH.search(line)
+        if m:
+            graph = {"nodes": m.group(1).strip(), "splits": m.group(2).strip()}
+    return graph
+
+
 def classify_bench(exit_code, stdout: str, stderr: str, expect: dict) -> dict:
     lines = stderr.splitlines()
     rows = parse_bench_jsonl(stdout)
     oom, stage = find_oom(lines), find_stage(lines)
+    summary = {"graph": _graph(lines)}
 
     if oom and (exit_code != 0 or len(rows) != 1):
         return _result("oom", stage or "unknown", "allocation failure", oom, metrics=None)
@@ -241,5 +251,5 @@ def classify_bench(exit_code, stdout: str, stderr: str, expect: dict) -> dict:
         return _result("error", stage, f"expected exactly 1 result row, got {len(rows)}", None, metrics=None)
     violations = check_bench_row(rows[0], expect)
     if violations:
-        return _result("error", stage, "; ".join(violations), None, metrics=bench_metrics(rows[0]))
-    return _result("ok", metrics=bench_metrics(rows[0]))
+        return _result("error", stage, "; ".join(violations), None, metrics=bench_metrics(rows[0]), summary=summary)
+    return _result("ok", metrics=bench_metrics(rows[0]), summary=summary)

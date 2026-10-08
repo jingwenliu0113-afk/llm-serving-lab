@@ -43,6 +43,7 @@ results/core_a/<platform>/<session_id>/
 | `started_at`、`finished_at` | UTC ISO 8601 |
 | `outcomes` | `{"ok": n, "oom": n, "error": n}` |
 | `sentinel` | `start_tok_s`、`end_tok_s`、`drift_pct`、`drift`（> 3% 為 true，整個 session 需重跑）、`threshold_pct` |
+| `env_flags`、`env_valid` | 電源有效性（012）：任一 process 前後電源不是 AC、電量 < 20% 或有 thermal / performance warning，就列入 `env_flags`，`env_valid` 為 false，整個 session 需重跑 |
 
 ## `rows.jsonl`（每列一個 job）
 
@@ -60,6 +61,7 @@ results/core_a/<platform>/<session_id>/
 | `stage` | 失敗階段：`load` / `context` / `eval` / `unknown`；ok 為 null |
 | `reason`、`evidence` | 判定理由與觸發判定的 log 行 |
 | `metrics` | bench 類：`avg_ns`、`stddev_ns`、`avg_ts`、`stddev_ts`、`samples_ns` |
+| `summary`（bench） | `graph`（`nodes`、`splits`，來自 `llama-bench -v` 的 stderr；012） |
 | `summary` | fit 類：`n_ctx`、`flash_attn`、`prompt_tokens`、`eval_runs`、`memory`（`unit`、`devices[]`、`host`、`other[]`，單位 MiB）、`graph`（`nodes`、`splits`；pp / tg 不同時為 `"a / b"`）、`fused_ops`（fused op probe 的結果行，只在 `auto` 設定時出現） |
 | `external_memory` | fit 類（v2）：Mac 為 `{"peak_footprint_bytes", "max_rss_bytes"}`（`/usr/bin/time -l`）；RTX 為 `{"gpu_mem_used_peak_mib", "gpu_mem_used_first_mib", "n_samples", "samples"}`（B 在分析時扣除）；量不到或非 fit 為 null |
 | `stdout`、`stderr`、`env_before`、`env_after`、`gpu_mem_samples` | session 目錄內的相對路徑（`gpu_mem_samples` 只在 RTX fit） |

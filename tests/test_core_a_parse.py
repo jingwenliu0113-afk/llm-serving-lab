@@ -270,3 +270,10 @@ def test_completion_summary_graph_single_value_and_disabled_probe():
     s = cap.completion_summary(cap.parse_log_jsonl(text))
     assert s["graph"] == {"nodes": "1795", "splits": "2"}
     assert s["fused_ops"] == ["Flash Attention not supported, set to disabled"]
+
+
+def test_bench_rows_report_graph_splits_from_verbose_stderr():
+    stderr = ("sched_reserve:       MTL0 compute buffer size =   497.02 MiB\n"
+              "sched_reserve: graph: nodes = 1879, splits = 2, input objects = 4, input tensors = 7\n")
+    r = cap.classify_bench(0, bench_line(), stderr, EXPECT_TTFT)
+    assert r["outcome"] == "ok" and r["summary"] == {"graph": {"nodes": "1879", "splits": "2"}}

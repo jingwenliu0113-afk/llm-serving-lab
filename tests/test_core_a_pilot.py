@@ -112,3 +112,17 @@ def test_report_never_lists_cross_cell_speeds():
     assert "900" not in text and "40.0" not in text  # calibration speeds stay masked
     # 54 x (20 + 30) + 54 x (60 + 30) + 54 x (30 + 30) + 2 x (30 + 30) seconds
     assert rep["calibration"]["upper_bound_hours"] == round((54 * 50 + 54 * 90 + 54 * 60 + 2 * 60) / 3600, 2)
+
+
+def test_graph_splits_collected_from_bench_and_fit_rows():
+    rows = [row("poll", "decode", 100.0, 0, summary={"graph": {"nodes": "1879", "splits": "2"}}),
+            row("memory", "fit", summary={"graph": {"nodes": "1900", "splits": "2"}, "memory": {}}),
+            row("calib", "ttft", 900.0, L=32768, summary={"graph": {"nodes": "1879", "splits": "50"}})]
+    g = pl.graph_splits(rows)
+    assert g["values"] == {"2": 2, "50": 1} and g["max_splits"] == 50
+
+
+def test_blocks_can_be_selected(pins):
+    plan = pl.build_pilot_plan(pins, platform="macos-metal", sizes=["4B"], n_thr=8, blocks=["fa_probe"])
+    assert {j["block"] for j in plan["jobs"]} == {"fa_probe", "sentinel"}
+    assert all(arg(j["argv"], "-lv") == "4" for j in plan["jobs"] if j["kind"] == "fit")

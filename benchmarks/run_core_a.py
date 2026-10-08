@@ -93,6 +93,26 @@ class NvidiaSmiSampler:
         return {"gpu_mem_used_peak_mib": max(values), "gpu_mem_used_first_mib": values[0], "n_samples": len(values)}
 
 
+BATTERY_MIN_PCT = 20  # decision 012
+
+
+def env_problems(rec: dict) -> list:
+    """Power / thermal state that invalidates a session (decision 012). Desktops without a
+    battery report no power source and are not checked."""
+    power = (rec or {}).get("power") or {}
+    if not power.get("source"):
+        return []
+    problems = []
+    if power["source"] != "AC":
+        problems.append(f"power source {power['source']} (AC required)")
+    if power.get("battery_pct") is not None and power["battery_pct"] < BATTERY_MIN_PCT:
+        problems.append(f"battery {power['battery_pct']}% < {BATTERY_MIN_PCT}%")
+    thermal = power.get("thermal") or {}
+    if thermal.get("thermal_warning_recorded") or thermal.get("performance_warning_recorded"):
+        problems.append("thermal / performance warning recorded")
+    return problems
+
+
 def write_raw_manifest(out: Path) -> dict:
     """raw/ is kept in the local archive, not in git; this committed manifest pins its content."""
     files = {}
@@ -201,7 +221,7 @@ def run_session(
     params = plan["params"]
     bench_expect = {"build_commit": want["build_commit"], "n_threads": params["n_thr"], "poll": params["poll"],
                     "reps": params["bench_r"]}
-    rows = []
+    rows, env_flags = [], []
     with open(out / "rows.jsonl", "w") as rows_file:
         for i, job in enumerate(plan["jobs"]):
             if i:
@@ -225,14 +245,16 @@ def run_session(
             if ext_kind == "nvidia-smi" and gpu_sampler is not None:
                 rel["gpu_mem_samples"] = f"raw/{jid}.gpumem.txt"
                 sampler = gpu_sampler(out / rel["gpu_mem_samples"])
-            capture_env(llama_bin=llama_bin, out_path=out / rel["env_before"], gpu_lock_held=gpu_lock_held)
+            env_before = capture_env(llama_bin=llama_bin, out_path=out / rel["env_before"], gpu_lock_held=gpu_lock_held)
             if sampler is not None:
                 sampler.start()
             try:
                 exit_code, wall_s = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
             finally:
                 sampled = sampler.stop() if sampler is not None else None
-            capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
+            env_after = capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
+            for phase, rec in (("before", env_before), ("after", env_after)):
+                env_flags.extend({"job_id": jid, "phase": phase, "reason": why} for why in env_problems(rec))
 
             stdout = (out / rel["stdout"]).read_text(errors="replace")
             stderr = (out / rel["stderr"]).read_text(errors="replace")
@@ -263,7 +285,8 @@ def run_session(
     outcomes = {"ok": 0, "oom": 0, "error": 0}
     for row in rows:
         outcomes[row["outcome"]] += 1
-    session.update({"finished_at": now(), "outcomes": outcomes, "sentinel": _sentinel_summary(rows)})
+    session.update({"finished_at": now(), "outcomes": outcomes, "sentinel": _sentinel_summary(rows),
+                    "env_flags": env_flags, "env_valid": not env_flags})
     write_raw_manifest(out)
     (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
     return session

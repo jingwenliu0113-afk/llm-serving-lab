@@ -5,6 +5,7 @@
 > **2026-10-08（009）**：
 > - 超量測試改為 9B-Q8_0 搭配 `-c 262144`（006 / 008），下文的 14B-Q8_0 `-c 65536` 為歷史。
 > - spill 定義改寫：C_ctx 與速度 anchor 改用 4B-Q4_K_M，bytes 完全採用 PREREGISTRATION H-A2 的定義。見下文「spill」段的 009 版本。
+> - **2026-10-08（012）**：fit 指令另加 `--log-jsonl -lv 4`（只影響 log；harness 一直用 `--log-jsonl` 解析）。
 
 - 狀態：Accepted（v1；在 Stage A pre-registration commit 前仍可修改，修改需留 log）
 - 日期：2026-10-08（同日依 review 修訂：fit 規則、quant set 理由、轉換 pipeline）

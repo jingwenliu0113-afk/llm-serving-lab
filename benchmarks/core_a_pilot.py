@@ -52,7 +52,11 @@ def _fit_job(jid, block, size, quant, L, model, n_thr, platform, fa="on"):
             "prompt": {"unit": cp.PROMPT_UNIT, "count": L - cp.N_GEN}, "expect": {"prompt_tokens": L - cp.N_GEN}}
 
 
-def build_pilot_plan(pins: dict, *, platform: str, sizes: list, n_thr: int, pins_sha256: str | None = None) -> dict:
+BLOCKS = ("fa_probe", "poll", "memory", "calib")
+
+
+def build_pilot_plan(pins: dict, *, platform: str, sizes: list, n_thr: int, pins_sha256: str | None = None,
+                     blocks: list | None = None) -> dict:
     files = _files(pins)
     quants, contexts = pins["core_a"]["quants"], pins["core_a"]["context_lengths"]
     known = [m["size"] for m in pins["core_a"]["models"]]
@@ -85,12 +89,13 @@ def build_pilot_plan(pins: dict, *, platform: str, sizes: list, n_thr: int, pins
                                              n_thr, 0, position=pos), "block": "sentinel"}
     return {
         "schema_version": cp.SCHEMA_VERSION, "platform": platform, "mode": "pilot", "seed": None,
-        "pilot": {"sizes": sizes, "poll_reps": POLL_REPS, "poll_values": list(POLL_VALUES)},
+        "pilot": {"sizes": sizes, "poll_reps": POLL_REPS, "poll_values": list(POLL_VALUES),
+                  "blocks": list(blocks) if blocks else list(BLOCKS)},
         "pins_sha256": pins_sha256,
         "params": {"n_thr": n_thr, "poll": 0, "reps": 1, "bench_r": cp.BENCH_R, "delay_s": cp.DELAY_S,
                    "idle_s": cp.IDLE_S},
         "expect": {"build_number": pins["llama_cpp"]["build_number"], "build_commit": pins["llama_cpp"]["commit"]},
-        "jobs": [sentinel("start"), *jobs, sentinel("end")],
+        "jobs": [sentinel("start"), *(j for j in jobs if blocks is None or j["block"] in blocks), sentinel("end")],
     }
 
 
@@ -146,6 +151,19 @@ def memory_cross_check(rows: list) -> list:
     return out
 
 
+def graph_splits(rows: list) -> dict:
+    """Splits per process (fit and bench). A full Metal / CUDA offload of this model has a small
+    constant split count; a silent fused-GDN CPU fallback multiplies it (008)."""
+    values: dict = {}
+    for r in rows:
+        g = (r.get("summary") or {}).get("graph")
+        if g:
+            for part in str(g["splits"]).split("/"):
+                values[part.strip()] = values.get(part.strip(), 0) + 1
+    return {"values": dict(sorted(values.items())),
+            "max_splits": max((int(v) for v in values), default=None)}
+
+
 def fa_probe(rows: list) -> list:
     return [{"size": r["size"], "quant": r["quant"], "outcome": r["outcome"],
              "fused_ops": (r.get("summary") or {}).get("fused_ops"),
@@ -165,6 +183,7 @@ def report(rows: list, *, n_formal_jobs: dict, idle_s: float) -> dict:
         bound = sum(n * (per_kind[k] + idle_s) for k, n in n_formal_jobs.items()) / 3600
     return {
         "fa_probe": fa_probe(rows),
+        "graph_splits": graph_splits(rows),
         "poll": poll,
         "noise": noise_and_mde(rows, poll["poll"] if poll["poll"] is not None else 0),
         "memory": memory_cross_check(rows),
@@ -183,6 +202,7 @@ def main(argv: list | None = None) -> int:
     p.add_argument("--platform", required=True, choices=sorted(cp.PLATFORMS))
     p.add_argument("--sizes", required=True, nargs="+")
     p.add_argument("--n-thr", required=True, type=int)
+    p.add_argument("--blocks", nargs="+", choices=BLOCKS, default=None)
     p.add_argument("--out", required=True)
     r = sub.add_parser("report")
     r.add_argument("--session", required=True)
@@ -192,7 +212,7 @@ def main(argv: list | None = None) -> int:
     if args.cmd == "plan":
         raw = Path(args.pins).read_bytes()
         plan = build_pilot_plan(tomllib.loads(raw.decode()), platform=args.platform, sizes=args.sizes,
-                                n_thr=args.n_thr, pins_sha256=hashlib.sha256(raw).hexdigest())
+                                n_thr=args.n_thr, pins_sha256=hashlib.sha256(raw).hexdigest(), blocks=args.blocks)
         Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
         return 0
 

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="440" viewBox="0 0 720 440" font-family="sans-serif" font-size="12">
+<rect width="720" height="440" fill="white"/>
+<text x="360.0" y="24" text-anchor="middle" font-size="15">Core A peak memory vs context — M4 Pro 48GB (Metal), 4B pilot</text>
+<line x1="80" y1="380" x2="550" y2="380" stroke="black"/>
+<line x1="80" y1="50" x2="80" y2="380" stroke="black"/>
+<line x1="80.0" y1="380" x2="80.0" y2="385" stroke="black"/>
+<text x="80.0" y="398" text-anchor="middle">2048</text>
+<line x1="315.0" y1="380" x2="315.0" y2="385" stroke="black"/>
+<text x="315.0" y="398" text-anchor="middle">8192</text>
+<line x1="550.0" y1="380" x2="550.0" y2="385" stroke="black"/>
+<text x="550.0" y="398" text-anchor="middle">32768</text>
+<line x1="80" y1="380.0" x2="550" y2="380.0" stroke="#ddd"/>
+<text x="72" y="384.0" text-anchor="end">0</text>
+<line x1="80" y1="270.0" x2="550" y2="270.0" stroke="#ddd"/>
+<text x="72" y="274.0" text-anchor="end">2000</text>
+<line x1="80" y1="160.0" x2="550" y2="160.0" stroke="#ddd"/>
+<text x="72" y="164.0" text-anchor="end">4000</text>
+<line x1="80" y1="50.0" x2="550" y2="50.0" stroke="#ddd"/>
+<text x="72" y="54.0" text-anchor="end">6000</text>
+<text x="315.0" y="422" text-anchor="middle">context L (tokens, log2 scale)</text>
+<text x="18" y="215.0" text-anchor="middle" transform="rotate(-90 18 215.0)">MiB (device self + host self)</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="80.0,176.9 315.0,166.1 550.0,120.8"/>
+<circle cx="80.0" cy="176.9" r="3" fill="#1f77b4"/>
+<circle cx="315.0" cy="166.1" r="3" fill="#1f77b4"/>
+<circle cx="550.0" cy="120.8" r="3" fill="#1f77b4"/>
+<line x1="565" y1="60" x2="585" y2="60" stroke="#1f77b4" stroke-width="2"/>
+<text x="590" y="64">4B-Q4_K_M</text>
+<polyline fill="none" stroke="#d62728" stroke-width="2" points="80.0,137.3 315.0,126.5 550.0,81.2"/>
+<circle cx="80.0" cy="137.3" r="3" fill="#d62728"/>
+<circle cx="315.0" cy="126.5" r="3" fill="#d62728"/>
+<circle cx="550.0" cy="81.2" r="3" fill="#d62728"/>
+<line x1="565" y1="78" x2="585" y2="78" stroke="#d62728" stroke-width="2"/>
+<text x="590" y="82">4B-Q6_K</text>
+<polyline fill="none" stroke="#2ca02c" stroke-width="2" points="80.0,75.8 315.0,65.0 550.0,19.7"/>
+<circle cx="80.0" cy="75.8" r="3" fill="#2ca02c"/>
+<circle cx="315.0" cy="65.0" r="3" fill="#2ca02c"/>
+<circle cx="550.0" cy="19.7" r="3" fill="#2ca02c"/>
+<line x1="565" y1="96" x2="585" y2="96" stroke="#2ca02c" stroke-width="2"/>
+<text x="590" y="100">4B-Q8_0</text>
+<text x="80" y="436" font-size="10" fill="#555">llama.cpp memory breakdown of the fit run (llama-completion -c L, f16 KV, -fa on); max over processes</text>
+</svg>

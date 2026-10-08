@@ -1,0 +1,181 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/pilot-calib-decode-4B-Q8_0-32768.stderr.txt": {
+   "sha256": "31b5a1c99b3105f62e444993389f1766935364340df6214e58da42a17e75d276",
+   "size_bytes": 124887
+  },
+  "raw/pilot-calib-decode-4B-Q8_0-32768.stdout.txt": {
+   "sha256": "7d88e3b2cb46a586434fe008058caf5543dc764f83194f8c2f0a41415dfdf557",
+   "size_bytes": 1148
+  },
+  "raw/pilot-calib-ttft-4B-Q8_0-32768.stderr.txt": {
+   "sha256": "4b4babe72002064d8765e925db66446b236a04e1b8b7609166b7e133f77cba37",
+   "size_bytes": 122584
+  },
+  "raw/pilot-calib-ttft-4B-Q8_0-32768.stdout.txt": {
+   "sha256": "c30ddae63ea187b077b4eebe49bbcb87890ae84c38114eeee53d77d0d23a17d0",
+   "size_bytes": 1157
+  },
+  "raw/pilot-fa-4B-Q4_K_M.stderr.txt": {
+   "sha256": "5ba255962013c2222e7b5e06698dccdfb998ee2f06283db02dca23d1057adf56",
+   "size_bytes": 777
+  },
+  "raw/pilot-fa-4B-Q4_K_M.stdout.txt": {
+   "sha256": "9b9873288971ef7d2f516ede4f4647e2d7a937b1df0933c17b1b11b925eabdfc",
+   "size_bytes": 119965
+  },
+  "raw/pilot-fa-4B-Q6_K.stderr.txt": {
+   "sha256": "9e9b2418df5be69df9ab9f3591380e4a8c0dee22c6f264a52e6c1e8a4176a839",
+   "size_bytes": 777
+  },
+  "raw/pilot-fa-4B-Q6_K.stdout.txt": {
+   "sha256": "2350939fca6e93a52a9272e4993a4986b7496b3b95ed2a09290ec1f19258a9c2",
+   "size_bytes": 119965
+  },
+  "raw/pilot-fa-4B-Q8_0.stderr.txt": {
+   "sha256": "aedf6b961c9a2ab2c8e3e6f8c150dde8f4faa0e6b3584b0d12480ad2b5e6f7d7",
+   "size_bytes": 777
+  },
+  "raw/pilot-fa-4B-Q8_0.stdout.txt": {
+   "sha256": "e2701d4713a43528c5424d4e7d448a09094572355c80238897e928b636d540f7",
+   "size_bytes": 119963
+  },
+  "raw/pilot-mem-4B-Q4_K_M-2048.stderr.txt": {
+   "sha256": "bd857a33ba7c11d24a3ee50ff6daf7e9409893a168399103eaffb641997ea429",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q4_K_M-2048.stdout.txt": {
+   "sha256": "63b79464b92c3ab2f09fffc54aa0814adbfed8661bf18ab568093b417c048ba9",
+   "size_bytes": 119965
+  },
+  "raw/pilot-mem-4B-Q4_K_M-32768.stderr.txt": {
+   "sha256": "738e7e8bc42ea78644439e08409789bb59d350ce6bc13e9ada2d0b0f39f4e309",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q4_K_M-32768.stdout.txt": {
+   "sha256": "18d4d142fa94b0ee06d3fcdb067a15033d656e80cf9aa595b930d35f0a77019c",
+   "size_bytes": 1928232
+  },
+  "raw/pilot-mem-4B-Q4_K_M-8192.stderr.txt": {
+   "sha256": "4e6d5c114bd418bdbaa6d287728f7caae707b38b9370ddd78068a3a7f33b0485",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q4_K_M-8192.stdout.txt": {
+   "sha256": "7cf4a42006ab7637da1ce169719b723695ee7b3258f6de65d905fe9f998c2dcd",
+   "size_bytes": 478246
+  },
+  "raw/pilot-mem-4B-Q6_K-2048.stderr.txt": {
+   "sha256": "b8a71cf953bdb21b02bcf5ff8331d2b2e415a8bac80a01998a409a7977427f6c",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q6_K-2048.stdout.txt": {
+   "sha256": "9505b622e593d3b7b5cdb4fde9b31347190caa37645aeee6155ba93386f29be8",
+   "size_bytes": 119965
+  },
+  "raw/pilot-mem-4B-Q6_K-32768.stderr.txt": {
+   "sha256": "63cfd679515ca1d87fc9c8e66e651bef735ce130ae8c5bafa6b33daf9c9b9f8a",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q6_K-32768.stdout.txt": {
+   "sha256": "ea39bc080eb72a44df34fed53097a5e7db448b038d481468d0d057a209e2c551",
+   "size_bytes": 1928232
+  },
+  "raw/pilot-mem-4B-Q6_K-8192.stderr.txt": {
+   "sha256": "bae2ec88e18d5027d74aab679d598cac8a23d0b842ef361fc0198cc4354bbe7d",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q6_K-8192.stdout.txt": {
+   "sha256": "24f29818a45d6daaa8b5c66cfe9669b3de987358bc611538efe0b9b892aae0c0",
+   "size_bytes": 478246
+  },
+  "raw/pilot-mem-4B-Q8_0-2048.stderr.txt": {
+   "sha256": "3e702658c8da3eee2357fcf18e05a0a6b89ed91b78bc0a68ed0135a6c94823ff",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q8_0-2048.stdout.txt": {
+   "sha256": "f95143bea4441d58efbe7537ec10c606b9d0f5ddcf5bf92fa8305d9a3504dd59",
+   "size_bytes": 121893
+  },
+  "raw/pilot-mem-4B-Q8_0-32768.stderr.txt": {
+   "sha256": "f656011f3e83762ad7eb78ec342228feddacf5ff38ef3fdf36bdad69b710415e",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q8_0-32768.stdout.txt": {
+   "sha256": "c2d72f6b8c4667627345b51272e0fecbc33b8adb4657a44cff73568fd4ebe94e",
+   "size_bytes": 1926183
+  },
+  "raw/pilot-mem-4B-Q8_0-8192.stderr.txt": {
+   "sha256": "d772ec3192c299739ec47169438641a2b8278d2d6999826674ec787ebfc42304",
+   "size_bytes": 777
+  },
+  "raw/pilot-mem-4B-Q8_0-8192.stdout.txt": {
+   "sha256": "5a1e9420e7d925504214b806529c49a3b6cf79cd30c1fed75d1a701b32b0de96",
+   "size_bytes": 476325
+  },
+  "raw/pilot-poll0-r1.stderr.txt": {
+   "sha256": "bbf287a5ba1e03e0b0bd3830ad560397ea9bb205b4352662072af1040b1fccad",
+   "size_bytes": 125072
+  },
+  "raw/pilot-poll0-r1.stdout.txt": {
+   "sha256": "3326b00ed3950c1a15a72f4f873bd13181356948b2657b23fae181988b3277a3",
+   "size_bytes": 1157
+  },
+  "raw/pilot-poll0-r2.stderr.txt": {
+   "sha256": "afe506f7770ddc320b8bc8666169e7567e77c24c402cc6cd40b6b4e764e6cc47",
+   "size_bytes": 125072
+  },
+  "raw/pilot-poll0-r2.stdout.txt": {
+   "sha256": "a40f0351dd2084f118c6395b3c2b974fb53d97937fae64a00d8555987a39f37d",
+   "size_bytes": 1159
+  },
+  "raw/pilot-poll0-r3.stderr.txt": {
+   "sha256": "4368d2adabf20098da28ea8dca65904fb03ed67b7ebe1ec9bb0660c67f67f4ae",
+   "size_bytes": 125072
+  },
+  "raw/pilot-poll0-r3.stdout.txt": {
+   "sha256": "ca9b57f422a6d46bbc80b4b50b1003934a4684c37a1b3bed68411eb5dc551233",
+   "size_bytes": 1159
+  },
+  "raw/pilot-poll50-r1.stderr.txt": {
+   "sha256": "c64551f1f32658fea129c2d051210e27af1b780744e696ab652bacb86f9bc484",
+   "size_bytes": 125072
+  },
+  "raw/pilot-poll50-r1.stdout.txt": {
+   "sha256": "0b6cf679485b7b6896e2e548851547dff336b0a793c54087bc8e652524a66a54",
+   "size_bytes": 1160
+  },
+  "raw/pilot-poll50-r2.stderr.txt": {
+   "sha256": "b92884c89f487ff57e0d4005650f3968bc877eeec5143cf7975b38d817a466b1",
+   "size_bytes": 125072
+  },
+  "raw/pilot-poll50-r2.stdout.txt": {
+   "sha256": "b4f269f3719c2c542acb06d91b8e949cc1b7a4d3787072a0973b9bad912f1f16",
+   "size_bytes": 1160
+  },
+  "raw/pilot-poll50-r3.stderr.txt": {
+   "sha256": "395f31a8d70ebab2eab01dd8026889556ae11fd8d2ae50e9a62d8c0874d22677",
+   "size_bytes": 125072
+  },
+  "raw/pilot-poll50-r3.stdout.txt": {
+   "sha256": "349c27ed25464a1e3c9fb5f15e8352ee528e0c17a47535cc0594d731136ff3a7",
+   "size_bytes": 1158
+  },
+  "raw/sentinel-end.stderr.txt": {
+   "sha256": "273395e150df6753d8f4782dd8241cf98b5db17d53efbf22f9601e54f7d8ed88",
+   "size_bytes": 125072
+  },
+  "raw/sentinel-end.stdout.txt": {
+   "sha256": "743ed59d940cdaac71c7f36e2818f2885cef48eed75e4254fa38aba5720f7077",
+   "size_bytes": 1158
+  },
+  "raw/sentinel-start.stderr.txt": {
+   "sha256": "e50c497bd3e3ed19ec75ac5590ff910c673e5f4f9d1f3670e03dd0a03c901440",
+   "size_bytes": 125072
+  },
+  "raw/sentinel-start.stdout.txt": {
+   "sha256": "d1052f764dbf120676b7fe3e1a821a8304991efccb8940bca23a2b3bd900d6ae",
+   "size_bytes": 1159
+  }
+ }
+}

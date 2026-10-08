@@ -217,3 +217,8 @@ def test_pilot_can_be_limited_to_available_sizes(pins):
     frozen["freeze"]["mac"] = True
     with pytest.raises(rq.QualityError, match="all sizes"):
         rq.build_quality_plan(frozen, mode="formal", n_thr=8, poll=0, sizes=["4B"])
+
+
+def test_quality_session_reports_env_validity(tmp_path, monkeypatch, pins):
+    summary, rows, data = run(tmp_path, monkeypatch, small(pins))
+    assert summary["env_valid"] is True and summary["env_flags"] == []

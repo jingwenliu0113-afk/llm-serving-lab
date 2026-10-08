@@ -1,0 +1,198 @@
+{
+ "fa_probe": [
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "outcome": "ok",
+   "fused_ops": [],
+   "graph": null,
+   "fa_enabled": false
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "outcome": "ok",
+   "fused_ops": [],
+   "graph": null,
+   "fa_enabled": false
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "outcome": "ok",
+   "fused_ops": [],
+   "graph": null,
+   "fa_enabled": false
+  }
+ ],
+ "poll": {
+  "poll": 0,
+  "median_tok_s": {
+   "0": 54.885635,
+   "50": 53.541861
+  },
+  "poll0_slower_pct": -2.51,
+  "rule": "50 only if poll 0 is > 3.0% slower"
+ },
+ "noise": {
+  "n": 3,
+  "cv_pct": 5.879709641537103,
+  "mde_pct": 9.60152563832566,
+  "note": "process-level CV of the sentinel cell; MDE = relative difference two cells need to be 'beyond noise' with n = 3 each"
+ },
+ "memory": [
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 4875,
+   "host_self_mib": 656,
+   "footprint_mib": 355.4259719848633,
+   "max_rss_mib": 4582.375,
+   "footprint_over_self": 0.06426070728346832,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3904,
+   "host_self_mib": 509,
+   "footprint_mib": 357.00341033935547,
+   "max_rss_mib": 3611.3125,
+   "footprint_over_self": 0.08089812153622376,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3184,
+   "host_self_mib": 509,
+   "footprint_mib": 355.7841339111328,
+   "max_rss_mib": 2892.203125,
+   "footprint_over_self": 0.09634013915817298,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 4875,
+   "host_self_mib": 656,
+   "footprint_mib": 352.7853240966797,
+   "max_rss_mib": 4536.09375,
+   "footprint_over_self": 0.06378328043693358,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 5065,
+   "host_self_mib": 662,
+   "footprint_mib": 559.1292572021484,
+   "max_rss_mib": 4785.90625,
+   "footprint_over_self": 0.0976303923873142,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q8_0",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 5865,
+   "host_self_mib": 686,
+   "footprint_mib": 1381.004783630371,
+   "max_rss_mib": 5607.84375,
+   "footprint_over_self": 0.21080824051753488,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3904,
+   "host_self_mib": 509,
+   "footprint_mib": 353.5814895629883,
+   "max_rss_mib": 3609.5625,
+   "footprint_over_self": 0.08012270327735968,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 4094,
+   "host_self_mib": 515,
+   "footprint_mib": 558.0034561157227,
+   "max_rss_mib": 3814.484375,
+   "footprint_over_self": 0.12106822653845144,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q6_K",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 4894,
+   "host_self_mib": 539,
+   "footprint_mib": 1383.0041885375977,
+   "max_rss_mib": 4638.9375,
+   "footprint_over_self": 0.2545562651458858,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 3184,
+   "host_self_mib": 509,
+   "footprint_mib": 352.8309860229492,
+   "max_rss_mib": 2888.984375,
+   "footprint_over_self": 0.09554047820821804,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 3374,
+   "host_self_mib": 515,
+   "footprint_mib": 559.1748275756836,
+   "max_rss_mib": 3095.765625,
+   "footprint_over_self": 0.14378370469932722,
+   "graph_splits": null
+  },
+  {
+   "size": "4B",
+   "quant": "Q4_K_M",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 4174,
+   "host_self_mib": 539,
+   "footprint_mib": 1379.4566955566406,
+   "max_rss_mib": 3915.609375,
+   "footprint_over_self": 0.292691851380573,
+   "graph_splits": null
+  }
+ ],
+ "calibration": {
+  "upper_bound_hours": 10.65,
+  "method": "n_jobs x (slowest pilot wall time of that kind + idle) per kind"
+ },
+ "outcomes": {
+  "ok": 22,
+  "oom": 0,
+  "error": 0
+ }
+}

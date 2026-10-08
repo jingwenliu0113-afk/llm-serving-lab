@@ -110,6 +110,9 @@ def test_fit_argv_matches_prereg(pins):
         assert arg(argv, flag) == value
     assert (arg(argv, "-t"), arg(argv, "--poll")) == ("6", "50")
     assert {"--ignore-eos", "-no-cnv", "--log-jsonl"} <= set(argv)
+    # decision 012: llama.cpp library INFO logs (n_ctx, flash_attn, graph splits) map to
+    # verbosity 4 (trace) in this build and are hidden at the default 3
+    assert arg(argv, "-lv") == "4"
     assert arg(argv, "-f") == "{prompt}"
     assert j["prompt"] == {"unit": cp.PROMPT_UNIT, "count": 32768 - 128}
 
