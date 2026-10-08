@@ -207,3 +207,13 @@ def test_quality_session_writes_a_raw_manifest(tmp_path, monkeypatch, pins):
     manifest = json.loads((tmp_path / "out" / "raw_manifest.json").read_text())
     assert sorted(manifest["files"]) == sorted(p.relative_to(tmp_path / "out").as_posix()
                                                for p in (tmp_path / "out" / "raw").iterdir())
+
+
+def test_pilot_can_be_limited_to_available_sizes(pins):
+    p = rq.build_quality_plan(pins, mode="pilot", n_thr=8, poll=0, sizes=["4B"])
+    assert {j["size"] for j in p["jobs"]} == {"4B"}
+    assert any(j["kind"] == "ppl" for j in p["jobs"])  # the 4B half of the H-A5 pair
+    frozen = copy.deepcopy(pins)
+    frozen["freeze"]["mac"] = True
+    with pytest.raises(rq.QualityError, match="all sizes"):
+        rq.build_quality_plan(frozen, mode="formal", n_thr=8, poll=0, sizes=["4B"])

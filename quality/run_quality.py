@@ -63,9 +63,12 @@ def _flags(n_thr: int, poll: int) -> list:
     return [x for kv in QUALITY_FLAGS.items() for x in kv] + ["-t", str(n_thr), "--poll", str(poll)]
 
 
-def build_quality_plan(pins: dict, *, mode: str, n_thr: int, poll: int, pins_sha256: str | None = None) -> dict:
+def build_quality_plan(pins: dict, *, mode: str, n_thr: int, poll: int, pins_sha256: str | None = None,
+                       sizes: list | None = None) -> dict:
     if mode not in ("pilot", "formal"):
         raise QualityError(f"unknown mode {mode!r}")
+    if sizes is not None and mode == "formal":
+        raise QualityError("formal quality runs cover all sizes (decision 005)")
     if mode == "formal" and not pins["freeze"]["mac"]:
         raise QualityError("formal quality runs require freeze.mac = true in pins.toml (decision 006)")
     pilot = mode == "pilot"
@@ -83,6 +86,8 @@ def build_quality_plan(pins: dict, *, mode: str, n_thr: int, poll: int, pins_sha
     jobs = []
     for m in models:
         size = m["size"]
+        if sizes is not None and size not in sizes:
+            continue
         gguf = {"BF16": m["reference"]["filename"], **{q: m["files"][q]["filename"] for q in quants}}
         model = lambda p: ["-m", "{models}/" + gguf[p]]  # noqa: E731
         kld = f"{{data}}/kld/{size}.kld"
@@ -242,6 +247,7 @@ def main(argv: list | None = None) -> int:
     p_plan.add_argument("--n-thr", type=int, required=True)
     p_plan.add_argument("--poll", type=int, required=True)
     p_plan.add_argument("--out", required=True)
+    p_plan.add_argument("--sizes", nargs="+", default=None, help="pilot only: restrict to these sizes")
     p_run = sub.add_parser("run")
     for a in ("--plan", "--bin", "--models", "--data", "--out"):
         p_run.add_argument(a, required=True)
@@ -251,7 +257,7 @@ def main(argv: list | None = None) -> int:
     if args.cmd == "plan":
         raw = (ROOT / "configs" / "pins.toml").read_bytes()
         plan = build_quality_plan(tomllib.loads(raw.decode()), mode=args.mode, n_thr=args.n_thr, poll=args.poll,
-                                  pins_sha256=hashlib.sha256(raw).hexdigest())
+                                  pins_sha256=hashlib.sha256(raw).hexdigest(), sizes=args.sizes)
         Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
         return 0
     plan = json.loads(Path(args.plan).read_text())
