@@ -204,8 +204,8 @@ sha256 = "6726173ef65ffdc4abb0d28b755375d288ffb3eb41633bd833288c411c8ebf7c"
 size_bytes = 155325
 
 # Expected counts for formal runs (quality/run_quality.py success checks).
-# wikitext_chunks is from the HF tokenizer (297,193 tokens / 512) and must be
-# confirmed with the llama.cpp tokenizer before the Stage A freeze.
+# wikitext_chunks: 297,194 tokens / 512 = 580, identical for the HF and llama.cpp tokenizers
+# (llama-perplexity -f drops one trailing newline; quality/subsets/tokenizer-crosscheck.json).
 [quality.expected]
 wikitext_chunks = 580
 hellaswag_tasks = 4000
