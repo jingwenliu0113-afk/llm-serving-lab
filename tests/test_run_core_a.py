@@ -227,3 +227,70 @@ def test_refuses_existing_output_dir(tmp_path):
     with pytest.raises(rc.RunError, match="exists"):
         rc.run_session(plan, bin_dir=tmp_path / "bin", models_dir=tmp_path / "models", out_dir=tmp_path / "session",
                        capture_env=EnvRecorder(), sleep=lambda s: None, session_id="s1")
+
+
+# -------------------------------------------- schema v2: external peak memory --
+
+
+class FakeSampler:
+    def __init__(self, path):
+        self.path, self.started = path, False
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        assert self.started
+        self.path.write_text("1000\n9500\n9800\n1200\n")
+        return {"gpu_mem_used_peak_mib": 9800, "gpu_mem_used_first_mib": 1000, "n_samples": 4}
+
+
+def test_cuda_fit_rows_record_sampled_peak(tmp_path):
+    made = []
+
+    def factory(path):
+        made.append(FakeSampler(path))
+        return made[-1]
+
+    out, _, rows = run(tmp_path, small_plan(), gpu_sampler=factory)
+    fit = [r for r in rows if r["kind"] == "fit"]
+    assert len(made) == len(fit)
+    for r in fit:
+        assert r["external_memory"]["gpu_mem_used_peak_mib"] == 9800
+        assert (out / r["external_memory"]["samples"]).is_file()
+    assert all(r["external_memory"] is None for r in rows if r["kind"] != "fit")
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="/usr/bin/time -l is the macOS (BSD) variant")
+def test_mac_fit_rows_record_time_l_footprint(tmp_path):
+    out, summary, rows = run(tmp_path, small_plan(platform="macos-metal", contexts=(2048,)),
+                             path_exists=lambda p: False)
+    fit = [r for r in rows if r["kind"] == "fit"]
+    assert fit and all(r["outcome"] == "ok" for r in fit), [r["reason"] for r in fit]
+    for r in fit:
+        assert r["argv"][:2] == ["/usr/bin/time", "-l"]
+        assert r["external_memory"]["peak_footprint_bytes"] > 0
+        assert r["external_memory"]["max_rss_bytes"] > 0
+    assert summary["schema_version"] == 2
+
+
+def test_nvidia_smi_sampler_parses_peak(tmp_path, monkeypatch):
+    fake = tmp_path / "fakebin" / "nvidia-smi"
+    fake.parent.mkdir()
+    fake.write_text("#!/bin/sh\nfor v in 1000 9500 9800 1200; do echo $v; done\nexec sleep 30\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake.parent}:/usr/bin:/bin")
+    sampler = rc.NvidiaSmiSampler(tmp_path / "gpumem.txt")
+    sampler.start()
+    import time
+    deadline = time.time() + 5
+    while time.time() < deadline and len((tmp_path / "gpumem.txt").read_text().split()) < 4:
+        time.sleep(0.05)
+    assert sampler.stop() == {"gpu_mem_used_peak_mib": 9800, "gpu_mem_used_first_mib": 1000, "n_samples": 4}
+
+
+def test_nvidia_smi_sampler_without_nvidia_smi(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path))
+    sampler = rc.NvidiaSmiSampler(tmp_path / "gpumem.txt")
+    sampler.start()
+    assert sampler.stop() is None

@@ -34,7 +34,7 @@ from typing import Callable
 
 import core_a_parse as cap
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2 (decision 010): rows carry external_memory
 MAC_HEAVY_LOCK = "/tmp/ai-portfolio-mac-heavy.lock"
 SENTINEL_DRIFT_PCT = 3.0  # PREREGISTRATION §4
 JOB_TIMEOUT_S = 7200
@@ -60,6 +60,37 @@ def default_run_proc(argv: list, stdout_path: Path, stderr_path: Path, timeout: 
             err.write(f"{type(exc).__name__}: {exc}\n")
             code = 127
     return code, round(time.monotonic() - t0, 3)
+
+
+class NvidiaSmiSampler:
+    """Samples nvidia-smi memory.used (MiB) every 200 ms while a fit process runs
+    (PREREGISTRATION §3: RTX peak memory = sampled peak - B; B is subtracted in analysis)."""
+
+    def __init__(self, path: Path, interval_ms: int = 200):
+        self.path, self.interval_ms, self.proc, self.fh = Path(path), interval_ms, None, None
+
+    def start(self) -> None:
+        self.fh = open(self.path, "w")
+        try:
+            self.proc = subprocess.Popen(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits",
+                                          "-lms", str(self.interval_ms)], stdout=self.fh, stderr=subprocess.DEVNULL)
+        except OSError:
+            self.proc = None
+
+    def stop(self) -> dict | None:
+        if self.proc is not None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
+        if self.fh is not None:
+            self.fh.close()
+        values = [int(x) for x in self.path.read_text().split() if x.strip().isdigit()] if self.path.exists() else []
+        if not values:
+            return None
+        return {"gpu_mem_used_peak_mib": max(values), "gpu_mem_used_first_mib": values[0], "n_samples": len(values)}
 
 
 def make_env_capture(script: Path, python: str = sys.executable) -> Callable:
@@ -106,6 +137,7 @@ def run_session(
     gpu_lock_held: bool = False,
     mac_lock_held: bool = False,
     run_proc: Callable = default_run_proc,
+    gpu_sampler: Callable | None = None,
     sleep: Callable = time.sleep,
     path_exists: Callable = os.path.exists,
     timeout_s: float = JOB_TIMEOUT_S,
@@ -175,12 +207,27 @@ def run_session(
                 "stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
                 "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json",
             }
+            ext_kind = job.get("external_memory")
+            sampler = None
+            if ext_kind == "nvidia-smi" and gpu_sampler is not None:
+                rel["gpu_mem_samples"] = f"raw/{jid}.gpumem.txt"
+                sampler = gpu_sampler(out / rel["gpu_mem_samples"])
             capture_env(llama_bin=llama_bin, out_path=out / rel["env_before"], gpu_lock_held=gpu_lock_held)
-            exit_code, wall_s = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
+            if sampler is not None:
+                sampler.start()
+            try:
+                exit_code, wall_s = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
+            finally:
+                sampled = sampler.stop() if sampler is not None else None
             capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
 
             stdout = (out / rel["stdout"]).read_text(errors="replace")
             stderr = (out / rel["stderr"]).read_text(errors="replace")
+            external = None
+            if ext_kind == "time-l":
+                stderr, external = cap.split_time_l(stderr)
+            elif sampled is not None:
+                external = {**sampled, "samples": rel["gpu_mem_samples"]}
             if job["kind"] == "fit":
                 result = cap.classify_completion(exit_code, cap.parse_log_jsonl(stdout), stderr,
                                                  job["expect"]["prompt_tokens"])
@@ -193,6 +240,7 @@ def run_session(
                 "argv": argv, "exit_code": exit_code, "wall_s": wall_s,
                 "outcome": result["outcome"], "stage": result["stage"], "reason": result["reason"],
                 "evidence": result["evidence"], "metrics": result.get("metrics"), "summary": result.get("summary"),
+                "external_memory": external,
                 **rel,
             }
             rows.append(row)
@@ -224,6 +272,7 @@ def main(argv: list | None = None) -> int:
             plan, bin_dir=Path(args.bin).resolve(), models_dir=Path(args.models).resolve(), out_dir=args.out,
             capture_env=make_env_capture(script), session_id=args.session_id, gpu_lock_held=args.gpu_lock_held,
             mac_lock_held=os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1",
+            gpu_sampler=NvidiaSmiSampler if plan["platform"] == "wsl2-cuda" else None,
         )
     except RunError as exc:
         print(f"run_core_a: {exc}", file=sys.stderr)

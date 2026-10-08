@@ -151,7 +151,8 @@ def test_completion_summary():
 
 def test_completion_summary_missing_everything():
     s = cap.completion_summary(cap.parse_log_jsonl(""))
-    assert s == {"n_ctx": None, "flash_attn": None, "prompt_tokens": None, "eval_runs": None, "memory": None}
+    assert s == {"n_ctx": None, "flash_attn": None, "prompt_tokens": None, "eval_runs": None, "memory": None,
+                 "graph": None, "fused_ops": []}
 
 
 # ---------------------------------------------------------- classification --
@@ -225,3 +226,47 @@ def test_classify_bench_exit0_but_violation_is_error():
 def test_classify_crash_signal_without_oom_is_error():
     out = cap.classify_bench(-6, "", "GGML_ASSERT(x) failed\n", EXPECT_TTFT)
     assert out["outcome"] == "error" and "-6" in out["reason"]
+
+
+# ------------------------------------------- schema v2: external memory, graph --
+
+TIME_L = """        6.12 real         3.01 user         1.20 sys
+          7340032000  maximum resident set size
+                   0  average shared memory size
+               12345  page reclaims
+          6912000000  peak memory footprint
+"""
+
+
+def test_parse_time_l_extracts_footprint_and_strips_block():
+    stderr = "llama log line\n" + TIME_L
+    rest, mem = cap.split_time_l(stderr)
+    assert mem == {"peak_footprint_bytes": 6912000000, "max_rss_bytes": 7340032000}
+    assert rest.strip() == "llama log line"
+
+
+def test_parse_time_l_absent():
+    rest, mem = cap.split_time_l("no time output\n")
+    assert mem is None and rest == "no time output\n"
+
+
+def test_completion_summary_reports_graph_and_fused_probes():
+    text = "\n".join([
+        COMPLETION_OK,
+        log("llama_context: Flash Attention enabled"),
+        log("llama_context: graph (pp bs=512, tg bs=1): nodes = 1843 / 1795, splits = 2 / 2, "
+            "input objects = 9 / 7, input tensors = 9 / 7"),
+    ])
+    s = cap.completion_summary(cap.parse_log_jsonl(text))
+    assert s["graph"] == {"nodes": "1843 / 1795", "splits": "2 / 2"}
+    assert s["fused_ops"] == ["Flash Attention enabled"]
+
+
+def test_completion_summary_graph_single_value_and_disabled_probe():
+    text = "\n".join([
+        log("llama_context: graph: nodes = 1795, splits = 2, input objects = 7, input tensors = 7"),
+        log("llama_context: Flash Attention not supported, set to disabled", "warn"),
+    ])
+    s = cap.completion_summary(cap.parse_log_jsonl(text))
+    assert s["graph"] == {"nodes": "1795", "splits": "2"}
+    assert s["fused_ops"] == ["Flash Attention not supported, set to disabled"]

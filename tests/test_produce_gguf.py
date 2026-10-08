@@ -4,6 +4,7 @@ docs/STORAGE_PLAN.md)."""
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tomllib
@@ -92,7 +93,9 @@ SMALL_FILES = ("config.json", "tokenizer.json", "tokenizer_config.json", "chat_t
 def setup_repo(tmp_path, small_files=SMALL_FILES):
     root = tmp_path / "repo"
     (root / "configs").mkdir(parents=True)
-    pins_text = (ROOT / "configs" / "pins.toml").read_text()
+    # start from unproduced artifacts even after the real pins.toml has been filled in
+    pins_text = re.sub(r'(filename = "[^"]+\.gguf"\n)sha256 = "[0-9a-f]*"\nsize_bytes = \d+',
+                       r'\1sha256 = ""\nsize_bytes = 0', (ROOT / "configs" / "pins.toml").read_text())
     (root / "configs" / "pins.toml").write_text(pins_text)
     (root / "configs" / "converter.lock.txt").write_text("torch==2.11.0\n")
     pins = tomllib.loads(pins_text)

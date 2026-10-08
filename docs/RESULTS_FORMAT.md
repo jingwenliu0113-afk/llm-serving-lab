@@ -1,7 +1,9 @@
-# Results format（Core A，schema v1）
+# Results format（Core A，schema v2）
 
 SPEC Week 1 #3「固定輸出格式」。由 `benchmarks/run_core_a.py` 產生；欄位由 `tests/test_run_core_a.py` 鎖定。
 修改格式要提升 `SCHEMA_VERSION` 並寫 decision log。
+
+- v2（decision 010）：fit row 增加 `external_memory`（PREREGISTRATION §3 的外部 peak memory 量測）；`summary` 增加 `graph` 與 `fused_ops`；Mac 的 fit run 以 `/usr/bin/time -l` 包裝。
 
 ## 目錄結構
 
@@ -16,7 +18,8 @@ results/core_a/<platform>/<session_id>/
 │   └── <job_id>.after.json    # 每個 process 後
 ├── raw/
 │   ├── <job_id>.stdout.txt
-│   └── <job_id>.stderr.txt
+│   ├── <job_id>.stderr.txt        # Mac fit：末尾的 /usr/bin/time -l 區塊保留在原檔
+│   └── <job_id>.gpumem.txt        # RTX fit：nvidia-smi memory.used 每 200 ms 的取樣（MiB）
 └── prompts/
     └── unit_x<count>.txt      # fit run 的 prompt（PROMPT_UNIT × count）
 ```
@@ -29,7 +32,7 @@ results/core_a/<platform>/<session_id>/
 
 | 欄位 | 說明 |
 |---|---|
-| `schema_version` | 1 |
+| `schema_version` | 2 |
 | `session_id`、`platform`、`mode` | `mode` ∈ {`pilot`, `formal`}；formal 需對應 stage 已凍結（006）與 lock（MACHINE_POLICY） |
 | `seed`、`plan_sha256`、`pins_sha256` | plan 與 pins 的 hash（`plan_sha256` 是 canonical JSON 的 sha256） |
 | `gpu_lock_held`、`mac_lock_held` | 是否在對應 lock 下執行 |
@@ -53,8 +56,9 @@ results/core_a/<platform>/<session_id>/
 | `stage` | 失敗階段：`load` / `context` / `eval` / `unknown`；ok 為 null |
 | `reason`、`evidence` | 判定理由與觸發判定的 log 行 |
 | `metrics` | bench 類：`avg_ns`、`stddev_ns`、`avg_ts`、`stddev_ts`、`samples_ns` |
-| `summary` | fit 類：`n_ctx`、`flash_attn`、`prompt_tokens`、`eval_runs`、`memory`（`unit`、`devices[]`、`host`、`other[]`，單位 MiB） |
-| `stdout`、`stderr`、`env_before`、`env_after` | session 目錄內的相對路徑 |
+| `summary` | fit 類：`n_ctx`、`flash_attn`、`prompt_tokens`、`eval_runs`、`memory`（`unit`、`devices[]`、`host`、`other[]`，單位 MiB）、`graph`（`nodes`、`splits`；pp / tg 不同時為 `"a / b"`）、`fused_ops`（fused op probe 的結果行，只在 `auto` 設定時出現） |
+| `external_memory` | fit 類（v2）：Mac 為 `{"peak_footprint_bytes", "max_rss_bytes"}`（`/usr/bin/time -l`）；RTX 為 `{"gpu_mem_used_peak_mib", "gpu_mem_used_first_mib", "n_samples", "samples"}`（B 在分析時扣除）；量不到或非 fit 為 null |
+| `stdout`、`stderr`、`env_before`、`env_after`、`gpu_mem_samples` | session 目錄內的相對路徑（`gpu_mem_samples` 只在 RTX fit） |
 
 ## 判定規則摘要
 
@@ -62,7 +66,7 @@ results/core_a/<platform>/<session_id>/
   - exit 0，而且 stdout 恰好有 1 列 jsonl，各項設定都符合 PREREGISTRATION §4，才算 `ok`。
   - 必須符合的設定：`n_batch`、`n_ubatch`、`type_k/v`、`n_gpu_layers`、`flash_attn = 1`、`load_mode`、`n_prompt/n_gen/n_depth`、`n_threads`、`poll`、`build_commit`，以及 5 個 samples。
   - 任一項不符就是 `error`，原因寫在 `reason`。
-- **fit**：`llama-completion --log-jsonl`。以下都滿足才算 `ok`：
+- **fit**：`llama-completion --log-jsonl`（Mac 外層為 `/usr/bin/time -l`，判定前先移除 stderr 末尾的 time 區塊）。以下都滿足才算 `ok`：
   - exit 0；
   - prompt token 數等於 L − 128；
   - 有 eval timing；

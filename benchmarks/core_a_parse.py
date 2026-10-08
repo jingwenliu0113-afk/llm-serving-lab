@@ -52,6 +52,14 @@ _RE_N_CTX = re.compile(r"llama_context: n_ctx\s+=\s+(\d+)")
 _RE_FA = re.compile(r"llama_context: flash_attn\s+=\s+(\w+)")
 _RE_PROMPT = re.compile(r"prompt eval time =\s*[\d.]+ ms /\s*(\d+) tokens")
 _RE_EVAL = re.compile(r":\s+eval time =\s*[\d.]+ ms /\s*(\d+) runs")
+# llama-context.cpp: "graph[ (pp bs=N, tg bs=M)]: nodes = A[ / B], splits = C[ / D], ..."
+# Extra splits on a full offload = an op (e.g. fused GDN, which has no device probe) fell back to CPU.
+_RE_GRAPH = re.compile(r"graph(?: \(pp bs=\d+, tg bs=\d+\))?: nodes = ([\d /]+?), splits = ([\d /]+?),")
+# llama-context.cpp fused-op probes (only run for "auto" settings, e.g. the -fa auto pilot probe).
+_RE_FUSED = re.compile(r": ((?:Flash Attention|fused [^:]+?) (?:enabled|not supported, set to disabled))$")
+# /usr/bin/time -l (macOS): "<bytes>  peak memory footprint" / "<bytes>  maximum resident set size"
+_RE_TIME_L = re.compile(r"^\s*(\d+)\s+(peak memory footprint|maximum resident set size)\s*$")
+_RE_TIME_REAL = re.compile(r"^\s*[\d.]+ real\s+[\d.]+ user\s+[\d.]+ sys\s*$")
 
 
 class ParsedLog(NamedTuple):
@@ -119,13 +127,38 @@ def _last_int(pattern: re.Pattern, msgs: list):
     return None
 
 
+def split_time_l(stderr: str) -> tuple:
+    """Separate the trailing `/usr/bin/time -l` block from the process stderr.
+    Returns (stderr without the block, {"peak_footprint_bytes", "max_rss_bytes"} or None)."""
+    lines = stderr.splitlines(keepends=True)
+    start = next((i for i in range(len(lines) - 1, -1, -1) if _RE_TIME_REAL.match(lines[i])), None)
+    if start is None:
+        return stderr, None
+    found = {}
+    for line in lines[start:]:
+        m = _RE_TIME_L.match(line)
+        if m:
+            found[m.group(2)] = int(m.group(1))
+    mem = {"peak_footprint_bytes": found.get("peak memory footprint"),
+           "max_rss_bytes": found.get("maximum resident set size")}
+    return "".join(lines[:start]), mem
+
+
 def completion_summary(parsed: ParsedLog) -> dict:
     msgs = [entry["msg"] for entry in parsed.logs]
     fa = None
+    graph = None
+    fused = []
     for msg in msgs:
         m = _RE_FA.search(msg)
         if m:
             fa = m.group(1)
+        m = _RE_GRAPH.search(msg)
+        if m:
+            graph = {"nodes": m.group(1).strip(), "splits": m.group(2).strip()}
+        m = _RE_FUSED.search(msg.rstrip())
+        if m:
+            fused.append(m.group(1))
     memory = None
     if parsed.events.get("fit_memory_breakdown"):
         data = parsed.events["fit_memory_breakdown"][-1] or {}
@@ -144,6 +177,8 @@ def completion_summary(parsed: ParsedLog) -> dict:
         "prompt_tokens": _last_int(_RE_PROMPT, msgs),
         "eval_runs": _last_int(_RE_EVAL, msgs),
         "memory": memory,
+        "graph": graph,
+        "fused_ops": fused,
     }
 
 

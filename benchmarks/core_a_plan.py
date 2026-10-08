@@ -27,10 +27,14 @@ import random
 import tomllib
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2 (decision 010): fit jobs carry external_memory; Mac fit runs under /usr/bin/time -l
 
 # platform -> pins.toml [freeze] key (decision 006)
 PLATFORMS = {"macos-metal": "mac", "wsl2-cuda": "nvidia"}
+# PREREGISTRATION §3 peak memory, external measure per platform (in addition to the
+# llama.cpp breakdown): Mac = /usr/bin/time -l peak memory footprint (the fit argv is
+# wrapped); RTX = nvidia-smi memory.used sampled by the runner during the fit run.
+EXTERNAL_MEMORY = {"macos-metal": ("time-l", ["/usr/bin/time", "-l"]), "wsl2-cuda": ("nvidia-smi", [])}
 
 N_GEN = 128
 REPS = 3
@@ -111,6 +115,7 @@ def build_plan(pins: dict, *, platform: str, mode: str, seed: int, n_thr: int, p
 
     core_a = pins["core_a"]
     files = {(m["size"], q): f["filename"] for m in core_a["models"] for q, f in m["files"].items()}
+    ext_kind, ext_prefix = EXTERNAL_MEMORY[platform]
 
     jobs = []
     for (size, quant), model in files.items():
@@ -118,7 +123,8 @@ def build_plan(pins: dict, *, platform: str, mode: str, seed: int, n_thr: int, p
             for rep in range(1, REPS + 1):
                 jobs.append({
                     "id": f"fit-{size}-{quant}-{L}-r{rep}", "kind": "fit", "size": size, "quant": quant, "L": L,
-                    "rep": rep, "model": model, "argv": completion_argv(model, L, n_thr, poll),
+                    "rep": rep, "model": model, "argv": ext_prefix + completion_argv(model, L, n_thr, poll),
+                    "external_memory": ext_kind,
                     "prompt": {"unit": PROMPT_UNIT, "count": L - N_GEN},
                     "expect": {"prompt_tokens": L - N_GEN},
                 })

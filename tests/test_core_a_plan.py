@@ -114,6 +114,19 @@ def test_fit_argv_matches_prereg(pins):
     assert j["prompt"] == {"unit": cp.PROMPT_UNIT, "count": 32768 - 128}
 
 
+def test_fit_external_memory_per_platform(pins):
+    """PREREGISTRATION §3: Mac also records /usr/bin/time -l peak footprint; RTX samples memory.used."""
+    mac = next(j for j in jobs_of(plan(pins, platform="macos-metal"), "fit"))
+    assert mac["argv"][:3] == ["/usr/bin/time", "-l", "{bin}/llama-completion"]
+    assert mac["external_memory"] == "time-l"
+    cuda = next(j for j in jobs_of(plan(pins, platform="wsl2-cuda"), "fit"))
+    assert cuda["argv"][0] == "{bin}/llama-completion" and cuda["external_memory"] == "nvidia-smi"
+    assert plan(pins)["schema_version"] == 2
+    for j in plan(pins)["jobs"]:
+        if j["kind"] != "fit":
+            assert j["argv"][0] == "{bin}/llama-bench" and "external_memory" not in j
+
+
 def test_models_come_from_pins(pins):
     p = plan(pins)
     expected = {
