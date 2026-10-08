@@ -10,8 +10,11 @@
   C order per restart is a seeded permutation stored in the plan.
 - one shared server config for all levels and mixes: --max-model-len 32768, --max-num-seqs 264.
 - `mixed` (H-B4 only, L in {2048, 8192}): 90% (L - 128, 128) + 10% (32640, 128), a custom
-  dataset built with vLLM's own RandomDataset (same generator as `uniform`) and a seeded
-  interleaving; its sha256 is pinned at Stage B (core_b.mix_dataset_sha256).
+  dataset built with vLLM's own RandomDataset (same generator and seed as `uniform`, so the
+  short prompts are the uniform prompts) in blocks of ten (9 short + 1 long, seeded order
+  inside each block), MIXED_ROWS = num-prompts at the grid cap. It is read in file order
+  (--disable-shuffle), so the first N rows hold exactly N / 10 long prompts for any C;
+  its sha256 is pinned at Stage B (core_b.mix_dataset_sha256), before C_knee is known.
 
 Stdlib only, Python 3.10 compatible.
 """
@@ -32,6 +35,7 @@ MAX_MODEL_LEN = 32768
 MAX_NUM_SEQS = 264
 GRID_CAP = 256
 HF_HOME = "/home/wenn0113/.cache/huggingface"
+MIXED_ROWS = 10 * GRID_CAP  # = num_prompts(GRID_CAP)
 
 
 class PlanError(ValueError):
@@ -88,7 +92,8 @@ def bench_argv(pins: dict, *, L: int, C: int, mix: str, result_dir: str, result_
     elif mix == "mixed":
         if L not in MIXED_LEVELS or not mixed_dataset:
             raise PlanError(f"mixed is defined only for L in {MIXED_LEVELS} with a pinned dataset (007)")
-        argv += ["--dataset-name", "custom", "--dataset-path", mixed_dataset, "--skip-chat-template"]
+        argv += ["--dataset-name", "custom", "--dataset-path", mixed_dataset, "--skip-chat-template",
+                 "--disable-shuffle"]
     else:
         raise PlanError(f"unknown mix {mix!r}")
     argv += ["--num-prompts", str(num_prompts(C)), "--max-concurrency", str(C), "--num-warmups", str(num_warmups(C)),
@@ -120,8 +125,14 @@ def mixed_counts(n: int) -> tuple:
 
 
 def mixed_rows(*, short: list, long: list, seed: int = SEED) -> list:
-    """Seeded interleaving of short / long prompts into custom-dataset rows."""
-    prompts = list(short) + list(long)
-    idx = list(range(len(prompts)))
-    random.Random(seed).shuffle(idx)
-    return [{"prompt": prompts[i], "output_tokens": N_GEN} for i in idx]
+    """Blocks of ten: 9 short + 1 long in a seeded order per block; short prompts keep their order."""
+    if len(short) != 9 * len(long):
+        raise PlanError("mixed dataset needs exactly 9 short prompts per long prompt")
+    rng = random.Random(seed)
+    rows, s = [], iter(short)
+    for lp in long:
+        pos = rng.randrange(10)
+        block = [next(s) for _ in range(9)]
+        block.insert(pos, lp)
+        rows.extend({"prompt": p, "output_tokens": N_GEN} for p in block)
+    return rows

@@ -55,5 +55,9 @@ CI 的方法）就可能被數據影響。所以判定規則在看到任何數�
     例：C_KV = 5 時 k = −2 得 2.5 → 3。
   - 逐 request 的百分位數用線性內插（與 `vllm bench serve` 回報 P95 的 numpy 預設相同）。
   - H-B4 的單位：每次 restart 先算短類（input = L − 128）的 P95 TTFT，再對 3 次 restart 取平均與 SE。
-  - `mixed` dataset 用 vLLM 自己的 `RandomDataset` 產生短類與長類，與 `uniform` 同一套產生器，再以 seed 20261008 交錯。
-    N 個 prompt 中長類為 ⌊N ÷ 10⌋ 個（N = max(10C, 200)，必為 10 的倍數）。
+  - `mixed` dataset（`benchmarks/core_b_mixed_dataset.py`）：
+    - 短類用 vLLM 自己的 `RandomDataset`，seed 與 input 長度都與 `uniform` 相同，所以短類就是 `uniform` 的 prompt。
+      長類（32640 tokens）用同一產生器、seed + 1。
+    - 每個 L 一個檔，2560 列（= grid 上限 256 的 num-prompts），以 10 列為一組（9 短 + 1 長，組內位置以 seed 決定）。
+    - bench 以 `--disable-shuffle` 依檔案順序取前 N 列（N = max(10C, 200)，必為 10 的倍數），所以任何 C 下長類都恰好是 N ÷ 10。
+    - 這樣檔案與 sha256 可在 Stage B 凍結時就固定，不需要等正式數據算出 C_knee。

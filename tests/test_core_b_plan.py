@@ -96,9 +96,40 @@ def test_uniform_plan_orders_c_by_seed_per_restart(pins):
     assert bp.build_uniform_plan(pins, num_gpu_blocks=160, block_size=528, seed=20261008) == plan
 
 
-def test_mixed_dataset_layout():
-    rows = bp.mixed_rows(short=["s"] * 180, long=["l"] * 20, seed=20261008)
-    assert len(rows) == 200 and sum(r["prompt"] == "l" for r in rows) == 20
+def test_mixed_dataset_is_blocks_of_ten_so_any_prefix_is_exactly_ten_percent_long():
+    rows = bp.mixed_rows(short=[f"s{i}" for i in range(9 * 256)], long=[f"l{i}" for i in range(256)], seed=20261008)
+    assert len(rows) == bp.MIXED_ROWS == 2560
+    for n in (200, 320, 2560):  # num-prompts is always a multiple of 10
+        head = rows[:n]
+        assert sum(r["prompt"].startswith("l") for r in head) == n // 10
     assert all(r["output_tokens"] == 128 for r in rows)
-    assert rows == bp.mixed_rows(short=["s"] * 180, long=["l"] * 20, seed=20261008)
+    assert [r["prompt"] for r in rows if r["prompt"].startswith("s")][:5] == ["s0", "s1", "s2", "s3", "s4"]
+    assert rows == bp.mixed_rows(short=[f"s{i}" for i in range(9 * 256)], long=[f"l{i}" for i in range(256)],
+                                 seed=20261008)
     assert bp.mixed_counts(200) == (180, 20) and bp.mixed_counts(320) == (288, 32)
+
+
+def test_mixed_bench_reads_the_file_in_order(pins):
+    argv = bp.bench_argv(pins, L=8192, C=8, mix="mixed", result_dir="/r", result_filename="x.json", port=8000,
+                         mixed_dataset="/d/mixed-8192.jsonl")
+    assert "--disable-shuffle" in argv
+
+
+def test_mixed_dataset_builder_uses_uniform_generator_for_short_prompts(tmp_path):
+    import json
+
+    import core_b_mixed_dataset as md
+
+    calls = []
+
+    def fake_sample(*, num_requests, input_len, seed):
+        calls.append((num_requests, input_len, seed))
+        return [f"{input_len}:{seed}:{i}" for i in range(num_requests)]
+
+    out = tmp_path / "mixed-2048.jsonl"
+    info = md.build(2048, out, sample=fake_sample)
+    assert calls == [(2304, 1920, 20261008), (256, 32640, 20261009)]
+    rows = [json.loads(x) for x in out.read_text().splitlines()]
+    assert len(rows) == 2560 and info["rows"] == 2560 and len(info["sha256"]) == 64
+    short = [r["prompt"] for r in rows if r["prompt"].startswith("1920:")]
+    assert short[:3] == ["1920:20261008:0", "1920:20261008:1", "1920:20261008:2"]
