@@ -203,6 +203,23 @@ request throughput（req/s）；output token throughput 與 total token throughp
 - Core A：每個 cell 3 個獨立 process × `-r 5`；每個 session 內，cell 的執行順序以固定 seed 隨機排列，seed 記入結果。
 - Core B：每個 (L, mix) 3 次 server restart（007）。
 
+### Core B server 與 Stage B 推導規則（003 的固定參數表，017 寫定細節）
+
+- 所有 Core B server（smoke 除外，smoke 依 008）共用 `core_b_plan.server_argv`：
+  - 007 / 008 已有的 flags。
+  - `--max-num-batched-tokens 2048`、`--performance-mode balanced`、`--async-scheduling`、`--attention-backend FLASH_ATTN`。
+  - `--kv-cache-memory-bytes K`。
+  - client 為 `--backend vllm`。
+  - 以 log 驗證 attention backend 與 max_num_batched_tokens。
+- **U**（`--gpu-memory-utilization`）：取 0.01 的倍數中，滿足 U × V_total ≤ V_total − B − 512 MiB 的最大值。
+- **K**：在 U 下用全新的 cache 做兩次不帶 K 的 boot。第一次（冷）丟棄；第二次（熱）log 中的 `Available KV cache memory` 向下取整到 256 MiB。
+  num_gpu_blocks / block_size 由帶 K 的 server 的 `/metrics` 讀取。
+- **JIT 計時**：上述兩次 boot 從啟動到 `/health` 的秒數，只作描述。
+- **`VLLM_WSL2_ENABLE_PIN_MEMORY` A/B**：依序以 0、1 各 boot 一次（帶 U、K），每次跑 `uniform` L = 2048，C = 1、16 各 3 次。
+  - 1 在兩個 C 都快 ≥ 5%，而且四組的 CV 都 < 3%，才改為 1；否則維持 0。
+  - 任一組少於 3 次有效 run 時，同樣維持 0。
+- 以上都在 GPU lock 下執行（`benchmarks/coreb_stage_b.py`、`benchmarks/stage_b.py`）。
+
 ### RTX idle baseline B 的量測程序（Stage A 凍結）
 
 1. 在 GPU lock 下進行，且沒有任何其他 GPU process。
@@ -286,5 +303,6 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
   - num_gpu_blocks 與 block_size（`/metrics` 的 `vllm:cache_config_info`；`GPU KV cache size` 只作紀錄與交叉核對）
   - 依 §2 的 C_KV 公式與 007 的 grid 規則，算出每個 L 的 C_KV 與 grid
   - `mixed` dataset 的 sha256（`core_b.mix_dataset_sha256`，每個 L 一個；2026-10-08 已在 WSL 建好並驗證可重現，見 013）
-  - `--kv-cache-memory-bytes`、`--gpu-memory-utilization`
+  - `--kv-cache-memory-bytes`（K）、`--gpu-memory-utilization`（U）：依 §4 的 017 規則由 B、V_total 與熱 boot 的 log 算出
+  - JIT 冷 / 熱啟動秒數；pin-memory A/B 的結果與選定值
 - [ ] 本節狀態改為 FROZEN (Stage B) 並 commit

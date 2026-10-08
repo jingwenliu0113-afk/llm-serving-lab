@@ -29,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import math
 import random
+import re
 
 LEVELS = (2048, 8192, 32768)
 MIXED_LEVELS = (2048, 8192)
@@ -38,6 +39,9 @@ SEED = 20261008
 RESTARTS = 3
 MAX_MODEL_LEN = 32768
 MAX_NUM_SEQS = 264
+MAX_NUM_BATCHED_TOKENS = 2048  # 003: the 16 GB default, written explicitly
+UTIL_MARGIN_MIB = 512          # 017
+KV_ROUND_MIB = 256             # 017
 GRID_CAP = 256
 HF_HOME = "/home/wenn0113/.cache/huggingface"
 PROJECT_DIR = "/home/wenn0113/llm-serving-lab"
@@ -127,21 +131,45 @@ def toolchain_problems(env: dict, *, exists=None, which=None) -> list:
     return problems
 
 
+def gpu_memory_utilization(*, v_total_mib: float, b_mib: float) -> str:
+    """017: the largest multiple of 0.01 with U x V_total <= V_total - B - UTIL_MARGIN_MIB (vLLM refuses to
+    start when free VRAM < U x total; the margin absorbs Windows idle VRAM fluctuation)."""
+    return f"{int(100 * (v_total_mib - b_mib - UTIL_MARGIN_MIB) // v_total_mib) / 100:.2f}"
+
+
+_RE_AVAILABLE_KV = re.compile(r"Available KV cache memory: ([\d.]+) GiB")
+
+
+def kv_cache_bytes_from_log(text: str) -> int | None:
+    """017: K = the warm boot's 'Available KV cache memory' (gpu_worker.py), floored to 256 MiB."""
+    m = _RE_AVAILABLE_KV.search(text)
+    if not m:
+        return None
+    mib = float(m.group(1)) * 1024
+    return int(mib // KV_ROUND_MIB) * KV_ROUND_MIB * 2**20
+
+
 def server_argv(pins: dict, *, gdn_prefill_backend: str, gpu_memory_utilization: str, port: int,
-                vllm_bin: str = "{vllm}", base_env=None) -> tuple:
+                vllm_bin: str = "{vllm}", base_env=None, kv_cache_memory_bytes: int | None = None) -> tuple:
+    """Shared Core B server: 007 / 008 flags plus the 003 fixed scheduler / backend / KV-pool flags (017).
+    Only the Stage B boots that determine K run without --kv-cache-memory-bytes."""
     b = pins["core_b"]
     argv = [vllm_bin, "serve", b["repo"], "--revision", b["revision"],
             "--language-model-only", "--dtype", b["dtype"],
             "--max-model-len", str(MAX_MODEL_LEN), "--max-num-seqs", str(MAX_NUM_SEQS),
+            "--max-num-batched-tokens", str(MAX_NUM_BATCHED_TOKENS),
+            "--performance-mode", "balanced", "--async-scheduling", "--attention-backend", "FLASH_ATTN",
             "--gpu-memory-utilization", gpu_memory_utilization,
             "--no-enable-prefix-caching", "--gdn-prefill-backend", gdn_prefill_backend,
             "--generation-config", "vllm", "--host", "127.0.0.1", "--port", str(port)]
+    if kv_cache_memory_bytes is not None:
+        argv += ["--kv-cache-memory-bytes", str(int(kv_cache_memory_bytes))]
     return argv, server_env(base_env or {})
 
 
 def bench_argv(pins: dict, *, L: int, C: int, mix: str, result_dir: str, result_filename: str, port: int,
                mixed_dataset: str | None = None, vllm_bin: str = "{vllm}") -> list:
-    argv = [vllm_bin, "bench", "serve", "--backend", "openai", "--base-url", f"http://127.0.0.1:{port}",
+    argv = [vllm_bin, "bench", "serve", "--backend", "vllm", "--base-url", f"http://127.0.0.1:{port}",
             "--endpoint", "/v1/completions", "--model", pins["core_b"]["repo"], "--tokenizer", snapshot_dir(pins)]
     if mix == "uniform":
         argv += ["--dataset-name", "random", "--random-input-len", str(L - N_GEN),
@@ -167,12 +195,14 @@ def _order(grid: list, seed: int, L: int, restart: int, mix: str) -> list:
     return order
 
 
-def build_uniform_plan(pins: dict, *, num_gpu_blocks: int, block_size: int, seed: int = SEED) -> dict:
+def build_uniform_plan(pins: dict, *, num_gpu_blocks: int, block_size: int, seed: int = SEED,
+                       kv_cache_memory_bytes: int | None = None, gpu_memory_utilization: str | None = None) -> dict:
     ckv = {str(L): c_kv(num_gpu_blocks, block_size, L) for L in LEVELS}
     grids = {L: concurrency_grid(v) for L, v in ckv.items()}
     runs = [{"L": L, "mix": "uniform", "restart": r, "order": _order(grids[str(L)], seed, L, r, "uniform")}
             for L in LEVELS for r in range(1, RESTARTS + 1)]
     return {"schema_version": 1, "seed": seed, "num_gpu_blocks": num_gpu_blocks, "block_size": block_size,
+            "kv_cache_memory_bytes": kv_cache_memory_bytes, "gpu_memory_utilization": gpu_memory_utilization,
             "c_kv": ckv, "grids": grids, "runs": runs}
 
 
@@ -183,8 +213,8 @@ def build_mixed_plan(uniform_plan: dict, c_knee: dict, *, uniform_session: str) 
     levels = [L for L in MIXED_LEVELS if knees.get(L) is not None]
     runs = [{"L": L, "mix": "mixed", "restart": r, "order": [knees[L]]}
             for L in levels for r in range(1, RESTARTS + 1)]
-    return {**{k: uniform_plan[k] for k in ("schema_version", "seed", "num_gpu_blocks", "block_size", "c_kv",
-                                            "grids")},
+    return {**{k: uniform_plan.get(k) for k in ("schema_version", "seed", "num_gpu_blocks", "block_size",
+                                                "kv_cache_memory_bytes", "gpu_memory_utilization", "c_kv", "grids")},
             "derived_from": uniform_session, "c_knee": {str(L): knees[L] for L in levels},
             "skipped": {str(L): "uniform C_knee not available" for L in MIXED_LEVELS if L not in levels},
             "runs": runs}

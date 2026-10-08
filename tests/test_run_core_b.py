@@ -194,7 +194,8 @@ def mixed_setup(tmp_path, pins, *, pinned=None):
     ds.write_text('{"prompt": "x", "output_tokens": 128}\n')
     digest = hashlib.sha256(ds.read_bytes()).hexdigest()
     p["core_b"]["mix_dataset_sha256"] = {"2048": pinned or digest, "8192": "0" * 64}
-    plan = bp.build_mixed_plan(bp.build_uniform_plan(p, num_gpu_blocks=160, block_size=528), {2048: 22, 8192: None},
+    plan = bp.build_mixed_plan(bp.build_uniform_plan(p, num_gpu_blocks=160, block_size=528,
+                                                     kv_cache_memory_bytes=6400 * 2**20), {2048: 22, 8192: None},
                                uniform_session="b-u")
     return p, plan, ds, digest
 
@@ -227,3 +228,19 @@ def test_server_gets_the_014_env_and_a_toolchain_precheck(tmp_path, pins):
     with pytest.raises(rb.RunError, match="toolchain"):
         run(w2, pins, small_plan(pins), toolchain_check=lambda env: ["missing ninja"])
     assert w2.started == []
+
+
+def test_formal_run_requires_the_fixed_kv_pool(tmp_path, pins):
+    """017: formal Core B runs use --kv-cache-memory-bytes K from the Stage B plan."""
+    import copy
+
+    p = copy.deepcopy(pins)
+    p["freeze"]["nvidia"] = True
+    with pytest.raises(rb.RunError, match="kv_cache_memory_bytes"):
+        run(World(tmp_path), p, small_plan(pins), formal=True)
+    plan = small_plan(pins)
+    plan["kv_cache_memory_bytes"] = 6400 * 2**20
+    w = World(tmp_path / "k")
+    (tmp_path / "k").mkdir()
+    run(w, p, plan, formal=True)
+    assert w.started[0][w.started[0].index("--kv-cache-memory-bytes") + 1] == str(6400 * 2**20)

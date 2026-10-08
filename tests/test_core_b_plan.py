@@ -247,3 +247,42 @@ def test_toolchain_problems_lists_what_the_server_would_miss():
     assert any("nvcc" in m for m in missing) and any("curand.h" in m for m in missing)
     present.add("/usr/bin/nvcc")
     assert any("on PATH" in m for m in bp.toolchain_problems(env, exists=present.__contains__, which=which))
+
+
+# ------------------------------------------- 003 server protocol and Stage B rules (017) --
+
+def test_server_argv_fixes_the_003_scheduler_backend_and_kv_flags(pins):
+    """003 (still in force after 008): explicit --max-num-batched-tokens 2048, performance mode, async
+    scheduling, FLASH_ATTN and a fixed --kv-cache-memory-bytes."""
+    argv, _ = bp.server_argv(pins, gdn_prefill_backend="triton", gpu_memory_utilization="0.94", port=8000,
+                             kv_cache_memory_bytes=6400 * 2**20)
+    assert arg(argv, "--max-num-batched-tokens") == "2048" and arg(argv, "--performance-mode") == "balanced"
+    assert "--async-scheduling" in argv and arg(argv, "--attention-backend") == "FLASH_ATTN"
+    assert arg(argv, "--kv-cache-memory-bytes") == str(6400 * 2**20)
+    argv, _ = bp.server_argv(pins, gdn_prefill_backend="triton", gpu_memory_utilization="0.94", port=8000)
+    assert "--kv-cache-memory-bytes" not in argv  # only the Stage B boots that determine K run without it
+
+
+def test_bench_backend_is_vllm(pins):
+    argv = bp.bench_argv(pins, L=2048, C=1, mix="uniform", result_dir="/r", result_filename="x.json", port=8000)
+    assert arg(argv, "--backend") == "vllm"  # 003; same request function as "openai" in 0.30.0
+
+
+def test_gpu_memory_utilization_rule():
+    """017: largest multiple of 0.01 with U x V_total <= V_total - B - 512 MiB."""
+    assert bp.gpu_memory_utilization(v_total_mib=16303, b_mib=380) == "0.94"   # 0.9453
+    assert bp.gpu_memory_utilization(v_total_mib=16303, b_mib=1000) == "0.90"  # 0.9073
+    assert bp.gpu_memory_utilization(v_total_mib=10000, b_mib=488) == "0.90"   # exactly 0.9000
+
+
+def test_kv_cache_bytes_from_the_warm_boot_log():
+    """017: K = 'Available KV cache memory' of the warm boot, floored to a multiple of 256 MiB."""
+    log = "(EngineCore pid=1) INFO 10-09 01:00:00 [gpu_worker.py:640] Available KV cache memory: 6.37 GiB\n"
+    assert bp.kv_cache_bytes_from_log(log) == 6400 * 2**20  # 6522.9 MiB -> 25 x 256 MiB
+    assert bp.kv_cache_bytes_from_log("no such line") is None
+
+
+def test_uniform_plan_carries_the_stage_b_server_values(pins):
+    plan = bp.build_uniform_plan(pins, num_gpu_blocks=160, block_size=528, kv_cache_memory_bytes=6400 * 2**20,
+                                 gpu_memory_utilization="0.94")
+    assert plan["kv_cache_memory_bytes"] == 6400 * 2**20 and plan["gpu_memory_utilization"] == "0.94"

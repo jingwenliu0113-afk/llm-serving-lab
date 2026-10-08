@@ -178,6 +178,8 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
                        "--gpu-lock-held (MACHINE_POLICY)")
     if formal and not pins["freeze"]["nvidia"]:
         raise RunError("formal Core B runs require freeze.nvidia = true (decision 006)")
+    if formal and not plan.get("kv_cache_memory_bytes"):
+        raise RunError("formal Core B runs need the Stage B kv_cache_memory_bytes in the plan (decision 017)")
     mixed_sha = {}
     for L in sorted({r["L"] for r in plan["runs"] if r["mix"] == "mixed"}):
         path = (mixed_datasets or {}).get(L)
@@ -218,7 +220,7 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
                 raise RunError(f"GPU busy before {tag}: memory.used {mem0} MiB > {IDLE_MIB}")
             argv, env = bp.server_argv(pins, gdn_prefill_backend=gdn_prefill_backend,
                                        gpu_memory_utilization=gpu_memory_utilization, port=PORT, vllm_bin=vllm_bin,
-                                       base_env=os.environ)
+                                       base_env=os.environ, kv_cache_memory_bytes=plan.get("kv_cache_memory_bytes"))
             proc = popen(argv, env, out / "raw" / f"server-{tag}.log")
             stop_reasons = []
             try:
