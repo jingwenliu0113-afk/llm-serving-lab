@@ -8,7 +8,11 @@
 > 同日第二輪凍結前 review（decision 013）：Core B client flags、無效 run 與缺 C 的處理、H-A3 相鄰的定義、
 > prefill 的計算順序、env 有效性（未知即無效）、分析 CLI 只處理有效的正式 session。hypothesis 的結構與門檻不變。
 
-> **狀態：DRAFT v1（2026-10-08，同日依兩輪 review 修訂）— 尚未凍結。**
+> 2026-10-08 至 10-09 凍結前另依 014–017 補齊：Core B 的 JIT 工具鏈與啟動 env（014）、Mac 充電閘門（016）、
+> 003 的 Core B server 固定參數與 Stage B 的 U / K / JIT / A/B 規則（017）。hypothesis 的結構與門檻不變。
+
+> **狀態：第 1–5 節 FROZEN (Stage A)，2026-10-09**（harness commit `eb6eef1d43a15d70805cce83784646a038aed6d1`，
+> `pins.toml` `freeze.mac = true`）。第 6 節（Stage B）尚未凍結。
 > 依 decision 006 分兩階段凍結：
 > - **Stage A**（本文第 1–5 節）：在任何 Mac 正式數據之前 commit，並把 `pins.toml` 設為 `freeze.mac = true`。
 > - **Stage B**（第 6 節 addendum）：在任何 NVIDIA 正式數據之前 commit，並把 `freeze.nvidia = true`。
@@ -201,6 +205,7 @@ request throughput（req/s）；output token throughput 與 total token throughp
 ### 重複次數與順序
 
 - Core A：每個 cell 3 個獨立 process × `-r 5`；每個 session 內，cell 的執行順序以固定 seed 隨機排列，seed 記入結果。
+  正式 session 的 seed 一律為 **20261008**（凍結時寫定；重跑的 session 也用同一個 seed）。
 - Core B：每個 (L, mix) 3 次 server restart（007）。
 
 ### Core B server 與 Stage B 推導規則（003 的固定參數表，017 寫定細節）
@@ -270,25 +275,25 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 
 ## 5. Stage A 凍結 checklist（任何 Mac 正式數據之前）
 
-- [ ] 8 個衍生 GGUF 的 sha256 / size 都已填入 `pins.toml`（`freeze.mac = true` 由測試強制）
+- [x] 8 個衍生 GGUF 的 sha256 / size 都已填入 `pins.toml`（`freeze.mac = true` 由測試強制；4B 與 9B 各為 BF16 加 3 個 quant，附 recipe）
 - [x] converter 的 Python lock 已 commit，`pins.toml` 的 `core_a.converter_lock` 指向它（004；`configs/converter.lock.txt`）
 - [x] Quality：HellaSwag / MMLU 子集的題號清單、子集 `.bin` 的 sha256、MMLU 排除清單已 commit（005）
   - [x] 題號清單與 HellaSwag 子集 sha256（`pins.toml`）
   - [x] MMLU 結構性排除清單：用 Qwen3.5 tokenizer 計算，排除 3 題，剩 3997 題，sha256 已寫入 pins（005）
   - [x] 以 llama.cpp tokenizer 交叉驗證 MMLU 排除清單：16,000 個字串的 token 完全一致，排除清單相同；HellaSwag、ARC 走同一 scorer，皆 0 題（`quality/subsets/tokenizer-crosscheck.json`，2026-10-08）
   - [x] WikiText chunk 數：llama.cpp tokenizer 與 HF 完全一致（297,194 tokens，比照 `-f` 去掉一個結尾換行），580 chunks（同上檔案）
-- [ ] Mac pilot 完成：
-  - [ ] `-fa auto` probe：4B 三個 quant 在 Metal 皆為 "Flash Attention enabled"、graph splits = 2（`-lv 4` 重跑，`pilot-20261008-4b-fa`；012）；9B 待補
+- [x] Mac pilot 完成：
+  - [x] `-fa auto` probe：4B 與 9B 共 6 個 quant 在 Metal 皆為 "Flash Attention enabled"、graph splits = 2（`pilot-20261008-4b-fa`、`pilot-20261008-9b`；012）
   - [x] `--poll` 依規則選定：Mac P = 0（012）
-  - [ ] throughput 校準：Core A 上限 10.65 h、quality 4B 約 5.1 h（012）；9B 待補
-  - [x] determinism：KLD 與 MMLU 重跑完全相同（4B；012）
-  - [x] memory metric 交叉核對（4B）：breakdown 的 context 增量 990 MiB 與 footprint 1026 MiB、理論 960 MiB 一致（012）；9B 待補
-  - [x] quality 數值 sanity check：self-KLD 0、Q8_0 KLD 0.0014（fa on / off 相同）（4B；012）
-  - [ ] MDE（遮蔽方向）：Core A 已估（sentinel CV 5.9%，兩格相對 MDE 約 9.6%）；downstream CI 半寬 0.2–1.7 pp（012）；H-A5 ΔNLL 待 9B
-- [ ] Benchmark harness 與輸出格式固定，記錄 harness 的 git commit
+  - [x] throughput 校準：正式 Core A 上限 17.39 h（9B）、正式 quality 兩個 size 約 14.2 h（012），皆不含 016 的充電暫停
+  - [x] determinism：KLD 與 MMLU 重跑完全相同（4B、9B；012）
+  - [x] memory metric 交叉核對：breakdown 的 context 增量 4B 990 MiB / 9B 958 MiB，footprint 約 1026 MiB，理論 960 MiB，一致（012）
+  - [x] quality 數值 sanity check：self-KLD 0；Q8_0 KLD 4B 0.0014、9B 0.00047（fa on / off 相同；012）
+  - [x] MDE（遮蔽方向）：Core A sentinel CV 1.0–5.9%（兩格相對 MDE 1.7–9.6%，依前景負載）；downstream CI 半寬 0–1.7 pp；H-A5 ΔNLL 的 MDE 約 0.009 nats/token（Holm 最嚴 α、80% power）；KLD SE 上界 4B 7.7e-4、9B 6.0e-4（012）
+- [x] Benchmark harness 與輸出格式固定，記錄 harness 的 git commit：`eb6eef1d43a15d70805cce83784646a038aed6d1`
 - [x] 判定規則的分析程式在任何數據前 commit（`benchmarks/core_a_analysis.py`、`quality/quality_analysis.py`、`benchmarks/core_b_plan.py`、`benchmarks/core_b_analysis.py`；011）；report CLI（`core_a_report.py`、`core_b_report.py`）亦同（013）
 - [x] Mac 重負載 lock 的參與方式已由使用者決定，並寫入 MACHINE_POLICY 或 decision log（共享 `/tmp/ai-portfolio-mac-heavy.lock`，經 `tools/with-mac-lock`）
-- [ ] 本文件第 1–5 節狀態改為 FROZEN (Stage A) 並 commit
+- [x] 本文件第 1–5 節狀態改為 FROZEN (Stage A) 並 commit（2026-10-09）
 
 ## 6. Stage B addendum（任何 NVIDIA 正式數據之前；只能代入實測值與執行參數）
 

@@ -8,7 +8,7 @@ schema_version = 1
 # nvidia = stage B addendum committed: RTX / Core B protocol parameters only.
 #          Requires the CUDA toolchain, the vLLM lock file and Core B verified.
 [freeze]
-mac = false
+mac = true                                               # Stage A frozen 2026-10-09 (PREREGISTRATION §5; harness commit eb6eef1)
 nvidia = false
 
 # ------------------------------------------------------------------ runtimes --

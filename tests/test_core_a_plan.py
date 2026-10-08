@@ -149,10 +149,12 @@ def test_plan_records_expectations(pins):
 
 
 def test_formal_mode_requires_matching_freeze(pins):
+    unfrozen = copy.deepcopy(pins)
+    unfrozen["freeze"]["mac"] = unfrozen["freeze"]["nvidia"] = False
     with pytest.raises(cp.PlanError, match="freeze.mac"):
-        plan(pins, mode="formal")
+        plan(unfrozen, mode="formal")
     with pytest.raises(cp.PlanError, match="freeze.nvidia"):
-        plan(pins, mode="formal", platform="wsl2-cuda")
+        plan(unfrozen, mode="formal", platform="wsl2-cuda")
     frozen = copy.deepcopy(pins)
     frozen["freeze"]["mac"] = True
     assert plan(frozen, mode="formal")["mode"] == "formal"

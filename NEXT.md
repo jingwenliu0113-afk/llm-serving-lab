@@ -2,55 +2,62 @@
 
 ## 目前位置
 
-**Core — Week 1 收尾，Stage A（Mac）凍結前最後一步；NVIDIA 端平行推進。** Advanced / Optional 皆未觸碰。
+**Core — Stage A（第 1–5 節）已於 2026-10-09 凍結**（harness commit `eb6eef1`，`freeze.mac = true`）。
+NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
 
 - 模型（008，使用者已確認）：Core A 為 Qwen3.5 4B + 9B；Core B 為 RedHatAI/Qwen3.5-9B-quantized.w4a16；context 2K / 8K / 32K。
-- Decision log 001–016。詳細內容以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–017。詳細內容以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
-## 現況（2026-10-09 00:45）
+## 現況（2026-10-09 01:15）
 
 ### Mac（Core A / quality）
 
-- GGUF ×8 全部 pin 並附 recipe（4B、9B 各為 BF16 加 Q8_0 / Q6_K / Q4_K_M）。
-  兩個 size 的 safetensors 都已依規則刪除，紀錄在 `results/artifacts/deletions.jsonl`。
-- Pilot（遮蔽版報告，012 及其補充）：
-  - 4B Core A：22 / 22 ok。
-  - 4B `-fa` probe：ok。
-  - 4B quality：26 / 26 ok。
-  - **9B Core A：22 / 22 ok**。FA 已啟用，graph splits = 2，CV 1.03%，KV 增量 +958 MiB，正式 Core A 上限 **17.39 h**。
-  - 9B smoke：正常。
-- **quality pilot（4B + 9B）**：00:06 起在 Mac lock 下執行（`results/quality/pilot-20261008-both`），完成後算 H-A5 ΔNLL 的 SD / MDE 與總時數。
-- **電源**：70 W adapter 滿載時電量仍會下降，9B pilot 38 分鐘內從 100% 掉到 73%。
-  因此加上 **016 充電閘門**：電量 < 40% 時閒置充電到 90% 再繼續，讓長 session 不會因為電量 < 20% 作廢。
+- GGUF ×8 全部 pin 並附 recipe。兩個 size 的 safetensors 都已依規則刪除（`results/artifacts/deletions.jsonl`）。
+- Pilot 全部完成（遮蔽版報告，012 及其補充）：
+  - 4B Core A 22 / 22、9B Core A 22 / 22，`-fa` probe 正常。
+  - quality 4B 26 / 26、4B + 9B 52 / 52。
+  - 估計值：
+    - 正式 Core A ≤ 17.39 h，正式 quality 約 14.2 h，兩者都不含充電暫停。
+    - H-A5 ΔNLL 的 MDE 約 0.009 nats/token。
+    - Core A 兩格 MDE 為 1.7–9.6%，依前景負載而定。
+- 016 充電閘門已上線：電量 < 40% 時閒置充電到 90%。
+- **正式 Core A：DEFERRED**，依使用者指示，見 Blocked 0。
+- **正式 quality：Blocked**，磁碟不足，見 Blocked 1。
+- 6 個 quant 正在背景傳到 WSL（`scripts/sync_gguf_to_wsl.py`，在 Mac lock 下，傳完在遠端以 sha256 驗證）。
+- **注意**：2026-10-09 01:05 起系統正在更新 Xcode，`/usr/bin/git`（xcrun shim）暫時無法使用（libxcrun 架構不符）。
+  - 目前改直接用 `/Library/Developer/CommandLineTools/usr/bin/git`，跑測試時把它放在 PATH 最前面。
+  - 不修改 xcode-select 等系統設定。
+  - Metal build 的 llama.cpp 執行檔不受影響。
 
 ### NVIDIA（Core B / Core A RTX）
 
-- 使用者已裝 `gcc g++ libc6-dev`（2026-10-08 23:38）。`wsl_toolchain_check.sh`（`JIT=0`）全部通過。
+- 使用者已裝 `gcc g++ libc6-dev`。`wsl_toolchain_check.sh`（`JIT=0`）全部通過。
 - Core B：
-  - FlashInfer 的 JIT 透過 user-space `CUDA_HOME` shim，使用 vLLM lock 中的 pip CUDA 13.4.92（014）。
-  - 啟動前會先檢查工具鏈。
-  - `mixed` dataset ×2 已建好並 pin（013 補充）。
-- llama.cpp CUDA：改用 user-space CUDA 13.4.1（pip wheels，`configs/llama-cuda.lock.txt`）加 Ninja（015）。configure 已通過。
-- **GPU lock 從 23:38 起由 Text-to-SQL 持有**（`inference.generate`）。
-  背景輪詢只用唯讀的 `lslocks`，lock 釋放且 GPU 閒置後，自動依序跑 `JIT=1` 檢查與 S1。
+  - JIT 經由 user-space `CUDA_HOME` shim（014）。
+  - server 已補齊 003 的固定 flags，U / K / JIT / A/B 的規則已寫定（017）。
+  - `mixed` dataset 已 pin。
+- llama.cpp CUDA：user-space CUDA 13.4.1 + Ninja（015）。configure 已通過。RTX 的 N_thr = 6（Ryzen 5 7600，6 核）。
+- Stage B 工具已備妥並有測試：`benchmarks/stage_b.py`（B、C_ctx、超量）、`benchmarks/coreb_stage_b.py`（boots、pin-ab）。
+- **GPU lock 從 2026-10-08 23:38 起由 Text-to-SQL 持有**。輪詢只用唯讀的 `lslocks`，lock 釋放後自動跑 `JIT=1` 檢查與 S1。
 
-## 下一步（依序；Mac 重負載都經 `tools/with-mac-lock`，不搶 lock）
+## 下一步（依序；Mac 重負載經 `tools/with-mac-lock`，GPU 重負載經 `flock -n`，不搶 lock）
 
-1. quality pilot 完成後：
-   - 用遮蔽版報告算 H-A5 MDE 與 quality 總時數，寫進 012 補充。
-   - 補完 PREREGISTRATION §5 checklist：GGUF ×8、9B probe / 校準 / 記憶體、MDE。
-   - 記錄 harness commit，設 `freeze.mac = true`，第 1–5 節標為 **FROZEN (Stage A)**，然後 commit。
-2. **正式 Core A（Mac）：DEFERRED**。使用者 2026-10-09 指示：Mac 今晚是「自動」電力模式，供電只有約 68 W，
-   暫停所有新的正式 Mac performance benchmark 與 Mac heavy run，等使用者通知解除再跑。
-   - 已備妥：凍結後的指令在 scratchpad 的 `batch_formal_a.sh`：plan seed 20261008、`-t 8`、`--poll 0`，經 `tools/with-mac-lock`，含 016 充電閘門。
-   - 跑完後用 `core_a_report.py` 出 analysis，並出圖。
-3. NVIDIA：
-   - `JIT=1` 檢查 → S1 → S2 → S3（008；每段通過才進下一段；smoke 不取 lock，lock 被占用時不啟動）。
-   - 之後在 `flock -n` 下跑 llama.cpp CUDA build，並把 6 個 quant 傳到 WSL（約 33 GB，在 Mac lock 下進行）。
-   - 然後是 Stage B 的量測（B / C_ctx、超量測試、vLLM 的 JIT 計時與 pin-memory A/B），以及 §6 addendum。
-4. 正式 quality（Mac）：磁碟不足，見下方 Blocked。
+1. NVIDIA（GPU lock 釋放後）：
+   1. `JIT=1` 檢查 → S1 → S2 → S3（008；每段通過才進下一段；smoke 不取 lock，lock 被占用時不啟動）。
+   2. llama.cpp CUDA build（`flock -n` 下執行 `scripts/build_llama_cpp.sh cuda`）→ `--version` 驗證 → 002 驗證紀錄。
+   3. Stage B 量測，全部在 GPU lock 下：
+      - `stage_b.py baseline` 量 B，依 017 算出 U。
+      - `coreb_stage_b.py boots` 取得 JIT 冷 / 熱時間與 K。
+      - `stage_b.py cctx` 與 `overflow`。
+      - `coreb_stage_b.py pin-ab`，同時取得 num_gpu_blocks / block_size。
+   4. RTX Core A pilot：`core_a_pilot.py plan --platform wsl2-cuda --sizes 4B 9B --n-thr 6`，在 lock 下跑，決定 P。
+   5. 填 §6 → `freeze.nvidia = true` → 正式 Core A（RTX）與 Core B（uniform → 由 `core_b_plan.py mixed` 產生 mixed plan → report / 圖）。
+2. 正式 Core A（Mac）：等使用者解除暫停（見 Blocked 0）。
+   指令在 scratchpad 的 `batch_formal_a.sh`（seed 20261008、`-t 8`、`--poll 0`、含 016）。
+   跑完後用 `core_a_report.py` 出 analysis，用 `core_a_figures.py` 出 decode / prefill / frontier 圖。
+3. 正式 quality（Mac）：等磁碟（見 Blocked 1）。之後用 `quality_analysis.py` 出 analysis，並畫 frontier 圖。
 
 ## Blocked / 需要使用者
 

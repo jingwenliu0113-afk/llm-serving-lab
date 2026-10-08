@@ -93,8 +93,10 @@ def test_pilot_vs_formal_counts(pins):
 
 
 def test_formal_requires_freeze(pins):
+    unfrozen = copy.deepcopy(pins)
+    unfrozen["freeze"]["mac"] = False
     with pytest.raises(rq.QualityError, match="freeze.mac"):
-        plan(pins, mode="formal")
+        plan(unfrozen, mode="formal")
 
 
 # --------------------------------------------------------------- runner --
