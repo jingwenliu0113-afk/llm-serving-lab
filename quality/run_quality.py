@@ -3,8 +3,10 @@
 
 Per size, in this order:
   kld_base (BF16 -> data/kld/<size>.kld) -> kld_self (floor) -> kld x 3 quants
+  [pilot only: Q8_0 with -fa off, and a repeat of the Q8_0 KLD (005 pilot)]
   -> delete_kld (only if all four KLD runs are ok; docs/STORAGE_PLAN.md)
   -> downstream (HellaSwag / MMLU / ARC via --multiple-choice, WinoGrande) for BF16 + 3 quants
+  [pilot only: a repeat of MMLU at Q8_0 (determinism)]
   -> per-chunk PPL (--ppl-output-type 1) for the H-A5(a) pair.
 One process per job; ok only with positive markers and expected counts
 (quality_parse). pilot = 20 chunks / 200 tasks; formal requires freeze.mac and
@@ -96,13 +98,29 @@ def build_quality_plan(pins: dict, *, mode: str, n_thr: int, poll: int, pins_sha
         for q in quants:
             add(f"kld-{size}-{q}", "kld", q,
                 [exe, *model(q), "--kl-divergence-base", kld, "--kl-divergence", *flags], {"n_chunks": n_chunks})
+        extra_kld = []
+        if pilot:  # 005 pilot: -fa off sanity and a determinism repeat, while the KLD file exists
+            q8 = quants[0]
+            fa_off = [*flags]
+            fa_off[fa_off.index("-fa") + 1] = "off"
+            add(f"kld-{size}-{q8}-fa_off", "kld", q8,
+                [exe, *model(q8), "--kl-divergence-base", kld, "--kl-divergence", *fa_off], {"n_chunks": n_chunks},
+                variant="fa_off")
+            add(f"kld-{size}-{q8}-repeat", "kld", q8,
+                [exe, *model(q8), "--kl-divergence-base", kld, "--kl-divergence", *flags], {"n_chunks": n_chunks},
+                repeat_of=f"kld-{size}-{q8}")
+            extra_kld = [f"kld-{size}-{q8}-fa_off", f"kld-{size}-{q8}-repeat"]
         jobs.append({"id": f"delete_kld-{size}", "kind": "delete_kld", "size": size, "point": None, "path": kld,
-                     "after": [f"kld_base-{size}", f"kld_self-{size}", *(f"kld-{size}-{q}" for q in quants)]})
+                     "after": [f"kld_base-{size}", f"kld_self-{size}", *(f"kld-{size}-{q}" for q in quants),
+                               *extra_kld]})
         for point in ("BF16", *quants):
             for task in MC_TASKS:
                 add(f"mc-{task}-{size}-{point}", "mc", point,
                     [exe, *model(point), "-bf", files[task], "--multiple-choice", *flags, "-np", "16"],
                     {"n_tasks": n_tasks[task]}, task=task)
+                if pilot and task == "mmlu" and point == quants[0]:
+                    add(f"mc-{task}-{size}-{point}-repeat", "mc", point, list(jobs[-1]["argv"]),
+                        {"n_tasks": n_tasks[task]}, task=task, repeat_of=f"mc-{task}-{size}-{point}")
             wg_n = ["--winogrande-tasks", str(PILOT["tasks"])] if pilot else []
             add(f"winogrande-{size}-{point}", "winogrande", point,
                 [exe, *model(point), "-f", files["winogrande"], "--winogrande", *wg_n, *flags, "-np", "16"],
@@ -171,7 +189,8 @@ def run_quality(
     with open(out / "rows.jsonl", "w") as fh:
         for job in plan["jobs"]:
             jid, kind, size = job["id"], job["kind"], job["size"]
-            base = {"job_id": jid, "kind": kind, "size": size, "point": job.get("point"), "task": job.get("task")}
+            base = {"job_id": jid, "kind": kind, "size": size, "point": job.get("point"), "task": job.get("task"),
+                    "variant": job.get("variant"), "repeat_of": job.get("repeat_of")}
             if kind == "delete_kld":
                 path = resolve(job["path"])
                 all_ok = all(by_id.get(a, {}).get("outcome") == "ok" for a in job["after"])

@@ -35,12 +35,15 @@ def arg(argv, flag):
 
 
 def test_job_order_per_size_follows_005(pins):
-    jobs = plan(pins)["jobs"]
-    sizes = [m["size"] for m in pins["core_a"]["models"]]
-    for size in sizes:
-        kinds = [j["kind"] for j in jobs if j["size"] == size]
-        assert kinds[:6] == ["kld_base", "kld_self", "kld", "kld", "kld", "delete_kld"]
-        assert Counter(kinds[6:])["mc"] == 4 * 3 and Counter(kinds[6:])["winogrande"] == 4
+    frozen = copy.deepcopy(pins)
+    frozen["freeze"]["mac"] = True
+    for mode, p, extra_kld, extra_mc in (("formal", frozen, 0, 0), ("pilot", pins, 2, 1)):
+        jobs = plan(p, mode=mode)["jobs"]
+        for size in [m["size"] for m in pins["core_a"]["models"]]:
+            kinds = [j["kind"] for j in jobs if j["size"] == size]
+            n = 6 + extra_kld
+            assert kinds[:n] == ["kld_base", "kld_self"] + ["kld"] * (3 + extra_kld) + ["delete_kld"]
+            assert Counter(kinds[n:])["mc"] == 4 * 3 + extra_mc and Counter(kinds[n:])["winogrande"] == 4
 
 
 def test_ha5_pair_gets_per_chunk_ppl(pins):
@@ -59,7 +62,8 @@ def test_flags_match_005(pins):
         a = j["argv"]
         assert a[0] == "{bin}/llama-perplexity"
         for flag, value in rq.QUALITY_FLAGS.items():
-            assert arg(a, flag) == value, (j["id"], flag)
+            want = "off" if (flag, j.get("variant")) == ("-fa", "fa_off") else value
+            assert arg(a, flag) == want, (j["id"], flag)
         assert (arg(a, "-t"), arg(a, "--poll")) == ("8", "50")
         if j["kind"] in ("mc", "winogrande"):
             assert arg(a, "-np") == "16"
