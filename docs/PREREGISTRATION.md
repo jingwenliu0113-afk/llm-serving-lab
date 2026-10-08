@@ -11,6 +11,9 @@
 > 2026-10-08 至 10-09 凍結前另依 014–017 補齊：Core B 的 JIT 工具鏈與啟動 env（014）、Mac 充電閘門（016）、
 > 003 的 Core B server 固定參數與 Stage B 的 U / K / JIT / A/B 規則（017）。hypothesis 的結構與門檻不變。
 
+> 凍結後、任何正式數據之前的 harness 修正見 decision 018。018 只讓程式落實本文已凍結的規則，未修改本文的規則；
+> 唯一的文字更正是 017 的 log 驗證句（0.30.0 不會印出），改以 non-default args 驗證同一件事。
+
 > **狀態：第 1–5 節 FROZEN (Stage A)，2026-10-09**（harness commit `eb6eef1d43a15d70805cce83784646a038aed6d1`，
 > `pins.toml` `freeze.mac = true`）。第 6 節（Stage B）尚未凍結。
 > 依 decision 006 分兩階段凍結：
@@ -255,6 +258,8 @@ request throughput（req/s）；output token throughput 與 total token throughp
     `vllm serve` 另設 `VLLM_GDN_DECODE_KERNEL=triton`（008、013），
     以及給 FlashInfer sampler JIT 用的 `CUDA_HOME`（user-space shim，指向 vLLM lock 中的 pip CUDA 13）與 PATH 前綴 `.venv/bin`（ninja）；
     nvcc 不放進 PATH（014）。
+    〔凍結後註記，018 第 7 點：014 補充把 shim 改指向版本一致的 CUDA 13.0（`configs/flashinfer-cuda.lock.txt`），
+    因為 vLLM lock 的 nvcc 13.4 與 cudart 13.0 headers 不一致；發生在任何 Core B 數據之前。〕
 
 ### Prompt 與 sampling
 

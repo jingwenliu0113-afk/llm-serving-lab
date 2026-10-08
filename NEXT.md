@@ -51,11 +51,15 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
     `max_num_seqs (264) exceeds available Mamba cache blocks (134)`（`vllm/config/compilation.py`：FULL CUDA graph 加上 Mamba 層時，
     要求 max_num_seqs ≤ num_gpu_blocks）。可用 KV 記憶體 2.17 GiB，66,528 tokens，num_gpu_blocks = 134。
     **見 Blocked 2，需要使用者決定**；Core B 的 Stage B（K、JIT 計時、pin-memory A/B）與正式 Core B 都暫停。
+- **第三輪審查（018）**：凍結後新寫程式的 18 項確認問題全部修正，都是讓程式落實已凍結的規則。
+  主要內容：Stage B 值集中到 pins `[stage_b]`、Core B 正式 run 的防護、log 驗證、powermode / seed / power-limit 檢查，
+  以及 boot 期間被中斷時會關掉 server。
 - **003 gate 第 5 項通過**（02:34，`results/stage_b/20261009/bench-check`）：在 S1 smoke server 上 `vllm bench serve` 完成並通過完整驗證，
   `/metrics` 的三個 metric 名稱都存在。
 - WSL 會在 wsl.exe 結束時終止背景 process，所以遠端長時間工作都在 ssh 前景執行（`ServerAliveInterval`）。
 - Mac ↔ 桌機約 0.7–0.9 MB/s，而且會斷線。GGUF 傳輸已改成可續傳（`sync_gguf_to_wsl.py`）。
-  02:37 起在 Mac lock 下傳輸（可續傳）。之後的嘗試會先傳 Stage B 需要的 4B-Q4_K_M 與 9B-Q8_0。
+  02:37 起在 Mac lock 下傳輸（可續傳）。**4B-Q8_0 已於 03:25 傳完並在遠端驗證**（約 1.6 MB/s）。
+  之後先傳 Stage B 需要的 4B-Q4_K_M 與 9B-Q8_0，再傳其餘 3 個。
   傳完後依序：`stage_b.py cctx` → `overflow` → RTX Core A pilot（`--n-thr 6`）。
 
 ## 下一步（依序；Mac 重負載經 `tools/with-mac-lock`，GPU 重負載經 `flock -n`，不搶 lock）
@@ -77,9 +81,16 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
 ## Blocked / 需要使用者
 
 0. **解除 Mac 正式 benchmark 的暫停**（使用者 2026-10-09 指示）：正式 Core A、正式 quality、任何 Mac heavy run 都等使用者通知。
-   - 正式 run 時建議：電力模式設為「高效能」或至少不要用「自動」（這屬於系統設定，我不會修改），並接上 ≥ 96 W adapter。
+   - §4 規定正式 run 的 **powermode 必須為 2（高效能）**、`iogpu.wired_limit_mb` 必須為 0。
+     018 起 harness 會強制檢查；目前是 powermode 0（「自動」），正式 run 會在開跑前被拒絕。
+     請使用者在正式 run 前切到「高效能」；這是系統設定，我不會修改。
+   - 建議接上 ≥ 96 W adapter（見 1 與 3）。
 
-1. **正式 quality 的磁碟空間**（Mac；不影響 Core A）
+1. **正式 quality：磁碟空間，以及 016 的充電門檻**（Mac；不影響 Core A）
+   - 充電門檻（018 第 6 點）：正式 quality 中 9B 的 MC job 長 38–59 分鐘，從 40% 開始跑可能跌破 20%，使整個 session 作廢。
+     改門檻屬於修改凍結的 §4，不自行處理。選項：
+     - 換 ≥ 96 W adapter：不必改任何規則。
+     - 或同意為 quality 補一則 016 addendum（例如暫停門檻 75%）；程式已參數化。
    - 目前可用 94 GiB。每個 size 的 KLD logits 約需 70 GiB，加上 `disk_guard` 的 50 GiB 保留量，共 120 GiB。
    - 即使依 STORAGE_PLAN 暫時刪掉另一個 size 的 quant（4B 約 11 GB，9B 約 23 GB；之後可從 BF16 重建），仍不夠。
      BF16 不能刪：safetensors 已刪，BF16 無法重建。
