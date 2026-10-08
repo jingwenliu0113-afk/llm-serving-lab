@@ -37,8 +37,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import disk_guard  # noqa: E402
 import quality_parse as qp  # noqa: E402
-from run_core_a import (charge_gate, default_run_proc, env_problems, make_env_capture, read_mac_power,  # noqa: E402
-                        sha256_json, write_raw_manifest)
+from run_core_a import (charge_gate, default_run_proc, env_problems, mac_config_problems,  # noqa: E402
+                        make_env_capture, read_mac_power, sha256_json, write_raw_manifest)
 
 SCHEMA_VERSION = 1
 MAC_HEAVY_LOCK = "/tmp/ai-portfolio-mac-heavy.lock"
@@ -189,6 +189,10 @@ def run_quality(
     want = plan["expect_build"]
     if lc.get("build_number") != want["build_number"] or lc.get("commit") != want["build_commit"]:
         raise QualityError(f"llama.cpp build mismatch: {lc} vs {want}")
+    if plan["mode"] == "formal":
+        bad = mac_config_problems(pre)
+        if bad:
+            raise QualityError("formal quality run refused before it starts: " + "; ".join(bad))
 
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "mode": plan["mode"],
                "plan_sha256": sha256_json(plan), "pins_sha256": plan.get("pins_sha256"),

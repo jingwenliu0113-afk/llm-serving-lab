@@ -97,6 +97,21 @@ class NvidiaSmiSampler:
 BATTERY_MIN_PCT = 20  # decision 012
 
 
+POWERMODE_REQUIRED = 2  # §4: all formal Mac runs in one powermode (2 = high power)
+
+
+def mac_config_problems(rec: dict) -> list:
+    """§4 / 004: powermode 2 and iogpu.wired_limit_mb = 0 (unknown counts as a problem, 013)."""
+    power = (rec or {}).get("power") or {}
+    wired = ((rec or {}).get("hardware") or {}).get("iogpu_wired_limit_mb")
+    problems = []
+    if power.get("powermode") != POWERMODE_REQUIRED:
+        problems.append(f"powermode {power.get('powermode')!r} (§4 requires {POWERMODE_REQUIRED})")
+    if wired != 0:
+        problems.append(f"iogpu.wired_limit_mb {wired!r} (§4 requires 0)")
+    return problems
+
+
 def env_problems(rec: dict, platform: str) -> list:
     """State that invalidates a session. Mac (012): AC, battery >= 20 %, no thermal / performance warning; a
     failed or partial probe cannot show them, so unknown counts as a problem (013); a Mac without a battery
@@ -128,7 +143,7 @@ def env_problems(rec: dict, platform: str) -> list:
         problems.append("thermal state unknown")
     elif thermal.get("thermal_warning_recorded") or thermal.get("performance_warning_recorded"):
         problems.append("thermal / performance warning recorded")
-    return problems
+    return problems + mac_config_problems(rec)
 
 
 # decision 016: on the Mac, a process starts only with charge to spare. Under full load the 70 W adapter
@@ -156,20 +171,21 @@ def read_mac_power() -> dict:
     return parse_pmset_batt(out)
 
 
-def charge_gate(read_power: Callable, sleep: Callable) -> dict | None:
+def charge_gate(read_power: Callable, sleep: Callable, pause_below: int = CHARGE_PAUSE_BELOW_PCT,
+                resume_at: int = CHARGE_RESUME_AT_PCT) -> dict | None:
     """Before a Mac process (016): on AC below the pause level, idle until the resume level (or the max
     wait). Off AC or unknown -> no pause (env_problems flags it). Returns the pause record or None."""
     p = read_power()
     pct = p.get("battery_pct")
-    if p.get("source") != "AC" or pct is None or pct >= CHARGE_PAUSE_BELOW_PCT:
+    if p.get("source") != "AC" or pct is None or pct >= pause_below:
         return None
     start, waited = pct, 0
-    while pct is not None and pct < CHARGE_RESUME_AT_PCT and waited < CHARGE_MAX_WAIT_S:
+    while pct is not None and pct < resume_at and waited < CHARGE_MAX_WAIT_S:
         sleep(CHARGE_POLL_S)
         waited += CHARGE_POLL_S
         pct = read_power().get("battery_pct")
     return {"from_pct": start, "to_pct": pct, "waited_s": waited,
-            "timed_out": pct is None or pct < CHARGE_RESUME_AT_PCT}
+            "timed_out": pct is None or pct < resume_at}
 
 
 def write_raw_manifest(out: Path) -> dict:
@@ -233,6 +249,7 @@ def run_session(
     sleep: Callable = time.sleep,
     path_exists: Callable = os.path.exists,
     read_power: Callable = read_mac_power,
+    measure_b: Callable | None = None,
     timeout_s: float = JOB_TIMEOUT_S,
     now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(),
 ) -> dict:
@@ -261,6 +278,15 @@ def run_session(
     if lc.get("build_number") != want["build_number"] or lc.get("commit") != want["build_commit"]:
         raise RunError(f"llama.cpp build mismatch: got build {lc.get('build_number')} commit {lc.get('commit')}, "
                        f"plan expects build {want['build_number']} commit {want['build_commit']}")
+    if mode == "formal" and platform == "macos-metal":
+        bad = mac_config_problems(preflight)
+        if bad:
+            raise RunError("formal Mac run refused before it starts: " + "; ".join(bad))
+    session_b = None
+    if mode == "formal" and platform == "wsl2-cuda":  # §4 step 4: re-measure B at every formal session start
+        if measure_b is None or not want.get("frozen_b_mib"):
+            raise RunError("formal RTX Core A needs the session-start B measurement (§4 step 4; stage_b.py)")
+        session_b = measure_b(want["frozen_b_mib"])
 
     session = {
         "schema_version": SCHEMA_VERSION,
@@ -275,6 +301,7 @@ def run_session(
         "bin_dir": bin_dir,
         "models_dir": models_dir,
         "preflight": "env/preflight.json",
+        "session_b": session_b,
         "started_at": now(),
     }
 

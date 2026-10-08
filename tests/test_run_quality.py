@@ -136,8 +136,9 @@ class Env:
     def __call__(self, llama_bin, out_path, gpu_lock_held):
         self.calls.append(Path(out_path).name)
         rec = {"runtime": {"llama_cpp": {"build_number": 11146, "commit": COMMIT}}, "probe_errors": [],
-               "power": {"source": "AC", "battery_pct": 80,
-                         "thermal": {"thermal_warning_recorded": False, "performance_warning_recorded": False}}}
+               "power": {"source": "AC", "battery_pct": 80, "powermode": 2,
+                         "thermal": {"thermal_warning_recorded": False, "performance_warning_recorded": False}},
+               "hardware": {"iogpu_wired_limit_mb": 0}}
         Path(out_path).write_text(json.dumps(rec))
         return rec
 

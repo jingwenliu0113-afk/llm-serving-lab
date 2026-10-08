@@ -96,6 +96,9 @@ def small_plan(platform="wsl2-cuda", mode="pilot", contexts=(2048, 8192)):
     pins["core_a"]["context_lengths"] = list(contexts)  # keep the test fast
     if mode == "formal":
         pins["freeze"]["mac"] = pins["freeze"]["nvidia"] = True
+        pins["stage_b"]["rtx_poll"] = 0
+        return cp.build_plan(pins, platform=platform, mode=mode, seed=20261008,
+                             n_thr=8 if platform == "macos-metal" else pins["stage_b"]["rtx_n_thr"], poll=0)
     return cp.build_plan(pins, platform=platform, mode=mode, seed=1, n_thr=6, poll=0)
 
 
@@ -107,12 +110,13 @@ class EnvRecorder:
     def __call__(self, llama_bin, out_path, gpu_lock_held):
         self.calls.append((Path(llama_bin).name, Path(out_path).name, gpu_lock_held))
         rec = {"runtime": {"llama_cpp": {"build_number": self.build, "commit": self.commit}}, "probe_errors": [],
-               "power": dict(GOOD_POWER)}
+               "power": dict(GOOD_POWER), "hardware": {"iogpu_wired_limit_mb": 0},
+               "gpu": {"nvidia": [{"enforced_power_limit_w": 300.0, "power_default_limit_w": 300.0}]}}
         Path(out_path).write_text(json.dumps(rec))
         return rec
 
 
-GOOD_POWER = {"source": "AC", "battery_pct": 80,
+GOOD_POWER = {"source": "AC", "battery_pct": 80, "powermode": 2,
               "thermal": {"thermal_warning_recorded": False, "performance_warning_recorded": False}}
 
 
@@ -338,7 +342,7 @@ def test_session_flags_processes_with_an_invalid_power_state(tmp_path):
         def __call__(self, llama_bin, out_path, gpu_lock_held):
             rec = super().__call__(llama_bin, out_path, gpu_lock_held)
             self.n += 1
-            rec["power"] = {"source": "AC", "battery_pct": 15 if self.n == 6 else 80,
+            rec["power"] = {"source": "AC", "battery_pct": 15 if self.n == 6 else 80, "powermode": 2,
                             "thermal": {"thermal_warning_recorded": False, "performance_warning_recorded": False}}
             Path(out_path).write_text(json.dumps(rec))
             return rec
@@ -353,7 +357,7 @@ def test_session_flags_processes_with_an_invalid_power_state(tmp_path):
 
 
 @pytest.mark.parametrize("rec, want", [
-    ({"power": GOOD_POWER}, []),
+    ({"power": GOOD_POWER, "hardware": {"iogpu_wired_limit_mb": 0}}, []),
     ({"probe_errors": ["env_capture failed (exit 1): boom"]}, ["power source unknown (AC required)",
                                                                "thermal state unknown"]),
     ({"power": {**GOOD_POWER, "source": None}}, ["power source unknown (AC required)"]),
@@ -362,11 +366,13 @@ def test_session_flags_processes_with_an_invalid_power_state(tmp_path):
                 "thermal": {"thermal_warning_recorded": True, "performance_warning_recorded": False}}},
      ["power source unknown (AC required)", "battery 15% < 20%", "thermal / performance warning recorded"]),
     ({"power": {**GOOD_POWER, "source": "Battery"}}, ["power source Battery (AC required)"]),
-    ({"power": {**GOOD_POWER, "battery_pct": None}}, []),  # a Mac without a battery
+    ({"power": {**GOOD_POWER, "battery_pct": None}, "hardware": {"iogpu_wired_limit_mb": 0}}, []),  # no battery
 ])
 def test_env_problems_on_the_mac_treat_unknown_as_invalid(rec, want):
-    """012 / 013: a failed or partial probe cannot prove AC power or a clean thermal log."""
-    assert rc.env_problems(rec, "macos-metal") == want
+    """012 / 013: a failed or partial probe cannot prove AC power or a clean thermal log (the §4 powermode /
+    wired-limit rules are tested separately)."""
+    config = rc.mac_config_problems(rec)
+    assert [x for x in rc.env_problems(rec, "macos-metal") if x not in config] == want
 
 
 def test_env_problems_on_the_rtx_check_the_power_limit_not_a_battery():
@@ -445,3 +451,44 @@ def test_rtx_session_never_reads_the_battery(tmp_path):
     power = Battery(10)
     _, summary, _ = run(tmp_path, small_plan(), read_power=power)
     assert power.calls == 0 and summary["charge_pauses"] == []
+
+
+
+def test_mac_config_rules_powermode_and_wired_limit():
+    """§4: every formal Mac run in powermode 2 with iogpu.wired_limit_mb = 0 (unknown = invalid, 013)."""
+    ok = {"power": GOOD_POWER, "hardware": {"iogpu_wired_limit_mb": 0}}
+    assert rc.mac_config_problems(ok) == []
+    assert rc.mac_config_problems({**ok, "power": {**GOOD_POWER, "powermode": 0}}) == ["powermode 0 (§4 requires 2)"]
+    assert rc.mac_config_problems({**ok, "hardware": {"iogpu_wired_limit_mb": 8192}}) == \
+        ["iogpu.wired_limit_mb 8192 (§4 requires 0)"]
+    assert "powermode 0 (§4 requires 2)" in rc.env_problems({**ok, "power": {**GOOD_POWER, "powermode": 0}},
+                                                             "macos-metal")
+
+
+def test_formal_mac_run_refuses_a_preflight_in_the_wrong_powermode(tmp_path):
+    class AutoMode(EnvRecorder):
+        def __call__(self, llama_bin, out_path, gpu_lock_held):
+            rec = super().__call__(llama_bin, out_path, gpu_lock_held)
+            rec["power"] = {**GOOD_POWER, "powermode": 0}
+            Path(out_path).write_text(json.dumps(rec))
+            return rec
+
+    with pytest.raises(rc.RunError, match="powermode"):
+        run(tmp_path, small_plan(platform="macos-metal", mode="formal", contexts=(2048,)), env=AutoMode(),
+            mac_lock_held=True, path_exists=lambda p: True)
+
+
+def test_formal_rtx_session_remeasures_b_and_records_drift(tmp_path):
+    """§4 step 4: B is re-measured at the start of every formal RTX session; > 0.25 GiB over the frozen B = drift."""
+    calls = []
+
+    def measure_b(frozen_b_mib):
+        calls.append(frozen_b_mib)
+        return {"b_mib": frozen_b_mib + 300, "frozen_b_mib": frozen_b_mib, "drift": True}
+
+    plan = small_plan(mode="formal", contexts=(2048,))
+    _, summary, _ = run(tmp_path, plan, gpu_lock_held=True, measure_b=measure_b)
+    assert calls == [plan["expect"]["frozen_b_mib"]] and summary["session_b"]["drift"] is True
+    (tmp_path / "x").mkdir()
+    with pytest.raises(rc.RunError, match="session-start B"):
+        run(tmp_path / "x", small_plan(mode="formal", contexts=(2048,)), gpu_lock_held=True)

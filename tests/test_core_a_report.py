@@ -59,10 +59,11 @@ def test_rtx_report_rejects_missing_stage_b_values(pins):
 
 
 @pytest.mark.parametrize("session, reason", [
-    ({"mode": "pilot", "env_valid": True, "sentinel": {"drift": False}}, "formal"),
-    ({"mode": "formal", "env_valid": False, "sentinel": {"drift": False}}, "env-invalid"),
-    ({"mode": "formal", "env_valid": True, "sentinel": {"drift": True}}, "drift"),
-    ({"mode": "formal", "env_valid": True, "sentinel": {"drift": None}}, "drift"),
+    ({"mode": "pilot", "env_valid": True, "sentinel": {"drift": False}, "seed": 20261008}, "formal"),
+    ({"mode": "formal", "env_valid": False, "sentinel": {"drift": False}, "seed": 20261008}, "env-invalid"),
+    ({"mode": "formal", "env_valid": True, "sentinel": {"drift": True}, "seed": 20261008}, "drift"),
+    ({"mode": "formal", "env_valid": True, "sentinel": {"drift": None}, "seed": 20261008}, "drift"),
+    ({"mode": "formal", "env_valid": True, "sentinel": {"drift": False}, "seed": 1}, "seed"),
 ])
 def test_report_cli_refuses_pilot_invalid_or_drifted_sessions(tmp_path, capsys, session, reason):
     """Pilots stay masked (011); env-invalid / drift sessions are rerun, not analysed (§4, 012, 013)."""
@@ -73,3 +74,13 @@ def test_report_cli_refuses_pilot_invalid_or_drifted_sessions(tmp_path, capsys, 
     assert cr.main(["--session", str(tmp_path), "--models", str(tmp_path / "missing")]) == 2
     assert reason in capsys.readouterr().err
     assert not (tmp_path / "analysis.json").exists()
+
+
+
+def test_rtx_sessions_need_a_session_start_b_without_drift():
+    base = {"mode": "formal", "env_valid": True, "sentinel": {"drift": False}, "seed": 20261008,
+            "platform": "wsl2-cuda"}
+    assert any("session-start B" in x for x in cr.session_problems(base))
+    assert any("session-start B" in x for x in cr.session_problems({**base, "session_b": {"drift": True}}))
+    assert cr.session_problems({**base, "session_b": {"drift": False}}) == []
+    assert cr.session_problems({**base, "platform": "macos-metal"}) == []

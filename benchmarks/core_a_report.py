@@ -80,6 +80,10 @@ def session_problems(s: dict) -> list:
     drift = (s.get("sentinel") or {}).get("drift")
     if drift is not False:
         problems.append(f"sentinel drift is {drift!r} (must be False)")
+    if s.get("seed") != 20261008:
+        problems.append(f"seed {s.get('seed')!r} is not the frozen 20261008 (§4)")
+    if s.get("platform") == "wsl2-cuda" and (s.get("session_b") or {}).get("drift") is not False:
+        problems.append(f"session-start B drift is {(s.get('session_b') or {}).get('drift')!r} (§4 step 4: must be False)")
     return problems
 
 

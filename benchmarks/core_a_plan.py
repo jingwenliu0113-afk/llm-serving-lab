@@ -55,6 +55,10 @@ COMPLETION_COMMON = {
 }
 
 
+FORMAL_SEED = 20261008                                # §4: every formal session, reruns too
+FORMAL_MAC = {"n_thr": 8, "poll": 0}                  # §4: Mac N_thr = 8 performance cores; P = 0 (012)
+
+
 class PlanError(ValueError):
     pass
 
@@ -113,6 +117,20 @@ def build_plan(pins: dict, *, platform: str, mode: str, seed: int, n_thr: int, p
     stage = PLATFORMS[platform]
     if mode == "formal" and not pins["freeze"][stage]:
         raise PlanError(f"formal mode on {platform} requires freeze.{stage} = true in pins.toml (decision 006)")
+    frozen_b = None
+    if mode == "formal":  # §4: a formal session never picks its own seed, N_thr or P (018)
+        if seed != FORMAL_SEED:
+            raise PlanError(f"formal Core A seed must be {FORMAL_SEED} (§4), not {seed}")
+        if platform == "macos-metal":
+            want = FORMAL_MAC
+        else:
+            sb = pins.get("stage_b") or {}
+            if sb.get("rtx_poll", -1) < 0 or not sb.get("rtx_n_thr") or not sb.get("b_mib"):
+                raise PlanError("formal RTX Core A needs pins [stage_b] rtx_n_thr, rtx_poll and b_mib (§4, §6)")
+            want, frozen_b = {"n_thr": sb["rtx_n_thr"], "poll": sb["rtx_poll"]}, sb["b_mib"]
+        if (n_thr, poll) != (want["n_thr"], want["poll"]):
+            raise PlanError(f"formal {platform} N_thr / P must be {want['n_thr']} / {want['poll']} (§4), "
+                            f"not {n_thr} / {poll}")
 
     core_a = pins["core_a"]
     files = {(m["size"], q): f["filename"] for m in core_a["models"] for q, f in m["files"].items()}
@@ -149,7 +167,8 @@ def build_plan(pins: dict, *, platform: str, mode: str, seed: int, n_thr: int, p
         "pins_sha256": pins_sha256,
         "params": {"n_thr": n_thr, "poll": poll, "reps": REPS, "bench_r": BENCH_R, "delay_s": DELAY_S,
                    "idle_s": IDLE_S},
-        "expect": {"build_number": pins["llama_cpp"]["build_number"], "build_commit": pins["llama_cpp"]["commit"]},
+        "expect": {"build_number": pins["llama_cpp"]["build_number"], "build_commit": pins["llama_cpp"]["commit"],
+                   "frozen_b_mib": frozen_b},
         "jobs": jobs,
     }
 

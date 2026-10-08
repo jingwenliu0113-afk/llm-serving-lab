@@ -157,7 +157,23 @@ def test_formal_mode_requires_matching_freeze(pins):
         plan(unfrozen, mode="formal", platform="wsl2-cuda")
     frozen = copy.deepcopy(pins)
     frozen["freeze"]["mac"] = True
-    assert plan(frozen, mode="formal")["mode"] == "formal"
+    assert plan(frozen, mode="formal", seed=20261008)["mode"] == "formal"
+
+
+def test_formal_plans_use_the_frozen_seed_and_platform_parameters(pins):
+    """§4: formal seed 20261008; Mac N_thr 8 / P 0; RTX N_thr / P from pins [stage_b] (refused until P is set)."""
+    frozen = copy.deepcopy(pins)
+    frozen["freeze"]["mac"] = frozen["freeze"]["nvidia"] = True
+    with pytest.raises(cp.PlanError, match="seed"):
+        plan(frozen, mode="formal", seed=1)
+    with pytest.raises(cp.PlanError, match="N_thr / P"):
+        plan(frozen, mode="formal", seed=20261008, poll=50)
+    with pytest.raises(cp.PlanError, match="rtx_poll"):
+        plan(frozen, mode="formal", seed=20261008, platform="wsl2-cuda", n_thr=6, poll=0)  # P not decided yet
+    frozen["stage_b"]["rtx_poll"] = 0
+    p = plan(frozen, mode="formal", seed=20261008, platform="wsl2-cuda", n_thr=6, poll=0)
+    assert p["expect"]["frozen_b_mib"] == frozen["stage_b"]["b_mib"]
+    assert plan(pins, mode="pilot", seed=7, n_thr=4, poll=50)["mode"] == "pilot"  # pilots are free
 
 
 def test_unknown_platform_rejected(pins):
