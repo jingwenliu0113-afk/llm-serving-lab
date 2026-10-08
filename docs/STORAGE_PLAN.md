@@ -72,7 +72,7 @@ source safetensors 的刪除由 `scripts/produce_gguf.py delete-source` 強制�
 
 | 內容 | 位置 | 等級 |
 |---|---|---|
-| 專案副本與 Python 環境 | `/home/wenn0113/llm-serving-lab/`（`.venv` 由 user scope 的 `uv` 建立） | 程式由 Mac 同步，Git 只在 Mac |
+| 專案副本與 Python 環境 | `/home/wenn0113/llm-serving-lab/`（`.venv` 由 user scope 的 `uv` 建立） | 程式由 Mac 以 `scripts/deploy_bundle.py` 部署（乾淨 HEAD + `DEPLOYED_COMMIT` + `DEPLOY_MANIFEST.json`，env_capture 會驗證），Git 只在 Mac |
 | HF cache（Core B checkpoint） | `HF_HOME=/home/wenn0113/.cache/huggingface` | W（Core B 期間保留） |
 | Core A 的 quantized GGUF（由 Mac 傳過去，以 sha256 驗證） | `/home/wenn0113/llm-serving-lab/models/gguf/` | W |
 | uv 本體 / Python / cache | `~/.local/bin/uv`、`~/.local/share/uv/`、`~/.cache/uv/` | 工具 |

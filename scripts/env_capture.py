@@ -130,6 +130,23 @@ def default_run(cmd: list) -> CmdResult | None:
     return CmdResult(proc.returncode, proc.stdout, proc.stderr)
 
 
+def _file_sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def parse_deployed_commit(text: str) -> tuple:
+    """DEPLOYED_COMMIT = full 40-hex sha. Anything else is kept as a note, never as the commit."""
+    text = text.strip()
+    token, _, rest = text.partition(" ")
+    if re.fullmatch(r"[0-9a-f]{40}", token):
+        return token, (rest.strip() or None)
+    return None, (text or None)
+
+
 def _read_text(path: str) -> str:
     return Path(path).read_text(errors="replace")
 
@@ -269,6 +286,7 @@ def capture(
     env: Mapping[str, str] | None = None,
     run: Runner = default_run,
     read_file: Callable[[str], str] = _read_text,
+    file_sha256: Callable[[str], str] = _file_sha256,
     path_exists: Callable[[str], bool] = os.path.exists,
     now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.timezone.utc),
     loadavg: Callable[[], tuple] = os.getloadavg,
@@ -313,13 +331,38 @@ def capture(
         "source": "git" if head else None,
     }
     if not head:
-        # Remote copies are deployed with `git archive` and a DEPLOYED_COMMIT file (no .git).
+        # Remote copies are deployed as a bundle (scripts/deploy_bundle.py): DEPLOYED_COMMIT
+        # holds the full sha, DEPLOY_MANIFEST.json the sha256 of every deployed file.
         try:
             deployed = read_file(f"{repo_dir}/DEPLOYED_COMMIT").strip()
         except OSError:
             deployed = ""
         if deployed:
-            repo.update({"commit": deployed, "source": "DEPLOYED_COMMIT"})
+            commit, note = parse_deployed_commit(deployed)
+            repo.update({"commit": commit, "source": "DEPLOYED_COMMIT"})
+            if note:
+                repo.update({"deployed_note": note, "dirty": True})
+            try:
+                manifest = json.loads(read_file(f"{repo_dir}/DEPLOY_MANIFEST.json"))
+            except OSError:
+                manifest = None
+            except ValueError as exc:
+                errors.append(f"DEPLOY_MANIFEST.json: unreadable: {exc}")
+                manifest = None
+            if manifest is not None:
+                changed = []
+                for rel, want in sorted(manifest.get("files", {}).items()):
+                    try:
+                        got = file_sha256(f"{repo_dir}/{rel}")
+                    except (OSError, KeyError):
+                        changed.append(f" D {rel}")
+                        continue
+                    if got != want:
+                        changed.append(f" M {rel}")
+                if manifest.get("commit") != commit:
+                    errors.append(f"DEPLOY_MANIFEST.json commit {manifest.get('commit')} != DEPLOYED_COMMIT {commit}")
+                repo["status"] = changed
+                repo["dirty"] = bool(changed) or bool(note) or manifest.get("commit") != commit
 
     # os / hardware / power
     os_info: dict = {"system": system_name, "release": platform.release(), "machine": platform.machine(), "wsl": False}

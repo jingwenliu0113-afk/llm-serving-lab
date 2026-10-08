@@ -664,18 +664,51 @@ def test_vllm_probe_runs_and_is_parsed(tmp_path):
     assert not any(e.startswith("vllm") for e in rec["probe_errors"])
 
 
+SHA = "1d952c2" + "0" * 33
+
+
 def test_capture_falls_back_to_deployed_commit_file():
-    # Remote copies are deployed with `git archive` + DEPLOYED_COMMIT (no .git).
-    system = FakeSystem(files={"REPO/DEPLOYED_COMMIT": "1d952c2 + uncommitted benchmarks/coreb_smoke.py\n"})
+    # Remote copies are deployed as a bundle with DEPLOYED_COMMIT (+ manifest), no .git.
+    system = FakeSystem(files={"REPO/DEPLOYED_COMMIT": SHA + "\n"})
     rec = capture(system, "Linux")
-    assert rec["repo"] == {
-        "commit": "1d952c2 + uncommitted benchmarks/coreb_smoke.py",
-        "dirty": None,
-        "status": None,
-        "source": "DEPLOYED_COMMIT",
-    }
+    assert rec["repo"] == {"commit": SHA, "dirty": None, "status": None, "source": "DEPLOYED_COMMIT"}
     # the git failure is still reported, not hidden
     assert any("git rev-parse" in e for e in rec["probe_errors"])
+
+
+def test_deployed_commit_free_text_is_not_a_commit():
+    """Review F12: a hot-patch note must not be recorded as a clean commit."""
+    system = FakeSystem(files={"REPO/DEPLOYED_COMMIT": SHA + " + uncommitted benchmarks/coreb_smoke.py\n"})
+    repo = capture(system, "Linux")["repo"]
+    assert repo["commit"] == SHA and repo["dirty"] is True
+    assert repo["deployed_note"] == "+ uncommitted benchmarks/coreb_smoke.py"
+    system = FakeSystem(files={"REPO/DEPLOYED_COMMIT": "1d952c2 + patch\n"})
+    repo = capture(system, "Linux")["repo"]
+    assert repo["commit"] is None and repo["dirty"] is True and repo["deployed_note"] == "1d952c2 + patch"
+
+
+def _manifest(files, commit=SHA):
+    return json.dumps({"commit": commit, "files": files})
+
+
+def test_deploy_manifest_verifies_files():
+    files = {"benchmarks/coreb_smoke.py": "aa" * 32, "scripts/env_capture.py": "bb" * 32}
+    hashes = {"REPO/benchmarks/coreb_smoke.py": "aa" * 32, "REPO/scripts/env_capture.py": "bb" * 32}
+    system = FakeSystem(files={"REPO/DEPLOYED_COMMIT": SHA + "\n", "REPO/DEPLOY_MANIFEST.json": _manifest(files)})
+    repo = capture(system, "Linux", file_sha256=hashes.__getitem__)["repo"]
+    assert repo["dirty"] is False and repo["status"] == []
+
+    hashes["REPO/benchmarks/coreb_smoke.py"] = "cc" * 32  # hot-patched after deploy
+    repo = capture(system, "Linux", file_sha256=hashes.__getitem__)["repo"]
+    assert repo["dirty"] is True and repo["status"] == [" M benchmarks/coreb_smoke.py"]
+
+
+def test_deploy_manifest_for_another_commit_is_dirty():
+    system = FakeSystem(files={"REPO/DEPLOYED_COMMIT": SHA + "\n",
+                               "REPO/DEPLOY_MANIFEST.json": _manifest({}, commit="f" * 40)})
+    rec = capture(system, "Linux", file_sha256=lambda p: "")
+    assert rec["repo"]["dirty"] is True
+    assert any("DEPLOY_MANIFEST" in e for e in rec["probe_errors"])
 
 
 def test_capture_repo_source_is_git_when_available():
