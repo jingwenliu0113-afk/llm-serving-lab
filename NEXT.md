@@ -148,17 +148,45 @@
 ## Blocked
 
 - ~~`ssh gpu-server`~~ → **resolved**（2026-10-08）。
-- **遠端 C compiler / CUDA toolkit（需使用者以 sudo 安裝）**：2026-10-08 22:05 唯讀檢查，gcc / cc / g++ / make / nvcc 仍不存在。
-  - Core B 的 S1 smoke 已確認卡在缺 C compiler。
-  - llama.cpp CUDA build 需要 `cuda-toolkit-12-8`。
-
-  ```bash
-  sudo apt-get update && sudo apt-get install -y build-essential
-  wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
-  sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt-get update
-  sudo apt-get install -y cuda-toolkit-12-8     # 002：只裝 toolkit，不要裝 Linux driver
-  ```
+- **遠端 C compiler（需使用者以 sudo 安裝；2026-10-08 22:05 檢查：gcc / cc / g++ / make / nvcc 都不存在）**
+  - S1 失敗的原因：Triton 在 profile_run 時要編譯 `CudaUtils` 的 C stub，找不到 C compiler。
+  - 2026-10-08 的盤點（唯讀 workflow，加上兩個對抗式驗證，在隔離環境模擬 apt）得出 Core B **唯一**需要 sudo 的是 `gcc g++ libc6-dev`：
+    - `g++` 是 FlashInfer sampling JIT 需要的 host / link compiler。
+    - `libc6-dev` 提供 C headers 與 crt。
+    - 不需要：`python3-dev`（uv 的 CPython 自帶 `Python.h`）、apt cmake、ninja（cmake 用 uvx，ninja 用 venv 內的），
+      以及任何給 vLLM 用的 apt CUDA。
+  - 裝完 compiler 之後的下一關：vLLM 的 V2 warmup 一定會 JIT 編譯 FlashInfer sampling module，需要 CUDA ≥ 12.9 的 nvcc、
+    cuRAND headers，PATH 上也要有 ninja。
+    - 預計不需要 sudo：venv 已 hash-lock 的 pip nvcc 13.4.92（`nvidia/cu13`，含 `curand*.h`）。
+      建一個 user-space `CUDA_HOME` shim，launcher 設定 `CUDA_HOME` 並把 `.venv/bin` 放在 PATH 最前面；
+      nvcc **不放進 PATH**，以免改變 vLLM 的 `has_flashinfer()`。
+    - 這會改變 Core B 的啟動 env，寫 decision 014，再從新的 session 目錄重跑 S1。
+  - llama.cpp CUDA build（Core A RTX）另外需要 NVIDIA keyring、`make`，以及 CUDA 12.8 的最小子集（nvcc 12.8.93 與 cuBLAS 12.8.5.5，
+    版本與完整 toolkit 相同），約 2.3 GiB。完整的 `cuda-toolkit-12-8` 至少 7.76 GiB，還會帶入 JRE / X11。這要在 002 補 addendum。
 
 ## 待使用者處理
 
-1. 執行上面的 sudo 安裝。`build-essential` 是 Core B 的直接 blocker；CUDA toolkit 是 RTX 端 llama.cpp 的 blocker。
+在 **WSL Ubuntu-22.04 的終端機**內執行（桌機直接開 Ubuntu，或從 Mac 執行 `ssh -t gpu-server wsl.exe -d Ubuntu-22.04`）。
+sudo 密碼由使用者自己輸入。避免在其他專案於 WSL 跑正式 GPU 工作時執行，因為 `libc6` 會從 2.35-0ubuntu3.13 升到 3.15。
+不要裝 `cuda`、`cuda-drivers`、`nvidia-driver-*`（WSL 的 driver 由 Windows 提供），也不要 `apt upgrade`。
+
+1. **Core B 必要**（下載約 58.5 MiB）：
+
+   ```bash
+   sudo apt-get -o DPkg::Lock::Timeout=300 update && sudo apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends gcc g++ libc6-dev
+   ```
+
+2. **llama.cpp CUDA build（Core A RTX）**：建議在同一次接著裝，讓 S1–S3 前後的環境一致。下載約 986 MiB，安裝約 2.3 GiB。
+
+   ```bash
+   wget -q -O /tmp/cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb && echo 'eea6cc5f0eaeb99082d054b8c05ae206a378e31e88048df0310d59f651dceed2  /tmp/cuda-keyring_1.1-1_all.deb' | sha256sum -c - && sudo dpkg -i /tmp/cuda-keyring_1.1-1_all.deb
+   ```
+
+   ```bash
+   sudo apt-get -o DPkg::Lock::Timeout=300 update && sudo apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends make cuda-nvcc-12-8=12.8.93-1 cuda-cudart-dev-12-8=12.8.90-1 cuda-driver-dev-12-8=12.8.90-1 cuda-cccl-12-8=12.8.90-1 libcublas-dev-12-8=12.8.5.5-1 libcublas-12-8=12.8.5.5-1
+   ```
+
+3. 裝完告訴我。之後的驗證全部不需要 sudo，依序是：
+   - NVIDIA / CUDA toolchain；
+   - project WSL env（含 CUDA_HOME shim 與 FlashInfer JIT 預編譯）；
+   - vLLM 啟動與 S1（2K）smoke。
