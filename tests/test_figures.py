@@ -37,3 +37,60 @@ def test_memory_figure_from_pilot_rows():
     assert series["4B-Q8_0"] == [(2048, 4300 + 32 + 300), (8192, 4300 + 128 + 300), (32768, 4300 + 512 + 300)]
     svg = cf.memory_figure(rows, platform_label="M4 Pro (Metal)")
     assert "llama.cpp memory breakdown" in svg and "M4 Pro (Metal)" in svg
+
+
+# ------------------------------------------------- latency / frontier / Core B figures --
+
+def test_decode_and_prefill_series_from_process_level_cells():
+    from test_core_a_analysis import grid, ideal_decode, ideal_ttft
+
+    rows = grid(ideal_decode, ideal_ttft)
+    dec = cf.speed_series(rows, metric="decode")
+    assert set(dec) == {f"{s}-{q}" for s in ("4B", "9B") for q in ("Q8_0", "Q6_K", "Q4_K_M")}
+    assert [L for L, _ in dec["4B-Q8_0"]] == [2048, 8192, 32768]
+    assert dec["4B-Q8_0"][0][1] > dec["4B-Q8_0"][-1][1]  # decode slows down with context
+    pre = cf.speed_series(rows, metric="prefill")
+    assert pre["9B-Q4_K_M"][0][1] > 0
+    svg = cf.speed_figure(rows, metric="decode", platform_label="RTX 5070 Ti (CUDA)")
+    assert "decode" in svg and "RTX 5070 Ti (CUDA)" in svg
+
+
+def test_frontier_points_pair_kld_with_decode_speed():
+    from test_core_a_analysis import grid, ideal_decode, ideal_ttft
+
+    core_a_rows = grid(ideal_decode, ideal_ttft)
+    quality_rows = [{"kind": "kld", "size": s, "point": q, "outcome": "ok", "metrics": {"kld_mean": k}}
+                    for (s, q), k in {("4B", "Q8_0"): 0.002, ("4B", "Q4_K_M"): 0.03, ("9B", "Q8_0"): 0.001}.items()]
+    quality_rows.append({"kind": "kld", "size": "4B", "point": "Q8_0", "outcome": "ok", "variant": "fa_off",
+                         "metrics": {"kld_mean": 9.9}})
+    pts = cf.frontier_points(core_a_rows, quality_rows, L=2048)
+    assert set(pts) == {"4B-Q8_0", "4B-Q4_K_M", "9B-Q8_0"}  # only configs with both measurements
+    assert pts["4B-Q8_0"][0][1] == 0.002 and pts["4B-Q4_K_M"][0][0] > pts["4B-Q8_0"][0][0]
+    svg = cf.frontier_figure(core_a_rows, quality_rows, platform_label="M4 Pro (Metal)")
+    assert "KLD" in svg
+
+
+def test_latency_figures_only_from_valid_formal_sessions(tmp_path, capsys):
+    import json
+
+    (tmp_path / "plan.json").write_text(json.dumps({"jobs": []}))
+    (tmp_path / "rows.jsonl").write_text("")
+    (tmp_path / "session.json").write_text(json.dumps({"mode": "pilot", "env_valid": True,
+                                                       "sentinel": {"drift": False}}))
+    assert cf.main(["decode", "--session", str(tmp_path), "--platform-label", "x",
+                    "--out", str(tmp_path / "d.svg")]) == 2
+    assert "formal" in capsys.readouterr().err and not (tmp_path / "d.svg").exists()
+
+
+def test_core_b_series_and_figure():
+    import core_b_figures as bf
+
+    cells = {f"uniform-{L}-{C}": {"n_valid": 3, "output_throughput": 100.0 * min(C, k), "p95_ttft_ms": 50.0 * C,
+                                  "p95_tpot_ms": 10 + C, "kv_cache_usage_peak_max": 0.5, "preemptions_total": 0}
+             for L, k in ((2048, 22), (8192, 8)) for C in (1, 2, 4, 8, 16, 32)}
+    cells["mixed-2048-22"] = {"n_valid": 3, "output_throughput": 1.0, "p95_ttft_ms": 1.0, "p95_tpot_ms": 1.0}
+    analysis = {"cells": cells, "hypotheses": {"H-B1": {"units": [{"L": 2048, "c_knee": 22}, {"L": 8192, "c_knee": 8}]}}}
+    s = bf.series(analysis, "p95_ttft_ms")
+    assert set(s) == {"L=2048", "L=8192"} and s["L=2048"][0] == (1, 50.0) and len(s["L=2048"]) == 6
+    svg = bf.figure(analysis, "p95_ttft_ms", platform_label="RTX 5070 Ti")
+    assert "P95 TTFT" in svg and "C_knee" in svg and "L=8192" in svg
