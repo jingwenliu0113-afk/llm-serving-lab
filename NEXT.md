@@ -58,13 +58,15 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
   `/metrics` 的三個 metric 名稱都存在。
 - WSL 會在 wsl.exe 結束時終止背景 process，所以遠端長時間工作都在 ssh 前景執行（`ServerAliveInterval`）。
 - Mac ↔ 桌機約 0.7–0.9 MB/s，而且會斷線。GGUF 傳輸已改成可續傳（`sync_gguf_to_wsl.py`）。
-  02:37 起在 Mac lock 下傳輸（可續傳）。已在遠端驗證的有：**4B-Q8_0（03:25）、4B-Q4_K_M（03:5x）**，約 1.6 MB/s。
-  其餘依序為 9B-Q8_0 → 4B-Q6_K → 9B-Q6_K → 9B-Q4_K_M。
+  02:37 起在 Mac lock 下傳輸（可續傳）。已在遠端驗證的有：**4B-Q8_0、4B-Q4_K_M、9B-Q8_0（04:5x）**，約 1.6–2.4 MB/s。
+  其餘依序為 4B-Q6_K → 9B-Q6_K → 9B-Q4_K_M。
 - **C_ctx = −89 MiB**（03:54，依 009 規則；照實記錄，說明見 §6）。spill 規則用到的 B + C_ctx = 722 MiB。
-- 已排隊（背景，GPU lock 下）：
-  - 9B-Q8_0 到齊後跑超量測試（`stage_b.py overflow`）。
-  - 6 個 quant 到齊後跑 RTX Core A pilot（`--n-thr 6`；決定 P，填入 `[stage_b] rtx_poll`）。
-- GitHub push 因上行頻寬被占滿而連不上（port 443 逾時），背景每 5 分鐘重試一次。本機 commit 都已完成。
+- **sysmem 超量測試：spill，不是 hard OOM**（04:56）。9B-Q8_0 搭配 `-c 262144` 時，self 16,788 MiB，超過 16,275 MiB 的卡，
+  process 正常結束。RTX 的 fit 判定照 004 的 spill 規則；規則不變。
+- **HAGS 開啟**；`.wslconfig` 為 memory=31GB、swap=8GB。
+  - 從 Windows 端唯讀查詢。WSL interop 執行 `.exe` 會出現 `Exec format error`，屬於系統設定，不修改。
+- 已排隊（背景，GPU lock 下）：6 個 quant 到齊後跑 RTX Core A pilot（`--n-thr 6`；決定 P，填入 `[stage_b] rtx_poll`）。
+- GGUF 傳輸會占滿上行頻寬，GitHub 的 TLS 連線因此逾時。現在 push 時會先短暫暫停 sender（SIGSTOP / SIGCONT，傳輸不中斷）。
 
 ## 下一步（依序；Mac 重負載經 `tools/with-mac-lock`，GPU 重負載經 `flock -n`，不搶 lock）
 
@@ -73,7 +75,7 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
    3. Stage B 量測（進行中），全部在 GPU lock 下：
       - `stage_b.py baseline` 量 B，依 017 算出 U。
       - `coreb_stage_b.py boots` 取得 JIT 冷 / 熱時間與 K。
-      - `stage_b.py cctx` 與 `overflow`。
+      - ~~`stage_b.py cctx` 與 `overflow`~~ ✅（C_ctx −89 MiB；spill）。
       - `coreb_stage_b.py pin-ab`，同時取得 num_gpu_blocks / block_size。
    4. RTX Core A pilot：`core_a_pilot.py plan --platform wsl2-cuda --sizes 4B 9B --n-thr 6`，在 lock 下跑，決定 P。
    5. 填 §6 → `freeze.nvidia = true` → 正式 Core A（RTX）與 Core B（uniform → 由 `core_b_plan.py mixed` 產生 mixed plan → report / 圖）。
