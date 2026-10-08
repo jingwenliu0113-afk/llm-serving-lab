@@ -109,14 +109,15 @@
 | 項目 | 位置 | 狀態 |
 |---|---|---|
 | 4B GGUF ×4 | Mac `models/gguf/` | ✅ pin + recipe；safetensors 已依規則刪除 |
-| 9B safetensors（19.33 GB） | Mac `models/hf/Qwen__Qwen3.5-9B@c2022362/` | ⏳ shard 1–3 已驗證 sha256；shard 4（約 3.35 GB）下載中，22:00 時約 1.27 GB。網路不穩（curl 自動續傳 / 重試），完成後 log 會出現 `ALL_SHARDS_VERIFIED`（scratchpad `fetch_9b.log`） |
+| 9B safetensors（19.33 GB） | Mac `models/hf/Qwen__Qwen3.5-9B@c2022362/` | ⏳ shard 1–3 已驗證 sha256；shard 4（約 3.35 GB）下載中，22:07 時約 2.03 GB。網路不穩（curl 自動續傳 / 重試），完成後 log 會出現 `ALL_SHARDS_VERIFIED`（scratchpad `fetch_9b.log`） |
 | Core B checkpoint | WSL HF cache | ✅ sha256 已驗證 |
 
 ## 下一步（依序；Mac 重負載都經 `tools/with-mac-lock`）
 
 1. ~~4B 的 `-fa auto` probe 以 `-lv 4` 重跑~~ → ✅ 已完成並 push。
 2. 9B 下載完成後，依序執行：
-   - scratchpad 的 `batch_9b.sh`：`produce --size 9B`。
+   - scratchpad 的 `batch_9b.sh`：`produce --size 9B`。**已排隊**（`queue_9b.sh`）：等 `ALL_SHARDS_VERIFIED` 之後，每 2 分鐘試一次
+     `tools/with-mac-lock`；lock 被占用就放棄該次（22:07 時由 incident-investigator 的 `env soak` 持有），不等待、不碰 lock。
    - commit pins 與 recipe。
    - `batch_9b_pilot.sh`：
      - delete-source；
@@ -147,7 +148,7 @@
 ## Blocked
 
 - ~~`ssh gpu-server`~~ → **resolved**（2026-10-08）。
-- **遠端 C compiler / CUDA toolkit（需使用者以 sudo 安裝）**：
+- **遠端 C compiler / CUDA toolkit（需使用者以 sudo 安裝）**：2026-10-08 22:05 唯讀檢查，gcc / cc / g++ / make / nvcc 仍不存在。
   - Core B 的 S1 smoke 已確認卡在缺 C compiler。
   - llama.cpp CUDA build 需要 `cuda-toolkit-12-8`。
 
