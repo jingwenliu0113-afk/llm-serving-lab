@@ -104,3 +104,21 @@ def test_cli_requires_the_gpu_lock(tmp_path, capsys):
     assert sb.main(["boots", "--b-mib", "380", "--v-total-mib", "16303", "--gdn-prefill-backend", "triton",
                     "--out", str(tmp_path / "b")]) == 2
     assert "gpu-lock-held" in capsys.readouterr().err
+
+
+def test_bench_check_runs_one_uniform_bench_on_the_smoke_server_and_finds_the_metrics(tmp_path, pins):
+    """003 gate step 5: `vllm bench serve` completes and writes its JSON; /metrics exposes KV usage, preemptions
+    and cache_config_info. Uses the 008 smoke server (a tool check, not a measurement)."""
+    w = World(tmp_path)
+    rec = sb.run_bench_check(pins, out=tmp_path / "bc", gdn_prefill_backend="triton", popen=w.popen,
+                             signal_group=w.signal_group, group_alive=w.group_alive, http_get=w.http_get,
+                             run_bench=w.run_bench, now=w.now, sleep=w.sleep, toolchain_check=lambda env: [],
+                             compute_apps=lambda: [])
+    argv = w.started[0]
+    assert argv[argv.index("--max-num-seqs") + 1] == "8" and argv[argv.index("--max-model-len") + 1] == "2048"
+    assert argv[2] == pins["core_b"]["repo"]  # served model name == the bench client's --model
+    assert w.bench_calls == [(2048, 4)]
+    assert rec["bench"]["ok"] is True and rec["metrics_found"] == {
+        "vllm:kv_cache_usage_perc": True, "vllm:num_preemptions_total": True, "vllm:cache_config_info": True}
+    assert rec["gate_step5_ok"] is True and w.signals  # the server was torn down
+    assert json.loads((tmp_path / "bc" / "result.json").read_text())["gate_step5_ok"] is True

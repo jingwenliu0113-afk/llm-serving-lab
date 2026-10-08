@@ -8,6 +8,8 @@ GPU process runs; never overwrites.
           boot 1 is cold, boot 2 warm (same caches). Records the time from start to /health 200
           (003 #3: JIT time, cache effective on the second boot) and K = the warm boot's
           'Available KV cache memory' floored to 256 MiB (017; the cold boot is the discarded one).
+  bench-check  003 gate step 5 on the 008 smoke server (S1 settings): one uniform L = 2048, C = 4 `vllm bench
+          serve` run completes and validates, and /metrics has the KV-usage / preemption / cache-config metrics.
   pin-ab  VLLM_WSL2_ENABLE_PIN_MEMORY 0 then 1 (003 #4), each one boot with U and K: uniform L = 2048,
           C = 1 and C = 16, 3 `vllm bench serve` runs each; 1 only if >= 5 % faster at both C and every
           group's run-to-run CV < 3 % (003 rule). Also records /metrics cache_config (num_gpu_blocks,
@@ -165,16 +167,63 @@ def run_pin_ab(pins: dict, *, out: Path, gpu_memory_utilization: str, kv_cache_m
     return rec
 
 
+BENCH_CHECK_L, BENCH_CHECK_C = 2048, 4
+REQUIRED_METRICS = ("vllm:kv_cache_usage_perc", "vllm:num_preemptions_total", "vllm:cache_config_info")
+
+
+def run_bench_check(pins: dict, *, out: Path, gdn_prefill_backend: str, popen: Callable, signal_group: Callable,
+                    group_alive: Callable, http_get: Callable, run_bench: Callable, now: Callable, sleep: Callable,
+                    toolchain_check: Callable = bp.toolchain_problems, compute_apps: Callable = nvidia_compute_apps,
+                    base_env=None, vllm_bin: str = ".venv/bin/vllm", startup_timeout_s: float = 3600) -> dict:
+    """003 gate step 5: `vllm bench serve` completes and writes its JSON, and /metrics exposes the KV-usage,
+    preemption and cache-config metrics (names used by run_core_b). Runs on the 008 smoke server (S1 settings:
+    --max-model-len 2048, --max-num-seqs 8, --gpu-memory-utilization 0.85): a tool check, not a measurement."""
+    out = Path(out)
+    argv, env = smoke.serve_command(vllm_bin=vllm_bin, model=pins["core_b"]["repo"], revision=pins["core_b"]["revision"],
+                                    stage=smoke.STAGES[0], gdn_prefill_backend=gdn_prefill_backend, port=PORT,
+                                    base_env=dict(os.environ if base_env is None else base_env))
+    _precheck(env, toolchain_check=toolchain_check, compute_apps=compute_apps, out=out)
+    (out / "raw").mkdir(parents=True)
+    proc, startup_s = _boot(argv, env, out / "raw" / "server.log", popen=popen, http_get=http_get, now=now,
+                            sleep=sleep, timeout_s=startup_timeout_s)
+    bench, found, sampled = {"ok": False, "reasons": ["server not ready"]}, {}, None
+    try:
+        if startup_s is not None:
+            name = "bench-check.json"
+            bargv = bp.bench_argv(pins, L=BENCH_CHECK_L, C=BENCH_CHECK_C, mix="uniform", result_dir=str(out / "raw"),
+                                  result_filename=name, port=PORT, vllm_bin=vllm_bin)
+            sampler = rb.MetricsSampler(http_get, f"http://127.0.0.1:{PORT}/metrics", 1.0)
+            sampler.start()
+            rc = run_bench(bargv, out / "raw" / "bench-check.log", {**os.environ, **bp.bench_env()})
+            sampled = sampler.stop()
+            path = out / "raw" / name
+            bench = (rb.summarize_result(json.loads(path.read_text()), L=BENCH_CHECK_L, C=BENCH_CHECK_C, mix="uniform")
+                     if rc == 0 and path.is_file() else {"ok": False, "reasons": [f"bench exit {rc}"]})
+            code, text = http_get(f"http://127.0.0.1:{PORT}/metrics")
+            names = {line.split("{")[0].split(" ")[0] for line in text.splitlines()
+                     if line and not line.startswith("#")} if code == 200 else set()
+            found = {m: m in names for m in REQUIRED_METRICS}
+    finally:
+        teardown = smoke._shutdown(proc, signal_group=signal_group, group_alive=group_alive, now=now, sleep=sleep)
+    rec = {"argv": argv, "server_env": bp.recorded_env(env), "startup_s": startup_s, "teardown_problems": teardown,
+           "bench": bench, "metrics_found": found, "metrics_sampled": sampled,
+           "gate_step5_ok": bool(bench.get("ok") and found and all(found.values()))}
+    rb.write_raw_manifest(out)
+    (out / "result.json").write_text(json.dumps(rec, indent=1) + "\n")
+    return rec
+
+
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("boots")
     p.add_argument("--b-mib", type=float, required=True)
     p.add_argument("--v-total-mib", type=float, required=True)
+    c = sub.add_parser("bench-check")
     q = sub.add_parser("pin-ab")
     q.add_argument("--gpu-memory-utilization", required=True)
     q.add_argument("--kv-cache-memory-bytes", type=int, required=True)
-    for x in (p, q):
+    for x in (p, q, c):
         x.add_argument("--gpu-lock-held", action="store_true")
         x.add_argument("--gdn-prefill-backend", required=True, choices=["triton", "flashinfer"])
         x.add_argument("--vllm-bin", default=".venv/bin/vllm")
@@ -193,6 +242,10 @@ def main(argv: list | None = None) -> int:
             rec = run_boots(pins, out=Path(args.out), v_total_mib=args.v_total_mib, b_mib=args.b_mib, **common)
             print(json.dumps({k: rec[k] for k in ("gpu_memory_utilization", "cache_effective", "kv_cache_memory_bytes")}
                              | {"startup_s": [b["startup_s"] for b in rec["boots"]]}))
+        elif args.cmd == "bench-check":
+            rec = run_bench_check(pins, out=Path(args.out), run_bench=rb.default_run_bench, **common)
+            print(json.dumps({k: rec[k] for k in ("gate_step5_ok", "metrics_found", "startup_s")}
+                             | {"bench_ok": rec["bench"].get("ok"), "reasons": rec["bench"].get("reasons")}))
         else:
             rec = run_pin_ab(pins, out=Path(args.out), gpu_memory_utilization=args.gpu_memory_utilization,
                              kv_cache_memory_bytes=args.kv_cache_memory_bytes, run_bench=rb.default_run_bench, **common)
