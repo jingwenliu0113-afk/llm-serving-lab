@@ -121,23 +121,23 @@ source_revision = "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
 
 [core_a.models.reference]
 filename = "Qwen3.5-9B-BF16.gguf"
-sha256 = ""
-size_bytes = 0
+sha256 = "d7ad929610505f870b3bb7a8dc8cff3cb472f5876538059220fbb1b01174b2e9"
+size_bytes = 17920697312
 
 [core_a.models.files.Q8_0]
 filename = "Qwen3.5-9B-Q8_0.gguf"
-sha256 = ""
-size_bytes = 0
+sha256 = "19aab081cfac94e7c861a662f9a8efc8959b18c5c05f5162bf2ae108e5755783"
+size_bytes = 9527501792
 
 [core_a.models.files.Q6_K]
 filename = "Qwen3.5-9B-Q6_K.gguf"
-sha256 = ""
-size_bytes = 0
+sha256 = "4203c13192721bab3b2f7c8af1b2c1bfba6147549242efcae62c8e83648aad82"
+size_bytes = 7359259616
 
 [core_a.models.files.Q4_K_M]
 filename = "Qwen3.5-9B-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 0
+sha256 = "27152c4ef594a908cabfcc6efc09c864763e9e1fb56ca71a3b2c9e247bebda22"
+size_bytes = 5629109216
 
 # -------------------------------------------------------------------- Core B --
 

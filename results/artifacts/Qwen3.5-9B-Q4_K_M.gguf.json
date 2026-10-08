@@ -1,0 +1,50 @@
+{
+ "schema_version": 1,
+ "kind": "quantize",
+ "size": "9B",
+ "quant": "Q4_K_M",
+ "inputs": [
+  {
+   "filename": "Qwen3.5-9B-BF16.gguf",
+   "sha256": "d7ad929610505f870b3bb7a8dc8cff3cb472f5876538059220fbb1b01174b2e9"
+  }
+ ],
+ "argv": [
+  "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/third_party/llama.cpp/build-metal/bin/llama-quantize",
+  "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/models/gguf/Qwen3.5-9B-BF16.gguf",
+  "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/models/gguf/.tmp/Qwen3.5-9B-Q4_K_M.gguf",
+  "Q4_K_M"
+ ],
+ "toolchain": {
+  "llama_cpp": {
+   "version": "0.5.0",
+   "build_number": 11146,
+   "commit": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+   "built_with": "AppleClang 21.0.0.21000334 for Darwin arm64"
+  },
+  "llama_cpp_tree": {
+   "head": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+   "dirty": false
+  },
+  "converter_python": "3.12.13",
+  "llama_quantize_sha256": "51e0b5bd7fd9ea6525e458552ec808c8f30fc916362f413fb70658643f4dd1b8",
+  "converter_lock_sha256": "612fbd1aaaab3ae37df340c77e1b4e6291bdf0542477373b28b0d76998f3f08e",
+  "produce_python": "3.12.13"
+ },
+ "output": {
+  "filename": "Qwen3.5-9B-Q4_K_M.gguf",
+  "sha256": "27152c4ef594a908cabfcc6efc09c864763e9e1fb56ca71a3b2c9e247bebda22",
+  "size_bytes": 5629109216,
+  "path": "models/gguf/Qwen3.5-9B-Q4_K_M.gguf"
+ },
+ "started_at": "2026-10-08T15:19:17.799457+00:00",
+ "finished_at": "2026-10-08T15:20:03.279470+00:00",
+ "disk_guard": {
+  "path": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/models/gguf",
+  "free_gib": 116.07,
+  "need_gib": 41.35,
+  "reserve_gib": 50.0,
+  "after_gib": 74.71,
+  "ok": true
+ }
+}
