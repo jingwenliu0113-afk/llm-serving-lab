@@ -235,7 +235,7 @@ def run_session(
                 result = cap.classify_bench(exit_code, stdout, stderr, {**bench_expect, **job["expect"]})
 
             row = {
-                "job_id": jid, "kind": job["kind"], "position": job.get("position"),
+                "job_id": jid, "kind": job["kind"], "position": job.get("position"), "block": job.get("block"),
                 "size": job["size"], "quant": job["quant"], "L": job["L"], "rep": job["rep"], "model": job["model"],
                 "argv": argv, "exit_code": exit_code, "wall_s": wall_s,
                 "outcome": result["outcome"], "stage": result["stage"], "reason": result["reason"],

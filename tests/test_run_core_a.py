@@ -294,3 +294,16 @@ def test_nvidia_smi_sampler_without_nvidia_smi(tmp_path, monkeypatch):
     sampler = rc.NvidiaSmiSampler(tmp_path / "gpumem.txt")
     sampler.start()
     assert sampler.stop() is None
+
+
+def test_pilot_plan_runs_and_rows_carry_the_block(tmp_path):
+    import core_a_pilot as pl
+
+    with (ROOT / "configs" / "pins.toml").open("rb") as fh:
+        pins = tomllib.load(fh)
+    pins["core_a"]["context_lengths"] = [2048]  # keep the test fast
+    plan = pl.build_pilot_plan(pins, platform="wsl2-cuda", sizes=["4B"], n_thr=6)
+    _, summary, rows = run(tmp_path, plan)
+    assert summary["outcomes"]["error"] == 0, [(r["job_id"], r["reason"]) for r in rows if r["outcome"] != "ok"]
+    assert [r["block"] for r in rows] == [j["block"] for j in plan["jobs"]]
+    assert pl.poll_decision(rows)["poll"] == 0

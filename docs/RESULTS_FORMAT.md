@@ -48,6 +48,7 @@ results/core_a/<platform>/<session_id>/
 | `job_id` | 例：`decode-8B-Q4_K_M-2048-r2`、`sentinel-start` |
 | `kind` | `fit` / `ttft` / `decode` / `sentinel` |
 | `position` | sentinel 為 `start` / `end`，其他為 null |
+| `block` | pilot plan 的區塊（`fa_probe` / `poll` / `memory` / `calib` / `sentinel`，`benchmarks/core_a_pilot.py`）；正式 plan 為 null |
 | `size`、`quant`、`L`、`rep`、`model` | cell 與 GGUF 檔名 |
 | `argv` | 實際執行的完整指令（路徑已展開） |
 | `exit_code` | 整數；timeout 為 null |
