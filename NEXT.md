@@ -44,7 +44,13 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
   先前兩次失敗照實保留：沒有 C compiler；FlashInfer JIT 的 CCCL 版本檢查。後者由 014 補充解決：shim 改用版本一致的 CUDA 13.0（`.venv-fi-cuda130`）。
 - 003 gate 第 1–2 項通過：專案 venv 的 capability 為 (12, 0)，arch list 含 sm_120。
 - **llama.cpp b11146 在 wsl2-cuda 上 verified**（02:07；CUDA 13.4.1 user space，GNU 11.4.0，`CUDA0 RTX 5070 Ti 16275 MiB`）。
-- **Stage B 量測進行中**（02:09 起，在 GPU lock 下，`results/stage_b/20261009/`）：baseline B → boots（U、K、JIT 冷 / 熱）→ pin-memory A/B。
+- **Stage B（2026-10-09 02:09–02:17，GPU lock 下，`results/stage_b/20261009/`）**：
+  - **B = 811 MiB**（60 個 1 Hz 樣本介於 799–811），**V_total = 16,303 MiB**，display_active = Disabled（螢幕不在這張卡上）。
+    HAGS 讀不到（`reg.exe` 沒有回傳值）。依 017，U = **0.91**。
+  - boots 的冷啟動在 vLLM 初始化時失敗：
+    `max_num_seqs (264) exceeds available Mamba cache blocks (134)`（`vllm/config/compilation.py`：FULL CUDA graph 加上 Mamba 層時，
+    要求 max_num_seqs ≤ num_gpu_blocks）。可用 KV 記憶體 2.17 GiB，66,528 tokens，num_gpu_blocks = 134。
+    **見 Blocked 2，需要使用者決定**；Core B 的 Stage B（K、JIT 計時、pin-memory A/B）與正式 Core B 都暫停。
 - WSL 會在 wsl.exe 結束時終止背景 process，所以遠端長時間工作都在 ssh 前景執行（`ServerAliveInterval`）。
 - Mac ↔ 桌機約 0.7–0.9 MB/s，而且會斷線。GGUF 傳輸已改成可續傳（`sync_gguf_to_wsl.py`）。
   為了不讓 GPU 工作的 ssh session 被擠斷，傳輸等 Stage B 結束後再進行。
@@ -78,9 +84,22 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
      - 釋出約 30 GiB 以上的空間；
      - 或同意把 KLD 檔放到外接 / 其他磁碟。
    - 降低 50 GiB 保留量屬於規則變更，我不會自行修改。
-2. **建議（非 blocker）**：Mac 換 ≥ 96 W 的 adapter。
+2. **Core B：`--max-num-seqs 264` 在這張卡上無法啟動（凍結的 §4 / 007，要由使用者決定）**
+   - 原因：Qwen3.5 是 hybrid 模型，每條 decode 序列需要一個 GDN（Mamba）狀態 block，約 50 MiB。
+     vLLM 0.30.0 在 FULL CUDA graph 下要求 max_num_seqs ≤ num_gpu_blocks。
+     U = 0.91 時 num_gpu_blocks = 134；264 條序列光是 GDN 狀態就要 13 GiB 以上，16 GB 卡上不論 U 為何都不可能達成。
+   - 007 選 264 的目的，是讓 knee 不會被 scheduler 上限截斷（grid 上限 256）。
+     實測 num_gpu_blocks = 134 時，依 §2 公式 C_KV(2K) = ⌊133 ÷ 7⌋ = 19、C_KV(8K) = 7、C_KV(32K) = 1，knee 遠低於 128。
+   - 選項（都要寫 decision log，並標明是凍結後、但在任何 Core B 數據之前的變更）：
+     - **(建議) A**：`--max-num-seqs 128`（8 的倍數，且 ≤ num_gpu_blocks），grid 上限從 256 改為 128，其餘規則不變。
+       H-B1 需要 grid 涵蓋 4 × C_knee：以 C_KV 估計約 76 ≤ 128，仍可檢驗。
+     - B：保留 264，改用 PIECEWISE-only 的 CUDA graph（`--compilation-config '{"cudagraph_mode": "PIECEWISE"}'`）。
+       decode 沒有 FULL graph，偏離 vLLM 預設，throughput 會偏低。
+     - C：保留 264，加 `--enforce-eager`。完全沒有 CUDA graph，偏離最大，不建議。
+   - 在決定之前不會跑任何 Core B 的 Stage B 或正式量測；baseline B 已量好，可以沿用。
+3. **建議（非 blocker）**：Mac 換 ≥ 96 W 的 adapter。
    - 016 已讓長 session 在 70 W 下仍有效，但充電暫停會讓正式 Core A 從約 17 h 拉長到約 1.5–2 倍。
-3. **建議（非 blocker）**：正式 Mac run 期間盡量少開前景程式。
+4. **建議（非 blocker）**：正式 Mac run 期間盡量少開前景程式。
    - 4B pilot 時前景負載的 loadavg 為 6–9，CV 5.9%；9B pilot 在深夜，CV 1.0%。
    - 前景負載不會讓 session 作廢，但會增加 noise。
 

@@ -1,0 +1,72 @@
+{
+ "v_total_mib": 16303.0,
+ "b_mib": 811.0,
+ "gpu_memory_utilization": "0.91",
+ "argv": [
+  ".venv/bin/vllm",
+  "serve",
+  "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+  "--revision",
+  "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "--language-model-only",
+  "--dtype",
+  "bfloat16",
+  "--max-model-len",
+  "32768",
+  "--max-num-seqs",
+  "264",
+  "--max-num-batched-tokens",
+  "2048",
+  "--performance-mode",
+  "balanced",
+  "--async-scheduling",
+  "--attention-backend",
+  "FLASH_ATTN",
+  "--gpu-memory-utilization",
+  "0.91",
+  "--no-enable-prefix-caching",
+  "--gdn-prefill-backend",
+  "triton",
+  "--generation-config",
+  "vllm",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "8766"
+ ],
+ "server_env": {
+  "HF_HOME": "/home/wenn0113/.cache/huggingface",
+  "HF_HUB_OFFLINE": "1",
+  "VLLM_GDN_DECODE_KERNEL": "triton",
+  "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+  "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin"
+ },
+ "caches": {
+  "TRITON_CACHE_DIR": "results/stage_b/20261009/boots/cache/triton_cache_dir",
+  "FLASHINFER_WORKSPACE_BASE": "results/stage_b/20261009/boots/cache/flashinfer_workspace_base",
+  "VLLM_CACHE_ROOT": "results/stage_b/20261009/boots/cache/vllm_cache_root"
+ },
+ "boots": [
+  {
+   "boot": "cold",
+   "startup_s": null,
+   "teardown_problems": [],
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 66528,
+    "max_concurrency": 2.03,
+    "max_model_len_logged": 32768
+   },
+   "kv_cache_bytes": 2147483648,
+   "log": "server-cold.log"
+  }
+ ],
+ "cache_effective": false,
+ "kv_cache_memory_bytes": null
+}

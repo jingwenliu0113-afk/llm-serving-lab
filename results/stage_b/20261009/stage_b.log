@@ -1,0 +1,5 @@
+== baseline 02:09:20
+{"b_mib": 811.0, "v_total_mib": 16303, "display_active": "Disabled"}
+== boots B=811.0 V=16303 02:15:22
+{"gpu_memory_utilization": "0.91", "cache_effective": false, "kv_cache_memory_bytes": null, "startup_s": [null]}
+no K from the warm boot
