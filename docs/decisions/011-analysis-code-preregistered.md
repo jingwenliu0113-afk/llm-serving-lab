@@ -43,3 +43,17 @@ CI 的方法）就可能被數據影響。所以判定規則在看到任何數�
 
 - 兩支分析程式與其測試在 Stage A 凍結時一併凍結。凍結後若要改，須寫 decision log 並標明 post-hoc。
 - PREREGISTRATION §5 checklist 增加一項「分析程式已在數據前 commit」。
+
+## 補充（2026-10-08，同日）：Core B 的規則也寫成程式
+
+- `benchmarks/core_b_plan.py`：C_KV、007 的 grid、num-prompts / warmup、每次 restart 的 C 順序、共用 server 設定、
+  `uniform` / `mixed` 的 `vllm bench serve` 指令。
+- `benchmarks/core_b_analysis.py`：C_knee、H-B1（3 倍 / 4 倍涵蓋）、H-B2（[C_KV ÷ 2, 2 × C_KV]，C_KV 超出 grid 只描述）、
+  H-B3（G_TPOT vs G_TTFT）、H-B4（短類 P95 TTFT，≥ 20% 且超出 noise）。
+- 007 文字沒有寫死、在此固定的細節：
+  - grid 的 round(C_KV × 2^(k/2)) 採**四捨五入（x.5 進位）**，不用 Python 的 banker's rounding。
+    例：C_KV = 5 時 k = −2 得 2.5 → 3。
+  - 逐 request 的百分位數用線性內插（與 `vllm bench serve` 回報 P95 的 numpy 預設相同）。
+  - H-B4 的單位：每次 restart 先算短類（input = L − 128）的 P95 TTFT，再對 3 次 restart 取平均與 SE。
+  - `mixed` dataset 用 vLLM 自己的 `RandomDataset` 產生短類與長類，與 `uniform` 同一套產生器，再以 seed 20261008 交錯。
+    N 個 prompt 中長類為 ⌊N ÷ 10⌋ 個（N = max(10C, 200)，必為 10 的倍數）。
