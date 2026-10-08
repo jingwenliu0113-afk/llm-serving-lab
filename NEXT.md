@@ -13,12 +13,8 @@
 
 ### Commit 狀態
 
-- `b5f7414 chore: establish core baseline`（Day 1 的成果，26 個檔案；用 `git archive` 匯出的乾淨副本也測試通過）。
-- baseline 之後的修改**尚未 commit**：
-  - harness：`benchmarks/`、`tests/test_core_a_*`、`tests/test_run_core_a.py`、`tests/fixtures/`
-  - quality 子集工具：`quality/`、`tests/test_mc_subset.py`
-  - `docs/RESULTS_FORMAT.md`、decision 008，以及 pins / docs / MACHINE_POLICY 的更新
-- 目前 `uv run pytest -q`：**150 passed、2 skipped**（skip 的是兩個 freeze 階段的檢查，屬預期）。
+- 所有已驗證的工作都已 commit 並 push 到 private `origin/main`（最新：decision 013 的三個 commit）。
+- 目前 `uv run pytest -q`：**365 passed、2 skipped**（skip 的是兩個 freeze 階段的檢查，屬預期）。
 
 ### 模型重新選擇（decision 008）
 
@@ -87,19 +83,38 @@
   - `produce_gguf` 可以只從 BF16 重新量化。
   - GGUF header reader。
   - Core A report CLI。
-- 目前 `uv run pytest -q`：**336 passed、2 skipped**。
+- **凍結前第二輪 review（decision 013）**，皆在任何數據前修正。vLLM 的兩項已對照 v0.30.0 原始碼確認：
+  - Core B client：
+    - 補 `--temperature 0`（0.30.0 不再預設）。
+    - `mixed` 補 `--custom-output-len 128`（預設 256 會覆蓋每列）。
+    - `--tokenizer` 改用 pinned snapshot，bench 加 `HF_HUB_OFFLINE=1`。
+    - `mixed` dataset 逐列檢查長度。
+  - Core B 分析：
+    - 只計入 `ok` 的 run。
+    - 任一 grid C 缺 3 次有效 restart，該 L 記為 not testable。
+    - plan 的 `str(L)` key 可直接使用。
+  - Core A：
+    - prefill 改為 process-level（先算 L ÷ TTFT 再平均）。
+    - H-A3 的「相鄰」以 32K fit 的配置為準。
+    - 缺 metric 時記為 not testable，不再 crash。
+  - Mac env 紀錄若電源或 thermal 狀態未知，視為 env-invalid。
+  - 分析 CLI 只處理有效的正式 session（pilot / env-invalid / drift 一律拒絕）。
+  - 照實記錄：4B pilot 依 quant 列出的 KLD SE 使 H-A5(b) 的順序在凍結前可推得（規則未改）。
+    之後 pilot 只報每個 size 的最大 SE。
+  - 更正 011 的描述：`mixed` 短類與 `uniform` 分布相同，token 內容不保證相同。
+- 4B `-fa auto` probe 以 `-lv 4` 重跑：三個 quant 都是 "Flash Attention enabled"、graph splits = 2（`pilot-20261008-4b-fa`）。
 
 ### 下載與 artifact
 
 | 項目 | 位置 | 狀態 |
 |---|---|---|
 | 4B GGUF ×4 | Mac `models/gguf/` | ✅ pin + recipe；safetensors 已依規則刪除 |
-| 9B safetensors（19.33 GB） | Mac `models/hf/Qwen__Qwen3.5-9B@c2022362/` | ⏳ shard 1 已驗證；shard 2 下載中，速度約 0.8 MB/s，預計 01:00 前後完成（scratchpad `fetch_9b.log`） |
+| 9B safetensors（19.33 GB） | Mac `models/hf/Qwen__Qwen3.5-9B@c2022362/` | ⏳ shard 1–3 已驗證 sha256；shard 4（約 3.35 GB）下載中，22:00 時約 1.27 GB。網路不穩（curl 自動續傳 / 重試），完成後 log 會出現 `ALL_SHARDS_VERIFIED`（scratchpad `fetch_9b.log`） |
 | Core B checkpoint | WSL HF cache | ✅ sha256 已驗證 |
 
 ## 下一步（依序；Mac 重負載都經 `tools/with-mac-lock`）
 
-1. （排隊中）4B 的 `-fa auto` probe 以 `-lv 4` 重跑（`pilot-20261008-4b-fa`），確認 "Flash Attention enabled"。
+1. ~~4B 的 `-fa auto` probe 以 `-lv 4` 重跑~~ → ✅ 已完成並 push。
 2. 9B 下載完成後，依序執行：
    - scratchpad 的 `batch_9b.sh`：`produce --size 9B`。
    - commit pins 與 recipe。
