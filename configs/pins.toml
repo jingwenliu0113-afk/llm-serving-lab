@@ -45,8 +45,8 @@ commit = "ced6857afa0ea7b2e3f0846a62e1394e90f15607"     # git tag v0.30.0
 wheel_sha256 = "ef52ee58c410ead0b8afb190838fa4cbcb52075596f67862a03859d984966ac4"  # cp38-abi3-manylinux_2_28_x86_64
 published_utc = "2026-09-22"
 verified = []
-pending = ["wsl2-cuda"]                                  # blocked: remote unavailable
-lock_file = ""                                           # hashed lock frozen after the smoke test (configs/)
+pending = ["wsl2-cuda"]                                  # 003 gate items 3-4 (JIT boots, pin-memory A/B) blocked by --max-num-seqs (NEXT Blocked 2)
+lock_file = "configs/vllm.lock.txt"                      # hashed lock; the S1-S3 smoke ran on it; WSL .venv == lock (196 / 196 packages, 2026-10-09)
 
 # Versions from the v0.30.0 CI lock (requirements/test/cuda.txt). Resolve with
 # `uv pip compile --exclude-newer <exclude_newer>` so transitive deps cannot float.

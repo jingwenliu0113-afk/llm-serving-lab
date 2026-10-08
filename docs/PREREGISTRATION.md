@@ -336,7 +336,8 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
       attention backend、performance mode / async scheduling 的實際生效值
   - smoke S1–S3 通過（2026-10-09 01:54–02:01，`results/core_b/smoke/20261009-s1s3-014b`）。
     003 gate 第 1、2、5 項通過（capability (12, 0)、arch list 含 sm_120、`vllm bench serve` 與 `/metrics` 名稱）。
-  - lock 檔已 commit。JIT 透過 014 的 `CUDA_HOME` shim。
+  - lock 檔：`configs/vllm.lock.txt`（pins `vllm.lock_file`）。S1–S3 都在這份 lock 上執行。
+    2026-10-09 核對 WSL 的 `.venv` 與 lock 完全一致（196 / 196 個套件）。JIT 透過 014 的 `CUDA_HOME` shim。
   - 017 的固定 flags（FLASH_ATTN、balanced、async scheduling、max_num_batched_tokens 2048）由 runner 以 log 驗證（018）。
   - pin-memory A/B、K、boots：卡在 `--max-num-seqs`（NEXT Blocked 2）。
 - [ ] Core B：
