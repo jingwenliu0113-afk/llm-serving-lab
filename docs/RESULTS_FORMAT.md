@@ -12,6 +12,7 @@ results/core_a/<platform>/<session_id>/
 ├── plan.json          # 執行的 plan 全文（core_a_plan.py 產生；job 順序以此為準，不靠 seed 重算）
 ├── session.json       # session 摘要（見下）
 ├── rows.jsonl         # 每個 job 一列，依執行順序
+├── raw_manifest.json  # raw/ 每個檔案的 sha256 與大小（raw/ 不進 git，留在本機 archive）
 ├── env/
 │   ├── preflight.json         # 開跑前的 env_capture；用來驗證 build 與 pin 一致
 │   ├── <job_id>.before.json   # 每個 process 前
@@ -27,6 +28,8 @@ results/core_a/<platform>/<session_id>/
 - `platform` ∈ {`macos-metal`, `wsl2-cuda`}。
 - session 目錄已存在時，runner 拒絕執行。session 不續跑也不覆寫；中斷或 drift 時整個 session 重跑。
 - `raw/` 與 `env/` 保留所有失敗的 process（OOM / crash 也要報告）。
+- **進 git 的是** `plan.json`、`session.json`、`rows.jsonl`、`env/`、`raw_manifest.json` 與分析輸出；
+  `raw/`（各 process 的完整 stdout / stderr）只留在本機 archive，以 `raw_manifest.json` 的 sha256 驗證（`.gitignore`）。
 
 ## `session.json`
 

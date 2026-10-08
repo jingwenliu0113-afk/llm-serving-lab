@@ -307,3 +307,16 @@ def test_pilot_plan_runs_and_rows_carry_the_block(tmp_path):
     assert summary["outcomes"]["error"] == 0, [(r["job_id"], r["reason"]) for r in rows if r["outcome"] != "ok"]
     assert [r["block"] for r in rows] == [j["block"] for j in plan["jobs"]]
     assert pl.poll_decision(rows)["poll"] == 0
+
+
+def test_session_writes_a_raw_manifest(tmp_path):
+    """raw/ stays in the local archive (not git); the committed manifest pins every raw file."""
+    import hashlib
+
+    out, _, rows = run(tmp_path, small_plan())
+    manifest = json.loads((out / "raw_manifest.json").read_text())
+    raw_files = sorted(p.relative_to(out).as_posix() for p in (out / "raw").iterdir())
+    assert sorted(manifest["files"]) == raw_files
+    for rel, meta in manifest["files"].items():
+        data = (out / rel).read_bytes()
+        assert meta == {"sha256": hashlib.sha256(data).hexdigest(), "size_bytes": len(data)}

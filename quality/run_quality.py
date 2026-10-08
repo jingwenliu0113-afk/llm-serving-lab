@@ -36,7 +36,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import disk_guard  # noqa: E402
 import quality_parse as qp  # noqa: E402
-from run_core_a import default_run_proc, make_env_capture, sha256_json  # noqa: E402
+from run_core_a import default_run_proc, make_env_capture, sha256_json, write_raw_manifest  # noqa: E402
 
 SCHEMA_VERSION = 1
 MAC_HEAVY_LOCK = "/tmp/ai-portfolio-mac-heavy.lock"
@@ -229,6 +229,7 @@ def run_quality(
     for r in rows:
         outcomes[r["outcome"]] += 1
     session.update({"finished_at": now(), "outcomes": outcomes})
+    write_raw_manifest(out)
     (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
     return session
 

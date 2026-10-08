@@ -200,3 +200,10 @@ def test_formal_requires_our_mac_lock(tmp_path, monkeypatch, pins):
     frozen["core_a"]["models"] = frozen["core_a"]["models"][:1]
     with pytest.raises(rq.QualityError, match="with-mac-lock"):
         run(tmp_path, monkeypatch, plan(frozen, mode="formal"))
+
+
+def test_quality_session_writes_a_raw_manifest(tmp_path, monkeypatch, pins):
+    summary, rows, data = run(tmp_path, monkeypatch, small(pins))
+    manifest = json.loads((tmp_path / "out" / "raw_manifest.json").read_text())
+    assert sorted(manifest["files"]) == sorted(p.relative_to(tmp_path / "out").as_posix()
+                                               for p in (tmp_path / "out" / "raw").iterdir())

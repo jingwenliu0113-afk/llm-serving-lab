@@ -28,6 +28,8 @@ schema v1 的 harness 沒有收集這兩項，pilot 也就無法做「memory met
   - RTX：fit process 執行期間以 `nvidia-smi --query-gpu=memory.used -lms 200` 取樣，原始取樣存成 `raw/<job>.gpumem.txt`。
     `external_memory` 記峰值、第一筆與樣本數。B 依 PREREGISTRATION §4 量測，在分析階段扣除。
   - `summary.graph` 記 nodes / splits；`summary.fused_ops` 記 fused-op probe 的結果行（只在 `auto` 時出現，例如 pilot 的 `-fa auto` probe）。
+- session 目錄增加 `raw_manifest.json`（`raw/` 每個檔案的 sha256 與大小）。依使用者 2026-10-08 的指示，
+  benchmark raw outputs 不進 git：`raw/` 只留在本機 archive（`.gitignore`），git 裡的 manifest 用來驗證。quality session 同樣適用。
 - rows 增加 `block`：pilot plan（`benchmarks/core_a_pilot.py`）的區塊名稱；正式 plan 為 null。
 - 外部量測缺失時，fit 的 outcome **不變**（fit / OOM 的判定仍依 004），只是該欄位為 null，分析時列為缺值。
 

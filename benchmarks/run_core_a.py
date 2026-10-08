@@ -93,6 +93,19 @@ class NvidiaSmiSampler:
         return {"gpu_mem_used_peak_mib": max(values), "gpu_mem_used_first_mib": values[0], "n_samples": len(values)}
 
 
+def write_raw_manifest(out: Path) -> dict:
+    """raw/ is kept in the local archive, not in git; this committed manifest pins its content."""
+    files = {}
+    for path in sorted((out / "raw").rglob("*")):
+        if path.is_file():
+            data = path.read_bytes()
+            files[path.relative_to(out).as_posix()] = {"sha256": hashlib.sha256(data).hexdigest(),
+                                                       "size_bytes": len(data)}
+    manifest = {"note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file", "files": files}
+    (out / "raw_manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
+    return manifest
+
+
 def make_env_capture(script: Path, python: str = sys.executable) -> Callable:
     """env_capture.py as a subprocess; never raises, failures land in probe_errors."""
 
@@ -251,6 +264,7 @@ def run_session(
     for row in rows:
         outcomes[row["outcome"]] += 1
     session.update({"finished_at": now(), "outcomes": outcomes, "sentinel": _sentinel_summary(rows)})
+    write_raw_manifest(out)
     (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
     return session
 

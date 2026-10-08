@@ -17,3 +17,14 @@ data/
 
 # Scratch
 .DS_Store
+
+# Benchmark raw outputs stay in the local archive (docs/STORAGE_PLAN.md); each session
+# commits plan / session / rows / env and raw_manifest.json (sha256 of every raw file).
+results/**/raw/
+
+# Never commit environments, caches, deploy bundles or credentials
+.env
+*.pem
+*.key
+.cache/
+*.tar

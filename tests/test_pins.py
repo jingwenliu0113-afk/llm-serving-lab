@@ -216,3 +216,18 @@ def test_quality_exclusions_are_a_subset_of_the_index_list(pins):
             idx = json.loads((ROOT / sub["index_file"]).read_text())
             assert set(excl["excluded"]) <= set(idx["indices"]), name
             assert excl["n_after"] == len(idx["indices"]) - len(excl["excluded"]), name
+
+
+def test_gitignore_keeps_raw_outputs_and_secrets_out_of_git():
+    import subprocess
+
+    paths = ["results/core_a/macos-metal/s1/raw/fit-4B-Q8_0-2048-r1.stdout.txt",
+             "results/quality/q1/raw/kld-4B-Q8_0.stdout.txt", "models/gguf/x.gguf", "data/kld/4B.kld",
+             "third_party/convert-venv/bin/python", ".venv/bin/python", ".env", "bundle.tar"]
+    res = subprocess.run(["git", "-C", str(ROOT), "check-ignore", "--no-index", *paths], capture_output=True,
+                         text=True)
+    assert sorted(res.stdout.split()) == sorted(paths)
+    kept = ["results/core_a/macos-metal/s1/rows.jsonl", "results/core_a/macos-metal/s1/raw_manifest.json",
+            "results/artifacts/Qwen3.5-4B-Q8_0.gguf.json", "configs/pins.toml"]
+    res = subprocess.run(["git", "-C", str(ROOT), "check-ignore", "--no-index", *kept], capture_output=True, text=True)
+    assert res.stdout.strip() == ""
