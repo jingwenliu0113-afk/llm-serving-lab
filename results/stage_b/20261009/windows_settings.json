@@ -1,0 +1,8 @@
+{
+  "measured_at": "2026-10-09T04:10+08:00",
+  "method": "read-only, via `ssh gpu-server` on the Windows side (MACHINE_POLICY): `reg query HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers /v HwSchMode` and `type %USERPROFILE%\\.wslconfig`",
+  "why_not_stage_b_probe": "inside WSL, stage_b.windows_gpu_settings() fails with OSError(8, 'Exec format error') for reg.exe and cmd.exe: WSL interop (binfmt for .exe) is not available in this distro session. That is system configuration, left untouched; the reading is taken from the Windows side instead.",
+  "hags": {"HwSchMode": 2, "meaning": "hardware-accelerated GPU scheduling ON"},
+  "wslconfig": {"present": true, "wsl2": {"memory": "31GB", "swap": "8GB"}},
+  "display_active": "Disabled (results/stage_b/20261009/baseline.json; the display is not on this card)"
+}

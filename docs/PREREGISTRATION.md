@@ -308,7 +308,10 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
   - 2026-10-09（`results/stage_b/20261009/`，GPU lock 下）：
     - V_total = 16,303 MiB。
     - **B = 811 MiB**（02:09–02:15，5 分鐘閒置後 60 個 1 Hz 樣本的中位數，樣本介於 799–811）。
-    - 螢幕不接在這張卡上（display_active = Disabled）。HAGS 與 `.wslconfig` 這次沒有讀到（018 修正前的 probe）。
+    - 螢幕不接在這張卡上（display_active = Disabled）。
+    - **HAGS 開啟**（`HwSchMode` = 2）；`.wslconfig`：`[wsl2] memory=31GB`、`swap=8GB`
+      （04:10，從 Windows 端以 `ssh gpu-server` 唯讀查詢，`windows_settings.json`）。
+      WSL 內的 probe 呼叫 `reg.exe` / `cmd.exe` 會出現 `Exec format error`，代表 WSL interop 不可用。這是系統設定，不去修改。
     - **C_ctx = −89 MiB**（03:54，依規則 = 峰值 3,906 − B 811 − self 3,184）。
   - 觀察（照實記錄，不改規則）：這台桌機的 Windows idle VRAM 在當晚於 457–811 MiB 之間浮動，C_ctx 那次 run 開始時是 457。
     因此 C_ctx 的負值只是 B 與 C_ctx 分別量測造成的；spill 規則實際用到的是 B + C_ctx = 722 MiB，也就是 anchor 峰值減 self，不受 B 影響。
@@ -316,8 +319,16 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
     沒有為了得到正值而重量 B（避免挑選結果）。
 - [ ] sysmem 超量測試（9B-Q8_0、`-c 262144`，不屬於 18 格；N 約 15.90 GiB，任何 B 下都超量；008）：hard OOM 或 spill
 - [ ] llama.cpp CUDA build：toolkit 版本、`wsl2-cuda` verified、RTX 的 N_thr / P（依第 4 節規則）
+  - toolkit：user-space CUDA 13.4.1 pip wheels 加上 Ninja（015，`configs/llama-cuda.lock.txt`），host compiler 為 GNU 11.4.0。
+  - b11146 在 `wsl2-cuda` 上 verified（2026-10-09 02:07，`CUDA0 RTX 5070 Ti 16275 MiB`）。
+  - N_thr = 6（Ryzen 5 7600，6 個 physical core）。P：待 RTX pilot 依第 4 節規則決定。
 - [ ] vLLM：smoke test 通過（003 gate）、lock 檔已 commit（`vllm.lock_file`）、`VLLM_WSL2_ENABLE_PIN_MEMORY`（依 003 規則）、
       attention backend、performance mode / async scheduling 的實際生效值
+  - smoke S1–S3 通過（2026-10-09 01:54–02:01，`results/core_b/smoke/20261009-s1s3-014b`）。
+    003 gate 第 1、2、5 項通過（capability (12, 0)、arch list 含 sm_120、`vllm bench serve` 與 `/metrics` 名稱）。
+  - lock 檔已 commit。JIT 透過 014 的 `CUDA_HOME` shim。
+  - 017 的固定 flags（FLASH_ATTN、balanced、async scheduling、max_num_batched_tokens 2048）由 runner 以 log 驗證（018）。
+  - pin-memory A/B、K、boots：卡在 `--max-num-seqs`（NEXT Blocked 2）。
 - [ ] Core B：
   - num_gpu_blocks 與 block_size（`/metrics` 的 `vllm:cache_config_info`；`GPU KV cache size` 只作紀錄與交叉核對）
   - 依 §2 的 C_KV 公式與 007 的 grid 規則，算出每個 L 的 C_KV 與 grid
