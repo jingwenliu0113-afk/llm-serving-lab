@@ -148,11 +148,17 @@
      - `mixed` dataset ×2 已建好並 pin。
      - CUDA_HOME shim 已建（014）。
      - `scripts/wsl_toolchain_check.sh` 的安裝前基準：只缺 compiler。
-   - 使用者裝好 compiler（與 CUDA 12.8 子集）之後，依序：
+   - 2026-10-08 23:38：使用者已裝 `gcc g++ libc6-dev`（沒有裝 CUDA 12.8 子集與 make，並指示 user-space 路線失敗前不再要求系統 CUDA）。
+     - `wsl_toolchain_check.sh`（`JIT=0`）全部通過：Triton stub 能編譯，shim 的 nvcc 13.4 搭配 gcc 11 能編譯。
+     - llama.cpp 改用 user-space CUDA 13.4.1 加 Ninja（015）。configure 已通過：nvcc 13.4.92 / GNU 11.4.0 / `120a-real`。
+     - GPU lock 從 23:38 起由 Text-to-SQL 持有（`inference.generate`）。S1 與 build 都在等它釋放。
+       輪詢只用唯讀的 `lslocks` 檢查，不碰 lock。
+   - 接下來依序：
      1. `JIT=1 bash scripts/wsl_toolchain_check.sh`：compiler、Triton stub、shim nvcc、FlashInfer sampling JIT（暫存 workspace）。
      2. S1（2K）smoke，用新的 session 目錄（例如 `results/core_b/smoke/20261009-s1`）；通過後才跑 S2 → S3（008）。
-     3. llama.cpp CUDA build：`scripts/build_llama_cpp.sh cuda`。toolkit 為 user-space 的 CUDA 13.4.1（015：
-        `.venv-cuda134` 加 `scripts/wsl_cuda134_root.sh`，均已建好）。要錯開其他專案的正式 GPU 工作，最多 8 個 nvcc job。
+     3. llama.cpp CUDA build：在 `flock -n /tmp/ai-portfolio-gpu.lock` 下執行 `scripts/build_llama_cpp.sh cuda`。
+        CPU 負擔重，持有 lock 才不會干擾別人。toolkit 為 user-space 的 CUDA 13.4.1（015：`.venv-cuda134` 加 `.cuda-root-13.4`，均已建好）。
+        最多 8 個 nvcc job。
      4. 6 個 quant 傳到 WSL（約 33 GB，008 已列入計畫）。傳輸期間的 SSH 加密會持續占用 CPU，所以在 Mac lock 下進行。
 6. Core B：S1–S3 通過後（舊的說明保留如下）：
    - 用 `scripts/deploy_bundle.py` 部署；
