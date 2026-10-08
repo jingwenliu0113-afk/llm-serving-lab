@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -176,6 +177,16 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
                        "--gpu-lock-held (MACHINE_POLICY)")
     if formal and not pins["freeze"]["nvidia"]:
         raise RunError("formal Core B runs require freeze.nvidia = true (decision 006)")
+    mixed_sha = {}
+    for L in sorted({r["L"] for r in plan["runs"] if r["mix"] == "mixed"}):
+        path = (mixed_datasets or {}).get(L)
+        if not path or not Path(path).is_file():
+            raise RunError(f"mixed runs at L={L} need --mixed-dataset {L}=<file> (decision 007)")
+        mixed_sha[str(L)] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        pinned = (pins["core_b"].get("mix_dataset_sha256") or {}).get(str(L))
+        if formal and mixed_sha[str(L)] != pinned:
+            raise RunError(f"mixed dataset for L={L}: sha256 {mixed_sha[str(L)]} != pinned {pinned!r} "
+                           "(core_b.mix_dataset_sha256)")
     out = Path(out_dir)
     if out.exists():
         raise RunError(f"{out} exists; sessions are never resumed or overwritten")
@@ -183,7 +194,8 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
     (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "formal": formal,
                "gpu_lock_held": gpu_lock_held, "plan_sha256": sha256_json(plan), "started_at": clock(),
-               "server": {"gdn_prefill_backend": gdn_prefill_backend, "gpu_memory_utilization": gpu_memory_utilization}}
+               "server": {"gdn_prefill_backend": gdn_prefill_backend, "gpu_memory_utilization": gpu_memory_utilization},
+               "mixed_dataset_sha256": mixed_sha}
     rows = []
     base = f"http://127.0.0.1:{PORT}"
     with open(out / "rows.jsonl", "w") as fh:

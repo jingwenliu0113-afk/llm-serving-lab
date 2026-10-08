@@ -281,6 +281,6 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 - [ ] Core B：
   - num_gpu_blocks 與 block_size（`/metrics` 的 `vllm:cache_config_info`；`GPU KV cache size` 只作紀錄與交叉核對）
   - 依 §2 的 C_KV 公式與 007 的 grid 規則，算出每個 L 的 C_KV 與 grid
-  - `mixed` dataset 的 sha256（`core_b.mix_dataset_sha256`）
+  - `mixed` dataset 的 sha256（`core_b.mix_dataset_sha256`，每個 L 一個；2026-10-08 已在 WSL 建好並驗證可重現，見 013）
   - `--kv-cache-memory-bytes`、`--gpu-memory-utilization`
 - [ ] 本節狀態改為 FROZEN (Stage B) 並 commit

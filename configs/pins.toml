@@ -152,7 +152,9 @@ base_repo = "Qwen/Qwen3.5-9B"                            # lineage inferred from
 precision = "w4a16-gptq-int4-g128"                       # compressed-tensors, sym int4, group 128, actorder static; GDN / embed / lm_head / vision / MTP stay BF16
 dtype = "bfloat16"
 kv_cache_dtype = "auto"                                  # KV quantization is an Advanced item: off in Core
-mix_dataset_sha256 = ""                                  # seeded `mixed` dataset (decision 007), built at Stage B
+# seeded `mixed` datasets (decision 007), one file per L; built in WSL with vLLM 0.30.0 RandomDataset and the pinned
+# tokenizer (benchmarks/core_b_mixed_dataset.py, every row re-tokenizes to its target length; rebuilt with the same sha256)
+mix_dataset_sha256 = { "2048" = "3fc75fcadaa5d457ade882598ba129402469ff2393f32a8dd24753f3fe69f2f8", "8192" = "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2" }
 # Repo: model.safetensors 10,950,193,416 B (sha256 48e5ff6e...cd17) + model_mtp.safetensors 486,582,848 B; 11,456,885,740 B total
 # Serve with --language-model-only (vision skipped; MTP dropped).
 

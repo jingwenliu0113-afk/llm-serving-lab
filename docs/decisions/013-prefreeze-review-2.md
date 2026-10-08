@@ -143,3 +143,15 @@ review 找到兩類問題：
   - H-B4 使用每個 run 的短類 P95 TTFT。這個值由 runner 從 `--save-detailed` 的逐筆資料算出，所以 report 不必讀 `raw/`。
   - 另附 (mix, L, C) 描述表：throughput、P95、KV cache 使用峰值、preemption 次數。
 - `core_b_analysis.h_b4_values`：H-B4 的判定改為直接接受各 restart 的 P95 值。`h_b4` 先算出 P95 再呼叫它，規則不變。
+
+## 補充（同日）：`mixed` dataset 每個 L 各 pin 一個 sha256
+
+- 007 / 011 的設計是每個 L 一個 dataset 檔（2048、8192），但 `pins.toml` 的 `core_b.mix_dataset_sha256` 原本只有一個字串。
+  改為以 L 為 key 的 table。
+- `run_core_b` 新增兩項檢查：
+  - plan 中有 `mixed` run 時，必須提供對應 L 的檔案。
+  - 正式 run 在啟動 server 前，先比對檔案的 sha256 與 pin，不符就拒絕；session 記錄實際使用的 sha256。
+- 兩個檔案已在 WSL 以 vLLM 0.30.0 的 `RandomDataset` 和 pinned tokenizer 建好（只用 CPU，沒有用 GPU）：
+  - 每一列重新 tokenize 後都恰好等於目標長度。
+  - 重建 `mixed-2048` 得到相同的 sha256。
+  - 值已填入 pins，在 Stage B 隨 addendum 凍結。

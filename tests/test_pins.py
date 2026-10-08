@@ -159,7 +159,8 @@ def test_stage_b_freeze_requires_verified_nvidia_stack(pins):
     assert "wsl2-cuda" in pins["vllm"]["verified"]
     assert (ROOT / pins["vllm"]["lock_file"]).is_file()
     assert pins["core_b"]["status"] == "verified"
-    assert SHA256.fullmatch(pins["core_b"]["mix_dataset_sha256"])
+    mix = pins["core_b"]["mix_dataset_sha256"]
+    assert set(mix) == {"2048", "8192"} and all(SHA256.fullmatch(v) for v in mix.values())
 
 
 def test_core_b_single_fixed_precision(pins):
@@ -231,3 +232,10 @@ def test_gitignore_keeps_raw_outputs_and_secrets_out_of_git():
             "results/artifacts/Qwen3.5-4B-Q8_0.gguf.json", "configs/pins.toml"]
     res = subprocess.run(["git", "-C", str(ROOT), "check-ignore", "--no-index", *kept], capture_output=True, text=True)
     assert res.stdout.strip() == ""
+
+
+def test_mixed_dataset_sha256_is_one_per_mixed_level(pins):
+    """007 defines `mixed` only at L = 2048 / 8192, one seeded file per level (013)."""
+    mix = pins["core_b"]["mix_dataset_sha256"]
+    assert isinstance(mix, dict) and set(mix) <= {"2048", "8192"}
+    assert all(SHA256.fullmatch(v) for v in mix.values())

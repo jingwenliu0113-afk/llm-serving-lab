@@ -179,3 +179,37 @@ def test_bench_runs_offline_with_the_server_hf_cache(tmp_path, pins):
     w = World(tmp_path)
     run(w, pins, small_plan(pins))
     assert w.bench_envs and all(e["HF_HUB_OFFLINE"] == "1" and e["HF_HOME"] == bp.HF_HOME for e in w.bench_envs)
+
+
+def mixed_setup(tmp_path, pins, *, pinned=None):
+    import copy
+    import hashlib
+
+    p = copy.deepcopy(pins)
+    p["freeze"]["nvidia"] = True
+    ds = tmp_path / "data" / "mixed-2048.jsonl"
+    ds.parent.mkdir(parents=True)
+    ds.write_text('{"prompt": "x", "output_tokens": 128}\n')
+    digest = hashlib.sha256(ds.read_bytes()).hexdigest()
+    p["core_b"]["mix_dataset_sha256"] = {"2048": pinned or digest, "8192": "0" * 64}
+    plan = bp.build_mixed_plan(bp.build_uniform_plan(p, num_gpu_blocks=160, block_size=528), {2048: 22, 8192: None},
+                               uniform_session="b-u")
+    return p, plan, ds, digest
+
+
+def test_formal_mixed_run_requires_the_pinned_dataset(tmp_path, pins):
+    """The `mixed` file is pinned per L (core_b.mix_dataset_sha256; 007, 013): a formal run checks it first."""
+    p, plan, ds, _ = mixed_setup(tmp_path, pins, pinned="f" * 64)
+    w = World(tmp_path)
+    with pytest.raises(rb.RunError, match="sha256"):
+        run(w, p, plan, formal=True, mixed_datasets={2048: str(ds)})
+    assert w.started == [] and not (tmp_path / "session").exists()
+    with pytest.raises(rb.RunError, match="--mixed-dataset"):
+        run(World(tmp_path), p, plan, formal=True)
+
+
+def test_mixed_run_records_the_dataset_sha256(tmp_path, pins):
+    p, plan, ds, digest = mixed_setup(tmp_path, pins)
+    out, summary, rows = run(World(tmp_path), p, plan, formal=True, mixed_datasets={2048: str(ds)})
+    assert summary["mixed_dataset_sha256"] == {"2048": digest}
+    assert len(rows) == 3 and all(r["ok"] for r in rows), [r["reasons"] for r in rows]
