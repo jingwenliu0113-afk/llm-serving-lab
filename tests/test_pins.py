@@ -224,7 +224,8 @@ def test_gitignore_keeps_raw_outputs_and_secrets_out_of_git():
 
     paths = ["results/core_a/macos-metal/s1/raw/fit-4B-Q8_0-2048-r1.stdout.txt",
              "results/quality/q1/raw/kld-4B-Q8_0.stdout.txt", "models/gguf/x.gguf", "data/kld/4B.kld",
-             "third_party/convert-venv/bin/python", ".venv/bin/python", ".env", "bundle.tar"]
+             "third_party/convert-venv/bin/python", ".venv/bin/python", ".env", "bundle.tar",
+             "results/stage_b/20261009/boots/cache/triton_cache_dir/x.so"]
     res = subprocess.run(["git", "-C", str(ROOT), "check-ignore", "--no-index", *paths], capture_output=True,
                          text=True)
     assert sorted(res.stdout.split()) == sorted(paths)
