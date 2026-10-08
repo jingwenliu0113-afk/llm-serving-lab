@@ -57,9 +57,10 @@ def test_copy_one_resumes_from_the_partial_size(tmp_path):
             remote.extend(chunk[: len(chunk) // 2])
             return subprocess.CompletedProcess(cmd, 255, "", "Read from remote host: Operation timed out")
         remote.extend(chunk)
-        return subprocess.CompletedProcess(cmd, 0, "VERIFIED x", "")
+        return subprocess.CompletedProcess(cmd, 0, "VERIFIED Qwen3.5-4B-Q8_0.gguf", "")
 
-    assert sg.copy_one("Qwen3.5-4B-Q8_0.gguf", sha, len(data), tmp_path, run=run, send=send) is True
+    assert sg.copy_one("Qwen3.5-4B-Q8_0.gguf", sha, len(data), tmp_path, run=run, send=send,
+                       sleep=lambda s: None) is True
     assert sends == [0, len(data) // 2] and bytes(remote) == data
 
 
@@ -68,3 +69,43 @@ def test_stage_b_files_go_first():
                                         "Qwen3.5-9B-Q6_K.gguf")]
     assert [f[0] for f in sg.copy_order(files)] == ["Qwen3.5-4B-Q4_K_M.gguf", "Qwen3.5-9B-Q8_0.gguf",
                                                     "Qwen3.5-4B-Q8_0.gguf", "Qwen3.5-9B-Q6_K.gguf"]
+
+
+def test_copy_one_backs_off_between_failed_attempts_and_reports_a_temporary_failure(tmp_path):
+    import subprocess
+
+    (tmp_path / "Qwen3.5-4B-Q8_0.gguf").write_bytes(b"x" * 10)
+    slept = []
+
+    def run(cmd, **kw):  # the link is down: ssh fails every time
+        return subprocess.CompletedProcess(cmd, 255, "", "Could not resolve hostname")
+
+    res = sg.copy_one("Qwen3.5-4B-Q8_0.gguf", "b" * 64, 10, tmp_path, run=run, send=None, attempts=5,
+                      sleep=slept.append)
+    assert res is None and len(slept) == 5 and slept == sorted(slept) and slept[0] > 0  # backoff, then give up
+
+
+def test_success_needs_the_verified_line():
+    import subprocess
+
+    def run(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 0, "0\n", "")
+
+    def send(path, offset, cmd):  # rc 0 but no VERIFIED (e.g. an old receiver): not a success
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    assert sg.copy_one("Qwen3.5-4B-Q8_0.gguf", "b" * 64, 10, Path("/nonexistent"), run=run, send=send, attempts=2,
+                       sleep=lambda s: None) is None
+
+
+def test_receiver_stops_on_mkdir_cd_or_rename_failures():
+    s = sg.RECEIVER_SCRIPT
+    assert "set -eu" in s and "mv -T" in s and "NODIR" in s
+
+
+def test_main_treats_a_failed_remote_check_as_temporary(monkeypatch, capsys):
+    import subprocess
+
+    monkeypatch.setattr(sg.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 255, "", "timed out"))
+    assert sg.main(["--dry-run"]) == sg.EX_TEMPFAIL
+    assert "remote check failed" in capsys.readouterr().err

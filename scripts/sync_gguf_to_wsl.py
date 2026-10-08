@@ -18,6 +18,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import tomllib
 from pathlib import Path
 
@@ -25,6 +26,8 @@ REMOTE_DIR = "/home/wenn0113/llm-serving-lab/models/gguf"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-o", "ServerAliveInterval=30",
        "-o", "ServerAliveCountMax=6", "gpu-server", "wsl.exe", "-d", "Ubuntu-22.04", "--", "bash", "-s"]
 ATTEMPTS = 50
+EX_TEMPFAIL = 75   # tools/with-mac-lock convention: try again later
+MAX_BACKOFF_S = 600
 CHUNK = 4 * 2**20
 
 
@@ -56,16 +59,15 @@ def remote_script_check(files: list) -> str:
 
 
 RECEIVER = "/tmp/llmsl-recv-gguf.sh"
-RECEIVER_SCRIPT = f"""set -u
+RECEIVER_SCRIPT = f"""set -eu
 name=$1; sha=$2; size=$3
-mkdir -p {REMOTE_DIR}
-cd {REMOTE_DIR}
+{{ mkdir -p {REMOTE_DIR} && cd {REMOTE_DIR}; }} || {{ echo "NODIR {REMOTE_DIR}"; exit 3; }}
 if [ "$size" = query ]; then stat -c %s ".$name.part" 2>/dev/null || echo 0; exit 0; fi
 cat >> ".$name.part"
 have=$(stat -c %s ".$name.part")
 if [ "$have" -lt "$size" ]; then echo "INCOMPLETE $name $have/$size"; exit 2; fi
 got=$(sha256sum ".$name.part" | cut -d' ' -f1)
-if [ "$got" = "$sha" ]; then mv ".$name.part" "$name"; echo "VERIFIED $name"
+if [ "$got" = "$sha" ]; then mv -T ".$name.part" "$name"; echo "VERIFIED $name"
 else rm -f ".$name.part"; echo "MISMATCH $name $got"; exit 1; fi
 """
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+\.gguf$")
@@ -96,19 +98,29 @@ def send_from(path: Path, offset: int, cmd: list) -> subprocess.CompletedProcess
 
 
 def copy_one(name: str, sha: str, size: int, models: Path, *, run=subprocess.run, send=send_from,
-             attempts: int = ATTEMPTS) -> bool:
+             attempts: int = ATTEMPTS, sleep=time.sleep):
+    """True = verified on WSL; False = sha mismatch or the remote directory is unusable (do not retry);
+    None = still failing after `attempts` tries with exponential backoff (temporary: run again later)."""
+    k, last = 0, None
     for _ in range(attempts):
         q = run(receive_command(name, sha, "query"), capture_output=True, text=True)
-        have = int(q.stdout.strip() or 0) if q.returncode == 0 and q.stdout.strip().isdigit() else None
-        if have is None:
-            continue  # link down; try again
-        res = send(models / name, have, receive_command(name, sha, size))
-        print((res.stdout.strip() or res.stderr.strip()[-200:]), flush=True)
-        if res.returncode == 0:
-            return True
-        if "MISMATCH" in res.stdout:
+        if "NODIR" in q.stdout:
+            print(q.stdout.strip(), flush=True)
             return False
-    return False
+        have = int(q.stdout.strip()) if q.returncode == 0 and q.stdout.strip().isdigit() else None
+        if have is not None:
+            if last is not None and have > last:
+                k = 0  # the partial grew since the last try: the link works, it only dropped
+            last = have
+            res = send(models / name, have, receive_command(name, sha, size))
+            print((res.stdout.strip() or res.stderr.strip()[-200:]), flush=True)
+            if res.returncode == 0 and f"VERIFIED {name}" in res.stdout:
+                return True
+            if "MISMATCH" in res.stdout or "NODIR" in res.stdout:
+                return False
+        sleep(min(MAX_BACKOFF_S, 15 * 2 ** k))
+        k += 1
+    return None
 
 
 def parse_check(text: str) -> dict:
@@ -128,7 +140,11 @@ def main(argv: list | None = None) -> int:
     root = Path(__file__).resolve().parent.parent
     pins = tomllib.loads((root / "configs" / "pins.toml").read_text())
     files = quant_files(pins)
-    have = parse_check(subprocess.run(SSH, input=remote_script_check(files), capture_output=True, text=True).stdout)
+    chk = subprocess.run(SSH, input=remote_script_check(files), capture_output=True, text=True)
+    if chk.returncode != 0:  # the remote script always exits 0, so this is ssh / wsl.exe failing
+        print(f"remote check failed (rc {chk.returncode}): {chk.stderr.strip()[-300:]}", file=sys.stderr)
+        return EX_TEMPFAIL
+    have = parse_check(chk.stdout)
     todo = copy_order([f for f in files if have.get(f[0]) != f[1]])
     print(json.dumps({"present": sorted(n for n, s, _ in files if have.get(n) == s), "to_copy": [f[0] for f in todo],
                       "gib": round(sum(f[2] for f in todo) / 2**30, 2)}))
@@ -137,7 +153,10 @@ def main(argv: list | None = None) -> int:
     if todo:
         subprocess.run(SSH, input=f"cat > {RECEIVER} <<'EOF'\n{RECEIVER_SCRIPT}EOF\n", text=True, check=True)
     for name, sha, size in todo:
-        if not copy_one(name, sha, size, Path(args.models)):
+        res = copy_one(name, sha, size, Path(args.models))
+        if res is None:
+            return EX_TEMPFAIL
+        if res is False:
             return 1
     return 0
 
