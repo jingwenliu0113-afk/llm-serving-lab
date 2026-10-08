@@ -423,7 +423,9 @@ def test_capture_darwin_core_fields():
 
     assert rec["schema_version"] == ec.SCHEMA_VERSION
     assert rec["captured_at_utc"] == "2026-10-08T03:30:00+00:00"
-    assert rec["repo"] == {"commit": "0123456789abcdef0123456789abcdef01234567", "dirty": False, "status": []}
+    assert rec["repo"] == {
+        "commit": "0123456789abcdef0123456789abcdef01234567", "dirty": False, "status": [], "source": "git",
+    }
     assert rec["os"]["system"] == "Darwin"
     assert rec["os"]["product_version"] == "27.0.1"
     assert rec["os"]["wsl"] is False
@@ -576,7 +578,7 @@ def test_capture_missing_probes_never_raise_and_are_reported():
     # Nothing available at all: not a git repo, no sw_vers, no pmset, no sysctl.
     rec = capture(FakeSystem(), "Darwin", llama_bin="/nope/llama-cli")
 
-    assert rec["repo"] == {"commit": None, "dirty": None, "status": None}
+    assert rec["repo"] == {"commit": None, "dirty": None, "status": None, "source": None}
     assert rec["hardware"]["cpu"] is None
     assert rec["power"]["source"] is None
     assert rec["runtime"]["llama_cpp"] is None
@@ -660,3 +662,21 @@ def test_vllm_probe_runs_and_is_parsed(tmp_path):
     assert set(stack) == {"python", *ec._VLLM_KEYS}
     assert re.fullmatch(r"[0-9a-f]{64}", stack["freeze_sha256"])
     assert not any(e.startswith("vllm") for e in rec["probe_errors"])
+
+
+def test_capture_falls_back_to_deployed_commit_file():
+    # Remote copies are deployed with `git archive` + DEPLOYED_COMMIT (no .git).
+    system = FakeSystem(files={"REPO/DEPLOYED_COMMIT": "1d952c2 + uncommitted benchmarks/coreb_smoke.py\n"})
+    rec = capture(system, "Linux")
+    assert rec["repo"] == {
+        "commit": "1d952c2 + uncommitted benchmarks/coreb_smoke.py",
+        "dirty": None,
+        "status": None,
+        "source": "DEPLOYED_COMMIT",
+    }
+    # the git failure is still reported, not hidden
+    assert any("git rev-parse" in e for e in rec["probe_errors"])
+
+
+def test_capture_repo_source_is_git_when_available():
+    assert capture(darwin_system(), "Darwin")["repo"]["source"] == "git"

@@ -310,7 +310,16 @@ def capture(
         "commit": head.strip() if head else None,
         "dirty": git_dirty(status) if status is not None else None,
         "status": [line for line in status.splitlines() if line.strip()] if status is not None else None,
+        "source": "git" if head else None,
     }
+    if not head:
+        # Remote copies are deployed with `git archive` and a DEPLOYED_COMMIT file (no .git).
+        try:
+            deployed = read_file(f"{repo_dir}/DEPLOYED_COMMIT").strip()
+        except OSError:
+            deployed = ""
+        if deployed:
+            repo.update({"commit": deployed, "source": "DEPLOYED_COMMIT"})
 
     # os / hardware / power
     os_info: dict = {"system": system_name, "release": platform.release(), "machine": platform.machine(), "wsl": False}
