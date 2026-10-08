@@ -203,6 +203,16 @@ path = "winogrande-debiased-eval.csv"                    # 1267 tasks; git blob 
 sha256 = "6726173ef65ffdc4abb0d28b755375d288ffb3eb41633bd833288c411c8ebf7c"
 size_bytes = 155325
 
+# Expected counts for formal runs (quality/run_quality.py success checks).
+# wikitext_chunks is from the HF tokenizer (297,193 tokens / 512) and must be
+# confirmed with the llama.cpp tokenizer before the Stage A freeze.
+[quality.expected]
+wikitext_chunks = 580
+hellaswag_tasks = 4000
+mmlu_tasks = 3997
+arc_tasks = 869
+winogrande_tasks = 1267
+
 # 4000-task subsets: committed index list (seed 20261008, quality/mc_subset.py) + sha256 of the built .bin.
 # Index lists are model-independent; identical to the research-stage lists built with Python 3.13.
 [quality.subsets.hellaswag]
