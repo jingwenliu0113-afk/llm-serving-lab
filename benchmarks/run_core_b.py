@@ -154,9 +154,9 @@ def default_http_get(url: str, timeout: float = 5) -> tuple:
         return 0, str(exc)
 
 
-def default_run_bench(argv: list, log_path) -> int:
+def default_run_bench(argv: list, log_path, env: dict) -> int:
     with open(log_path, "w") as log:
-        return subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT).returncode
+        return subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, env=env).returncode
 
 
 def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gpu_memory_utilization: str,
@@ -225,7 +225,8 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
                                           mixed_dataset=(mixed_datasets or {}).get(L) if mix == "mixed" else None)
                     sampler = MetricsSampler(http_get, f"{base}/metrics", sample_interval)
                     sampler.start()
-                    rc = run_bench(bargv, out / "raw" / f"bench-{tag}-c{C}.log")
+                    rc = run_bench(bargv, out / "raw" / f"bench-{tag}-c{C}.log",
+                                   {**os.environ, **bp.bench_env()})
                     sampled = sampler.stop()
                     path = out / "raw" / name
                     if rc != 0 or not path.is_file():

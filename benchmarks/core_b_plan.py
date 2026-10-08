@@ -10,11 +10,16 @@
   C order per restart is a seeded permutation stored in the plan.
 - one shared server config for all levels and mixes: --max-model-len 32768, --max-num-seqs 264.
 - `mixed` (H-B4 only, L in {2048, 8192}): 90% (L - 128, 128) + 10% (32640, 128), a custom
-  dataset built with vLLM's own RandomDataset (same generator and seed as `uniform`, so the
-  short prompts are the uniform prompts) in blocks of ten (9 short + 1 long, seeded order
-  inside each block), MIXED_ROWS = num-prompts at the grid cap. It is read in file order
-  (--disable-shuffle), so the first N rows hold exactly N / 10 long prompts for any C;
-  its sha256 is pinned at Stage B (core_b.mix_dataset_sha256), before C_knee is known.
+  dataset built with vLLM's own RandomDataset (same generator, seed and input length as
+  `uniform`, so the short prompts follow the uniform distribution; token content can differ
+  because RandomDataset's re-encode padding draws depend on num_requests, 013) in blocks of
+  ten (9 short + 1 long, seeded order inside each block), MIXED_ROWS = num-prompts at the
+  grid cap. It is read in file order (--disable-shuffle), so the first N rows hold exactly
+  N / 10 long prompts for any C; its sha256 is pinned at Stage B (core_b.mix_dataset_sha256),
+  before C_knee is known.
+- client (013): --temperature 0 (vLLM 0.30.0 `bench serve` no longer sends it), the pinned
+  snapshot as --tokenizer (`bench serve` has no --revision) with HF_HUB_OFFLINE=1, and for
+  `mixed` --custom-output-len 128 (its default 256 overrides the rows' output_tokens).
 
 Stdlib only, Python 3.10 compatible.
 """
@@ -69,6 +74,15 @@ def num_warmups(C: int) -> int:
     return C
 
 
+def snapshot_dir(pins: dict) -> str:
+    b = pins["core_b"]
+    return f"{HF_HOME}/hub/models--{b['repo'].replace('/', '--')}/snapshots/{b['revision']}"
+
+
+def bench_env() -> dict:
+    return {"HF_HOME": HF_HOME, "HF_HUB_OFFLINE": "1"}
+
+
 def server_argv(pins: dict, *, gdn_prefill_backend: str, gpu_memory_utilization: str, port: int,
                 vllm_bin: str = "{vllm}") -> tuple:
     b = pins["core_b"]
@@ -78,14 +92,14 @@ def server_argv(pins: dict, *, gdn_prefill_backend: str, gpu_memory_utilization:
             "--gpu-memory-utilization", gpu_memory_utilization,
             "--no-enable-prefix-caching", "--gdn-prefill-backend", gdn_prefill_backend,
             "--generation-config", "vllm", "--host", "127.0.0.1", "--port", str(port)]
-    env = {"HF_HOME": HF_HOME, "HF_HUB_OFFLINE": "1", "VLLM_GDN_DECODE_KERNEL": "triton"}
+    env = {**bench_env(), "VLLM_GDN_DECODE_KERNEL": "triton"}
     return argv, env
 
 
 def bench_argv(pins: dict, *, L: int, C: int, mix: str, result_dir: str, result_filename: str, port: int,
                mixed_dataset: str | None = None, vllm_bin: str = "{vllm}") -> list:
     argv = [vllm_bin, "bench", "serve", "--backend", "openai", "--base-url", f"http://127.0.0.1:{port}",
-            "--endpoint", "/v1/completions", "--model", pins["core_b"]["repo"]]
+            "--endpoint", "/v1/completions", "--model", pins["core_b"]["repo"], "--tokenizer", snapshot_dir(pins)]
     if mix == "uniform":
         argv += ["--dataset-name", "random", "--random-input-len", str(L - N_GEN),
                  "--random-output-len", str(N_GEN), "--random-range-ratio", "0"]
@@ -93,11 +107,11 @@ def bench_argv(pins: dict, *, L: int, C: int, mix: str, result_dir: str, result_
         if L not in MIXED_LEVELS or not mixed_dataset:
             raise PlanError(f"mixed is defined only for L in {MIXED_LEVELS} with a pinned dataset (007)")
         argv += ["--dataset-name", "custom", "--dataset-path", mixed_dataset, "--skip-chat-template",
-                 "--disable-shuffle"]
+                 "--disable-shuffle", "--custom-output-len", str(N_GEN)]
     else:
         raise PlanError(f"unknown mix {mix!r}")
     argv += ["--num-prompts", str(num_prompts(C)), "--max-concurrency", str(C), "--num-warmups", str(num_warmups(C)),
-             "--request-rate", "inf", "--ignore-eos", "--seed", str(SEED),
+             "--request-rate", "inf", "--ignore-eos", "--temperature", "0", "--seed", str(SEED),
              "--percentile-metrics", "ttft,tpot,itl,e2el,client_queue_time", "--metric-percentiles", "50,95,99",
              "--save-result", "--save-detailed", "--result-dir", result_dir, "--result-filename", result_filename]
     return argv

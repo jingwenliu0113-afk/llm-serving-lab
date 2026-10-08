@@ -127,9 +127,50 @@ def test_mixed_dataset_builder_uses_uniform_generator_for_short_prompts(tmp_path
         return [f"{input_len}:{seed}:{i}" for i in range(num_requests)]
 
     out = tmp_path / "mixed-2048.jsonl"
-    info = md.build(2048, out, sample=fake_sample)
+    info = md.build(2048, out, sample=fake_sample, count_tokens=lambda p: int(p.split(":")[0]))
     assert calls == [(2304, 1920, 20261008), (256, 32640, 20261009)]
     rows = [json.loads(x) for x in out.read_text().splitlines()]
     assert len(rows) == 2560 and info["rows"] == 2560 and len(info["sha256"]) == 64
     short = [r["prompt"] for r in rows if r["prompt"].startswith("1920:")]
     assert short[:3] == ["1920:20261008:0", "1920:20261008:1", "1920:20261008:2"]
+
+
+# ------------------------------------------------- pre-freeze review fixes (013) --
+
+def test_bench_is_greedy_and_mixed_outputs_are_128(pins):
+    """§4 temperature 0: vLLM 0.30.0 `bench serve` no longer sends it by default. The custom dataset's
+    --custom-output-len defaults to 256 and overrides the rows' output_tokens unless set (013)."""
+    for mix, extra in (("uniform", {}), ("mixed", {"mixed_dataset": "/d/mixed-2048.jsonl"})):
+        argv = bp.bench_argv(pins, L=2048, C=8, mix=mix, result_dir="/r", result_filename="x.json", port=8000,
+                             **extra)
+        assert arg(argv, "--temperature") == "0", mix
+    assert arg(argv, "--custom-output-len") == "128"
+
+
+def test_bench_client_uses_the_pinned_tokenizer_offline(pins):
+    """`bench serve` has no --revision: without --tokenizer it would resolve the repo's main branch (013)."""
+    snap = (f"{bp.HF_HOME}/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/"
+            f"{pins['core_b']['revision']}")
+    assert bp.snapshot_dir(pins) == snap
+    for mix, extra in (("uniform", {}), ("mixed", {"mixed_dataset": "/d/mixed-2048.jsonl"})):
+        argv = bp.bench_argv(pins, L=2048, C=8, mix=mix, result_dir="/r", result_filename="x.json", port=8000,
+                             **extra)
+        assert arg(argv, "--tokenizer") == snap and arg(argv, "--model") == pins["core_b"]["repo"]
+    assert bp.bench_env() == {"HF_HOME": bp.HF_HOME, "HF_HUB_OFFLINE": "1"}
+
+
+def test_mixed_dataset_builder_checks_every_prompt_token_count(tmp_path):
+    """Each row must re-tokenize to exactly L - 128 / 32640 tokens, checked before the sha256 is pinned (013)."""
+    import core_b_mixed_dataset as md
+
+    def fake_sample(*, num_requests, input_len, seed):
+        return [f"{input_len}:{seed}:{i}" for i in range(num_requests)]
+
+    def count(prompt):
+        n = int(prompt.split(":")[0])
+        return n + 1 if prompt == "1920:20261008:7" else n
+
+    out = tmp_path / "mixed-2048.jsonl"
+    with pytest.raises(bp.PlanError, match="1 of 2560 prompts"):
+        md.build(2048, out, sample=fake_sample, count_tokens=count)
+    assert not out.exists()

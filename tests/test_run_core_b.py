@@ -77,7 +77,7 @@ class FakeProc:
 class World:
     def __init__(self, tmp_path, blocks=160):
         self.tmp_path, self.blocks = tmp_path, blocks
-        self.started, self.signals, self.bench_calls, self.t = [], [], [], 0.0
+        self.started, self.signals, self.bench_calls, self.bench_envs, self.t = [], [], [], [], 0.0
         self.proc = None
 
     def popen(self, argv, env, log_path):
@@ -98,7 +98,8 @@ class World:
             return 200, ""
         return 200, METRICS.replace('num_gpu_blocks="160"', f'num_gpu_blocks="{self.blocks}"')
 
-    def run_bench(self, argv, log_path):
+    def run_bench(self, argv, log_path, env):
+        self.bench_envs.append(env)
         a = dict(zip(argv, argv[1:]))
         C = int(a["--max-concurrency"])
         L = int(a["--random-input-len"]) + 128 if "--random-input-len" in a else int(Path(a["--dataset-path"]).stem.split("-")[-1])
@@ -172,3 +173,9 @@ def test_existing_session_is_never_overwritten(tmp_path, pins):
     run(World(tmp_path), pins, small_plan(pins))
     with pytest.raises(rb.RunError, match="exists"):
         run(World(tmp_path), pins, small_plan(pins))
+
+
+def test_bench_runs_offline_with_the_server_hf_cache(tmp_path, pins):
+    w = World(tmp_path)
+    run(w, pins, small_plan(pins))
+    assert w.bench_envs and all(e["HF_HUB_OFFLINE"] == "1" and e["HF_HOME"] == bp.HF_HOME for e in w.bench_envs)
