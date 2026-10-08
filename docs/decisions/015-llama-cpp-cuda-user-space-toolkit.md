@@ -35,8 +35,12 @@
    - 只在 cuda backend 生效；Metal 的指令不變。
    - build-record 記錄 toolkit flags 與 nvcc 版本。
    - `-DCMAKE_CUDA_ARCHITECTURES=120a-real` 等 backend flags 不變。
-4. `pins.toml` `llama_cpp.toolchain.wsl2_cuda.cuda_toolkit = "13.4"`。
-5. 不會用到 `/usr/local/cuda`，不需要 sudo，也不安裝任何 Linux driver。
+4. **CMake generator 改用 Ninja**：WSL 沒有 `make`（使用者只裝了 compiler）。
+   - 在同一個 lock 中 pin `ninja==1.13.2`，透過 `-G Ninja -DCMAKE_MAKE_PROGRAM=<.venv-cuda134>/bin/ninja` 使用。
+   - generator 只負責排程，不會改變 compiler flags。Metal 的 build 仍用 Makefiles。
+   - JOBS 上限一樣是 8。
+5. `pins.toml` `llama_cpp.toolchain.wsl2_cuda.cuda_toolkit = "13.4"`。
+6. 不會用到 `/usr/local/cuda`，不需要 sudo，也不安裝任何 Linux driver。
 
 ## 為什麼
 

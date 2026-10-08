@@ -53,12 +53,15 @@ if [ "$BACKEND" = cuda ] && [ "$JOBS" -gt 8 ]; then
 fi
 
 # CUDA toolkit: the user-space CUDA 13.4.1 root built by scripts/wsl_cuda134_root.sh (decision 015).
-# Named explicitly: WSL's PATH carries the Windows CUDA bin dirs.
+# Named explicitly: WSL's PATH carries the Windows CUDA bin dirs. WSL has no make, so the CUDA build
+# uses the Ninja generator with the ninja pinned in the same lock (the generator does not change the
+# compiler flags).
 TOOLKIT_FLAGS=()
 if [ "$BACKEND" = cuda ]; then
   CUDA_ROOT=${CUDA_ROOT:-$ROOT/.cuda-root-13.4}
+  CUDA_VENV=${CUDA_VENV:-$ROOT/.venv-cuda134}
   export CUDACXX="$CUDA_ROOT/bin/nvcc"
-  TOOLKIT_FLAGS=(-DCUDAToolkit_ROOT="$CUDA_ROOT")
+  TOOLKIT_FLAGS=(-G Ninja -DCMAKE_MAKE_PROGRAM="$CUDA_VENV/bin/ninja" -DCUDAToolkit_ROOT="$CUDA_ROOT")
 fi
 
 # GGML_NATIVE silently flips OFF when SOURCE_DATE_EPOCH is set; keep builds comparable.

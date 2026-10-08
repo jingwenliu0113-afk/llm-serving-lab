@@ -57,4 +57,5 @@ def test_llama_cuda_lock_pins_one_cuda_13_4_1_set():
     assert pins["nvidia-cuda-nvcc"] == pins["nvidia-cuda-runtime"] == pins["nvidia-cuda-crt"] == "13.4.92"
     assert pins["nvidia-nvvm"] == pins["nvidia-cuda-nvrtc"] == "13.4.92"
     assert pins["nvidia-cublas"] == "13.4.2.4" and pins["nvidia-cuda-cccl"] == "13.3.4.3.1"
+    assert pins["ninja"] == "1.13.2"  # CMake generator; WSL has no make (015)
     assert "--hash=sha256:" in lock

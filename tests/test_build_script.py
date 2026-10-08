@@ -94,5 +94,6 @@ def test_cuda_build_names_the_user_space_toolkit_explicitly():
     t = text()
     assert 'CUDA_ROOT=${CUDA_ROOT:-$ROOT/.cuda-root-13.4}' in t
     assert 'export CUDACXX="$CUDA_ROOT/bin/nvcc"' in t
-    assert 'TOOLKIT_FLAGS=(-DCUDAToolkit_ROOT="$CUDA_ROOT")' in t
+    assert 'TOOLKIT_FLAGS=(-G Ninja -DCMAKE_MAKE_PROGRAM="$CUDA_VENV/bin/ninja" -DCUDAToolkit_ROOT="$CUDA_ROOT")' in t
+    assert 'CUDA_VENV=${CUDA_VENV:-$ROOT/.venv-cuda134}' in t
     assert '${TOOLKIT_FLAGS[@]+"${TOOLKIT_FLAGS[@]}"}' in t  # empty-array safe under set -u (bash 3.2)

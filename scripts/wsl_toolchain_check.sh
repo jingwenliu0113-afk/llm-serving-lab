@@ -41,6 +41,7 @@ if [ -x "$CR/bin/nvcc" ]; then
     [ -e "$CR/lib64/$f" ] && ok "toolkit root lib64/$f" || bad "toolkit root lib64/$f missing"
   done
   [ -e "$CR/include/cccl/cub/cub.cuh" ] && ok "cub headers" || bad "cub headers missing"
+  [ -x "$PROJECT/.venv-cuda134/bin/ninja" ] && ok "ninja $("$PROJECT/.venv-cuda134/bin/ninja" --version) (CMake generator)" || bad "ninja missing in .venv-cuda134"
 else
   echo "SKIP  $CR not built yet (bash scripts/wsl_cuda134_root.sh)"
 fi

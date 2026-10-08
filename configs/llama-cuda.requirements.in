@@ -12,3 +12,4 @@ nvidia-cuda-runtime==13.4.92
 nvidia-cuda-cccl==13.3.4.3.1
 nvidia-cublas==13.4.2.4
 nvidia-cuda-nvrtc==13.4.92
+ninja==1.13.2  # CMake generator for the llama.cpp build (WSL has no make; 015)
