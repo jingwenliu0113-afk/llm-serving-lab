@@ -39,6 +39,14 @@ def quant_files(pins: dict) -> list:
     return out
 
 
+# Stage B needs these first: the C_ctx / sentinel anchor (009) and the sysmem-overflow model (008).
+FIRST = ("Qwen3.5-4B-Q4_K_M.gguf", "Qwen3.5-9B-Q8_0.gguf")
+
+
+def copy_order(files: list) -> list:
+    return sorted(files, key=lambda f: FIRST.index(f[0]) if f[0] in FIRST else len(FIRST))
+
+
 def remote_script_check(files: list) -> str:
     lines = [f"cd {shlex.quote(REMOTE_DIR)} 2>/dev/null || exit 0"]
     for name, _, _ in files:
@@ -121,7 +129,7 @@ def main(argv: list | None = None) -> int:
     pins = tomllib.loads((root / "configs" / "pins.toml").read_text())
     files = quant_files(pins)
     have = parse_check(subprocess.run(SSH, input=remote_script_check(files), capture_output=True, text=True).stdout)
-    todo = [f for f in files if have.get(f[0]) != f[1]]
+    todo = copy_order([f for f in files if have.get(f[0]) != f[1]])
     print(json.dumps({"present": sorted(n for n, s, _ in files if have.get(n) == s), "to_copy": [f[0] for f in todo],
                       "gib": round(sum(f[2] for f in todo) / 2**30, 2)}))
     if args.dry_run:

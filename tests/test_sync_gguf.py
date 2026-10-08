@@ -61,3 +61,10 @@ def test_copy_one_resumes_from_the_partial_size(tmp_path):
 
     assert sg.copy_one("Qwen3.5-4B-Q8_0.gguf", sha, len(data), tmp_path, run=run, send=send) is True
     assert sends == [0, len(data) // 2] and bytes(remote) == data
+
+
+def test_stage_b_files_go_first():
+    files = [(n, "a" * 64, 1) for n in ("Qwen3.5-4B-Q8_0.gguf", "Qwen3.5-9B-Q8_0.gguf", "Qwen3.5-4B-Q4_K_M.gguf",
+                                        "Qwen3.5-9B-Q6_K.gguf")]
+    assert [f[0] for f in sg.copy_order(files)] == ["Qwen3.5-4B-Q4_K_M.gguf", "Qwen3.5-9B-Q8_0.gguf",
+                                                    "Qwen3.5-4B-Q8_0.gguf", "Qwen3.5-9B-Q6_K.gguf"]
