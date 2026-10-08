@@ -395,12 +395,19 @@ def main(argv: list | None = None) -> int:
 
     plan = json.loads(Path(args.plan).read_text())
     script = Path(__file__).resolve().parent.parent / "scripts" / "env_capture.py"
+    measure_b = None
+    if plan["platform"] == "wsl2-cuda" and plan["mode"] == "formal":
+        import stage_b  # imported here: stage_b itself imports this module
+
+        def measure_b(frozen_b_mib: float) -> dict:  # §4 step 4 (018)
+            return stage_b.measure_baseline(query=stage_b.nvidia_query, compute_apps=stage_b.nvidia_compute_apps,
+                                            sleep=time.sleep, frozen_b_mib=frozen_b_mib)
     try:
         summary = run_session(
             plan, bin_dir=Path(args.bin).resolve(), models_dir=Path(args.models).resolve(), out_dir=args.out,
             capture_env=make_env_capture(script), session_id=args.session_id, gpu_lock_held=args.gpu_lock_held,
             mac_lock_held=os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1",
-            gpu_sampler=NvidiaSmiSampler if plan["platform"] == "wsl2-cuda" else None,
+            gpu_sampler=NvidiaSmiSampler if plan["platform"] == "wsl2-cuda" else None, measure_b=measure_b,
         )
     except RunError as exc:
         print(f"run_core_a: {exc}", file=sys.stderr)

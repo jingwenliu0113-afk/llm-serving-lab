@@ -492,3 +492,22 @@ def test_formal_rtx_session_remeasures_b_and_records_drift(tmp_path):
     (tmp_path / "x").mkdir()
     with pytest.raises(rc.RunError, match="session-start B"):
         run(tmp_path / "x", small_plan(mode="formal", contexts=(2048,)), gpu_lock_held=True)
+
+
+
+def test_main_wires_the_session_start_b_for_formal_rtx_plans(tmp_path, monkeypatch):
+    import stage_b
+
+    seen = {}
+
+    def fake_run_session(plan, **kw):
+        seen.update(kw)
+        raise rc.RunError("stop here")
+
+    monkeypatch.setattr(rc, "run_session", fake_run_session)
+    monkeypatch.setattr(stage_b, "measure_baseline", lambda **kw: {"b_mib": 1, "drift": False, **kw})
+    plan = small_plan(mode="formal", contexts=(2048,))
+    (tmp_path / "plan.json").write_text(json.dumps(plan))
+    assert rc.main(["--plan", str(tmp_path / "plan.json"), "--bin", "b", "--models", "m", "--out", str(tmp_path / "o"),
+                    "--session-id", "s", "--gpu-lock-held"]) == 2
+    assert seen["measure_b"] is not None and seen["measure_b"](811)["frozen_b_mib"] == 811
