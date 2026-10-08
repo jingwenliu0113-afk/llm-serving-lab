@@ -1,0 +1,109 @@
+{
+ "argv": [
+  "third_party/llama.cpp/build-cuda/bin/llama-completion",
+  "-m",
+  "models/gguf/Qwen3.5-4B-Q4_K_M.gguf",
+  "-c",
+  "2048",
+  "-np",
+  "1",
+  "--fit",
+  "off",
+  "-ngl",
+  "999",
+  "-fa",
+  "on",
+  "-ctk",
+  "f16",
+  "-ctv",
+  "f16",
+  "-b",
+  "2048",
+  "-ub",
+  "512",
+  "-lm",
+  "mmap",
+  "-t",
+  "6",
+  "--poll",
+  "0",
+  "-f",
+  "results/stage_b/20261009/cctx/prompt.txt",
+  "-n",
+  "128",
+  "--ignore-eos",
+  "-no-cnv",
+  "--log-jsonl",
+  "-lv",
+  "4"
+ ],
+ "exit_code": 0,
+ "wall_s": 3.699,
+ "samples_mib": [
+  457,
+  468,
+  678,
+  678,
+  678,
+  666,
+  678,
+  678,
+  678,
+  678,
+  3252,
+  3252,
+  3882,
+  3904,
+  3906,
+  3906,
+  3906,
+  3906,
+  457
+ ],
+ "outcome": "ok",
+ "stage": null,
+ "reason": null,
+ "evidence": null,
+ "summary": {
+  "n_ctx": 2048,
+  "flash_attn": "enabled",
+  "prompt_tokens": 1920,
+  "eval_runs": 127,
+  "memory": {
+   "unit": "MiB",
+   "devices": [
+    {
+     "name": "CUDA0",
+     "description": "RTX 5070 Ti",
+     "total": 16275,
+     "free": 11781,
+     "self": 3184,
+     "model": 2572,
+     "context": 114,
+     "compute": 497,
+     "unaccounted": 1310
+    }
+   ],
+   "host": {
+    "self": 509,
+    "model": 497,
+    "context": 0,
+    "compute": 12
+   },
+   "other": []
+  },
+  "graph": {
+   "nodes": "1879",
+   "splits": "2"
+  },
+  "fused_ops": [
+   "fused DeepSeek V4 HC pre enabled",
+   "fused DeepSeek V4 HC comb enabled",
+   "fused DeepSeek V4 HC post enabled"
+  ]
+ },
+ "b_mib": 811.0,
+ "v_total_mib": 16303,
+ "device_self_mib": 3184,
+ "c_ctx_mib": -89.0
+}
