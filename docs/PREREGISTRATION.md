@@ -5,6 +5,8 @@
 > sentinel 與超量測試。仍待 pilot 才能凍結的 tokenizer 常數：WikiText chunk 數、MMLU 結構性排除清單。本文其餘結構不變。
 > 同日依 review 做凍結前的一致性修訂（decision 009）：H-A4(b) 預測值、token_embd 扣除的適用範圍、
 > fit run prompt、C_KV 的資料來源、H-A3 相鄰差距的寫法。hypothesis 的結構與門檻不變。
+> 同日第二輪凍結前 review（decision 013）：Core B client flags、無效 run 與缺 C 的處理、H-A3 相鄰的定義、
+> prefill 的計算順序、env 有效性（未知即無效）、分析 CLI 只處理有效的正式 session。hypothesis 的結構與門檻不變。
 
 > **狀態：DRAFT v1（2026-10-08，同日依兩輪 review 修訂）— 尚未凍結。**
 > 依 decision 006 分兩階段凍結：
@@ -34,6 +36,8 @@
     取平均 m，標準誤 SE = s ÷ √3。
   - Core B 的單位是 server restart：每次 restart 在每個 C 下的 output throughput 與 P95 值。n = 3，
     throughput 先對 3 次 restart 取平均，再計算 C_knee；P95 對 3 次 restart 取平均。
+    只計入通過驗證的 run（completed、failed = 0、input / output 長度皆符合）；grid 中任一 C 沒有 3 次有效 restart，
+    該 L 的比較單位記為 not testable，不以其他 C 代替（013）。
 - **「超出 noise」**：
   - 兩個量 x、y 的差超出 noise，條件是 |x − y| > 2·√(SE_x² + SE_y²)。
   - 衍生的比值 r = m_a ÷ m_b，其 SE(r) = r·√((SE_a ÷ m_a)² + (SE_b ÷ m_b)²)（delta method）；D = 1 − r 的 SE 與 r 相同。
@@ -82,6 +86,7 @@
   模型預測值（Q4_K_M / Q6_K / Q8_0）：4B 為 0.260 / 0.218 / 0.178，9B 為 0.162 / 0.131 / 0.105。
   相鄰差距約 0.026–0.042（最小為 9B 的 Q6_K vs Q8_0）；差距落在 noise 內時屬於「不推翻、也不確認」，照實報告。
 - *推翻條件*：任一相鄰配對的順序相反，而且差距超出 noise。若某 (平台, size) 在 32K fit 的配置少於 2 個，記為 not testable。
+  「相鄰」是在 32K fit 的配置中，依 Q8_0 → Q6_K → Q4_K_M 順序相鄰（例：Q6_K OOM 時比較 Q8_0 與 Q4_K_M；013）。
 
 **H-A4（prefill 受算力限制）**
 
@@ -157,7 +162,7 @@
 |---|---|---|
 | fit / OOM / spill | 004「Fit 的操作定義」與 spill 定義（anchor 與 C_ctx 為 4B-Q4_K_M，bytes 同 H-A2；009） | `llama-completion`（同 cell 的 bench process 若失敗也記為 OOM） |
 | engine TTFT(L) | `-p L -n 0` 的 `avg_ns`，同時保留 `samples_ns`；不含 tokenize / HTTP / sampling | `llama-bench` |
-| prefill tok/s(L) | L ÷ TTFT(L) | 同上 |
+| prefill tok/s(L) | L ÷ TTFT(L)，每個 process 各自計算後再取 cell 平均（013） | 同上 |
 | decode tok/s(L) | `-p 0 -n 128 -d (L-128)` 的 `avg_ts` | `llama-bench` |
 | peak memory | **只取 fit-run process**：llama.cpp memory breakdown（model / context / compute）逐 device 與 host 報告，另列合計。Mac 另記 `/usr/bin/time -l` 的 peak memory footprint 與 maximum resident set size（pilot：footprint 不含 mmap 的權重、含 KV / compute；012）；RTX 另記 `nvidia-smi memory.used` 峰值減 B。`-lm mmap` 固定 | `llama-completion` |
 | quality | 005 | `llama-perplexity`（只在 Mac） |
@@ -215,12 +220,15 @@ request throughput（req/s）；output token throughput 與 total token throughp
   - 每個 process 前後都跑一次 `env_capture`（thermal / loadavg / Mac lock owner / 電源）。
   - **電源有效性（012）**：任一 process 前後出現「電源不是 AC」、「電量 < 20%」或 thermal / performance warning，
     該 session 標為 env-invalid，整個 session 重跑（與 drift 相同）。quality session 同樣適用。
+    env 紀錄無法判定電源來源或 thermal 狀態（probe 失敗）時，同樣視為 env-invalid（013）。
 - **RTX**：
   - 在 GPU lock 下執行，`env_capture --gpu-lock-held`。
   - `enforced.power.limit` 必須等於 `power.default_limit`。
   - 每個 process 前後記錄溫度、SM clock、`clocks_event_reasons`。
   - sentinel 規則同上。
 - **環境變數**：`GGML_*`、`CUDA_*`、`VLLM_*` 等一律不設定，除非本文件明列。`env_capture` 會記錄這些變數，名稱疑似 credential 的一律遮蔽值。
+  - 明列（Core B）：`vllm serve` 與 `vllm bench serve` 都設 `HF_HOME`（gpu-server 的 HF cache）與 `HF_HUB_OFFLINE=1`；
+    `vllm serve` 另設 `VLLM_GDN_DECODE_KERNEL=triton`（008、013）。
 
 ### Prompt 與 sampling
 
@@ -229,10 +237,15 @@ request throughput（req/s）；output token throughput 與 total token throughp
 - quality：log-likelihood scoring，沒有 sampling。
 - Core B：`uniform` 用 random dataset，`mixed` 用自訂 dataset，seed 皆為 20261008（007）；
   `temperature 0`、`--ignore-eos`、`--generation-config vllm`。
+  client 明確傳 `--temperature 0`（vLLM 0.30.0 的 `bench serve` 不再預設）、`--tokenizer` 指向 pinned snapshot
+  （`bench serve` 沒有 `--revision`）；`mixed` 另傳 `--custom-output-len 128`（預設 256 會覆蓋每列的 output_tokens）。
+  `mixed` 的短類與 `uniform` 分布相同（同產生器、seed、長度），token 內容不保證相同（013）。
 
 ### 失敗也要報告
 
 OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結果表，不刪除。
+分析程式（`core_a_report`、`quality_analysis`）只對有效的正式 session 產生判定：pilot 維持遮蔽，
+env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 
 ## 5. Stage A 凍結 checklist（任何 Mac 正式數據之前）
 
