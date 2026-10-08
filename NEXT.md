@@ -58,9 +58,13 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
   `/metrics` 的三個 metric 名稱都存在。
 - WSL 會在 wsl.exe 結束時終止背景 process，所以遠端長時間工作都在 ssh 前景執行（`ServerAliveInterval`）。
 - Mac ↔ 桌機約 0.7–0.9 MB/s，而且會斷線。GGUF 傳輸已改成可續傳（`sync_gguf_to_wsl.py`）。
-  02:37 起在 Mac lock 下傳輸（可續傳）。**4B-Q8_0 已於 03:25 傳完並在遠端驗證**（約 1.6 MB/s）。
-  之後先傳 Stage B 需要的 4B-Q4_K_M 與 9B-Q8_0，再傳其餘 3 個。
-  傳完後依序：`stage_b.py cctx` → `overflow` → RTX Core A pilot（`--n-thr 6`）。
+  02:37 起在 Mac lock 下傳輸（可續傳）。已在遠端驗證的有：**4B-Q8_0（03:25）、4B-Q4_K_M（03:5x）**，約 1.6 MB/s。
+  其餘依序為 9B-Q8_0 → 4B-Q6_K → 9B-Q6_K → 9B-Q4_K_M。
+- **C_ctx = −89 MiB**（03:54，依 009 規則；照實記錄，說明見 §6）。spill 規則用到的 B + C_ctx = 722 MiB。
+- 已排隊（背景，GPU lock 下）：
+  - 9B-Q8_0 到齊後跑超量測試（`stage_b.py overflow`）。
+  - 6 個 quant 到齊後跑 RTX Core A pilot（`--n-thr 6`；決定 P，填入 `[stage_b] rtx_poll`）。
+- GitHub push 因上行頻寬被占滿而連不上（port 443 逾時），背景每 5 分鐘重試一次。本機 commit 都已完成。
 
 ## 下一步（依序；Mac 重負載經 `tools/with-mac-lock`，GPU 重負載經 `flock -n`，不搶 lock）
 
