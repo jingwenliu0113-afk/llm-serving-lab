@@ -95,9 +95,15 @@ backend device 能初始化。帶模型的 smoke test 屬於 Week 1 #1，不在�
   - 生效 flags 摘要：`GGML_METAL=ON`、`GGML_METAL_EMBED_LIBRARY=ON`、`GGML_NATIVE=ON`（`-mcpu=native`）、
     `GGML_ACCELERATE=ON`、`GGML_BLAS_VENDOR=Apple`、`GGML_OPENMP=OFF`、`GGML_BACKEND_DL=OFF`。
     完整內容在 `third_party/llama.cpp/build-metal/build-record.txt`（不進 git，但每次 build 都可重產）。
-- **WSL2 CUDA：blocked**。
-  - 2026-10-08 先是 `ssh gpu-server` 無法解析；SSH 已於同日恢復。
-  - 現在缺的是 WSL 內的 compiler 與 CUDA 12.8，待使用者以 sudo 安裝（見下方 addendum）。
+- **WSL2 CUDA：verified（2026-10-09）**（toolkit 依 015 改為 user-space 的 CUDA 13.4.1）
+  - `version: 0.5.0 (build 11146, commit 7fe450e19305b828c199d602c23a8337aaa1f03b)`
+  - `built with GNU 11.4.0 for Linux x86_64`；nvcc 13.4.92（host GCC 11.4.0）；cmake 4.4.3；Ninja 1.13.2；JOBS 8；
+    build 約 5 分鐘，在 GPU lock 下進行。
+  - `--list-devices`：`CUDA0: NVIDIA GeForce RTX 5070 Ti (16275 MiB, 15009 MiB free)`
+  - 生效 flags：與 Metal 共用同一組 common flags；`GGML_CUDA=ON`、`CMAKE_CUDA_ARCHITECTURES=120a-real`、`GGML_CUDA_NCCL=OFF`，
+    以及 `GGML_CUDA_FA=ON`、`GGML_CUDA_GRAPHS=ON`、`GGML_BACKEND_DL=OFF`（預設）。
+    完整內容在遠端的 `third_party/llama.cpp/build-cuda/build-record.txt`（不進 git，但每次 build 都可重產）。
+  - 歷程：2026-10-08 先是 `ssh gpu-server` 無法解析，同日恢復；接著缺 WSL 內的 compiler（使用者已安裝 gcc / g++ / libc6-dev）。
 
 ## Addendum（2026-10-08）：CUDA 12.8 改裝最小子集，並明確指定 nvcc
 
