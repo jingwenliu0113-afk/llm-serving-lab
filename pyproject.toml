@@ -10,4 +10,4 @@ dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts", "benchmarks"]
+pythonpath = ["scripts", "benchmarks", "quality"]

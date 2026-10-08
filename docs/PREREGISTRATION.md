@@ -1,5 +1,7 @@
 # Pre-registration — Local LLM Serving Lab
 
+> **2026-10-08：模型已依 decision 008 改為 Qwen3.5 4B + 9B（Core A）與 RedHatAI Qwen3.5-9B W4A16（Core B）。** 下列與模型綁定的內容在 Stage A 凍結前必須依 008「對實驗的影響」重新推導：H-A1 至 H-A5 的數值預測與範例、fit 規則中的 KV / recurrent 狀態、Core B 的 C_KV 公式、sentinel 與超量測試的配置。本文其餘結構不變。
+
 > **狀態：DRAFT v1（2026-10-08，同日依兩輪 review 修訂）— 尚未凍結。**
 > 依 decision 006 分兩階段凍結：
 > - **Stage A**（本文第 1–5 節）：在任何 Mac 正式數據之前 commit，並把 `pins.toml` 設為 `freeze.mac = true`。

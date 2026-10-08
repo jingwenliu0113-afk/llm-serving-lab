@@ -10,6 +10,7 @@ encode SPEC invariants so a later edit cannot silently break them:
       freeze.nvidia -> additionally CUDA toolchain, vLLM stack and Core B verified
 """
 
+import json
 import re
 import tomllib
 from pathlib import Path
@@ -171,10 +172,38 @@ def test_core_b_single_fixed_precision(pins):
     assert core_b["kv_cache_dtype"] == "auto"  # KV quantization is Advanced
 
 
-def test_core_b_fixed_to_qwen3_8b_awq_without_alternatives(pins):
-    # User decision 2026-10-08 (decision 003): one fixed model; no fallback matrix,
-    # RTX 5070 Ti 16 GB must keep room for KV cache / concurrency.
+def test_core_b_fixed_model_without_alternatives(pins):
+    # Decision 008 (supersedes the Qwen3-8B-AWQ choice in 003): one fixed quantized
+    # checkpoint, no fallback matrix; 16 GB must keep KV / concurrency headroom.
     core_b = pins["core_b"]
-    assert core_b["repo"] == "Qwen/Qwen3-8B-AWQ"
-    assert core_b["precision"] == "awq-w4a16"
+    assert core_b["repo"] == "RedHatAI/Qwen3.5-9B-quantized.w4a16"
+    assert core_b["precision"] == "w4a16-gptq-int4-g128"
+    assert core_b["dtype"] == "bfloat16"
     assert "fallback" not in core_b
+
+
+def test_core_b_is_quantized_from_a_core_a_size(pins):
+    # Lineage: the serving model is a quantization of one of the Core A sizes.
+    core_a_sources = {m["source_repo"] for m in pins["core_a"]["models"]}
+    assert pins["core_b"]["base_repo"] in core_a_sources
+
+
+def test_core_a_ordering_conventions(pins):
+    # benchmarks/core_a_plan.sentinel_cell relies on: models smallest first,
+    # quants highest-bit first.
+    core_a = pins["core_a"]
+    sizes = [float(m["size"].rstrip("B")) for m in core_a["models"]]
+    assert sizes == sorted(sizes)
+    bpw = {"Q8_0": 8.5, "Q6_K": 6.56, "Q5_K_M": 5.5, "Q4_K_M": 4.85, "Q4_0": 4.5, "Q3_K_M": 3.9}
+    assert all(q in bpw for q in core_a["quants"])
+    assert [bpw[q] for q in core_a["quants"]] == sorted((bpw[q] for q in core_a["quants"]), reverse=True)
+
+
+def test_quality_subset_index_files_exist(pins):
+    for name, sub in pins["quality"]["subsets"].items():
+        if sub["index_file"]:
+            path = ROOT / sub["index_file"]
+            assert path.is_file(), name
+            record = json.loads(path.read_text())
+            assert record["indices"] == sorted(set(record["indices"]))
+            assert len(record["indices"]) == record["n"]

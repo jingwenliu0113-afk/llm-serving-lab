@@ -1,5 +1,7 @@
 # 004 — Model family、Core A 的 size × quant × context grid、量化來源、fit 規則
 
+> **2026-10-08：model family / size / 來源 repo / fit 預測表已由 008 取代**（改為 Qwen3.5 4B + 9B，hybrid attention）。量化方式（本地 Q8_0 / Q6_K / Q4_K_M、不用 imatrix）、context set 與 fit 規則的結構仍有效；KV 與 recurrent 狀態的算法依 008 修訂。下方的 Qwen3 數字保留作為決策歷史。
+
 - 狀態：Accepted（v1；在 Stage A pre-registration commit 前仍可修改，修改需留 log）
 - 日期：2026-10-08（同日依 review 修訂：fit 規則、quant set 理由、轉換 pipeline）
 - 對應：SPEC Day 1 #5「選 model family」、SPEC Core A「同一 model family：2 種 parameter size × 3 種 quantization × 3 種 context length」

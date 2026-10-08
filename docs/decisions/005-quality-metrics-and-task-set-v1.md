@@ -1,5 +1,7 @@
 # 005 — Quality 指標與 task set v1
 
+> **2026-10-08（008）**：模型改為 Qwen3.5，tokenizer 改變（vocab 248,320）。WikiText 的 chunk 數 / 計分 token 數、MMLU 結構性排除清單、KLD 檔大小（約 74 GB / size）都要依新 tokenizer 重算；指標與 task set 的設計不變。
+
 - 狀態：Accepted（v1 **草案**；pilot 校準後於 Stage A pre-registration commit 時凍結，凍結後不得依結果修改）
 - 日期：2026-10-08（同日依 review 修訂：統計方法、章節、資料 pin）
 - 對應：SPEC Core A Quality（「perplexity 或類似指標 + 一組固定 downstream task set」）、SPEC Day 1 #6、
@@ -51,6 +53,7 @@ SPEC 把 quality 定義為「model × quantization」的屬性：只量一次、
     只有在 Stage A 凍結後、正式 quality run 確實需要時才產生，不提前產生。
   - 任何大型下載（模型 safetensors、資料集）之前，都要先在 `pins.toml` 記錄來源、版本（revision）與 checksum（sha256）。
     目前 safetensors 的 shard 與資料集都已記錄；未記錄的檔案不得下載。
+  - 保留 / 刪除的分級、空間預算與 50 GiB 安全餘量，見 `docs/STORAGE_PLAN.md`。KLD logits 屬於可重建 scratch，一次只存在一個 size。
 
 ### Downstream（log-likelihood、cloze）
 

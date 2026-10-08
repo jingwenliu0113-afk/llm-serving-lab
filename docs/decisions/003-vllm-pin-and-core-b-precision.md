@@ -1,5 +1,7 @@
 # 003 — vLLM 版本 pin 與 Core B 固定 precision
 
+> **2026-10-08：Core B 的模型 / precision / dtype 已由 008 取代**（改為 `RedHatAI/Qwen3.5-9B-quantized.w4a16`、`--dtype bfloat16`）。vLLM 版本與其餘 server protocol 仍有效；hybrid 模型需要的新 flag 見 008。下方內容保留作為決策歷史。
+
 - 狀態：**Core B 模型已由使用者固定為 `Qwen3-8B-AWQ`（2026-10-08）**；vLLM 環境待 RTX 5070 Ti smoke test 通過後改為 Accepted
 - 日期：2026-10-08
 - 對應：SPEC Day 1 #3「固定 vLLM 版本」、SPEC Core B「固定一種 precision」
@@ -108,7 +110,8 @@ GPU lock 依 MACHINE_POLICY：步驟 1–2 是小型啟動 smoke test，**不需
 步驟 3–6 屬於 throughput 類重工作業，或會產生 protocol 數字，**必須**在 `flock -n /tmp/ai-portfolio-gpu.lock` 下執行。
 
 1. `torch.cuda.get_device_capability() == (12, 0)`，且 `get_arch_list()` 含 sm_120。
-2. AWQ 模型可以啟動並回應；log 顯示使用 Marlin 與 FLASH_ATTN。
+2. 模型可以啟動並回應。2026-10-08 起依 008：模型改為 Qwen3.5-9B W4A16，`--language-model-only`，
+   並依 **2K → 8K → 32K 分段**（008「Core B smoke test」），每段只送 1 個 request，前一段通過才進下一段。
 3. 記錄 FA2 PTX JIT 的首次啟動時間；第二次 boot 時 JIT cache 有生效。
 4. `VLLM_WSL2_ENABLE_PIN_MEMORY` 做 0/1 A/B 一次。
 5. `vllm bench serve` 能跑完並產出 JSON；在 `/metrics` 確認 KV usage 與 preemption 的 metric 名稱。

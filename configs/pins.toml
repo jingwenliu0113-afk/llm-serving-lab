@@ -1,4 +1,4 @@
-# Machine-readable Day 1 pins. Rationale lives in docs/decisions/002-007.
+# Machine-readable Day 1 pins. Rationale lives in docs/decisions/002-008.
 # Invariants are enforced by tests/test_pins.py.
 schema_version = 1
 
@@ -61,103 +61,100 @@ exclude_newer = "2026-09-23T00:00:00Z"                   # end of the vLLM 0.30.
 # -------------------------------------------------------------------- Core A --
 
 [core_a]
-# docs/decisions/004-model-family-and-core-a-grid.md
-family = "Qwen3"
+# docs/decisions/008-model-reselection-qwen35.md (supersedes the family/size part of 004)
+family = "Qwen3.5"
 quants = ["Q8_0", "Q6_K", "Q4_K_M"]
 context_lengths = [2048, 8192, 32768]
-native_context = 32768                                   # Qwen3 native window; no YaRN
+native_context = 262144                                  # Qwen3.5 native window; no YaRN
 converter_lock = ""                                      # hashed lock for convert_hf_to_gguf.py deps (configs/), before Week 1 conversion
+# Hybrid: 32 layers = 8 full attention (4 KV heads x 256) + 24 Gated-DeltaNet.
+# f16 KV = 32768 B/token; recurrent state (llama.cpp f32) ~50.25 MiB per sequence.
+# Same KV/state geometry for both sizes. Convert with --no-mtp; text-only (no --mmproj).
 
 [[core_a.models]]
-size = "8B"
-family = "Qwen3"
+size = "4B"
+family = "Qwen3.5"
 license = "apache-2.0"
-source_repo = "Qwen/Qwen3-8B"
-source_revision = "b968826d9c46dd6066d109eabc6255188de91218"
-# config.json: 36 layers, 8 KV heads, head_dim 128 -> f16 KV = 147456 B/token
+source_repo = "Qwen/Qwen3.5-4B"
+source_revision = "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+# 4.66B params incl. vision 0.33B + MTP 0.12B; tie_word_embeddings = true; 9,342,907,469 B repo
 
 [core_a.models.source_shards]
-"model-00001-of-00005.safetensors" = "31d6a825ae35f11fb85b195b4c42c146c051e446433125a215336abdf95cbf5f"
-"model-00002-of-00005.safetensors" = "5991236cea6fe21f3d43cab0f0e84448734fbbe0789816202989f2ddc9d18282"
-"model-00003-of-00005.safetensors" = "c5185c4794be2d8a9784d5753c9922db38df478ce11f9ed0b415b7304d896836"
-"model-00004-of-00005.safetensors" = "b5ee7de71fbf17db3d5704e0c8f2bc7d005ca9e1d7ca2aeb19827b0cfcaa917a"
-"model-00005-of-00005.safetensors" = "20c2d6366ab85c90786ccdd829cd2b9e7d30ef3b2ebbb998280e7e4014b542ff"
+"model.safetensors-00001-of-00002.safetensors" = "26a93f066e1916adb13453dae5a0c707c0fbc71299ed98779571a907b8e74c61"
+"model.safetensors-00002-of-00002.safetensors" = "cb544bd9bfae93dc59b0f22b292f5933573854a7f9b97835c67060d7d910e188"
 
-# Derived locally with the pinned llama.cpp (convert_hf_to_gguf.py -> llama-quantize, no imatrix).
+# Derived locally with the pinned llama.cpp (convert_hf_to_gguf.py --no-mtp -> llama-quantize, no imatrix).
 # sha256 / size_bytes are recorded when produced (Week 1).
 [core_a.models.reference]
-filename = "Qwen3-8B-BF16.gguf"
+filename = "Qwen3.5-4B-BF16.gguf"
 sha256 = ""
 size_bytes = 0
 
 [core_a.models.files.Q8_0]
-filename = "Qwen3-8B-Q8_0.gguf"
+filename = "Qwen3.5-4B-Q8_0.gguf"
 sha256 = ""
 size_bytes = 0
 
 [core_a.models.files.Q6_K]
-filename = "Qwen3-8B-Q6_K.gguf"
+filename = "Qwen3.5-4B-Q6_K.gguf"
 sha256 = ""
 size_bytes = 0
 
 [core_a.models.files.Q4_K_M]
-filename = "Qwen3-8B-Q4_K_M.gguf"
+filename = "Qwen3.5-4B-Q4_K_M.gguf"
 sha256 = ""
 size_bytes = 0
 
 [[core_a.models]]
-size = "14B"
-family = "Qwen3"
+size = "9B"
+family = "Qwen3.5"
 license = "apache-2.0"
-source_repo = "Qwen/Qwen3-14B"
-source_revision = "40c069824f4251a91eefaf281ebe4c544efd3e18"
-# config.json: 40 layers, 8 KV heads, head_dim 128 -> f16 KV = 163840 B/token
+source_repo = "Qwen/Qwen3.5-9B"
+source_revision = "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+# 9.65B params incl. vision 0.46B + MTP 0.24B; tie_word_embeddings = false; 19,329,393,661 B repo
 
 [core_a.models.source_shards]
-"model-00001-of-00008.safetensors" = "e942bdbdf08857d16a8fef7d1dae9fceabeb4e84def6043485fe2f6f085dab0e"
-"model-00002-of-00008.safetensors" = "f7c9c6eee628f5ad831d2d1d292e120505e5fcadeb38f88b4d3c4cb86306ccf9"
-"model-00003-of-00008.safetensors" = "dfb8c5df9404b41ad6ae74e8b6b367135f017b4467b884cf71b17c71954f18a9"
-"model-00004-of-00008.safetensors" = "eab286fec759e3e59ab228621aefa0fef14ed56039e06f959e67257d5af7604d"
-"model-00005-of-00008.safetensors" = "97f0dc2992e59da95c466eff6f4fd0c8335843bbc36ed5c913a6f5150748c0e6"
-"model-00006-of-00008.safetensors" = "9e8e76a013cd5e253865b792991e0b410f869b136b3c500079b531b09198e99e"
-"model-00007-of-00008.safetensors" = "0aee70ee6e91dc00d818804fb47f124d13ee4ad5b4a64553e09dbf9391cd5750"
-"model-00008-of-00008.safetensors" = "0d6b92296e326d39bbbaeb32c3ec454ac606da843d4c8ffa8edf010b62b8c9e0"
+"model.safetensors-00001-of-00004.safetensors" = "db6f444b43d318c92f360a13a25561a6a65b10c0631b8ed305a426dbaa6c380e"
+"model.safetensors-00002-of-00004.safetensors" = "31c7d7e2dd5d207840b31cc59083c8f4c4718959149e0358c0364052bb9a0330"
+"model.safetensors-00003-of-00004.safetensors" = "7ec36ba3a4176a44c3c0876ad80c56a2f70c84bf008d82e9501df642f17dadec"
+"model.safetensors-00004-of-00004.safetensors" = "b62b0c4cd7e44edee103ee8f4fe225f246d5e768e07bfd5f25b63a8aa1fdd0c6"
 
 [core_a.models.reference]
-filename = "Qwen3-14B-BF16.gguf"
+filename = "Qwen3.5-9B-BF16.gguf"
 sha256 = ""
 size_bytes = 0
 
 [core_a.models.files.Q8_0]
-filename = "Qwen3-14B-Q8_0.gguf"
+filename = "Qwen3.5-9B-Q8_0.gguf"
 sha256 = ""
 size_bytes = 0
 
 [core_a.models.files.Q6_K]
-filename = "Qwen3-14B-Q6_K.gguf"
+filename = "Qwen3.5-9B-Q6_K.gguf"
 sha256 = ""
 size_bytes = 0
 
 [core_a.models.files.Q4_K_M]
-filename = "Qwen3-14B-Q4_K_M.gguf"
+filename = "Qwen3.5-9B-Q4_K_M.gguf"
 sha256 = ""
 size_bytes = 0
 
 # -------------------------------------------------------------------- Core B --
 
 [core_b]
-# docs/decisions/003-vllm-pin-and-core-b-precision.md
-# Model fixed by user decision (2026-10-08): no fallback / alternatives.
-# status stays "proposed" until the 003 smoke-test gate passes on the RTX 5070 Ti.
+# docs/decisions/008-model-reselection-qwen35.md (supersedes the Qwen3-8B-AWQ choice in 003).
+# One fixed checkpoint, no fallback. status stays "proposed" until the 003/008 smoke-test gate passes.
 status = "proposed"
-family = "Qwen3"
-repo = "Qwen/Qwen3-8B-AWQ"
-revision = "4da05a8edb55c6046cce958586c33b61da07bb79"
-precision = "awq-w4a16"                                  # INT4 weight-only, group 128, Marlin kernels
-dtype = "float16"
+family = "Qwen3.5"
+repo = "RedHatAI/Qwen3.5-9B-quantized.w4a16"
+revision = "a398088c4228b0ae0c8c78df88fd1e4bf445f068"
+base_repo = "Qwen/Qwen3.5-9B"                            # lineage inferred from the recipe (base revision not hash-verified)
+precision = "w4a16-gptq-int4-g128"                       # compressed-tensors, sym int4, group 128, actorder static; GDN / embed / lm_head / vision / MTP stay BF16
+dtype = "bfloat16"
 kv_cache_dtype = "auto"                                  # KV quantization is an Advanced item: off in Core
 mix_dataset_sha256 = ""                                  # seeded `mixed` dataset (decision 007), built at Stage B
-
+# Repo: model.safetensors 10,950,193,416 B (sha256 48e5ff6e...cd17) + model_mtp.safetensors 486,582,848 B; 11,456,885,740 B total
+# Serve with --language-model-only (vision skipped; MTP dropped).
 
 # ------------------------------------------------------------------- Quality --
 
@@ -206,11 +203,13 @@ path = "winogrande-debiased-eval.csv"                    # 1267 tasks; git blob 
 sha256 = "6726173ef65ffdc4abb0d28b755375d288ffb3eb41633bd833288c411c8ebf7c"
 size_bytes = 155325
 
-# Frozen 4000-task subsets (Week 1): committed index list + sha256 of the built .bin.
+# 4000-task subsets: committed index list (seed 20261008, quality/mc_subset.py) + sha256 of the built .bin.
+# Index lists are model-independent; identical to the research-stage lists built with Python 3.13.
 [quality.subsets.hellaswag]
-index_file = ""
-sha256 = ""
+index_file = "quality/subsets/hellaswag-val-4000.json"
+sha256 = "8c3678d996a329f857746937f9d9aa5698f90182ff57b5a05882f6d96d582984"
 
 [quality.subsets.mmlu]
-index_file = ""                                          # after the structural exclusion rule (005)
-sha256 = ""
+index_file = "quality/subsets/mmlu-test-4000.json"
+pre_exclusion_sha256 = "49e128209c344e359ccaed1c415f49857d3a8b66cf472f7eb9350c203e085ffa"
+sha256 = ""                                              # final .bin after the tokenizer-dependent structural exclusion (005)

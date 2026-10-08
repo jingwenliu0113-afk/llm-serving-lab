@@ -16,6 +16,13 @@ Mac 是主要開發機：所有一般開發、Git、Claude Code session 都留�
 - configs / scripts
 - 統一結果分析
 
+## Mac Docker Desktop（Core 階段不使用）
+
+- Core A 在 Mac 使用 native `llama.cpp`（Metal）；Docker 在 macOS 上無法使用 Metal（001）。
+- Core B NVIDIA serving 在 `gpu-server` 的 WSL2 `Ubuntu-22.04` 執行。
+- 不得為了方便而在 Mac 啟動 vLLM 或任何 model serving 的 Docker container。
+- 不得執行任何會影響 Mac Docker Desktop 全域狀態的指令（例如啟動 / 停止 Docker Desktop、修改其設定、pull / prune image、建立或刪除 volume / network）。
+
 ## RTX 桌機負責
 
 遠端可用時：
@@ -55,8 +62,14 @@ ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "<command>"'
 
 ### 遠端 Python 環境
 
-- `~/venvs/gpu-check` 只是 CUDA 驗證環境，**不是**本 Project 的正式 Python 環境。
-- 需要 GPU Python 環境時，建立本 Project 自己的隔離環境。
+- `~/venvs/gpu-check` 只是 CUDA 驗證環境，**不是**本 Project 的正式 Python 環境，本 Project 不使用它。
+- 需要 GPU Python 環境時，建立本 Project 自己的隔離環境：
+  - `uv` 以 user scope 安裝到 `~/.local/bin/uv`（pinned 版本，不修改 shell rc）；不污染 system Python，不用 sudo。
+  - 專案目錄與環境放在 WSL Linux filesystem：`/home/wenn0113/llm-serving-lab/`（`.venv` 在其中）。
+    **不得**放在 `/mnt/c/...`。
+- Hugging Face / model cache：`HF_HOME=/home/wenn0113/.cache/huggingface`（WSL Linux filesystem），
+  遠端指令一律明確設定，不得放在 C 槽掛載路徑。
+- 大型檔案的保留與刪除規則見 `docs/STORAGE_PLAN.md`。
 
 ## 遠端不可用
 
@@ -119,7 +132,8 @@ ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "flock -n /tmp/ai-portfolio-
 ## Core A / Core B
 
 - Core A 才 sweep quantization。
-- Core B 固定一種 precision：固定使用 `Qwen3-8B-AWQ`，不擴大模型選擇矩陣。
-  原因是 RTX 5070 Ti 16GB 需要保留 KV cache / concurrency 空間（003）。
+- Core B 固定一種 precision：固定使用單一 quantized checkpoint，不擴大模型選擇矩陣。
+  原因是 RTX 5070 Ti 16GB 需要保留 KV cache / concurrency 空間。
+  目前依 008 為 `RedHatAI/Qwen3.5-9B-quantized.w4a16`（取代原本的 `Qwen3-8B-AWQ`）。
 - Mac / RTX 結果明確標示 hardware / backend。
 - 不做「誰比較快」排行榜。

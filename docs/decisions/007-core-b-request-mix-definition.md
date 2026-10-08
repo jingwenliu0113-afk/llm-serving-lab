@@ -1,5 +1,7 @@
 # 007 — Core B 的 request mix 與 grid 規則（與 Advanced「request-length distribution」劃界）
 
+> **2026-10-08（008）**：Core B 改為 hybrid 模型。C_KV 公式要改為 ⌊(num_gpu_blocks − 1) ÷ (⌈L ÷ block_size⌉ + 3)⌋（block_size 約 528，另加 3 個 GDN 狀態 block），須在 Stage A 前於 PREREGISTRATION 修訂；mix 與 grid 的結構不變。
+
 - 狀態：Accepted（**規則**於 Stage A 凍結；Stage B 只代入實測的 KV 容量）
 - 日期：2026-10-08（同日依 re-review 修訂：長度、比例、grid 改為 Stage A 規則）
 - 對應：SPEC Core B 變因「concurrency、context length、request mix、KV cache pressure」；
