@@ -109,3 +109,11 @@ def test_main_treats_a_failed_remote_check_as_temporary(monkeypatch, capsys):
     monkeypatch.setattr(sg.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 255, "", "timed out"))
     assert sg.main(["--dry-run"]) == sg.EX_TEMPFAIL
     assert "remote check failed" in capsys.readouterr().err
+
+
+def test_send_from_streams_the_tail_through_a_real_subprocess(tmp_path):
+    """Regression: closing stdin and then calling communicate() raised 'flush of closed file'."""
+    f = tmp_path / "x.gguf"
+    f.write_bytes(b"abcdef")
+    res = sg.send_from(f, 2, ["sh", "-c", "wc -c | tr -d ' '; echo VERIFIED x.gguf"])
+    assert res.returncode == 0 and res.stdout.split() == ["4", "VERIFIED", "x.gguf"]

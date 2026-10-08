@@ -90,10 +90,14 @@ def send_from(path: Path, offset: int, cmd: list) -> subprocess.CompletedProcess
             fh.seek(offset)
             while chunk := fh.read(CHUNK):
                 proc.stdin.write(chunk)
+    except BrokenPipeError:
+        pass
+    try:
         proc.stdin.close()
     except BrokenPipeError:
         pass
-    out, err = proc.communicate()
+    out, err = proc.stdout.read(), proc.stderr.read()  # tiny outputs; communicate() would flush the closed stdin
+    proc.wait()
     return subprocess.CompletedProcess(cmd, proc.returncode, out.decode(errors="replace"), err.decode(errors="replace"))
 
 
