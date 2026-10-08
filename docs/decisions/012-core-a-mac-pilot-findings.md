@@ -74,3 +74,17 @@
 
 - PREREGISTRATION §3（Mac 外部量測）、§4（fit 指令、Mac 的 P、電源有效性規則）、§5 checklist 依上更新。
 - `-fa auto` probe 待重跑。9B pilot 會補上 9B 的 memory 與時間校準。
+
+## 補充：quality pilot（4B，`results/quality/pilot-20261008-4b`，26 / 26 ok）
+
+遮蔽版報告（`quality/quality_pilot.py`）只看下列各項，沒有任何 accuracy、Q6_K / Q4_K_M 的 KLD 或 PPL。
+
+- **determinism**：Q8_0 的 KLD 與 MMLU 重跑，metrics 完全相同。
+- **sanity**：
+  - BF16 對自己的 KLD 為 −0.0，即 0。
+  - Q8_0 的 KLD 在 `-fa on` 為 0.001398、`-fa off` 為 0.001399，符合 005 預期的 1e-3 量級，`-fa` 對數值幾乎沒有影響。
+- **SE 換算到 580 chunks**：Q8_0 約 1.3e-4、Q6_K 約 4.2e-4、Q4_K_M 約 7.7e-4。只看 SE，不看平均。
+- **downstream 的 MDE（只看 b + c）**：相鄰配對換算到正式 N 的 95% CI 半寬約 0.2–1.7 pp（ARC 最寬，因為 N = 869）。
+- **時間**：4B 換算到正式 run 約 5.1 小時；9B pilot 後更新總時數（005 原估 19.5 小時）。
+- H-A5 的配對 ΔNLL 需要兩個 size，等 9B pilot。
+- 未發現需要修改 quality protocol 的問題。

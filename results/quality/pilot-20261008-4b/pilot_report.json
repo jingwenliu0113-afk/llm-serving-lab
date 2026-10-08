@@ -1,0 +1,193 @@
+{
+ "throughput": {
+  "formal_hours_est": 5.12,
+  "method": "pilot wall time scaled by formal / pilot chunks or tasks (sizes in this pilot)"
+ },
+ "determinism": [
+  {
+   "job": "kld-4B-Q8_0-repeat",
+   "of": "kld-4B-Q8_0",
+   "identical": true
+  },
+  {
+   "job": "mc-mmlu-4B-Q8_0-repeat",
+   "of": "mc-mmlu-4B-Q8_0",
+   "identical": true
+  }
+ ],
+ "sanity": {
+  "kld_self": {
+   "4B": -0.0
+  },
+  "q8_0_kld": {
+   "4B": {
+    "fa_on": 0.001398,
+    "fa_off": 0.001399
+   }
+  }
+ },
+ "kld_se_formal_est": {
+  "4B": {
+   "Q8_0": 0.00012571574394586413,
+   "Q6_K": 0.0004183715969128978,
+   "Q4_K_M": 0.0007656218793039848
+  }
+ },
+ "discordance": [
+  {
+   "task": "arc",
+   "size": "4B",
+   "pair": [
+    "BF16",
+    "Q8_0"
+   ],
+   "n": 200,
+   "b_plus_c": 0,
+   "rate": 0.0,
+   "ci_halfwidth_pp_formal": 0.0
+  },
+  {
+   "task": "arc",
+   "size": "4B",
+   "pair": [
+    "Q6_K",
+    "Q4_K_M"
+   ],
+   "n": 200,
+   "b_plus_c": 13,
+   "rate": 0.065,
+   "ci_halfwidth_pp_formal": 1.6951294202621918
+  },
+  {
+   "task": "arc",
+   "size": "4B",
+   "pair": [
+    "Q8_0",
+    "Q6_K"
+   ],
+   "n": 200,
+   "b_plus_c": 4,
+   "rate": 0.02,
+   "ci_halfwidth_pp_formal": 0.9402886220465967
+  },
+  {
+   "task": "hellaswag",
+   "size": "4B",
+   "pair": [
+    "BF16",
+    "Q8_0"
+   ],
+   "n": 200,
+   "b_plus_c": 2,
+   "rate": 0.01,
+   "ci_halfwidth_pp_formal": 0.3099032106965012
+  },
+  {
+   "task": "hellaswag",
+   "size": "4B",
+   "pair": [
+    "Q6_K",
+    "Q4_K_M"
+   ],
+   "n": 200,
+   "b_plus_c": 12,
+   "rate": 0.06,
+   "ci_halfwidth_pp_formal": 0.7591047358566537
+  },
+  {
+   "task": "hellaswag",
+   "size": "4B",
+   "pair": [
+    "Q8_0",
+    "Q6_K"
+   ],
+   "n": 200,
+   "b_plus_c": 4,
+   "rate": 0.02,
+   "ci_halfwidth_pp_formal": 0.4382693235899588
+  },
+  {
+   "task": "mmlu",
+   "size": "4B",
+   "pair": [
+    "BF16",
+    "Q8_0"
+   ],
+   "n": 200,
+   "b_plus_c": 1,
+   "rate": 0.005,
+   "ci_halfwidth_pp_formal": 0.21921688354577903
+  },
+  {
+   "task": "mmlu",
+   "size": "4B",
+   "pair": [
+    "Q6_K",
+    "Q4_K_M"
+   ],
+   "n": 200,
+   "b_plus_c": 8,
+   "rate": 0.04,
+   "ci_halfwidth_pp_formal": 0.6200389796232082
+  },
+  {
+   "task": "mmlu",
+   "size": "4B",
+   "pair": [
+    "Q8_0",
+    "Q6_K"
+   ],
+   "n": 200,
+   "b_plus_c": 3,
+   "rate": 0.015,
+   "ci_halfwidth_pp_formal": 0.3796947801781991
+  },
+  {
+   "task": "winogrande",
+   "size": "4B",
+   "pair": [
+    "BF16",
+    "Q8_0"
+   ],
+   "n": 200,
+   "b_plus_c": 1,
+   "rate": 0.005,
+   "ci_halfwidth_pp_formal": 0.3893612845992156
+  },
+  {
+   "task": "winogrande",
+   "size": "4B",
+   "pair": [
+    "Q6_K",
+    "Q4_K_M"
+   ],
+   "n": 200,
+   "b_plus_c": 11,
+   "rate": 0.055,
+   "ci_halfwidth_pp_formal": 1.2913652889063827
+  },
+  {
+   "task": "winogrande",
+   "size": "4B",
+   "pair": [
+    "Q8_0",
+    "Q6_K"
+   ],
+   "n": 200,
+   "b_plus_c": 1,
+   "rate": 0.005,
+   "ci_halfwidth_pp_formal": 0.3893612845992156
+  }
+ ],
+ "ha5_paired_nll": {
+  "n_chunks": null,
+  "sd_chunk_diff": null,
+  "ci_halfwidth_formal": null
+ },
+ "outcomes": {
+  "ok": 25,
+  "oom": 0,
+  "error": 0,
+  "skipped": 0
+ }
+}

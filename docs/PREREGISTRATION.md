@@ -246,11 +246,11 @@ OOM、spill、crash、drift、not testable、inconclusive 的單位一律進結�
 - [ ] Mac pilot 完成：
   - [ ] `-fa auto` probe（4B 的 probe 因 log verbosity 無法判定，需以 `-lv 4` 重跑；012）
   - [x] `--poll` 依規則選定：Mac P = 0（012）
-  - [ ] throughput 校準
-  - [ ] determinism
+  - [ ] throughput 校準：Core A 上限 10.65 h、quality 4B 約 5.1 h（012）；9B 待補
+  - [x] determinism：KLD 與 MMLU 重跑完全相同（4B；012）
   - [x] memory metric 交叉核對（4B）：breakdown 的 context 增量 990 MiB 與 footprint 1026 MiB、理論 960 MiB 一致（012）；9B 待補
-  - [ ] quality 數值 sanity check
-  - [ ] MDE（遮蔽方向）：Core A 已估（sentinel CV 5.9%，兩格相對 MDE 約 9.6%；012）；quality 待 quality pilot
+  - [x] quality 數值 sanity check：self-KLD 0、Q8_0 KLD 0.0014（fa on / off 相同）（4B；012）
+  - [ ] MDE（遮蔽方向）：Core A 已估（sentinel CV 5.9%，兩格相對 MDE 約 9.6%）；downstream CI 半寬 0.2–1.7 pp（012）；H-A5 ΔNLL 待 9B
 - [ ] Benchmark harness 與輸出格式固定，記錄 harness 的 git commit
 - [x] 判定規則的分析程式在任何數據前 commit（`benchmarks/core_a_analysis.py`、`quality/quality_analysis.py`、`benchmarks/core_b_plan.py`、`benchmarks/core_b_analysis.py`；011）
 - [x] Mac 重負載 lock 的參與方式已由使用者決定，並寫入 MACHINE_POLICY 或 decision log（共享 `/tmp/ai-portfolio-mac-heavy.lock`，經 `tools/with-mac-lock`）

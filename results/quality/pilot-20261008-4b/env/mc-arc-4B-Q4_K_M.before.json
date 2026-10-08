@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "captured_at_utc": "2026-10-08T12:02:11.231076+00:00",
+  "repo": {
+    "commit": "6d67cb668322ad53b74306fae97d755244245629",
+    "dirty": true,
+    "status": [
+      " M benchmarks/core_a_parse.py",
+      " M benchmarks/core_a_pilot.py",
+      " M benchmarks/core_a_plan.py",
+      " M benchmarks/run_core_a.py",
+      " M docs/PREREGISTRATION.md",
+      " M docs/RESULTS_FORMAT.md",
+      " M docs/STORAGE_PLAN.md",
+      " M docs/decisions/004-model-family-and-core-a-grid.md",
+      " M quality/run_quality.py",
+      " M scripts/produce_gguf.py",
+      " M tests/test_core_a_parse.py",
+      " M tests/test_core_a_pilot.py",
+      " M tests/test_core_a_plan.py",
+      " M tests/test_produce_gguf.py",
+      " M tests/test_run_core_a.py",
+      " M tests/test_run_quality.py",
+      "?? docs/decisions/012-core-a-mac-pilot-findings.md",
+      "?? results/core_a/macos-metal/pilot-20261008-4b/",
+      "?? results/quality/"
+    ],
+    "source": "git"
+  },
+  "os": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "wsl": false,
+    "product_name": "macOS",
+    "product_version": "27.0.1",
+    "build_version": "26A434"
+  },
+  "hardware": {
+    "cpu": "Apple M4 Pro",
+    "logical_cpus": 12,
+    "ram_bytes": 51539607552,
+    "iogpu_wired_limit_mb": 0
+  },
+  "gpu": {
+    "nvidia": null,
+    "cuda_toolkit_on_path": null
+  },
+  "power": {
+    "source": "AC",
+    "battery_pct": 73,
+    "powermode": 2,
+    "powermode_label": "high_power",
+    "thermal": {
+      "thermal_warning_recorded": false,
+      "performance_warning_recorded": false,
+      "cpu_limits": {}
+    }
+  },
+  "load": {
+    "loadavg_1m": 3.71630859375,
+    "loadavg_5m": 4.9345703125,
+    "loadavg_15m": 5.23486328125,
+    "mac_heavy_lock_present": true,
+    "mac_heavy_lock_owner": "pid=97925\nstarted_at=2026-10-08T11:14:59Z\ncwd=/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab\nproject=llm-serving-lab\ncommand=bash /private/tmp/claude-501/-Users-liujingwen-Desktop-AI-Portfolio-llm-serving-lab/7e882394-1a55-4068-8e62-710fa960d4fe/scratchpad/batch_4b.sh\n",
+    "gpu_lock_held": null
+  },
+  "runtime": {
+    "llama_cpp": {
+      "binary": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/third_party/llama.cpp/build-metal/bin/llama-perplexity",
+      "version": "0.5.0",
+      "build_number": 11146,
+      "commit": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+      "built_with": "AppleClang 21.0.0.21000334 for Darwin arm64"
+    },
+    "vllm": null
+  },
+  "env": {},
+  "capture_python": "3.12.13",
+  "config": null,
+  "probe_errors": []
+}
