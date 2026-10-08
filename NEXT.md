@@ -40,22 +40,20 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
   - `mixed` dataset 已 pin。
 - llama.cpp CUDA：user-space CUDA 13.4.1 + Ninja（015）。configure 已通過。RTX 的 N_thr = 6（Ryzen 5 7600，6 核）。
 - Stage B 工具已備妥並有測試：`benchmarks/stage_b.py`（B、C_ctx、超量）、`benchmarks/coreb_stage_b.py`（boots、pin-ab）。
-- GPU lock 01:10 釋放後跑了第一次 S1（`results/core_b/smoke/20261008-s1s3-014`，失敗，已 commit）：
-  - Triton stub 已能編譯，KV cache 33,060 tokens，FLASH_ATTN，GDN 走 Triton/FLA。
-  - 但 FlashInfer sampler 的 JIT 撞上 CCCL 的版本檢查：vLLM venv 的 pip nvcc 13.4 搭配 cudart 13.0 headers。
-  - 修正（014 補充，仍在 user space）：shim 改指向版本一致的 CUDA 13.0（`.venv-fi-cuda130`，`configs/flashinfer-cuda.lock.txt`）。
-    01:27 起在 WSL 安裝中（網路慢）。
-  - 裝好後：部署 → `bash scripts/wsl_cuda_home_shim.sh` → `JIT=1` 檢查 → 在新目錄 `20261009-s1s3-014b` 重跑 S1。
-- **WSL 會在 wsl.exe 結束時終止背景 process**（`nohup` 加 `setsid` 也一樣）。遠端長時間工作必須在 ssh session 的前景執行，
-  並讓連線保持開啟（`ServerAliveInterval`）。
-- Mac ↔ 桌機的傳輸只有約 0.7–0.9 MB/s。6 個 quant（30.9 GiB）的傳輸 01:06 起在背景進行，估計要 10 小時以上。
+- **Core B smoke S1 → S2 → S3 全部通過**（2026-10-09 01:54–02:01，`results/core_b/smoke/20261009-s1s3-014b`；008 補充）。
+  先前兩次失敗照實保留：沒有 C compiler；FlashInfer JIT 的 CCCL 版本檢查。後者由 014 補充解決：shim 改用版本一致的 CUDA 13.0（`.venv-fi-cuda130`）。
+- 003 gate 第 1–2 項通過：專案 venv 的 capability 為 (12, 0)，arch list 含 sm_120。
+- **llama.cpp b11146 在 wsl2-cuda 上 verified**（02:07；CUDA 13.4.1 user space，GNU 11.4.0，`CUDA0 RTX 5070 Ti 16275 MiB`）。
+- **Stage B 量測進行中**（02:09 起，在 GPU lock 下，`results/stage_b/20261009/`）：baseline B → boots（U、K、JIT 冷 / 熱）→ pin-memory A/B。
+- WSL 會在 wsl.exe 結束時終止背景 process，所以遠端長時間工作都在 ssh 前景執行（`ServerAliveInterval`）。
+- Mac ↔ 桌機約 0.7–0.9 MB/s，而且會斷線。GGUF 傳輸已改成可續傳（`sync_gguf_to_wsl.py`）。
+  為了不讓 GPU 工作的 ssh session 被擠斷，傳輸等 Stage B 結束後再進行。
 
 ## 下一步（依序；Mac 重負載經 `tools/with-mac-lock`，GPU 重負載經 `flock -n`，不搶 lock）
 
-1. NVIDIA（GPU lock 釋放後）：
-   1. `JIT=1` 檢查 → S1 → S2 → S3（008；每段通過才進下一段；smoke 不取 lock，lock 被占用時不啟動）。
-   2. llama.cpp CUDA build（`flock -n` 下執行 `scripts/build_llama_cpp.sh cuda`）→ `--version` 驗證 → 002 驗證紀錄。
-   3. Stage B 量測，全部在 GPU lock 下：
+1. NVIDIA：
+   1. ~~S1 → S2 → S3~~ ✅；~~llama.cpp CUDA build~~ ✅。
+   3. Stage B 量測（進行中），全部在 GPU lock 下：
       - `stage_b.py baseline` 量 B，依 017 算出 U。
       - `coreb_stage_b.py boots` 取得 JIT 冷 / 熱時間與 K。
       - `stage_b.py cctx` 與 `overflow`。
