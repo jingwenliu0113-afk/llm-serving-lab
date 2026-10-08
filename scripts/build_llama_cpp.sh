@@ -52,6 +52,11 @@ if [ "$BACKEND" = cuda ] && [ "$JOBS" -gt 8 ]; then
   JOBS=8
 fi
 
+# WSL's PATH carries the Windows CUDA bin dirs; name the pinned CUDA 12.8 nvcc (002) explicitly.
+if [ "$BACKEND" = cuda ]; then
+  export CUDACXX=/usr/local/cuda-12.8/bin/nvcc
+fi
+
 # GGML_NATIVE silently flips OFF when SOURCE_DATE_EPOCH is set; keep builds comparable.
 unset SOURCE_DATE_EPOCH
 

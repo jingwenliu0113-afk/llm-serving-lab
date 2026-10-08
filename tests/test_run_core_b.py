@@ -83,6 +83,7 @@ class World:
     def popen(self, argv, env, log_path):
         Path(log_path).write_text("server log\n")
         self.started.append(argv)
+        self.server_envs = getattr(self, "server_envs", []) + [env]
         self.proc = FakeProc()
         return self.proc
 
@@ -126,6 +127,7 @@ def pins():
 def run(world, pins, plan, **kw):
     out = world.tmp_path / "session"
     kw.setdefault("gpu_lock_held", True)
+    kw.setdefault("toolchain_check", lambda env: [])
     summary = rb.run_session(plan, pins=pins, out_dir=out, gdn_prefill_backend="triton",
                              gpu_memory_utilization="0.90", popen=world.popen, signal_group=world.signal_group,
                              group_alive=world.group_alive, http_get=world.http_get, run_bench=world.run_bench,
@@ -213,3 +215,15 @@ def test_mixed_run_records_the_dataset_sha256(tmp_path, pins):
     out, summary, rows = run(World(tmp_path), p, plan, formal=True, mixed_datasets={2048: str(ds)})
     assert summary["mixed_dataset_sha256"] == {"2048": digest}
     assert len(rows) == 3 and all(r["ok"] for r in rows), [r["reasons"] for r in rows]
+
+
+def test_server_gets_the_014_env_and_a_toolchain_precheck(tmp_path, pins):
+    w = World(tmp_path)
+    run(w, pins, small_plan(pins))
+    env = w.server_envs[0]
+    assert env["CUDA_HOME"] == bp.FLASHINFER_CUDA_HOME and env["PATH"].startswith(bp.VENV_BIN + ":")
+    w2 = World(tmp_path / "x")
+    (tmp_path / "x").mkdir()
+    with pytest.raises(rb.RunError, match="toolchain"):
+        run(w2, pins, small_plan(pins), toolchain_check=lambda env: ["missing ninja"])
+    assert w2.started == []

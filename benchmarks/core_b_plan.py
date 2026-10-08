@@ -40,6 +40,11 @@ MAX_MODEL_LEN = 32768
 MAX_NUM_SEQS = 264
 GRID_CAP = 256
 HF_HOME = "/home/wenn0113/.cache/huggingface"
+PROJECT_DIR = "/home/wenn0113/llm-serving-lab"
+VENV_BIN = f"{PROJECT_DIR}/.venv/bin"
+# decision 014: user-space CUDA_HOME for FlashInfer's sampler JIT, pointing at the hash-locked pip CUDA 13
+# (nvidia/cu13: nvcc 13.4.92, cudart 13, curand headers); created by scripts/wsl_cuda_home_shim.sh
+FLASHINFER_CUDA_HOME = f"{PROJECT_DIR}/.cuda-home-cu13"
 MIXED_ROWS = 10 * GRID_CAP  # = num_prompts(GRID_CAP)
 
 
@@ -83,8 +88,47 @@ def bench_env() -> dict:
     return {"HF_HOME": HF_HOME, "HF_HUB_OFFLINE": "1"}
 
 
+def server_env(base) -> dict:
+    """The Core B server env on top of the caller's (§4; 008; 014). nvcc is never put on PATH: vLLM's
+    has_flashinfer() gate depends on it, while FlashInfer's own JIT finds nvcc through CUDA_HOME."""
+    path = base.get("PATH", "")
+    return {**base, **bench_env(), "VLLM_GDN_DECODE_KERNEL": "triton", "CUDA_HOME": FLASHINFER_CUDA_HOME,
+            "PATH": f"{VENV_BIN}:{path}" if path else VENV_BIN}
+
+
+def recorded_env(env: dict) -> dict:
+    """What a report records of the server env (the inherited PATH itself is machine noise)."""
+    out = {k: env.get(k) for k in ("HF_HOME", "HF_HUB_OFFLINE", "VLLM_GDN_DECODE_KERNEL", "CUDA_HOME")}
+    out["PATH_PREFIX"] = VENV_BIN if env.get("PATH", "").split(":")[0] == VENV_BIN else None
+    return out
+
+
+def toolchain_problems(env: dict, *, exists=None, which=None) -> list:
+    """What the server would miss at startup (Triton C stub, FlashInfer sampler JIT; 014), checked
+    before any model is loaded."""
+    import os
+    import shutil
+
+    exists = exists or os.path.exists
+    which = which or shutil.which
+    path, home = env.get("PATH", ""), env.get("CUDA_HOME") or ""
+    problems = []
+    if not (which("cc", path=path) or which("gcc", path=path)):
+        problems.append("no C compiler (cc / gcc) on PATH: Triton cannot build its launcher stub")
+    if not which("c++", path=path):
+        problems.append("no C++ compiler (c++) on PATH: FlashInfer's JIT links with it")
+    if not which("ninja", path=path):
+        problems.append("no ninja on PATH (expected in the project venv): FlashInfer's JIT builds with it")
+    for rel in ("bin/nvcc", "include/curand.h", "lib64/libcudart.so", "lib64/stubs/libcuda.so"):
+        if not exists(f"{home}/{rel}"):
+            problems.append(f"CUDA_HOME={home!r} lacks {rel} (scripts/wsl_cuda_home_shim.sh)")
+    if which("nvcc", path=path):
+        problems.append("nvcc is on PATH: it would change vLLM's has_flashinfer() gate (014)")
+    return problems
+
+
 def server_argv(pins: dict, *, gdn_prefill_backend: str, gpu_memory_utilization: str, port: int,
-                vllm_bin: str = "{vllm}") -> tuple:
+                vllm_bin: str = "{vllm}", base_env=None) -> tuple:
     b = pins["core_b"]
     argv = [vllm_bin, "serve", b["repo"], "--revision", b["revision"],
             "--language-model-only", "--dtype", b["dtype"],
@@ -92,8 +136,7 @@ def server_argv(pins: dict, *, gdn_prefill_backend: str, gpu_memory_utilization:
             "--gpu-memory-utilization", gpu_memory_utilization,
             "--no-enable-prefix-caching", "--gdn-prefill-backend", gdn_prefill_backend,
             "--generation-config", "vllm", "--host", "127.0.0.1", "--port", str(port)]
-    env = {**bench_env(), "VLLM_GDN_DECODE_KERNEL": "triton"}
-    return argv, env
+    return argv, server_env(base_env or {})
 
 
 def bench_argv(pins: dict, *, L: int, C: int, mix: str, result_dir: str, result_filename: str, port: int,

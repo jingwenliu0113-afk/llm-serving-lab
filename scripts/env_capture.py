@@ -400,7 +400,8 @@ def capture(
         hardware["ram_bytes"] = int(m.group(1)) * 1024 if m else None
 
     # gpu (NVIDIA only; the Apple GPU is described by the SoC name)
-    gpu: dict = {"nvidia": None, "cuda_toolkit_on_path": None}
+    gpu: dict = {"nvidia": None, "cuda_toolkit_on_path": None, "host_cc": None, "cuda_home": None,
+                 "cuda_home_nvcc": None}
     if system_name == "Linux":
 
         def nvidia(label: str, query: NvidiaQuery) -> list | None:
@@ -424,6 +425,14 @@ def capture(
         # System toolkit on PATH at capture time; vLLM's own CUDA runtime is in runtime.vllm.
         nvcc = probe("nvcc", ["nvcc", "--version"])
         gpu["cuda_toolkit_on_path"] = parse_nvcc_version(nvcc) if nvcc else None
+        # The JIT toolchain of the Core B server (decision 014): host C compiler and the nvcc FlashInfer
+        # finds through CUDA_HOME (nvcc itself is kept off PATH).
+        cc = probe("cc", ["cc", "--version"])
+        gpu["host_cc"] = cc.splitlines()[0].strip() if cc and cc.strip() else None
+        gpu["cuda_home"] = env.get("CUDA_HOME") or None
+        if gpu["cuda_home"]:
+            home_nvcc = probe("CUDA_HOME nvcc", [f"{gpu['cuda_home']}/bin/nvcc", "--version"])
+            gpu["cuda_home_nvcc"] = parse_nvcc_version(home_nvcc) if home_nvcc else None
 
     # load
     try:

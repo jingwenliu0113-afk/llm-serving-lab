@@ -180,6 +180,7 @@ def wsl_system(**overrides):
         NVIDIA_IDENTITY_CMD: NVIDIA_IDENTITY_CSV,
         NVIDIA_POWER_CMD: NVIDIA_POWER_CSV,
         ("nvcc", "--version"): NVCC_VERSION,
+        ("cc", "--version"): "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\nCopyright (C) 2021\n",
     }
     commands.update(overrides.pop("commands", {}))
     files = {
@@ -451,7 +452,8 @@ def test_capture_darwin_core_fields():
         "gpu_lock_held": None,  # GPU lock lives in WSL; meaningless on the Mac
     }
     # No NVIDIA stack on a Mac: explicit nulls, not missing keys.
-    assert rec["gpu"] == {"nvidia": None, "cuda_toolkit_on_path": None}
+    assert rec["gpu"] == {"nvidia": None, "cuda_toolkit_on_path": None, "host_cc": None, "cuda_home": None,
+                          "cuda_home_nvcc": None}
     assert rec["runtime"] == {"llama_cpp": None, "vllm": None}
     assert rec["config"] is None
     assert rec["env"] == {}
@@ -713,3 +715,15 @@ def test_deploy_manifest_for_another_commit_is_dirty():
 
 def test_capture_repo_source_is_git_when_available():
     assert capture(darwin_system(), "Darwin")["repo"]["source"] == "git"
+
+
+def test_capture_wsl_records_host_compiler_and_cuda_home_nvcc():
+    """014: the FlashInfer JIT toolchain is part of the Core B environment record."""
+    nvcc13 = NVCC_VERSION.replace("release 12.8", "release 13.4")
+    system = wsl_system(commands={("/shim/bin/nvcc", "--version"): nvcc13})
+    rec = capture(system, "Linux", env={"CUDA_HOME": "/shim"})
+    assert rec["gpu"]["host_cc"] == "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0"
+    assert rec["gpu"]["cuda_home"] == "/shim" and rec["gpu"]["cuda_home_nvcc"] == "13.4"
+    assert rec["env"]["CUDA_HOME"] == "/shim"
+    rec = capture(wsl_system(), "Linux")
+    assert rec["gpu"]["cuda_home"] is None and rec["gpu"]["cuda_home_nvcc"] is None

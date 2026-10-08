@@ -170,6 +170,7 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
                 http_get: Callable, run_bench: Callable, gpu_mem_used: Callable, gpu_lock_free: Callable,
                 gpu_lock_held: bool = False, formal: bool = False, vllm_bin: str = ".venv/bin/vllm",
                 mixed_datasets: dict | None = None, sample_interval: float | None = None,
+                toolchain_check: Callable = bp.toolchain_problems,
                 now: Callable = time.monotonic, sleep: Callable = time.sleep, startup_timeout_s: float = 1800,
                 clock: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat()) -> dict:
     if formal and not gpu_lock_held:
@@ -187,6 +188,9 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
         if formal and mixed_sha[str(L)] != pinned:
             raise RunError(f"mixed dataset for L={L}: sha256 {mixed_sha[str(L)]} != pinned {pinned!r} "
                            "(core_b.mix_dataset_sha256)")
+    missing = toolchain_check(bp.server_env(os.environ))
+    if missing:
+        raise RunError("toolchain incomplete, not starting (014): " + "; ".join(missing))
     out = Path(out_dir)
     if out.exists():
         raise RunError(f"{out} exists; sessions are never resumed or overwritten")
@@ -195,7 +199,7 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "formal": formal,
                "gpu_lock_held": gpu_lock_held, "plan_sha256": sha256_json(plan), "started_at": clock(),
                "server": {"gdn_prefill_backend": gdn_prefill_backend, "gpu_memory_utilization": gpu_memory_utilization},
-               "mixed_dataset_sha256": mixed_sha}
+               "mixed_dataset_sha256": mixed_sha, "server_env": bp.recorded_env(bp.server_env(os.environ))}
     rows = []
     base = f"http://127.0.0.1:{PORT}"
     with open(out / "rows.jsonl", "w") as fh:
@@ -213,8 +217,9 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
             if mem0 > IDLE_MIB:
                 raise RunError(f"GPU busy before {tag}: memory.used {mem0} MiB > {IDLE_MIB}")
             argv, env = bp.server_argv(pins, gdn_prefill_backend=gdn_prefill_backend,
-                                       gpu_memory_utilization=gpu_memory_utilization, port=PORT, vllm_bin=vllm_bin)
-            proc = popen(argv, {**os.environ, **env}, out / "raw" / f"server-{tag}.log")
+                                       gpu_memory_utilization=gpu_memory_utilization, port=PORT, vllm_bin=vllm_bin,
+                                       base_env=os.environ)
+            proc = popen(argv, env, out / "raw" / f"server-{tag}.log")
             stop_reasons = []
             try:
                 t0 = now()

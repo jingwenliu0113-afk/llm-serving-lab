@@ -95,4 +95,29 @@ backend device 能初始化。帶模型的 smoke test 屬於 Week 1 #1，不在�
   - 生效 flags 摘要：`GGML_METAL=ON`、`GGML_METAL_EMBED_LIBRARY=ON`、`GGML_NATIVE=ON`（`-mcpu=native`）、
     `GGML_ACCELERATE=ON`、`GGML_BLAS_VENDOR=Apple`、`GGML_OPENMP=OFF`、`GGML_BACKEND_DL=OFF`。
     完整內容在 `third_party/llama.cpp/build-metal/build-record.txt`（不進 git，但每次 build 都可重產）。
-- **WSL2 CUDA：blocked**（`ssh gpu-server` 無法解析，2026-10-08）。
+- **WSL2 CUDA：blocked**。
+  - 2026-10-08 先是 `ssh gpu-server` 無法解析；SSH 已於同日恢復。
+  - 現在缺的是 WSL 內的 compiler 與 CUDA 12.8，待使用者以 sudo 安裝（見下方 addendum）。
+
+## Addendum（2026-10-08）：CUDA 12.8 改裝最小子集，並明確指定 nvcc
+
+- **不裝完整的 `cuda-toolkit-12-8`**，改裝 build 實際用到的子集（由 NVIDIA wsl-ubuntu repo 的 index 遞迴解析 Depends，並做 apt 模擬）。
+  nvcc 與 cuBLAS 的版本與完整 toolkit **相同**：
+  - 子集：`make cuda-nvcc-12-8=12.8.93-1 cuda-cudart-dev-12-8=12.8.90-1 cuda-driver-dev-12-8=12.8.90-1 cuda-cccl-12-8=12.8.90-1 libcublas-dev-12-8=12.8.5.5-1 libcublas-12-8=12.8.5.5-1`。
+    `build-essential` 由 `cuda-nvcc-12-8` 依賴帶入。
+  - 各套件的用途：
+    - `cuda-nvcc-12-8`：nvcc 12.8.93，與本 pin 相同。
+    - `cuda-cudart-dev-12-8`：`CUDA::cudart`。
+    - `libcublas-dev-12-8`：`ggml-cuda` 連結 `CUDA::cublas`。
+    - `cuda-driver-dev-12-8`：`CUDA::cuda_driver`（VMM）的 stub。WSL 的 libcuda 在 `/usr/lib/wsl/lib`，CMake 找不到。
+    - `cuda-cccl-12-8`：`cub/cub.cuh`。
+  - 大小：子集約下載 986 MiB、安裝 2.3 GiB。完整 toolkit 至少 7.76 GiB，還會從 Ubuntu 拉進 default-jre 與 X11。
+  - 不包含任何 Linux driver 套件。WSL 的 driver 由 Windows 提供。
+- **`scripts/build_llama_cpp.sh cuda` 明確設定 `CUDACXX=/usr/local/cuda-12.8/bin/nvcc`**。
+  WSL 的 PATH 帶有 Windows 的 CUDA v13.3 / v12.8 bin 目錄，不能依賴 PATH 剛好正確。build-record 照舊記錄 nvcc 版本。
+- 安裝會讓 `/usr/local/cuda` 指向 12.8，並加入 ldconfig 路徑。
+  Core B 不使用它：server 一律明確設定 `CUDA_HOME`，nvcc 也不放進 PATH（014）。
+  安裝後由 `scripts/wsl_toolchain_check.sh` 檢查兩件事：
+  - ldconfig 中是否出現 `libcudart.so.12`。
+  - server log 是否出現 cuDNN frontend 的 "Multiple libcudart" 警告。
+

@@ -228,7 +228,9 @@ request throughput（req/s）；output token throughput 與 total token throughp
   - sentinel 規則同上。
 - **環境變數**：`GGML_*`、`CUDA_*`、`VLLM_*` 等一律不設定，除非本文件明列。`env_capture` 會記錄這些變數，名稱疑似 credential 的一律遮蔽值。
   - 明列（Core B）：`vllm serve` 與 `vllm bench serve` 都設 `HF_HOME`（gpu-server 的 HF cache）與 `HF_HUB_OFFLINE=1`；
-    `vllm serve` 另設 `VLLM_GDN_DECODE_KERNEL=triton`（008、013）。
+    `vllm serve` 另設 `VLLM_GDN_DECODE_KERNEL=triton`（008、013），
+    以及給 FlashInfer sampler JIT 用的 `CUDA_HOME`（user-space shim，指向 vLLM lock 中的 pip CUDA 13）與 PATH 前綴 `.venv/bin`（ninja）；
+    nvcc 不放進 PATH（014）。
 
 ### Prompt 與 sampling
 

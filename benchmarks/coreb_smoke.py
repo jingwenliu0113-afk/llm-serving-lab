@@ -30,6 +30,8 @@ import urllib.request
 from pathlib import Path
 from typing import Callable, NamedTuple
 
+import core_b_plan as bp
+
 
 class Stage(NamedTuple):
     name: str
@@ -84,8 +86,7 @@ def serve_command(*, vllm_bin: str, model: str, revision: str, stage: Stage, gdn
         "--generation-config", "vllm",
         "--host", "127.0.0.1", "--port", str(port),
     ]
-    env = {**base_env, "HF_HOME": HF_HOME, "HF_HUB_OFFLINE": "1", "VLLM_GDN_DECODE_KERNEL": "triton"}
-    return argv, env
+    return argv, bp.server_env(base_env)
 
 
 def parse_server_log(text: str) -> dict:
@@ -181,6 +182,7 @@ def run_stage(
     release_timeout_s: float = 60,
     release_margin_mib: int = 256,
     base_env: dict | None = None,
+    toolchain_check: Callable = bp.toolchain_problems,
 ) -> dict:
     names = [s.name for s in STAGES]
     if stage_name not in names:
@@ -193,8 +195,11 @@ def run_stage(
     argv, env = serve_command(vllm_bin=vllm_bin, model=model, revision=revision, stage=stage,
                               gdn_prefill_backend=gdn_prefill_backend, port=port,
                               base_env=dict(os.environ if base_env is None else base_env))
-    recorded_env = {k: env[k] for k in ("HF_HOME", "HF_HUB_OFFLINE", "VLLM_GDN_DECODE_KERNEL")}
+    recorded_env = bp.recorded_env(env)
     _previous_ok(idx, out, argv, recorded_env)
+    missing = toolchain_check(env)
+    if missing:
+        raise SmokeError("toolchain incomplete, not starting: " + "; ".join(missing))
 
     if not gpu_lock_free():
         raise SmokeError(f"{GPU_LOCK} is held by another project; not starting (MACHINE_POLICY)")

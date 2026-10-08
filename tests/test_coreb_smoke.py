@@ -54,7 +54,8 @@ def test_serve_argv_and_env_are_text_only_and_pinned():
     assert env["VLLM_GDN_DECODE_KERNEL"] == "triton"
     assert env["HF_HUB_OFFLINE"] == "1"
     assert env["HF_HOME"] == "/home/wenn0113/.cache/huggingface"
-    assert env["PATH"] == "/usr/bin"
+    assert env["PATH"] == "/home/wenn0113/llm-serving-lab/.venv/bin:/usr/bin"  # ninja for FlashInfer JIT (014)
+    assert env["CUDA_HOME"] == "/home/wenn0113/llm-serving-lab/.cuda-home-cu13"
 
 
 def test_parse_server_log():
@@ -169,6 +170,7 @@ class World:
 
 def run(world, stage="S1", out=None, backend="triton", **kw):
     out = out or world.tmp_path / "smoke"
+    kw.setdefault("toolchain_check", lambda env: [])
     return cs.run_stage(
         stage_name=stage, out_dir=out, vllm_bin="/v/bin/vllm", model="/snap", revision="a398",
         gdn_prefill_backend=backend, gpu_mem_used=world.gpu_mem_used, gpu_lock_free=world.gpu_lock_free,
@@ -382,3 +384,17 @@ def test_main_refusal_leaves_the_stage_retryable(tmp_path, monkeypatch):
     rc, _ = _main(tmp_path, monkeypatch, refuse)
     assert rc == 2
     assert not list((tmp_path / "s").glob("S1.*"))
+
+
+def test_stage_refuses_before_starting_when_the_toolchain_is_incomplete(tmp_path):
+    """014: a missing compiler / CUDA_HOME shim fails in seconds, not after the model has loaded."""
+    w = World(tmp_path)
+    with pytest.raises(cs.SmokeError, match="toolchain"):
+        run(w, toolchain_check=lambda env: ["no C compiler (cc / gcc) on PATH"])
+    assert w.proc is None and not (tmp_path / "smoke" / "S1.json").exists()
+
+
+def test_stage_report_records_the_flashinfer_env(tmp_path):
+    report = run(World(tmp_path))
+    assert report["env"]["CUDA_HOME"] == "/home/wenn0113/llm-serving-lab/.cuda-home-cu13"
+    assert report["env"]["PATH_PREFIX"] == "/home/wenn0113/llm-serving-lab/.venv/bin"

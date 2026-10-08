@@ -86,3 +86,9 @@ def test_targets_include_the_tools_core_needs():
     assert m
     assert set(m.group(1).split()) == {"llama-bench", "llama-perplexity", "llama-completion", "llama-quantize",
                                        "llama-tokenize"}
+
+
+def test_cuda_build_names_the_pinned_nvcc_explicitly():
+    """WSL's PATH carries Windows CUDA bin dirs; the CUDA 12.8 nvcc (002) is passed as CUDACXX."""
+    m = re.search(r'^if \[ "\$BACKEND" = cuda \]; then\n\s*export CUDACXX=(\S+)\nfi$', text(), re.MULTILINE)
+    assert m and m.group(1) == "/usr/local/cuda-12.8/bin/nvcc"

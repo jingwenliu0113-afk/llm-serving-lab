@@ -82,6 +82,7 @@ def test_server_argv_is_shared_by_all_levels(pins):
     assert {"--language-model-only", "--no-enable-prefix-caching"} <= set(argv)
     assert arg(argv, "--revision") == pins["core_b"]["revision"]
     assert env["VLLM_GDN_DECODE_KERNEL"] == "triton"
+    assert env["CUDA_HOME"] == bp.FLASHINFER_CUDA_HOME
 
 
 def test_uniform_plan_orders_c_by_seed_per_restart(pins):
@@ -212,3 +213,37 @@ def test_plan_cli_writes_uniform_and_mixed_plans(tmp_path, pins):
     mp = json.loads(mixed.read_text())
     assert mp["c_knee"] == {str(L): ba.knee(rows, L, up["grids"][str(L)])["c_knee"] for L in bp.MIXED_LEVELS}
     assert mp["derived_from"] == "b-uniform" and len(mp["runs"]) == 6
+
+
+def test_server_env_gives_flashinfer_a_cuda_home_but_no_nvcc_on_path():
+    """014: vLLM's warmup JIT-compiles FlashInfer's sampler (nvcc >= 12.9, curand headers, ninja).
+    CUDA_HOME points at the locked pip CUDA 13 via a user-space shim; .venv/bin (ninja) leads PATH;
+    nvcc itself stays off PATH so vLLM's has_flashinfer() gate is unchanged."""
+    env = bp.server_env({"PATH": "/usr/bin:/bin", "HOME": "/home/u"})
+    assert env["CUDA_HOME"] == "/home/wenn0113/llm-serving-lab/.cuda-home-cu13"
+    assert env["PATH"] == "/home/wenn0113/llm-serving-lab/.venv/bin:/usr/bin:/bin"
+    assert env["HOME"] == "/home/u" and env["HF_HUB_OFFLINE"] == "1" and env["HF_HOME"] == bp.HF_HOME
+    assert env["VLLM_GDN_DECODE_KERNEL"] == "triton"
+    assert bp.server_env({})["PATH"] == bp.VENV_BIN
+    assert bp.recorded_env(env) == {"HF_HOME": bp.HF_HOME, "HF_HUB_OFFLINE": "1", "VLLM_GDN_DECODE_KERNEL": "triton",
+                                    "CUDA_HOME": bp.FLASHINFER_CUDA_HOME, "PATH_PREFIX": bp.VENV_BIN}
+
+
+def test_toolchain_problems_lists_what_the_server_would_miss():
+    env = bp.server_env({"PATH": "/usr/bin"})
+    home = bp.FLASHINFER_CUDA_HOME
+    present = {"/usr/bin/cc", "/usr/bin/c++", f"{home}/bin/nvcc", f"{home}/include/curand.h",
+               f"{home}/lib64/libcudart.so", f"{home}/lib64/stubs/libcuda.so", f"{bp.VENV_BIN}/ninja"}
+
+    def which(name, path=None):
+        for d in (path or "").split(":"):
+            if f"{d}/{name}" in present:
+                return f"{d}/{name}"
+        return None
+
+    assert bp.toolchain_problems(env, exists=present.__contains__, which=which) == []
+    missing = bp.toolchain_problems(env, exists=lambda p: False, which=lambda n, path=None: None)
+    assert any("C compiler" in m for m in missing) and any("ninja" in m for m in missing)
+    assert any("nvcc" in m for m in missing) and any("curand.h" in m for m in missing)
+    present.add("/usr/bin/nvcc")
+    assert any("on PATH" in m for m in bp.toolchain_problems(env, exists=present.__contains__, which=which))
