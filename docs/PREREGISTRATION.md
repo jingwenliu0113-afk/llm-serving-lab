@@ -317,7 +317,15 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
     因此 C_ctx 的負值只是 B 與 C_ctx 分別量測造成的；spill 規則實際用到的是 B + C_ctx = 722 MiB，也就是 anchor 峰值減 self，不受 B 影響。
     H-A1 在 B ≤ 5.52 GiB 時 18 格都預測 fit，也不受影響。
     沒有為了得到正值而重量 B（避免挑選結果）。
-- [ ] sysmem 超量測試（9B-Q8_0、`-c 262144`，不屬於 18 格；N 約 15.90 GiB，任何 B 下都超量；008）：hard OOM 或 spill
+- [x] sysmem 超量測試（9B-Q8_0、`-c 262144`，不屬於 18 格；N 約 15.90 GiB，任何 B 下都超量；008）：hard OOM 或 spill
+  - **結果：spill，不是 hard OOM**（2026-10-09 04:56，GPU lock 下，`results/stage_b/20261009/overflow/`；raw 檔的 sha256 見 `raw_manifest.json`）。
+    - process 正常結束（exit 0，13.9 s）。
+    - llama.cpp breakdown 的 CUDA0：self 16,788 MiB（model 8,045 + context 8,242 + compute 501）、free 0。
+      self 已超過裝置總量 16,275 MiB，也超過 V_total 16,303 − B 811。
+    - `nvidia-smi memory.used` 峰值為 15,768 MiB，受實體 VRAM 限制。超出的部分由 WSL2 / WDDM 放到系統記憶體（sysmem fallback）。
+  - 含意（只是套用既有規則，不改規則）：在這台 RTX 上，超出 VRAM 的 cell 不會 OOM，而是以 spill 完成。
+    因此 RTX 的 fit 判定一律依 004 的兩條 spill 條件，也就是記憶體條件（self + C_ctx + B > V_total）與速度條件。
+  - 照實記錄的觀察（依 004 只用來判斷行為，不作任何速度結論）：prompt eval 351.7 tok/s（1,024 tokens）、decode 39.4 tok/s（127 runs）。
 - [ ] llama.cpp CUDA build：toolkit 版本、`wsl2-cuda` verified、RTX 的 N_thr / P（依第 4 節規則）
   - toolkit：user-space CUDA 13.4.1 pip wheels 加上 Ninja（015，`configs/llama-cuda.lock.txt`），host compiler 為 GNU 11.4.0。
   - b11146 在 `wsl2-cuda` 上 verified（2026-10-09 02:07，`CUDA0 RTX 5070 Ti 16275 MiB`）。

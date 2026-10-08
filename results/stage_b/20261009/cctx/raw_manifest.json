@@ -1,0 +1,17 @@
+{
+ "archive": "gpu-server WSL Ubuntu-22.04: ~/llm-serving-lab/results/stage_b/20261009/cctx/",
+ "files": {
+  "stdout.txt": {
+   "sha256": "30f811b02cc4d78b89582c7f4659dac88118343ca914dedcdabf4c19dc43f98b",
+   "bytes": 147112
+  },
+  "prompt.txt": {
+   "sha256": "537aec09ee9b1233a78c45e01dc8da61e9211e2188e723d36579c7a8fd458c67",
+   "bytes": 7680
+  },
+  "stderr.txt": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  }
+ }
+}
