@@ -116,10 +116,10 @@
 
 1. ~~4B 的 `-fa auto` probe 以 `-lv 4` 重跑~~ → ✅ 已完成並 push。
 2. 9B 下載完成後，依序執行：
-   - scratchpad 的 `batch_9b.sh`：`produce --size 9B`。**已排隊**（`queue_9b.sh`）：等 `ALL_SHARDS_VERIFIED` 之後，每 2 分鐘試一次
-     `tools/with-mac-lock`；lock 被占用就放棄該次（22:07 時由 incident-investigator 的 `env soak` 持有），不等待、不碰 lock。
-   - commit pins 與 recipe。
-   - `batch_9b_pilot.sh`：
+   - ✅ `produce --size 9B`：23:16–23:20 在 lock 下完成，GGUF ×4 已 pin，recipe 已 commit。
+     大小：Q8_0 9.53 GB、Q6_K 7.36 GB、Q4_K_M 5.63 GB、BF16 17.9 GB，與 008 的預估一致。
+   - ✅ commit pins 與 recipe。
+   - `batch_9b_pilot.sh`：**已排隊**（`queue_9b_pilot.sh`）。每 2 分鐘試一次 `tools/with-mac-lock`；lock 被占用就放棄該次，不等待、不碰 lock。
      - delete-source；
      - 9B smoke；
      - 9B Core A pilot（含 fa probe / memory / calib）；
@@ -140,7 +140,21 @@
    - 70 W adapter 滿載時電池仍會下降（28 分鐘內 80% → 76%）；電量 < 20% 會使 session 作廢。建議用 ≥ 96 W adapter。
    - 磁碟：正式 quality 的 KLD（68.4 GiB / size）會比 50 GiB 餘量少約 15 GiB，依 STORAGE_PLAN 暫時刪另一個 size 的
      quant，之後從 BF16 重建。
-5. Core B：使用者裝好 `build-essential` 後：
+5. **NVIDIA 端**（與 Mac Core A 平行推進）：
+   - 已完成（不需 sudo，2026-10-08）：
+     - 部署 HEAD 到 WSL。
+     - 遠端 venv 與 `configs/vllm.lock.txt` 完全一致（196 / 196）。
+     - pinned llama.cpp 原始碼已抓好，cmake 4.4.3 已快取。
+     - `mixed` dataset ×2 已建好並 pin。
+     - CUDA_HOME shim 已建（014）。
+     - `scripts/wsl_toolchain_check.sh` 的安裝前基準：只缺 compiler。
+   - 使用者裝好 compiler（與 CUDA 12.8 子集）之後，依序：
+     1. `JIT=1 bash scripts/wsl_toolchain_check.sh`：compiler、Triton stub、shim nvcc、FlashInfer sampling JIT（暫存 workspace）。
+     2. S1（2K）smoke，用新的 session 目錄（例如 `results/core_b/smoke/20261009-s1`）；通過後才跑 S2 → S3（008）。
+     3. llama.cpp CUDA build：`scripts/build_llama_cpp.sh cuda`，nvcc 12.8 由 `CUDACXX` 指定。
+        要錯開其他專案的正式 GPU 工作，最多 8 個 nvcc job。
+     4. 6 個 quant 傳到 WSL（約 33 GB，008 已列入計畫）。傳輸期間的 SSH 加密會持續占用 CPU，所以在 Mac lock 下進行。
+6. Core B：S1–S3 通過後（舊的說明保留如下）：
    - 用 `scripts/deploy_bundle.py` 部署；
    - 在新的 session 重跑 S1 → S2 → S3；
    - 通過後進入 Stage B（量 B / C_ctx、超量測試、vLLM lock、`mixed` dataset sha256）。
