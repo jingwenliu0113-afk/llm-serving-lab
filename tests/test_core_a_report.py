@@ -49,3 +49,27 @@ def test_tied_size_never_subtracts_token_embd(pins):
     embd[("4B", "Q8_0")] = 6.75e8  # the tied 4B still has a token_embd tensor
     rep = cr.report(rows, platform="macos-metal", pins=pins, embd_bytes=embd, tied={"4B": True, "9B": False})
     assert rep["subtracted_embd_bytes"]["4B-Q8_0"] == 0
+
+
+def test_rtx_report_rejects_missing_stage_b_values(pins):
+    rows = grid(ideal_decode, ideal_ttft)
+    with pytest.raises(cr.ReportError, match="Stage B"):
+        cr.report(rows, platform="wsl2-cuda", pins=pins, embd_bytes=EMBD, tied={"4B": True, "9B": False},
+                  platform_params={"v_total_mib": 16303, "b_mib": None, "c_ctx_mib": None})
+
+
+@pytest.mark.parametrize("session, reason", [
+    ({"mode": "pilot", "env_valid": True, "sentinel": {"drift": False}}, "formal"),
+    ({"mode": "formal", "env_valid": False, "sentinel": {"drift": False}}, "env-invalid"),
+    ({"mode": "formal", "env_valid": True, "sentinel": {"drift": True}}, "drift"),
+    ({"mode": "formal", "env_valid": True, "sentinel": {"drift": None}}, "drift"),
+])
+def test_report_cli_refuses_pilot_invalid_or_drifted_sessions(tmp_path, capsys, session, reason):
+    """Pilots stay masked (011); env-invalid / drift sessions are rerun, not analysed (§4, 012, 013)."""
+    import json
+
+    (tmp_path / "session.json").write_text(json.dumps({"session_id": "s", "platform": "macos-metal", **session}))
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in grid(ideal_decode, ideal_ttft)))
+    assert cr.main(["--session", str(tmp_path), "--models", str(tmp_path / "missing")]) == 2
+    assert reason in capsys.readouterr().err
+    assert not (tmp_path / "analysis.json").exists()

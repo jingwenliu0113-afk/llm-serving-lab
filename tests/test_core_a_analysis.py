@@ -61,7 +61,7 @@ def test_cell_stats_process_level_mean_and_se():
     assert c["outcome"] == "ok"
     assert c["decode"]["m"] == pytest.approx(100.0) and c["decode"]["n"] == 3
     assert c["decode"]["se"] == pytest.approx(1.0 / math.sqrt(3))
-    assert c["prefill"]["m"] == pytest.approx(2048 / 1.0)
+    assert c["prefill"]["m"] == pytest.approx(sum(2048 / f for f in (0.99, 1.0, 1.01)) / 3)
 
 
 def test_any_oom_process_makes_the_cell_oom():
@@ -158,3 +158,45 @@ def test_spill_rules_rtx():
     slow = an.cell_stats(grid(lambda s, q, L: ideal_decode(s, q, L) * (0.4 if (s, q, L) == ("9B", "Q6_K", 8192)
                                                                       else 1), ideal_ttft))
     assert an.spill_cells(slow, FILE, EMBD, params) == {("9B", "Q6_K", 8192)}
+
+
+# ------------------------------------------------- pre-freeze review fixes (013) --
+
+def test_prefill_is_the_mean_of_process_level_rates():
+    """§3: prefill tok/s = L / TTFT per process (avg_ns of its -r 5), then the cell mean (013)."""
+    rows = grid(lambda *a: 100.0, lambda *a: 1.0, noise=(0.5, 1.0, 1.5))
+    c = an.cell_stats(rows)[("4B", "Q8_0", 2048)]
+    rates = [2048 / 0.5, 2048 / 1.0, 2048 / 1.5]
+    assert c["prefill"]["m"] == pytest.approx(sum(rates) / 3)
+    sd = (sum((x - sum(rates) / 3) ** 2 for x in rates) / 2) ** 0.5
+    assert c["prefill"]["se"] == pytest.approx(sd / math.sqrt(3)) and c["prefill"]["n"] == 3
+
+
+def test_h_a3_compares_neighbours_among_the_configs_that_fit_at_32k():
+    """Two configs at 32K are testable (§2), so a missing Q6_K leaves the Q8_0 / Q4_K_M pair (013)."""
+    def q8_loses_most(s, q, L):
+        return ideal_decode(s, q, L) * (0.5 if (s, q, L) == ("9B", "Q8_0", 32768) else 1)
+
+    rows = [r for r in grid(q8_loses_most, ideal_ttft, noise=(0.999, 1.0, 1.001))
+            if not (r["size"] == "9B" and r["quant"] == "Q6_K" and r["L"] == 32768)]
+    rows += [bench("decode", "9B", "Q6_K", 32768, 1, outcome="oom")]
+    res = an.h_a3(an.cell_stats(rows), spill=set())
+    nine = next(u for u in res["units"] if u["size"] == "9B")
+    assert nine["status"] == "tested" and [p["pair"] for p in nine["pairs"]] == [["Q8_0", "Q4_K_M"]]
+    assert nine["refutes"] is True and res["verdict"] == "refuted"
+
+
+def test_a_cell_without_the_needed_metric_is_not_testable_instead_of_crashing():
+    rows = [r for r in grid(ideal_decode, ideal_ttft)
+            if not (r["kind"] == "ttft" and (r["size"], r["quant"], r["L"]) == ("4B", "Q6_K", 8192))]
+    cells = an.cell_stats(rows)
+    a = an.h_a4a(cells, spill=set())
+    assert next(u for u in a["units"] if (u["size"], u["L"]) == ("4B", 8192))["status"] == "not testable"
+    assert an.h_a2(cells, FILE, EMBD, spill=set())["verdict"] == "not refuted"  # decode-only rule unaffected
+    rows = [r for r in grid(ideal_decode, ideal_ttft)
+            if not (r["kind"] == "decode" and (r["size"], r["quant"], r["L"]) == ("9B", "Q8_0", 2048))]
+    cells = an.cell_stats(rows)
+    h2 = an.h_a2(cells, FILE, EMBD, spill=set())
+    assert all(u["status"] == "not testable" for u in h2["units"] if "9B-Q8_0" in u["pair"])
+    an.h_a3(cells, spill=set())
+    an.h_a4b(cells, spill=set())

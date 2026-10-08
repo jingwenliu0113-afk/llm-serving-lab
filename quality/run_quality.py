@@ -223,7 +223,8 @@ def run_quality(
                 code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
                 env_after = capture_env(llama_bin=exe, out_path=out / rel["env_after"], gpu_lock_held=False)
                 for phase, rec in (("before", env_before), ("after", env_after)):
-                    env_flags.extend({"job_id": jid, "phase": phase, "reason": why} for why in env_problems(rec))
+                    env_flags.extend({"job_id": jid, "phase": phase, "reason": why}
+                                     for why in env_problems(rec, "macos-metal"))
                 res = qp.classify(kind, code, (out / rel["stdout"]).read_text(errors="replace"),
                                   (out / rel["stderr"]).read_text(errors="replace"), job["expect"])
                 row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, **res, "disk_guard": guard, **rel}

@@ -41,32 +41,31 @@ def cell_stats(rows: list) -> dict:
     for r in rows:
         if r["kind"] not in ("fit", "ttft", "decode"):
             continue
-        c = cells.setdefault((r["size"], r["quant"], r["L"]), {"outcomes": [], "decode": [], "ttft": [], "fit": []})
+        key = (r["size"], r["quant"], r["L"])
+        c = cells.setdefault(key, {"outcomes": [], "decode": [], "ttft": [], "prefill": [], "fit": []})
         c["outcomes"].append(r["outcome"])
         if r["outcome"] != "ok":
             continue
         if r["kind"] == "decode":
             c["decode"].append(r["metrics"]["avg_ts"])
         elif r["kind"] == "ttft":
-            c["ttft"].append(r["metrics"]["avg_ns"] / 1e9)
+            ttft_s = r["metrics"]["avg_ns"] / 1e9
+            c["ttft"].append(ttft_s)
+            c["prefill"].append(key[2] / ttft_s)  # process-level L / TTFT, then the cell mean (§3; 013)
         else:
             c["fit"].append(r.get("summary"))
     out = {}
     for key, c in cells.items():
         outcome = "oom" if "oom" in c["outcomes"] else ("error" if any(o != "ok" for o in c["outcomes"]) else "ok")
-        ttft = _ms(c["ttft"])
-        prefill = None
-        if ttft:
-            m = key[2] / ttft["m"]
-            prefill = {"m": m, "se": m * ttft["se"] / ttft["m"] if ttft["se"] is not None else None, "n": ttft["n"]}
-        out[key] = {"outcome": outcome, "decode": _ms(c["decode"]), "ttft": ttft, "prefill": prefill,
-                    "fit_summaries": [s for s in c["fit"] if s]}
+        out[key] = {"outcome": outcome, "decode": _ms(c["decode"]), "ttft": _ms(c["ttft"]),
+                    "prefill": _ms(c["prefill"]), "fit_summaries": [s for s in c["fit"] if s]}
     return out
 
 
-def _usable(cells: dict, key, spill: set) -> bool:
+def _usable(cells: dict, key, spill: set, need: tuple = ("decode",)) -> bool:
+    """ok, not spilled, and every metric the comparison needs was measured (a partial cell is not testable)."""
     c = cells.get(key)
-    return bool(c) and c["outcome"] == "ok" and key not in spill
+    return bool(c) and c["outcome"] == "ok" and key not in spill and all(c[m] for m in need)
 
 
 def _ratio(a: dict, b: dict) -> tuple:
@@ -144,7 +143,8 @@ def h_a2(cells: dict, file_bytes: dict, embd_bytes: dict, *, spill: set, L: int 
 def h_a3(cells: dict, *, spill: set, quants: tuple = ("Q8_0", "Q6_K", "Q4_K_M"),
          l_short: int = 2048, l_long: int = 32768) -> dict:
     """D = 1 - tok/s(32K) / tok/s(2K); predicted D(Q4_K_M) > D(Q6_K) > D(Q8_0). Refuted only by a
-    reversal of an adjacent pair that is beyond noise. Fewer than 2 configs at 32K -> not testable."""
+    reversal of an adjacent pair that is beyond noise; "adjacent" = neighbours in that order among the
+    configs that fit at 32K (013). Fewer than 2 configs at 32K -> not testable."""
     units = []
     for size in sorted({k[0] for k in cells}):
         d = {}
@@ -158,9 +158,8 @@ def h_a3(cells: dict, *, spill: set, quants: tuple = ("Q8_0", "Q6_K", "Q4_K_M"),
             units.append({**unit, "status": "not testable", "refutes": False, "pairs": []})
             continue
         pairs, refutes = [], False
-        for lo, hi in zip(quants, quants[1:]):  # predicted D(hi-bit) < D(lower-bit)
-            if lo not in d or hi not in d:
-                continue
+        present = [q for q in quants if q in d]  # neighbours among the configs that fit at 32K (013)
+        for lo, hi in zip(present, present[1:]):  # predicted D(hi-bit) < D(lower-bit)
             reversed_ = d[lo][0] > d[hi][0]
             noisy = not _beyond_noise(d[lo][0], d[lo][1], d[hi][0], d[hi][1])
             pairs.append({"pair": [lo, hi], "reversed": reversed_, "within_noise": noisy})
@@ -175,7 +174,7 @@ def h_a4a(cells: dict, *, spill: set, quants: tuple = ("Q8_0", "Q6_K", "Q4_K_M")
     units = []
     for size, L in sorted({(k[0], k[2]) for k in cells}):
         keys = [(size, q, L) for q in quants]
-        if not all(_usable(cells, k, spill) for k in keys):
+        if not all(_usable(cells, k, spill, need=("decode", "prefill")) for k in keys):
             units.append({"size": size, "L": L, "status": "not testable", "refutes": False})
             continue
         pre = [cells[k]["prefill"]["m"] for k in keys]
@@ -190,9 +189,9 @@ def h_a4b(cells: dict, *, spill: set, l_mid: int = 8192, l_long: int = 32768) ->
     units = []
     for size, q in sorted({(k[0], k[1]) for k in cells}):
         km, kl = (size, q, l_mid), (size, q, l_long)
-        if not _usable(cells, kl, spill):
+        if not _usable(cells, kl, spill, need=()):
             continue  # only configurations that fit at 32K are units
-        if not _usable(cells, km, spill):
+        if not (_usable(cells, kl, spill, need=("ttft",)) and _usable(cells, km, spill, need=("ttft",))):
             units.append({"config": f"{size}-{q}", "status": "not testable", "refutes": False})
             continue
         ratio = cells[kl]["ttft"]["m"] / cells[km]["ttft"]["m"]

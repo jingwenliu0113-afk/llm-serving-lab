@@ -38,7 +38,7 @@ def report(rows: list, *, platform: str, pins: dict, embd_bytes: dict, tied: dic
     if platform == "macos-metal":
         params = dict(MAC_PARAMS)
     else:
-        if not platform_params or not all(k in platform_params for k in ("v_total_mib", "b_mib", "c_ctx_mib")):
+        if not platform_params or any(platform_params.get(k) is None for k in ("v_total_mib", "b_mib", "c_ctx_mib")):
             raise ReportError("RTX reports need the Stage B measurements: v_total_mib, b_mib, c_ctx_mib")
         params = dict(platform_params)
     files = {(m["size"], q): f["size_bytes"] for m in pins["core_a"]["models"] for q, f in m["files"].items()}
@@ -69,6 +69,20 @@ def report(rows: list, *, platform: str, pins: dict, embd_bytes: dict, tied: dic
     }
 
 
+def session_problems(s: dict) -> list:
+    """Only a valid formal session is analysed: pilots stay masked (011); an env-invalid or drifted
+    session is rerun as a whole (§4, 012), so its verdicts are never computed (013)."""
+    problems = []
+    if s.get("mode") != "formal":
+        problems.append(f"mode {s.get('mode')!r} is not formal (pilots stay masked)")
+    if s.get("env_valid") is not True:
+        problems.append(f"session is env-invalid (env_valid={s.get('env_valid')!r})")
+    drift = (s.get("sentinel") or {}).get("drift")
+    if drift is not False:
+        problems.append(f"sentinel drift is {drift!r} (must be False)")
+    return problems
+
+
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--session", required=True)
@@ -81,6 +95,10 @@ def main(argv: list | None = None) -> int:
     pins = tomllib.loads((root / "configs" / "pins.toml").read_text())
     session = Path(args.session)
     s = json.loads((session / "session.json").read_text())
+    problems = session_problems(s)
+    if problems:
+        print(f"core_a_report: refusing {session}: " + "; ".join(problems), file=sys.stderr)
+        return 2
     rows = [json.loads(x) for x in (session / "rows.jsonl").read_text().splitlines()]
     embd, tied = {}, {}
     for m in pins["core_a"]["models"]:
@@ -97,7 +115,8 @@ def main(argv: list | None = None) -> int:
     except ReportError as exc:
         print(f"core_a_report: {exc}", file=sys.stderr)
         return 2
-    rep["session"] = s["session_id"]
+    rep.update({"session": s["session_id"], "mode": s["mode"], "env_valid": s["env_valid"],
+                "sentinel": s.get("sentinel")})
     (session / "analysis.json").write_text(json.dumps(rep, indent=1) + "\n")
     print(json.dumps({k: v["verdict"] for k, v in rep["hypotheses"].items()}, indent=1))
     return 0

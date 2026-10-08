@@ -82,7 +82,10 @@ def report(rows: list, *, pins_expected: dict, pilot: dict) -> dict:
             key = "fa_off" if r.get("variant") == "fa_off" else "fa_on"
             sanity["q8_0_kld"].setdefault(r["size"], {})[key] = m.get("kld_mean")
         if r["kind"] == "kld" and not r.get("variant") and not r.get("repeat_of") and m.get("kld_mean_se"):
-            se_formal.setdefault(r["size"], {})[r["point"]] = m["kld_mean_se"] / math.sqrt(chunk_scale)
+            # only the largest SE per size: per-quant SEs track the KLD means and would reveal the
+            # H-A5(b) ordering (013); the max bounds the z-test denominators for the power check
+            se = m["kld_mean_se"] / math.sqrt(chunk_scale)
+            se_formal[r["size"]] = {"max": max(se, se_formal.get(r["size"], {}).get("max", 0.0))}
 
     ppl = {(r["size"], r["point"]): r["metrics"]["chunk_nll"] for r in main
            if r["kind"] == "ppl" and r["outcome"] == "ok"}

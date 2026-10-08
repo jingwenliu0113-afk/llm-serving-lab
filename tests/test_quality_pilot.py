@@ -110,8 +110,11 @@ def test_report_is_masked():
         assert hidden not in text, hidden
     assert rep["sanity"]["kld_self"]["4B"] == 0.000001
     assert rep["sanity"]["q8_0_kld"]["4B"] == {"fa_on": 0.00123, "fa_off": 0.00124}
-    se = rep["kld_se_formal_est"]["4B"]
-    assert se["Q4_K_M"] == pytest.approx(0.00031 * (20 / 580) ** 0.5)
+    # only the largest SE per size (power of the z tests): per-quant SEs track the KLD means and
+    # would reveal the H-A5(b) ordering (013)
+    assert rep["kld_se_formal_est"] == {"4B": {"max": pytest.approx(0.00031 * (20 / 580) ** 0.5)}}
+    for hidden in ("0.00011", "0.00005"):
+        assert hidden not in text, hidden
     ha5 = rep["ha5_paired_nll"]
     assert set(ha5) == {"n_chunks", "sd_chunk_diff", "ci_halfwidth_formal"}
     assert rep["throughput"]["formal_hours_est"] > 0

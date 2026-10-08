@@ -96,19 +96,24 @@ class NvidiaSmiSampler:
 BATTERY_MIN_PCT = 20  # decision 012
 
 
-def env_problems(rec: dict) -> list:
-    """Power / thermal state that invalidates a session (decision 012). Desktops without a
-    battery report no power source and are not checked."""
-    power = (rec or {}).get("power") or {}
-    if not power.get("source"):
+def env_problems(rec: dict, platform: str) -> list:
+    """Power / thermal state that invalidates a Mac session (decision 012). A failed or partial probe
+    cannot show AC power or a clean thermal log, so unknown counts as a problem (013). The RTX
+    desktop has no battery and is not checked. A Mac without a battery reports no percentage."""
+    if platform != "macos-metal":
         return []
+    power = (rec or {}).get("power") or {}
     problems = []
-    if power["source"] != "AC":
+    if power.get("source") is None:
+        problems.append("power source unknown (AC required)")
+    elif power["source"] != "AC":
         problems.append(f"power source {power['source']} (AC required)")
     if power.get("battery_pct") is not None and power["battery_pct"] < BATTERY_MIN_PCT:
         problems.append(f"battery {power['battery_pct']}% < {BATTERY_MIN_PCT}%")
-    thermal = power.get("thermal") or {}
-    if thermal.get("thermal_warning_recorded") or thermal.get("performance_warning_recorded"):
+    thermal = power.get("thermal")
+    if thermal is None:
+        problems.append("thermal state unknown")
+    elif thermal.get("thermal_warning_recorded") or thermal.get("performance_warning_recorded"):
         problems.append("thermal / performance warning recorded")
     return problems
 
@@ -254,7 +259,7 @@ def run_session(
                 sampled = sampler.stop() if sampler is not None else None
             env_after = capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
             for phase, rec in (("before", env_before), ("after", env_after)):
-                env_flags.extend({"job_id": jid, "phase": phase, "reason": why} for why in env_problems(rec))
+                env_flags.extend({"job_id": jid, "phase": phase, "reason": why} for why in env_problems(rec, platform))
 
             stdout = (out / rel["stdout"]).read_text(errors="replace")
             stderr = (out / rel["stderr"]).read_text(errors="replace")

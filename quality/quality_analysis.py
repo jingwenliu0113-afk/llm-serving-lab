@@ -122,6 +122,7 @@ def downstream(rows: list, *, n_boot: int = N_BOOT, seed: int = SEED) -> list:
 def main(argv: list | None = None) -> int:
     import argparse
     import json
+    import sys
     from pathlib import Path
 
     parser = argparse.ArgumentParser(description="H-A5 and downstream analysis of a quality session")
@@ -130,6 +131,14 @@ def main(argv: list | None = None) -> int:
     args = parser.parse_args(argv)
     session = Path(args.session)
     meta = json.loads((session / "session.json").read_text())
+    problems = []
+    if meta.get("mode") != "formal":
+        problems.append(f"mode {meta.get('mode')!r} is not formal (the pilot report stays masked: 005, 011)")
+    if meta.get("env_valid") is not True:
+        problems.append(f"session is env-invalid (env_valid={meta.get('env_valid')!r}; rerun it, 012)")
+    if problems:
+        print(f"quality_analysis: refusing {session}: " + "; ".join(problems), file=sys.stderr)
+        return 2
     rows = [json.loads(x) for x in (session / "rows.jsonl").read_text().splitlines()]
     rows = [r for r in rows if r["kind"] != "delete_kld"]
     out = {"session": meta.get("session_id"), "mode": meta.get("mode"), "env_valid": meta.get("env_valid"),

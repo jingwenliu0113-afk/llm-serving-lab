@@ -103,3 +103,21 @@ def test_quality_report_cli_writes_analysis(tmp_path):
     out = json.loads((tmp_path / "analysis.json").read_text())
     assert out["h_a5"]["verdict"] == "not refuted" and out["downstream"][0]["pair"] == ["BF16", "Q8_0"]
     assert out["session"] == "q" and out["env_valid"] is True
+
+
+@pytest.mark.parametrize("meta, reason", [
+    ({"session_id": "p", "mode": "pilot", "env_valid": True}, "formal"),
+    ({"session_id": "f", "mode": "formal", "env_valid": False}, "env-invalid"),
+    ({"session_id": "f", "mode": "formal"}, "env-invalid"),
+])
+def test_quality_cli_refuses_pilot_and_env_invalid_sessions(tmp_path, capsys, meta, reason):
+    """005 / 011: the pilot only reports b + c and N; an env-invalid session is rerun (012, 013)."""
+    import json
+
+    rows = kld_rows(GOOD_KLD) + ppl_rows([1.0] * 580, [1.1] * 580) + [
+        mc("mmlu", "4B", "BF16", [1, 0] * 200), mc("mmlu", "4B", "Q8_0", [1, 0] * 200)]
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (tmp_path / "session.json").write_text(json.dumps(meta))
+    assert qa.main(["--session", str(tmp_path), "--n-boot", "200"]) == 2
+    assert reason in capsys.readouterr().err
+    assert not (tmp_path / "analysis.json").exists()

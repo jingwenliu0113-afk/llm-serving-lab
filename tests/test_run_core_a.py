@@ -106,9 +106,14 @@ class EnvRecorder:
 
     def __call__(self, llama_bin, out_path, gpu_lock_held):
         self.calls.append((Path(llama_bin).name, Path(out_path).name, gpu_lock_held))
-        rec = {"runtime": {"llama_cpp": {"build_number": self.build, "commit": self.commit}}, "probe_errors": []}
+        rec = {"runtime": {"llama_cpp": {"build_number": self.build, "commit": self.commit}}, "probe_errors": [],
+               "power": dict(GOOD_POWER)}
         Path(out_path).write_text(json.dumps(rec))
         return rec
+
+
+GOOD_POWER = {"source": "AC", "battery_pct": 80,
+              "thermal": {"thermal_warning_recorded": False, "performance_warning_recorded": False}}
 
 
 def run(tmp_path, plan, monkeypatch=None, env=None, **kw):
@@ -337,9 +342,46 @@ def test_session_flags_processes_with_an_invalid_power_state(tmp_path):
             Path(out_path).write_text(json.dumps(rec))
             return rec
 
-    out, summary, rows = run(tmp_path, small_plan(), env=PowerEnv())
+    mac = dict(mac_lock_held=True, path_exists=lambda p: True)
+    out, summary, rows = run(tmp_path, small_plan(platform="macos-metal"), env=PowerEnv(), **mac)
     assert summary["env_valid"] is False
     assert summary["env_flags"][0]["reason"] == "battery 15% < 20%"
     (tmp_path / "b").mkdir()
-    _, ok_summary, _ = run(tmp_path / "b", small_plan())
+    _, ok_summary, _ = run(tmp_path / "b", small_plan(platform="macos-metal"), **mac)
     assert ok_summary["env_valid"] is True and ok_summary["env_flags"] == []
+
+
+@pytest.mark.parametrize("rec, want", [
+    ({"power": GOOD_POWER}, []),
+    ({"probe_errors": ["env_capture failed (exit 1): boom"]}, ["power source unknown (AC required)",
+                                                               "thermal state unknown"]),
+    ({"power": {**GOOD_POWER, "source": None}}, ["power source unknown (AC required)"]),
+    ({"power": {**GOOD_POWER, "thermal": None}}, ["thermal state unknown"]),
+    ({"power": {"source": None, "battery_pct": 15,
+                "thermal": {"thermal_warning_recorded": True, "performance_warning_recorded": False}}},
+     ["power source unknown (AC required)", "battery 15% < 20%", "thermal / performance warning recorded"]),
+    ({"power": {**GOOD_POWER, "source": "Battery"}}, ["power source Battery (AC required)"]),
+    ({"power": {**GOOD_POWER, "battery_pct": None}}, []),  # a Mac without a battery
+])
+def test_env_problems_on_the_mac_treat_unknown_as_invalid(rec, want):
+    """012 / 013: a failed or partial probe cannot prove AC power or a clean thermal log."""
+    assert rc.env_problems(rec, "macos-metal") == want
+
+
+def test_env_problems_skip_the_rtx_desktop():
+    assert rc.env_problems({"probe_errors": ["x"]}, "wsl2-cuda") == []
+    assert rc.env_problems({"power": {"source": None, "thermal": None}}, "wsl2-cuda") == []
+
+
+def test_mac_session_with_a_failed_env_probe_is_env_invalid(tmp_path):
+    class Broken(EnvRecorder):
+        def __call__(self, llama_bin, out_path, gpu_lock_held):
+            rec = super().__call__(llama_bin, out_path, gpu_lock_held)
+            rec.update({"power": {"source": None, "battery_pct": None, "thermal": None},
+                        "probe_errors": ["pmset batt: timed out", "pmset therm: timed out"]})
+            Path(out_path).write_text(json.dumps(rec))
+            return rec
+
+    _, summary, _ = run(tmp_path, small_plan(platform="macos-metal", contexts=(2048,)), env=Broken(),
+                        mac_lock_held=True, path_exists=lambda p: True)
+    assert summary["env_valid"] is False
