@@ -21,6 +21,14 @@
 2. 產生它與由它衍生的完整指令與 toolchain 已寫入 artifact recipe，並且已 commit。
 3. 刪除這件事記錄在 `NEXT.md`，或寫在該 recipe 中。
 
+source safetensors 的刪除由 `scripts/produce_gguf.py delete-source` 強制執行這三個條件：
+
+- 刪除前會重新驗證磁碟上每個衍生 GGUF 的大小與 sha256，必須同時符合 pins 與 recipe。
+- `pins.toml` 與 recipe 必須已 commit。
+- 刪除紀錄 append 到 `results/artifacts/deletions.jsonl`（K 級，刪除後 commit）。
+
+順序固定為：`produce` → commit pins 與 recipe → `delete-source` → commit `deletions.jsonl`。
+
 ## Artifact recipe（K 級，重現用）
 
 每產生一個大型 artifact，就寫一份 `results/artifacts/<filename>.json`，內容包括：
