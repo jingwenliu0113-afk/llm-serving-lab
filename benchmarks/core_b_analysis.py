@@ -128,10 +128,17 @@ def short_class_p95_ttft_ms(detailed: dict, *, L: int) -> float:
 def h_b4(per_level: dict) -> dict:
     """per_level: L -> {"C": uniform C_knee, "uniform": {restart: detailed}, "mixed": {restart: detailed}},
     only runs that passed validation; each mix needs all 3 restarts (013)."""
+    return h_b4_values({L: {"C": d["C"], **{mix: {r: short_class_p95_ttft_ms(x, L=L) for r, x in d[mix].items()}
+                                              for mix in ("uniform", "mixed")}}
+                        for L, d in per_level.items()})
+
+
+def h_b4_values(per_level: dict) -> dict:
+    """per_level: L -> {"C", "uniform": {restart: short-class P95 TTFT ms}, "mixed": {...}}; valid runs only."""
     units = []
     for L, d in sorted(per_level.items()):
-        u = [short_class_p95_ttft_ms(x, L=L) for _, x in sorted(d["uniform"].items())]
-        m = [short_class_p95_ttft_ms(x, L=L) for _, x in sorted(d["mixed"].items())]
+        u = [v for _, v in sorted(d["uniform"].items())]
+        m = [v for _, v in sorted(d["mixed"].items())]
         if len(u) < RESTARTS or len(m) < RESTARTS:
             units.append({"L": L, "status": "not testable"})
             continue

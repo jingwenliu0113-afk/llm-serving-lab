@@ -174,3 +174,41 @@ def test_mixed_dataset_builder_checks_every_prompt_token_count(tmp_path):
     with pytest.raises(bp.PlanError, match="1 of 2560 prompts"):
         md.build(2048, out, sample=fake_sample, count_tokens=count)
     assert not out.exists()
+
+
+def test_mixed_plan_runs_only_the_uniform_knee_at_2k_and_8k(pins):
+    """007: `mixed` only at L in {2048, 8192}, one C = that level's uniform C_knee, 3 restarts."""
+    up = bp.build_uniform_plan(pins, num_gpu_blocks=160, block_size=528)
+    mp = bp.build_mixed_plan(up, {2048: 22, 8192: None, 32768: 2}, uniform_session="b-uniform")
+    assert mp["runs"] == [{"L": 2048, "mix": "mixed", "restart": r, "order": [22]} for r in (1, 2, 3)]
+    assert mp["c_knee"] == {"2048": 22} and mp["skipped"] == {"8192": "uniform C_knee not available"}
+    assert mp["derived_from"] == "b-uniform"
+    assert {k: mp[k] for k in ("num_gpu_blocks", "block_size", "c_kv", "grids", "seed")} == \
+        {k: up[k] for k in ("num_gpu_blocks", "block_size", "c_kv", "grids", "seed")}
+
+
+def test_plan_cli_writes_uniform_and_mixed_plans(tmp_path, pins):
+    import json
+
+    import core_b_analysis as ba
+
+    out = tmp_path / "uniform.json"
+    assert bp.main(["uniform", "--num-gpu-blocks", "160", "--block-size", "528", "--out", str(out)]) == 0
+    up = json.loads(out.read_text())
+    assert up == json.loads(json.dumps(bp.build_uniform_plan(pins, num_gpu_blocks=160, block_size=528)))
+    session = tmp_path / "b-uniform"
+    session.mkdir()
+    (session / "plan.json").write_text(json.dumps(up))
+    (session / "session.json").write_text(json.dumps({"session_id": "b-uniform", "formal": True}))
+    rows = []
+    for L in bp.LEVELS:
+        for r in (1, 2, 3):
+            for C in up["grids"][str(L)]:
+                rows.append({"L": L, "mix": "uniform", "restart": r, "C": C, "ok": True,
+                             "output_throughput": 100.0 * min(C, 8)})
+    (session / "rows.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
+    mixed = tmp_path / "mixed.json"
+    assert bp.main(["mixed", "--uniform-session", str(session), "--out", str(mixed)]) == 0
+    mp = json.loads(mixed.read_text())
+    assert mp["c_knee"] == {str(L): ba.knee(rows, L, up["grids"][str(L)])["c_knee"] for L in bp.MIXED_LEVELS}
+    assert mp["derived_from"] == "b-uniform" and len(mp["runs"]) == 6

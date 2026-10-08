@@ -15,8 +15,13 @@ Formal runs require freeze.nvidia = true and running under
 per-request data, server logs) stays local; raw_manifest.json pins it.
 
 Usage (WSL, ~/llm-serving-lab):
-    .venv/bin/python benchmarks/run_core_b.py --plan plan.json --out results/core_b/<session> \\
+    .venv/bin/python benchmarks/core_b_plan.py uniform --num-gpu-blocks <N> --block-size <B> --out uniform.json
+    .venv/bin/python benchmarks/run_core_b.py --plan uniform.json --out results/core_b/<uniform> \\
         --gdn-prefill-backend triton --gpu-memory-utilization 0.90 [--gpu-lock-held --formal]
+    # H-B4 (007): `mixed` at each level's uniform C_knee, then the report (core_b_report.py)
+    .venv/bin/python benchmarks/core_b_plan.py mixed --uniform-session results/core_b/<uniform> --out mixed.json
+    .venv/bin/python benchmarks/run_core_b.py --plan mixed.json --out results/core_b/<mixed> ... \\
+        --mixed-dataset 2048=data/core_b/mixed-2048.jsonl --mixed-dataset 8192=data/core_b/mixed-8192.jsonl
 """
 
 from __future__ import annotations

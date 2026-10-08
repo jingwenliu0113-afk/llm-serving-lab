@@ -124,3 +124,11 @@ def test_h_b4_needs_all_three_restarts_of_each_mix():
     uni = {r: detailed([100.0 + r] * 200) for r in (1, 2)}
     mixed = {r: detailed([130.0 + r] * 180, n_long=20) for r in (1, 2, 3)}
     assert ba.h_b4({2048: {"uniform": uni, "mixed": mixed, "C": 22}})["units"][0]["status"] == "not testable"
+
+
+def test_h_b4_values_matches_the_detailed_form():
+    uni = {r: detailed([100.0 + r] * 200) for r in (1, 2, 3)}
+    mixed = {r: detailed([130.0 + r] * 180, n_long=20) for r in (1, 2, 3)}
+    values = {2048: {"C": 22, "uniform": {r: ba.short_class_p95_ttft_ms(x, L=2048) for r, x in uni.items()},
+                     "mixed": {r: ba.short_class_p95_ttft_ms(x, L=2048) for r, x in mixed.items()}}}
+    assert ba.h_b4_values(values) == ba.h_b4({2048: {"uniform": uni, "mixed": mixed, "C": 22}})

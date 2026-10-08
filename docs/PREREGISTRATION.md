@@ -265,7 +265,7 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
   - [x] quality 數值 sanity check：self-KLD 0、Q8_0 KLD 0.0014（fa on / off 相同）（4B；012）
   - [ ] MDE（遮蔽方向）：Core A 已估（sentinel CV 5.9%，兩格相對 MDE 約 9.6%）；downstream CI 半寬 0.2–1.7 pp（012）；H-A5 ΔNLL 待 9B
 - [ ] Benchmark harness 與輸出格式固定，記錄 harness 的 git commit
-- [x] 判定規則的分析程式在任何數據前 commit（`benchmarks/core_a_analysis.py`、`quality/quality_analysis.py`、`benchmarks/core_b_plan.py`、`benchmarks/core_b_analysis.py`；011）
+- [x] 判定規則的分析程式在任何數據前 commit（`benchmarks/core_a_analysis.py`、`quality/quality_analysis.py`、`benchmarks/core_b_plan.py`、`benchmarks/core_b_analysis.py`；011）；report CLI（`core_a_report.py`、`core_b_report.py`）亦同（013）
 - [x] Mac 重負載 lock 的參與方式已由使用者決定，並寫入 MACHINE_POLICY 或 decision log（共享 `/tmp/ai-portfolio-mac-heavy.lock`，經 `tools/with-mac-lock`）
 - [ ] 本文件第 1–5 節狀態改為 FROZEN (Stage A) 並 commit
 

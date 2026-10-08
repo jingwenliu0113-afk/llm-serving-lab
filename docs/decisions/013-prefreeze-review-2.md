@@ -127,3 +127,19 @@ review 找到兩類問題：
   - §4：環境變數、Core B client flags、電源有效性。
   - 「失敗也要報告」：分析 CLI 的限制。
 - 分析程式與測試依上修改，仍在任何數據之前 commit，011 的條件維持。
+
+## 補充（同日）：Core B 的 mixed plan 與 report 也在數據前寫定
+
+- `core_b_plan.build_mixed_plan` 與 CLI（`uniform` / `mixed`）：
+  - `mixed` 只在 L ∈ {2048, 8192} 跑，C 為該 L 的 `uniform` C_knee，3 次 restart（007）。
+  - C_knee 由 `uniform` session 依 `core_b_analysis.knee` 算出。
+  - 沒有 C_knee 的 L 不跑，並記錄原因。
+  - plan 記錄 `derived_from`，即 `uniform` session 的 id。
+- `benchmarks/core_b_report.py`：由正式的 `uniform` session 與由它衍生的正式 `mixed` session 產生 `analysis.json`。
+  - 遇到下列任一情況就拒絕執行：
+    - 任一 session 不是 formal。
+    - `mixed` plan 衍生自其他 session。
+    - `mixed` 的 C 不等於這裡重算的 C_knee。
+  - H-B4 使用每個 run 的短類 P95 TTFT。這個值由 runner 從 `--save-detailed` 的逐筆資料算出，所以 report 不必讀 `raw/`。
+  - 另附 (mix, L, C) 描述表：throughput、P95、KV cache 使用峰值、preemption 次數。
+- `core_b_analysis.h_b4_values`：H-B4 的判定改為直接接受各 restart 的 P95 值。`h_b4` 先算出 P95 再呼叫它，規則不變。

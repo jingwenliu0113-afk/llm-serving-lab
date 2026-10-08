@@ -133,6 +133,20 @@ def build_uniform_plan(pins: dict, *, num_gpu_blocks: int, block_size: int, seed
             "c_kv": ckv, "grids": grids, "runs": runs}
 
 
+def build_mixed_plan(uniform_plan: dict, c_knee: dict, *, uniform_session: str) -> dict:
+    """007: `mixed` only at L in {2048, 8192}, one C = that level's uniform C_knee (from the
+    uniform session, core_b_analysis.knee), 3 restarts. A level without a C_knee is skipped."""
+    knees = {int(L): C for L, C in c_knee.items()}
+    levels = [L for L in MIXED_LEVELS if knees.get(L) is not None]
+    runs = [{"L": L, "mix": "mixed", "restart": r, "order": [knees[L]]}
+            for L in levels for r in range(1, RESTARTS + 1)]
+    return {**{k: uniform_plan[k] for k in ("schema_version", "seed", "num_gpu_blocks", "block_size", "c_kv",
+                                            "grids")},
+            "derived_from": uniform_session, "c_knee": {str(L): knees[L] for L in levels},
+            "skipped": {str(L): "uniform C_knee not available" for L in MIXED_LEVELS if L not in levels},
+            "runs": runs}
+
+
 def mixed_counts(n: int) -> tuple:
     n_long = n // 10
     return n - n_long, n_long
@@ -150,3 +164,40 @@ def mixed_rows(*, short: list, long: list, seed: int = SEED) -> list:
         block.insert(pos, lp)
         rows.extend({"prompt": p, "output_tokens": N_GEN} for p in block)
     return rows
+
+
+def main(argv: list | None = None) -> int:
+    import argparse
+    import json
+    import tomllib
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description="Core B plans (decision 007)")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    u = sub.add_parser("uniform", help="uniform plan from the Stage B cache config")
+    u.add_argument("--num-gpu-blocks", type=int, required=True)
+    u.add_argument("--block-size", type=int, required=True)
+    u.add_argument("--out", required=True)
+    m = sub.add_parser("mixed", help="mixed plan at each level's uniform C_knee")
+    m.add_argument("--uniform-session", required=True)
+    m.add_argument("--out", required=True)
+    args = parser.parse_args(argv)
+    if args.cmd == "uniform":
+        pins = tomllib.loads((Path(__file__).resolve().parent.parent / "configs" / "pins.toml").read_text())
+        plan = build_uniform_plan(pins, num_gpu_blocks=args.num_gpu_blocks, block_size=args.block_size)
+    else:
+        import core_b_analysis as ba
+
+        session = Path(args.uniform_session)
+        up = json.loads((session / "plan.json").read_text())
+        rows = [json.loads(x) for x in (session / "rows.jsonl").read_text().splitlines()]
+        sid = json.loads((session / "session.json").read_text())["session_id"]
+        knees = {L: ba.knee(rows, L, up["grids"][str(L)])["c_knee"] for L in MIXED_LEVELS}
+        plan = build_mixed_plan(up, knees, uniform_session=sid)
+    Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
+    print(json.dumps({"runs": len(plan["runs"]), "c_knee": plan.get("c_knee"), "c_kv": plan["c_kv"]}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
