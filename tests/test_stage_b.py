@@ -36,9 +36,43 @@ def test_baseline_idles_five_minutes_then_takes_the_median_of_60_one_hertz_sampl
     """§4: idle 5 min after the last GPU process, 1 Hz x 60 s of memory.used, median = B."""
     gpu = Gpu([400] * 30 + [380] * 29 + [9000])
     res = sb.measure_baseline(query=gpu.query, compute_apps=gpu.compute_apps, sleep=gpu.sleep)
-    assert gpu.slept[0] == 300 and gpu.slept[1:] == [1] * 59
+    idle = [x for x in gpu.slept if x != 1]
+    assert sum(idle) == 300 and gpu.slept.count(1) == 59  # 5 min idle (polled), then 59 gaps of 1 s
     assert res["b_mib"] == 400 and len(res["samples_mib"]) == 60  # median is robust to one spike
     assert res["v_total_mib"] == 16303 and res["display_active"] == "Enabled" and res["idle_s"] == 300
+
+
+def test_baseline_restarts_the_idle_window_when_a_gpu_process_comes_and_goes():
+    """§4 step 2: 5 minutes after the LAST GPU process, so a process seen during the idle wait restarts it."""
+    seen = iter([[]] + [[]] * 10 + [[{"pid": 9, "name": "x", "used_mib": 100}]] + [[]] * 1000)
+    slept = []
+    sb.measure_baseline(query=lambda: {"memory_used_mib": 400, "memory_total_mib": 16303, "display_active": "x",
+                                       "display_mode": "x"}, compute_apps=lambda: next(seen), sleep=slept.append)
+    idle = [x for x in slept if x != 1]
+    assert sum(idle) == 11 * sb.IDLE_POLL_S + 300  # 50 s of idle, a process, then a full 300 s
+
+
+def test_baseline_rejects_a_gpu_process_during_sampling():
+    calls = {"n": 0}
+
+    def apps():
+        calls["n"] += 1
+        return [{"pid": 9, "name": "x", "used_mib": 100}] if calls["n"] == 70 else []
+
+    with pytest.raises(sb.StageBError, match="during"):
+        sb.measure_baseline(query=lambda: {"memory_used_mib": 400, "memory_total_mib": 16303, "display_active": "x",
+                                           "display_mode": "x"}, compute_apps=apps, sleep=lambda s: None)
+
+
+def test_baseline_records_drift_against_the_frozen_b():
+    """§4 step 4: re-measured at every session start; > 0.25 GiB above the frozen B marks the session drift."""
+    gpu = Gpu([1100])
+    res = sb.measure_baseline(query=gpu.query, compute_apps=gpu.compute_apps, sleep=gpu.sleep, frozen_b_mib=811)
+    assert res["frozen_b_mib"] == 811 and res["drift"] is True  # 1100 - 811 = 289 MiB > 256
+    gpu = Gpu([1000])
+    assert sb.measure_baseline(query=gpu.query, compute_apps=gpu.compute_apps, sleep=gpu.sleep,
+                               frozen_b_mib=811)["drift"] is False
+    assert "drift" not in sb.measure_baseline(query=Gpu([400]).query, compute_apps=lambda: [], sleep=lambda s: None)
 
 
 def test_baseline_refuses_while_another_gpu_process_exists():
@@ -46,8 +80,8 @@ def test_baseline_refuses_while_another_gpu_process_exists():
     with pytest.raises(sb.StageBError, match="GPU process"):
         sb.measure_baseline(query=gpu.query, compute_apps=gpu.compute_apps, sleep=gpu.sleep)
     assert gpu.slept == []
-    gpu = Gpu([400], apps_after=[{"pid": 1, "name": "x", "used_mib": 100}])
-    with pytest.raises(sb.StageBError, match="during"):
+    gpu = Gpu([400], apps_after=[{"pid": 1, "name": "x", "used_mib": 100}])  # a process that never goes away
+    with pytest.raises(sb.StageBError, match="never stayed free"):
         sb.measure_baseline(query=gpu.query, compute_apps=gpu.compute_apps, sleep=gpu.sleep)
 
 
@@ -145,3 +179,19 @@ def test_run_fit_job_end_to_end_with_the_fake_llama_completion(tmp_path, monkeyp
     rec = sb.run_fit_job(sb.overflow_job(pins=pins, n_thr=8, poll=0), out=tmp_path / "ovf", bin_dir=bin_dir,
                          models_dir=str(tmp_path / "m"), capture_env=EnvRecorder(), sampler_cls=FakeSampler)
     assert sb.classify_overflow(rec, self_mib=None, v_total_mib=16303, b_mib=380) == "hard-oom"
+
+
+
+def test_windows_settings_separate_absent_from_unread(monkeypatch, tmp_path):
+    import subprocess
+
+    def run(cmd, **kw):
+        if cmd[0] == "reg.exe":
+            raise FileNotFoundError("reg.exe")
+        if cmd[0] == "cmd.exe":
+            return subprocess.CompletedProcess(cmd, 0, "C:\\Users\\u\n", "")
+        return subprocess.CompletedProcess(cmd, 0, str(tmp_path) + "\n", "")
+
+    monkeypatch.setattr(sb.subprocess, "run", run)
+    out = sb.windows_gpu_settings()
+    assert out["hags"] is None and out["wslconfig"] == "absent" and any("reg.exe" in e for e in out["probe_errors"])

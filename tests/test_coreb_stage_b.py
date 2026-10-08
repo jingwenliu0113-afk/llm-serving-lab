@@ -122,3 +122,39 @@ def test_bench_check_runs_one_uniform_bench_on_the_smoke_server_and_finds_the_me
         "vllm:kv_cache_usage_perc": True, "vllm:num_preemptions_total": True, "vllm:cache_config_info": True}
     assert rec["gate_step5_ok"] is True and w.signals  # the server was torn down
     assert json.loads((tmp_path / "bc" / "result.json").read_text())["gate_step5_ok"] is True
+
+
+
+@pytest.mark.parametrize("entry", ["boots", "pin_ab", "bench_check"])
+def test_a_signal_during_the_boot_wait_tears_the_server_down(tmp_path, pins, entry):
+    """A SIGTERM / SIGHUP (SystemExit) or Ctrl-C while waiting for /health must not leave a server holding the
+    GPU after the lock is released."""
+    import signal as sig
+
+    w = BootWorld(tmp_path)
+
+    def http_get(url):
+        if url.endswith("/health"):
+            raise SystemExit(143)
+        return w.http_get(url)
+
+    common = dict(gdn_prefill_backend="triton", popen=w.popen, signal_group=w.signal_group,
+                  group_alive=w.group_alive, http_get=http_get, now=w.now, sleep=w.sleep,
+                  toolchain_check=lambda env: [], compute_apps=lambda: [])
+    with pytest.raises(SystemExit):
+        if entry == "boots":
+            sb.run_boots(pins, out=tmp_path / "o", v_total_mib=16303, b_mib=380, **common)
+        elif entry == "pin_ab":
+            sb.run_pin_ab(pins, out=tmp_path / "o", gpu_memory_utilization="0.91", kv_cache_memory_bytes=2**30,
+                          run_bench=w.run_bench, **common)
+        else:
+            sb.run_bench_check(pins, out=tmp_path / "o", run_bench=w.run_bench, **common)
+    assert sig.SIGINT in w.signals and not w.group_alive(w.proc)
+
+
+def test_boots_disclose_that_the_driver_jit_cache_is_not_reset(tmp_path, pins):
+    w = BootWorld(tmp_path)
+    rec = sb.run_boots(pins, out=tmp_path / "boots", v_total_mib=16303, b_mib=380, gdn_prefill_backend="triton",
+                       popen=w.popen, signal_group=w.signal_group, group_alive=w.group_alive, http_get=w.http_get,
+                       now=w.now, sleep=w.sleep, toolchain_check=lambda env: [], compute_apps=lambda: [])
+    assert "CUDA_CACHE_PATH" in rec["driver_jit_cache"] and "CUDA_CACHE_PATH" not in w.server_envs[0]

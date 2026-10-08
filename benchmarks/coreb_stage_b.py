@@ -6,7 +6,8 @@ GPU process runs; never overwrites.
   boots   Two boots of the Core B server (core_b_plan.server_argv, U from B by the 017 rule, no
           --kv-cache-memory-bytes) with fresh Triton / FlashInfer / vLLM caches under <out>/cache:
           boot 1 is cold, boot 2 warm (same caches). Records the time from start to /health 200
-          (003 #3: JIT time, cache effective on the second boot) and K = the warm boot's
+          (003 #3: JIT time of the Triton / FlashInfer / vLLM caches, cache effective on the second boot; the CUDA
+          driver's own PTX JIT cache is not reset, so FA2's compute_80 PTX JIT may already be cached) and K = the warm boot's
           'Available KV cache memory' floored to 256 MiB (017; the cold boot is the discarded one).
   bench-check  003 gate step 5 on the 008 smoke server (S1 settings): one uniform L = 2048, C = 4 `vllm bench
           serve` run completes and validates, and /metrics has the KV-usage / preemption / cache-config metrics.
@@ -78,14 +79,22 @@ def _precheck(env: dict, *, toolchain_check: Callable, compute_apps: Callable, o
         raise CoreBStageBError("toolchain incomplete (014): " + "; ".join(missing))
 
 
-def _boot(argv, env, log_path, *, popen, http_get, now, sleep, timeout_s: float) -> tuple:
+def _boot(argv, env, log_path, *, popen, http_get, now, sleep, timeout_s: float, signal_group: Callable,
+          group_alive: Callable) -> tuple:
+    """Start the server and wait for /health. Any exception during the wait (SIGTERM / SIGHUP via
+    _exit_on_signal, Ctrl-C) tears the server down before propagating: the callers never get `proc` back
+    then, and a server left running would hold the GPU after the lock is released."""
     t0 = now()
     proc = popen(argv, env, log_path)
-    while now() - t0 < timeout_s and proc.poll() is None:
-        if http_get(f"http://127.0.0.1:{PORT}/health")[0] == 200:
-            return proc, now() - t0
-        sleep(2)
-    return proc, None
+    try:
+        while now() - t0 < timeout_s and proc.poll() is None:
+            if http_get(f"http://127.0.0.1:{PORT}/health")[0] == 200:
+                return proc, now() - t0
+            sleep(2)
+        return proc, None
+    except BaseException:
+        smoke._shutdown(proc, signal_group=signal_group, group_alive=group_alive, now=now, sleep=sleep)
+        raise
 
 
 def run_boots(pins: dict, *, out: Path, v_total_mib: float, b_mib: float, gdn_prefill_backend: str,
@@ -105,7 +114,8 @@ def run_boots(pins: dict, *, out: Path, v_total_mib: float, b_mib: float, gdn_pr
     for i, label in enumerate(("cold", "warm")):
         log = out / f"server-{label}.log"
         proc, startup_s = _boot(argv, env, log, popen=popen, http_get=http_get, now=now, sleep=sleep,
-                                timeout_s=startup_timeout_s)
+                                timeout_s=startup_timeout_s, signal_group=signal_group,
+                                group_alive=group_alive)
         teardown = smoke._shutdown(proc, signal_group=signal_group, group_alive=group_alive, now=now, sleep=sleep)
         text = log.read_text(errors="replace") if log.exists() else ""
         boots.append({"boot": label, "startup_s": startup_s, "teardown_problems": teardown,
@@ -117,6 +127,9 @@ def run_boots(pins: dict, *, out: Path, v_total_mib: float, b_mib: float, gdn_pr
     rec = {"v_total_mib": v_total_mib, "b_mib": b_mib, "gpu_memory_utilization": util, "argv": argv,
            "server_env": bp.recorded_env(env), "caches": {v: env[v] for v in CACHE_VARS}, "boots": boots,
            "cache_effective": bool(warm and warm["startup_s"] < boots[0]["startup_s"]),
+           # the CUDA driver's own JIT cache (FA2 compute_80 PTX -> sm_120) is not reset: CUDA_CACHE_PATH is not
+           # among the §4-listed variables, so the cold boot may reuse PTX JIT results of earlier boots
+           "driver_jit_cache": "shared default (CUDA_CACHE_PATH unset, not reset; earlier boots may have filled it)",
            "kv_cache_memory_bytes": warm["kv_cache_bytes"] if warm else None}
     (out / "result.json").write_text(json.dumps(rec, indent=1) + "\n")
     return rec
@@ -138,7 +151,8 @@ def run_pin_ab(pins: dict, *, out: Path, gpu_memory_utilization: str, kv_cache_m
     for v in (0, 1):
         env = {**base, "VLLM_WSL2_ENABLE_PIN_MEMORY": str(v)}
         proc, startup_s = _boot(argv, env, out / "raw" / f"server-pin{v}.log", popen=popen, http_get=http_get,
-                                now=now, sleep=sleep, timeout_s=startup_timeout_s)
+                                now=now, sleep=sleep, timeout_s=startup_timeout_s, signal_group=signal_group,
+                                group_alive=group_alive)
         try:
             if startup_s is None:
                 runs.append({"setting": v, "ok": False, "reasons": ["server not ready"]})
@@ -185,7 +199,8 @@ def run_bench_check(pins: dict, *, out: Path, gdn_prefill_backend: str, popen: C
     _precheck(env, toolchain_check=toolchain_check, compute_apps=compute_apps, out=out)
     (out / "raw").mkdir(parents=True)
     proc, startup_s = _boot(argv, env, out / "raw" / "server.log", popen=popen, http_get=http_get, now=now,
-                            sleep=sleep, timeout_s=startup_timeout_s)
+                            sleep=sleep, timeout_s=startup_timeout_s, signal_group=signal_group,
+                                group_alive=group_alive)
     bench, found, sampled = {"ok": False, "reasons": ["server not ready"]}, {}, None
     try:
         if startup_s is not None:

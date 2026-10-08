@@ -41,7 +41,10 @@ import core_a_plan as cp
 from run_core_a import NvidiaSmiSampler, _resolve, default_run_proc, make_env_capture
 
 IDLE_S = 300
+IDLE_POLL_S = 5          # GPU processes are checked throughout the idle wait (a new one restarts it)
+MAX_IDLE_WAIT_S = 3600   # give up when the GPU never stays quiet for IDLE_S
 N_SAMPLES = 60
+DRIFT_MIB = 256          # §4 step 4: > 0.25 GiB above the frozen B marks the session drift
 CCTX_CELL = ("4B", "Q4_K_M", 2048)  # 009
 OVERFLOW_CELL = ("9B", "Q8_0")
 OVERFLOW_CTX = 262144
@@ -89,42 +92,61 @@ def nvidia_compute_apps() -> list:  # pragma: no cover - needs nvidia-smi
 
 
 def windows_gpu_settings() -> dict:  # pragma: no cover - needs WSL interop
-    """Read-only: HAGS (HwSchMode: 2 = on, 1 = off) and the user's .wslconfig, if any."""
-    out: dict = {"hags": None, "wslconfig": None}
+    """Read-only: HAGS (HwSchMode: 2 = on, 1 = off) and the user's .wslconfig. None = not read (see probe_errors);
+    wslconfig "absent" = no such file."""
+    out: dict = {"hags": None, "wslconfig": None, "probe_errors": []}
     try:
-        reg = subprocess.run(["reg.exe", "query", r"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers",
-                              "/v", "HwSchMode"], capture_output=True, text=True, timeout=30).stdout
-        for line in reg.splitlines():
-            if "HwSchMode" in line:
-                out["hags"] = str(int(line.split()[-1], 16))
+        r = subprocess.run(["reg.exe", "query", r"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers",
+                            "/v", "HwSchMode"], capture_output=True, text=True, timeout=30)
+        vals = [line for line in r.stdout.splitlines() if "HwSchMode" in line]
+        if vals:
+            out["hags"] = str(int(vals[-1].split()[-1], 16))
+        else:
+            out["probe_errors"].append(f"reg.exe rc={r.returncode}: {r.stderr.strip()[:200]}")
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        out["probe_errors"].append(f"reg.exe: {exc!r}")
+    try:
         home = subprocess.run(["cmd.exe", "/c", "echo %USERPROFILE%"], capture_output=True, text=True,
                               timeout=30).stdout.strip()
         path = subprocess.run(["wslpath", "-u", home], capture_output=True, text=True, timeout=30).stdout.strip()
+        if not home or not path:
+            raise ValueError(f"cannot resolve %USERPROFILE%: {home!r} -> {path!r}")
         cfg = Path(path) / ".wslconfig"
-        out["wslconfig"] = cfg.read_text(errors="replace") if cfg.is_file() else None
-    except (OSError, subprocess.SubprocessError, ValueError):
-        pass
+        out["wslconfig"] = cfg.read_text(errors="replace") if cfg.is_file() else "absent"
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        out["probe_errors"].append(f"wslconfig: {exc!r}")
     return out
 
 
 def measure_baseline(*, query: Callable, compute_apps: Callable, sleep: Callable, idle_s: int = IDLE_S,
-                     n_samples: int = N_SAMPLES) -> dict:
+                     n_samples: int = N_SAMPLES, frozen_b_mib: float | None = None) -> dict:
+    """§4: no other GPU process; B is sampled only after IDLE_S without any GPU process (checked every
+    IDLE_POLL_S; a process restarts the wait); a process during the 1 Hz sampling makes B invalid."""
     apps = compute_apps()
     if apps:
         raise StageBError(f"another GPU process is running, not measuring B: {apps}")
-    sleep(idle_s)
+    idle = waited = 0
+    while idle < idle_s:
+        if waited >= MAX_IDLE_WAIT_S:
+            raise StageBError(f"the GPU never stayed free of other processes for {idle_s} s within {MAX_IDLE_WAIT_S} s")
+        sleep(IDLE_POLL_S)
+        waited += IDLE_POLL_S
+        idle = 0 if compute_apps() else idle + IDLE_POLL_S
     samples, info = [], None
     for i in range(n_samples):
+        apps = compute_apps()
+        if apps:
+            raise StageBError(f"a GPU process appeared during the measurement, B is invalid: {apps}")
         info = query()
         samples.append(info["memory_used_mib"])
         if i < n_samples - 1:
             sleep(1)
-    apps = compute_apps()
-    if apps:
-        raise StageBError(f"a GPU process appeared during the measurement, B is invalid: {apps}")
-    return {"b_mib": statistics.median(samples), "samples_mib": samples, "idle_s": idle_s,
-            "v_total_mib": info["memory_total_mib"], "display_active": info["display_active"],
-            "display_mode": info["display_mode"]}
+    rec = {"b_mib": statistics.median(samples), "samples_mib": samples, "idle_s": idle_s, "idle_waited_s": waited,
+           "v_total_mib": info["memory_total_mib"], "display_active": info["display_active"],
+           "display_mode": info["display_mode"]}
+    if frozen_b_mib is not None:
+        rec.update({"frozen_b_mib": frozen_b_mib, "drift": rec["b_mib"] - frozen_b_mib > DRIFT_MIB})
+    return rec
 
 
 def device_self_mib(summary: dict) -> int | None:
@@ -191,6 +213,8 @@ def main(argv: list | None = None) -> int:
         p = sub.add_parser(name)
         p.add_argument("--gpu-lock-held", action="store_true")
         p.add_argument("--out", required=True)
+        if name == "baseline":
+            p.add_argument("--frozen-b-mib", type=float, help="§4 step 4: mark drift when B exceeds it by > 0.25 GiB")
         if name != "baseline":
             p.add_argument("--b-mib", type=float, required=True)
             p.add_argument("--bin", required=True)
@@ -205,7 +229,8 @@ def main(argv: list | None = None) -> int:
         if out.exists():
             raise StageBError(f"{out} exists; Stage B results are never overwritten")
         if args.cmd == "baseline":
-            rec = measure_baseline(query=nvidia_query, compute_apps=nvidia_compute_apps, sleep=time.sleep)
+            rec = measure_baseline(query=nvidia_query, compute_apps=nvidia_compute_apps, sleep=time.sleep,
+                                   frozen_b_mib=args.frozen_b_mib)
             rec["windows"] = windows_gpu_settings()
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(rec, indent=1) + "\n")
