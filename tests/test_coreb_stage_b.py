@@ -158,3 +158,15 @@ def test_boots_disclose_that_the_driver_jit_cache_is_not_reset(tmp_path, pins):
                        popen=w.popen, signal_group=w.signal_group, group_alive=w.group_alive, http_get=w.http_get,
                        now=w.now, sleep=w.sleep, toolchain_check=lambda env: [], compute_apps=lambda: [])
     assert "CUDA_CACHE_PATH" in rec["driver_jit_cache"] and "CUDA_CACHE_PATH" not in w.server_envs[0]
+
+
+
+def test_pin_ab_records_the_server_log_checks(tmp_path, pins):
+    """§4 / 017: attention backend and max_num_batched_tokens are verified from each server's log."""
+    w = World(tmp_path)
+    rec = sb.run_pin_ab(pins, out=tmp_path / "ab", gpu_memory_utilization="0.91", kv_cache_memory_bytes=2**30,
+                        gdn_prefill_backend="triton", popen=w.popen, signal_group=w.signal_group,
+                        group_alive=w.group_alive, http_get=w.http_get, run_bench=w.run_bench, now=w.now,
+                        sleep=w.sleep, toolchain_check=lambda env: [], compute_apps=lambda: [])
+    assert rec["server_checks"] == {"0": [], "1": []}
+    assert rec["log_facts"]["0"]["attention_backend"] == "FLASH_ATTN"

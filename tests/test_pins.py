@@ -92,6 +92,9 @@ def test_unfrozen_placeholders_present(pins):
     assert "converter_lock" in pins["core_a"]
     assert "lock_file" in pins["vllm"]
     assert "mix_dataset_sha256" in pins["core_b"]
+    for key in ("b_mib", "v_total_mib", "gpu_memory_utilization", "gdn_prefill_backend", "rtx_n_thr", "rtx_poll",
+                "c_ctx_mib", "kv_cache_memory_bytes", "num_gpu_blocks", "block_size", "wsl2_pin_memory"):
+        assert key in pins["stage_b"], key
 
 
 def test_core_a_context_within_native_window(pins):
@@ -161,6 +164,9 @@ def test_stage_b_freeze_requires_verified_nvidia_stack(pins):
     assert pins["core_b"]["status"] == "verified"
     mix = pins["core_b"]["mix_dataset_sha256"]
     assert set(mix) == {"2048", "8192"} and all(SHA256.fullmatch(v) for v in mix.values())
+    sb = pins["stage_b"]
+    assert sb["b_mib"] > 0 and sb["c_ctx_mib"] > 0 and sb["kv_cache_memory_bytes"] > 0 and sb["num_gpu_blocks"] > 0
+    assert sb["wsl2_pin_memory"] in ("0", "1") and sb["gdn_prefill_backend"] and sb["rtx_poll"] >= 0
 
 
 def test_core_b_single_fixed_precision(pins):

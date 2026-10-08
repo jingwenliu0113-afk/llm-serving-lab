@@ -24,22 +24,34 @@ LABELS = {"p95_ttft_ms": ("P95 TTFT (ms)", "P95 TTFT vs concurrency"),
           "output_throughput": ("output tok/s", "Output throughput vs concurrency")}
 
 
-def series(analysis: dict, metric: str) -> dict:
+RESTARTS = 3  # = core_b_analysis.RESTARTS (007 / §2: a point is the mean of 3 valid server restarts)
+
+
+def series(analysis: dict, metric: str) -> tuple:
+    """Uniform-mix points with all 3 restarts valid; also the (L, C) cells left out because fewer were valid."""
     out: dict = {}
-    for key, cell in analysis["cells"].items():
+    dropped = []
+    for key, cell in sorted(analysis["cells"].items()):
         mix, L, C = key.split("-")
         if mix != "uniform" or cell.get(metric) is None:
             continue
+        if cell.get("n_valid") != RESTARTS:
+            dropped.append(f"L={L} C={C} (n={cell.get('n_valid')})")
+            continue
         out.setdefault(int(L), []).append((int(C), cell[metric]))
-    return {f"L={L}": sorted(v) for L, v in sorted(out.items())}
+    return {f"L={L}": sorted(v) for L, v in sorted(out.items())}, dropped
 
 
 def figure(analysis: dict, metric: str, *, platform_label: str) -> str:
     y_label, title = LABELS[metric]
-    knees = ", ".join(f"L={u['L']}: {u.get('c_knee')}" for u in analysis["hypotheses"]["H-B1"]["units"])
+    s, dropped = series(analysis, metric)
+    knees = ", ".join(f"L={u['L']}: " + ("not testable" if u.get("status") == "not testable" else str(u.get("c_knee")))
+                      for u in analysis["hypotheses"]["H-B1"]["units"])
+    note = f"uniform mix, mean of 3 valid server restarts; C_knee {knees}"
+    if dropped:
+        note += "; left out (fewer valid restarts): " + ", ".join(dropped)
     return svg_chart.line_chart(title=f"Core B {title} — {platform_label}", x_label="concurrency C (log2 scale)",
-                                y_label=y_label, series=series(analysis, metric), log2_x=True,
-                                note=f"uniform mix, mean of 3 server restarts; C_knee {knees}")
+                                y_label=y_label, series=s, log2_x=True, note=note)
 
 
 def main(argv: list | None = None) -> int:

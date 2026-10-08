@@ -54,6 +54,19 @@ class CoreBStageBError(RuntimeError):
     pass
 
 
+def server_log_checks(text: str) -> tuple:
+    """(log facts, problems): attention backend and max_num_batched_tokens from the server log (§4 / 017 / 018)."""
+    facts = smoke.parse_server_log(text)
+    m = rb._RE_NONDEFAULT_BATCHED.search(text)
+    facts["max_num_batched_tokens_logged"] = int(m.group(1)) if m else None
+    problems = []
+    if facts.get("attention_backend") != "FLASH_ATTN":
+        problems.append(f"attention backend {facts.get('attention_backend')!r} != FLASH_ATTN")
+    if facts["max_num_batched_tokens_logged"] != bp.MAX_NUM_BATCHED_TOKENS:
+        problems.append(f"max_num_batched_tokens {facts['max_num_batched_tokens_logged']!r} != {bp.MAX_NUM_BATCHED_TOKENS}")
+    return facts, problems
+
+
 def pin_memory_choice(results: dict, *, runs: int = AB_RUNS) -> dict:
     """results: (setting, C) -> output throughputs of the valid runs."""
     groups = [(v, C) for v in (0, 1) for C in AB_CS]
@@ -147,7 +160,7 @@ def run_pin_ab(pins: dict, *, out: Path, gpu_memory_utilization: str, kv_cache_m
     argv, _ = bp.server_argv(pins, gdn_prefill_backend=gdn_prefill_backend,
                              gpu_memory_utilization=gpu_memory_utilization, port=PORT, vllm_bin=vllm_bin,
                              kv_cache_memory_bytes=kv_cache_memory_bytes)
-    results, runs, cache_cfg = {}, [], {}
+    results, runs, cache_cfg, facts, checks = {}, [], {}, {}, {}
     for v in (0, 1):
         env = {**base, "VLLM_WSL2_ENABLE_PIN_MEMORY": str(v)}
         proc, startup_s = _boot(argv, env, out / "raw" / f"server-pin{v}.log", popen=popen, http_get=http_get,
@@ -157,6 +170,8 @@ def run_pin_ab(pins: dict, *, out: Path, gpu_memory_utilization: str, kv_cache_m
             if startup_s is None:
                 runs.append({"setting": v, "ok": False, "reasons": ["server not ready"]})
                 continue
+            log = out / "raw" / f"server-pin{v}.log"
+            facts[str(v)], checks[str(v)] = server_log_checks(log.read_text(errors="replace") if log.exists() else "")
             code, text = http_get(f"http://127.0.0.1:{PORT}/metrics")
             cache_cfg[str(v)] = rb.cache_config(rb.parse_prometheus(text)) if code == 200 else None
             for C in AB_CS:
@@ -175,7 +190,9 @@ def run_pin_ab(pins: dict, *, out: Path, gpu_memory_utilization: str, kv_cache_m
             smoke._shutdown(proc, signal_group=signal_group, group_alive=group_alive, now=now, sleep=sleep)
     rec = {"gpu_memory_utilization": gpu_memory_utilization, "kv_cache_memory_bytes": kv_cache_memory_bytes,
            "argv": argv, "server_env": bp.recorded_env(base), "L": AB_L, "C": list(AB_CS), "runs_per_point": AB_RUNS,
-           "cache_config": cache_cfg, "runs": runs, "decision": pin_memory_choice(results)}
+           "cache_config": cache_cfg, "log_facts": facts, "server_checks": checks, "runs": runs,
+           "decision": pin_memory_choice(results) if not any(checks.values()) else
+           {"choice": 0, "reason": f"server log checks failed: {checks}; keep the default 0"}}
     rb.write_raw_manifest(out)
     (out / "result.json").write_text(json.dumps(rec, indent=1) + "\n")
     return rec

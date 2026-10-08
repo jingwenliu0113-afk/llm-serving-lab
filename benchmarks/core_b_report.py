@@ -62,6 +62,10 @@ def report(uniform: dict, mixed: dict | None) -> dict:
         if mixed["plan"].get("derived_from") != uniform["session"]["session_id"]:
             problems.append(f"the mixed plan was derived from {mixed['plan'].get('derived_from')!r}, "
                             f"not {uniform['session']['session_id']!r}")
+        for key in ("server", "server_env"):  # 007: one shared server config for every level and mix
+            if mixed["session"].get(key) != uniform["session"].get(key):
+                problems.append(f"the mixed session's {key} {mixed['session'].get(key)!r} differs from the uniform "
+                                f"session's {uniform['session'].get(key)!r} (007)")
     rows, plan = uniform["rows"], uniform["plan"]
     knees = {L: ba.knee(rows, L, plan["grids"][str(L)])["c_knee"] for L in bp.MIXED_LEVELS}
     if mixed is not None:

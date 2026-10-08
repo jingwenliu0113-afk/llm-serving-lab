@@ -45,7 +45,7 @@ from typing import Callable
 import core_b_analysis as ba
 import core_b_plan as bp
 import coreb_smoke as smoke
-from run_core_a import sha256_json, write_raw_manifest
+from run_core_a import env_problems, sha256_json, write_raw_manifest
 
 SCHEMA_VERSION = 1
 PORT = 8000
@@ -165,12 +165,51 @@ def default_run_bench(argv: list, log_path, env: dict) -> int:
         return subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, env=env).returncode
 
 
+_RE_NONDEFAULT_BATCHED = re.compile(r"non-default args: .*'max_num_batched_tokens': (\d+)")
+
+
+def make_vllm_env_capture(script: Path, vllm_python: str = sys.executable) -> Callable:
+    """scripts/env_capture.py --vllm-python as a subprocess; never raises (failures land in probe_errors)."""
+
+    def capture(out_path: Path, gpu_lock_held: bool) -> dict:
+        cmd = [sys.executable, str(script), "--vllm-python", vllm_python, "--out", str(out_path)]
+        if gpu_lock_held:
+            cmd.append("--gpu-lock-held")
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0 or not Path(out_path).is_file():
+            rec = {"probe_errors": [f"env_capture failed (exit {res.returncode}): {res.stderr.strip()[:300]}"]}
+            Path(out_path).write_text(json.dumps(rec))
+            return rec
+        return json.loads(Path(out_path).read_text())
+
+    return capture
+
+
+def stage_b_problems(plan: dict, pins: dict, *, gdn_prefill_backend: str, gpu_memory_utilization: str) -> list:
+    """Formal Core B runs use exactly the Stage B values pinned in pins.toml [stage_b] (§6; 017; 018)."""
+    sb = pins.get("stage_b") or {}
+    problems = []
+    if sb.get("wsl2_pin_memory") not in ("0", "1"):
+        problems.append("pins [stage_b] wsl2_pin_memory is not pinned (003 / 017 pin-memory A/B)")
+    if not sb.get("gpu_memory_utilization") or gpu_memory_utilization != sb["gpu_memory_utilization"] \
+            or plan.get("gpu_memory_utilization") != sb["gpu_memory_utilization"]:
+        problems.append(f"gpu_memory_utilization {gpu_memory_utilization!r} / plan {plan.get('gpu_memory_utilization')!r}"
+                        f" != pinned {sb.get('gpu_memory_utilization')!r} (017 U)")
+    if not sb.get("gdn_prefill_backend") or gdn_prefill_backend != sb["gdn_prefill_backend"]:
+        problems.append(f"gdn_prefill_backend {gdn_prefill_backend!r} != pinned {sb.get('gdn_prefill_backend')!r} "
+                        "(the backend the S1-S3 smoke passed with, 008)")
+    if not sb.get("kv_cache_memory_bytes") or plan.get("kv_cache_memory_bytes") != sb["kv_cache_memory_bytes"]:
+        problems.append(f"plan kv_cache_memory_bytes {plan.get('kv_cache_memory_bytes')!r} != pinned "
+                        f"{sb.get('kv_cache_memory_bytes')!r} (017 K)")
+    return problems
+
+
 def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gpu_memory_utilization: str,
                 session_id: str, popen: Callable, signal_group: Callable, group_alive: Callable,
                 http_get: Callable, run_bench: Callable, gpu_mem_used: Callable, gpu_lock_free: Callable,
                 gpu_lock_held: bool = False, formal: bool = False, vllm_bin: str = ".venv/bin/vllm",
                 mixed_datasets: dict | None = None, sample_interval: float | None = None,
-                toolchain_check: Callable = bp.toolchain_problems,
+                toolchain_check: Callable = bp.toolchain_problems, capture_env: Callable | None = None,
                 now: Callable = time.monotonic, sleep: Callable = time.sleep, startup_timeout_s: float = 1800,
                 clock: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat()) -> dict:
     if formal and not gpu_lock_held:
@@ -180,6 +219,11 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
         raise RunError("formal Core B runs require freeze.nvidia = true (decision 006)")
     if formal and not plan.get("kv_cache_memory_bytes"):
         raise RunError("formal Core B runs need the Stage B kv_cache_memory_bytes in the plan (decision 017)")
+    if formal:
+        problems = stage_b_problems(plan, pins, gdn_prefill_backend=gdn_prefill_backend,
+                                    gpu_memory_utilization=gpu_memory_utilization)
+        if problems:
+            raise RunError("; ".join(problems))
     mixed_sha = {}
     for L in sorted({r["L"] for r in plan["runs"] if r["mix"] == "mixed"}):
         path = (mixed_datasets or {}).get(L)
@@ -197,11 +241,32 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
     if out.exists():
         raise RunError(f"{out} exists; sessions are never resumed or overwritten")
     (out / "raw").mkdir(parents=True)
+    (out / "env").mkdir()
     (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
+    pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held) if capture_env else {}
+    if formal:
+        got = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
+        if got != pins["vllm"]["version"]:
+            raise RunError(f"vLLM {got!r} in the preflight != pinned {pins['vllm']['version']} (003)")
+        power = env_problems(pre, "wsl2-cuda")
+        if power:
+            raise RunError("preflight: " + "; ".join(power))
+    _, env0 = bp.server_argv(pins, gdn_prefill_backend=gdn_prefill_backend,
+                             gpu_memory_utilization=gpu_memory_utilization, port=PORT, vllm_bin=vllm_bin,
+                             base_env=os.environ, kv_cache_memory_bytes=plan.get("kv_cache_memory_bytes"))
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "formal": formal,
-               "gpu_lock_held": gpu_lock_held, "plan_sha256": sha256_json(plan), "started_at": clock(),
+               "gpu_lock_held": gpu_lock_held, "plan_sha256": sha256_json(plan), "pins_sha256": sha256_json(pins),
+               "started_at": clock(), "preflight": "env/preflight.json" if capture_env else None,
+               "repo_commit": ((pre.get("repo") or {}).get("commit")),
                "server": {"gdn_prefill_backend": gdn_prefill_backend, "gpu_memory_utilization": gpu_memory_utilization},
-               "mixed_dataset_sha256": mixed_sha, "server_env": bp.recorded_env(bp.server_env(os.environ))}
+               "mixed_dataset_sha256": mixed_sha, "server_env": bp.recorded_env(env0),
+               "inherited_unlisted": bp.inherited_unlisted(os.environ), "runs": {}}
+    env_flags = []
+
+    def snap(name: str) -> None:
+        if capture_env:
+            rec = capture_env(out_path=out / "env" / name, gpu_lock_held=gpu_lock_held)
+            env_flags.extend({"env": name, "reason": why} for why in env_problems(rec, "wsl2-cuda"))
     rows = []
     base = f"http://127.0.0.1:{PORT}"
     with open(out / "rows.jsonl", "w") as fh:
@@ -221,6 +286,7 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
             argv, env = bp.server_argv(pins, gdn_prefill_backend=gdn_prefill_backend,
                                        gpu_memory_utilization=gpu_memory_utilization, port=PORT, vllm_bin=vllm_bin,
                                        base_env=os.environ, kv_cache_memory_bytes=plan.get("kv_cache_memory_bytes"))
+            snap(f"{tag}.before.json")
             proc = popen(argv, env, out / "raw" / f"server-{tag}.log")
             stop_reasons = []
             try:
@@ -234,12 +300,24 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
                 code, text = http_get(f"{base}/metrics") if ready else (0, "")
                 cfg = cache_config(parse_prometheus(text)) if code == 200 else None
                 want = {"num_gpu_blocks": plan["num_gpu_blocks"], "block_size": plan["block_size"]}
+                log_text = (out / "raw" / f"server-{tag}.log").read_text(errors="replace") \
+                    if (out / "raw" / f"server-{tag}.log").exists() else ""
+                facts = smoke.parse_server_log(log_text)
+                m = _RE_NONDEFAULT_BATCHED.search(log_text)
+                batched = int(m.group(1)) if m else None
+                session["runs"][tag] = {"argv": argv, "log_facts": facts, "max_num_batched_tokens_logged": batched}
                 if not ready:
                     stop_reasons.append("server not ready")
                 elif cfg != want:
                     stop_reasons.append(f"num_gpu_blocks / block_size {cfg} != frozen {want}")
+                elif facts.get("attention_backend") != "FLASH_ATTN":
+                    stop_reasons.append(f"attention backend {facts.get('attention_backend')!r} != FLASH_ATTN (003, §4)")
+                elif batched != bp.MAX_NUM_BATCHED_TOKENS:
+                    stop_reasons.append(f"max_num_batched_tokens {batched!r} in the log's non-default args != "
+                                        f"{bp.MAX_NUM_BATCHED_TOKENS} (003, §4)")
                 for C in run["order"]:
-                    row = {"L": L, "mix": mix, "restart": restart, "C": C, "server_cache_config": cfg}
+                    row = {"L": L, "mix": mix, "restart": restart, "C": C, "server_cache_config": cfg,
+                           "kv_cache_tokens": facts.get("kv_cache_tokens")}
                     if stop_reasons:
                         emit({**row, "ok": False, "reasons": list(stop_reasons)})
                         continue
@@ -263,9 +341,11 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
                                            sleep=sleep)
             if teardown:
                 session.setdefault("teardown_problems", []).append({"run": tag, "reasons": teardown})
+            snap(f"{tag}.after.json")
 
     session.update({"finished_at": clock(), "outcomes": {"ok": sum(r["ok"] for r in rows),
-                                                         "error": sum(not r["ok"] for r in rows)}})
+                                                         "error": sum(not r["ok"] for r in rows)},
+                    "env_flags": env_flags, "env_valid": not env_flags})
     write_raw_manifest(out)
     (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
     return session
@@ -294,6 +374,7 @@ def main(argv: list | None = None) -> int:
             group_alive=smoke.group_alive, http_get=default_http_get, run_bench=default_run_bench,
             gpu_mem_used=smoke.nvidia_mem_used, gpu_lock_free=smoke.gpu_lock_free, gpu_lock_held=args.gpu_lock_held,
             formal=args.formal, vllm_bin=args.vllm_bin, sample_interval=1.0,
+            capture_env=make_vllm_env_capture(root / "scripts" / "env_capture.py"),
             mixed_datasets={int(k): v for k, v in (x.split("=", 1) for x in args.mixed_dataset)},
         )
     except RunError as exc:

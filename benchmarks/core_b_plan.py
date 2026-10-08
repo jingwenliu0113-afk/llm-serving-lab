@@ -92,17 +92,29 @@ def bench_env() -> dict:
     return {"HF_HOME": HF_HOME, "HF_HUB_OFFLINE": "1"}
 
 
-def server_env(base) -> dict:
-    """The Core B server env on top of the caller's (§4; 008; 014). nvcc is never put on PATH: vLLM's
+ENGINE_PREFIXES = ("VLLM_", "CUDA_", "GGML_")
+
+
+def inherited_unlisted(base) -> list:
+    """Engine variables in the caller's env that server_env drops (§4: none are set unless listed)."""
+    return sorted(k for k in base if k.startswith(ENGINE_PREFIXES))
+
+
+def server_env(base, pin_memory: str = "0") -> dict:
+    """The Core B server env on top of the caller's (§4; 008; 014; 018). Inherited VLLM_* / CUDA_* / GGML_*
+    variables are dropped (§4 lists every one the server gets); VLLM_WSL2_ENABLE_PIN_MEMORY is the Stage B
+    A/B choice (003 / 017; "0" = vLLM's default until it is pinned). nvcc is never put on PATH: vLLM's
     has_flashinfer() gate depends on it, while FlashInfer's own JIT finds nvcc through CUDA_HOME."""
-    path = base.get("PATH", "")
-    return {**base, **bench_env(), "VLLM_GDN_DECODE_KERNEL": "triton", "CUDA_HOME": FLASHINFER_CUDA_HOME,
-            "PATH": f"{VENV_BIN}:{path}" if path else VENV_BIN}
+    clean = {k: v for k, v in base.items() if not k.startswith(ENGINE_PREFIXES)}
+    path = clean.get("PATH", "")
+    return {**clean, **bench_env(), "VLLM_GDN_DECODE_KERNEL": "triton", "CUDA_HOME": FLASHINFER_CUDA_HOME,
+            "VLLM_WSL2_ENABLE_PIN_MEMORY": pin_memory, "PATH": f"{VENV_BIN}:{path}" if path else VENV_BIN}
 
 
 def recorded_env(env: dict) -> dict:
     """What a report records of the server env (the inherited PATH itself is machine noise)."""
-    out = {k: env.get(k) for k in ("HF_HOME", "HF_HUB_OFFLINE", "VLLM_GDN_DECODE_KERNEL", "CUDA_HOME")}
+    out = {k: env.get(k) for k in ("HF_HOME", "HF_HUB_OFFLINE", "VLLM_GDN_DECODE_KERNEL", "CUDA_HOME",
+                                    "VLLM_WSL2_ENABLE_PIN_MEMORY")}
     out["PATH_PREFIX"] = VENV_BIN if env.get("PATH", "").split(":")[0] == VENV_BIN else None
     return out
 
@@ -164,7 +176,8 @@ def server_argv(pins: dict, *, gdn_prefill_backend: str, gpu_memory_utilization:
             "--generation-config", "vllm", "--host", "127.0.0.1", "--port", str(port)]
     if kv_cache_memory_bytes is not None:
         argv += ["--kv-cache-memory-bytes", str(int(kv_cache_memory_bytes))]
-    return argv, server_env(base_env or {})
+    pin_memory = (pins.get("stage_b") or {}).get("wsl2_pin_memory") or "0"
+    return argv, server_env(base_env or {}, pin_memory=pin_memory)
 
 
 def bench_argv(pins: dict, *, L: int, C: int, mix: str, result_dir: str, result_filename: str, port: int,
@@ -239,25 +252,36 @@ def mixed_rows(*, short: list, long: list, seed: int = SEED) -> list:
     return rows
 
 
+def load_pins() -> dict:
+    import tomllib
+    from pathlib import Path
+
+    return tomllib.loads((Path(__file__).resolve().parent.parent / "configs" / "pins.toml").read_text())
+
+
 def main(argv: list | None = None) -> int:
     import argparse
     import json
-    import tomllib
     from pathlib import Path
 
     parser = argparse.ArgumentParser(description="Core B plans (decision 007)")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    u = sub.add_parser("uniform", help="uniform plan from the Stage B cache config")
-    u.add_argument("--num-gpu-blocks", type=int, required=True)
-    u.add_argument("--block-size", type=int, required=True)
+    u = sub.add_parser("uniform", help="uniform plan from the Stage B values in pins.toml [stage_b] (017)")
     u.add_argument("--out", required=True)
     m = sub.add_parser("mixed", help="mixed plan at each level's uniform C_knee")
     m.add_argument("--uniform-session", required=True)
     m.add_argument("--out", required=True)
     args = parser.parse_args(argv)
     if args.cmd == "uniform":
-        pins = tomllib.loads((Path(__file__).resolve().parent.parent / "configs" / "pins.toml").read_text())
-        plan = build_uniform_plan(pins, num_gpu_blocks=args.num_gpu_blocks, block_size=args.block_size)
+        pins = load_pins()
+        sb = pins["stage_b"]
+        missing = [k for k in ("num_gpu_blocks", "block_size", "kv_cache_memory_bytes", "gpu_memory_utilization")
+                   if not sb.get(k)]
+        if missing:
+            parser.error(f"pins.toml [stage_b] lacks {missing} (measure them at Stage B first, 017)")
+        plan = build_uniform_plan(pins, num_gpu_blocks=sb["num_gpu_blocks"], block_size=sb["block_size"],
+                                  kv_cache_memory_bytes=sb["kv_cache_memory_bytes"],
+                                  gpu_memory_utilization=sb["gpu_memory_utilization"])
     else:
         import core_b_analysis as ba
 

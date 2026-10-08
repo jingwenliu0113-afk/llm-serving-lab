@@ -74,14 +74,37 @@ class FakeProc:
         return self.returncode
 
 
+SERVER_LOG = (
+    "(APIServer pid=1) INFO [api_utils.py:286] non-default args: {'model_tag': 'm', 'max_num_batched_tokens': 2048, "
+    "'attention_backend': 'FLASH_ATTN', 'async_scheduling': True}\n"
+    "(EngineCore pid=2) INFO [cuda.py:478] Using AttentionBackendEnum.FLASH_ATTN backend.\n"
+    "(EngineCore pid=2) INFO [kv_cache_utils.py:2395] GPU KV cache size: 66,528 tokens, Maximum concurrency for "
+    "32,768 tokens per request: 2.03x\n")
+
+
+class CoreBEnv:
+    """Fake scripts/env_capture.py --vllm-python record."""
+
+    def __init__(self, enforced=300.0, vllm="0.30.0"):
+        self.enforced, self.vllm, self.calls = enforced, vllm, []
+
+    def __call__(self, out_path, gpu_lock_held):
+        self.calls.append(Path(out_path).name)
+        rec = {"runtime": {"vllm": {"vllm": self.vllm}}, "repo": {"commit": "c0ffee", "dirty": False},
+               "gpu": {"nvidia": [{"enforced_power_limit_w": self.enforced, "power_default_limit_w": 300.0}]},
+               "probe_errors": []}
+        Path(out_path).write_text(json.dumps(rec))
+        return rec
+
+
 class World:
-    def __init__(self, tmp_path, blocks=160):
-        self.tmp_path, self.blocks = tmp_path, blocks
+    def __init__(self, tmp_path, blocks=160, log=SERVER_LOG):
+        self.tmp_path, self.blocks, self.log = tmp_path, blocks, log
         self.started, self.signals, self.bench_calls, self.bench_envs, self.t = [], [], [], [], 0.0
         self.proc = None
 
     def popen(self, argv, env, log_path):
-        Path(log_path).write_text("server log\n")
+        Path(log_path).write_text(self.log)
         self.started.append(argv)
         self.server_envs = getattr(self, "server_envs", []) + [env]
         self.proc = FakeProc()
@@ -128,8 +151,10 @@ def run(world, pins, plan, **kw):
     out = world.tmp_path / "session"
     kw.setdefault("gpu_lock_held", True)
     kw.setdefault("toolchain_check", lambda env: [])
+    kw.setdefault("capture_env", CoreBEnv())
+    kw.setdefault("gpu_memory_utilization", "0.91")
     summary = rb.run_session(plan, pins=pins, out_dir=out, gdn_prefill_backend="triton",
-                             gpu_memory_utilization="0.90", popen=world.popen, signal_group=world.signal_group,
+                             popen=world.popen, signal_group=world.signal_group,
                              group_alive=world.group_alive, http_get=world.http_get, run_bench=world.run_bench,
                              gpu_mem_used=world.gpu_mem_used, gpu_lock_free=lambda: True, now=world.now,
                              sleep=world.sleep, session_id="b1", **kw)
@@ -183,19 +208,28 @@ def test_bench_runs_offline_with_the_server_hf_cache(tmp_path, pins):
     assert w.bench_envs and all(e["HF_HUB_OFFLINE"] == "1" and e["HF_HOME"] == bp.HF_HOME for e in w.bench_envs)
 
 
-def mixed_setup(tmp_path, pins, *, pinned=None):
+def stage_b_pins(pins, **over):
     import copy
-    import hashlib
 
     p = copy.deepcopy(pins)
     p["freeze"]["nvidia"] = True
+    p["stage_b"].update({"kv_cache_memory_bytes": 6400 * 2**20, "gpu_memory_utilization": "0.91",
+                         "gdn_prefill_backend": "triton", "wsl2_pin_memory": "0", **over})
+    return p
+
+
+def mixed_setup(tmp_path, pins, *, pinned=None):
+    import hashlib
+
+    p = stage_b_pins(pins)
     ds = tmp_path / "data" / "mixed-2048.jsonl"
     ds.parent.mkdir(parents=True)
     ds.write_text('{"prompt": "x", "output_tokens": 128}\n')
     digest = hashlib.sha256(ds.read_bytes()).hexdigest()
     p["core_b"]["mix_dataset_sha256"] = {"2048": pinned or digest, "8192": "0" * 64}
     plan = bp.build_mixed_plan(bp.build_uniform_plan(p, num_gpu_blocks=160, block_size=528,
-                                                     kv_cache_memory_bytes=6400 * 2**20), {2048: 22, 8192: None},
+                                                     kv_cache_memory_bytes=6400 * 2**20, gpu_memory_utilization="0.91"),
+                               {2048: 22, 8192: None},
                                uniform_session="b-u")
     return p, plan, ds, digest
 
@@ -232,15 +266,69 @@ def test_server_gets_the_014_env_and_a_toolchain_precheck(tmp_path, pins):
 
 def test_formal_run_requires_the_fixed_kv_pool(tmp_path, pins):
     """017: formal Core B runs use --kv-cache-memory-bytes K from the Stage B plan."""
-    import copy
-
-    p = copy.deepcopy(pins)
-    p["freeze"]["nvidia"] = True
+    p = stage_b_pins(pins)
     with pytest.raises(rb.RunError, match="kv_cache_memory_bytes"):
         run(World(tmp_path), p, small_plan(pins), formal=True)
     plan = small_plan(pins)
-    plan["kv_cache_memory_bytes"] = 6400 * 2**20
+    plan["kv_cache_memory_bytes"], plan["gpu_memory_utilization"] = 6400 * 2**20, "0.91"
     w = World(tmp_path / "k")
     (tmp_path / "k").mkdir()
     run(w, p, plan, formal=True)
     assert w.started[0][w.started[0].index("--kv-cache-memory-bytes") + 1] == str(6400 * 2**20)
+
+
+
+# --------------------------------------------- post-freeze review fixes (018) --
+
+def test_session_records_env_argv_commit_and_log_facts(tmp_path, pins):
+    w = World(tmp_path)
+    env = CoreBEnv()
+    out, summary, rows = run(w, pins, small_plan(pins), capture_env=env)
+    assert summary["repo_commit"] == "c0ffee" and summary["preflight"] == "env/preflight.json"
+    assert env.calls[0] == "preflight.json" and "uniform-32768-r1.before.json" in env.calls
+    assert "uniform-32768-r1.after.json" in env.calls and summary["env_valid"] is True
+    run1 = summary["runs"]["uniform-32768-r1"]
+    assert run1["argv"] == w.started[0] and run1["log_facts"]["attention_backend"] == "FLASH_ATTN"
+    assert run1["max_num_batched_tokens_logged"] == 2048
+    assert all(r["kv_cache_tokens"] == 66528 for r in rows)
+    assert summary["inherited_unlisted"] == bp.inherited_unlisted(__import__("os").environ)
+
+
+def test_server_log_checks_stop_a_restart_with_the_wrong_backend_or_batch(tmp_path, pins):
+    """§4 / 017: attention backend and max_num_batched_tokens are verified from the log (non-default args)."""
+    w = World(tmp_path, log=SERVER_LOG.replace("FLASH_ATTN backend.", "TRITON_ATTN backend."))
+    _, _, rows = run(w, pins, small_plan(pins))
+    assert rows and all(not r["ok"] and "attention backend" in r["reasons"][0] for r in rows)
+    w2 = World(tmp_path / "b", log=SERVER_LOG.replace("'max_num_batched_tokens': 2048", "'max_num_batched_tokens': 8192"))
+    (tmp_path / "b").mkdir()
+    _, _, rows = run(w2, pins, small_plan(pins))
+    assert all(not r["ok"] and "max_num_batched_tokens" in r["reasons"][0] for r in rows)
+
+
+def test_power_limit_mismatch_makes_the_session_env_invalid(tmp_path, pins):
+    _, summary, _ = run(World(tmp_path), pins, small_plan(pins), capture_env=CoreBEnv(enforced=250.0))
+    assert summary["env_valid"] is False and "power limit" in summary["env_flags"][0]["reason"]
+
+
+@pytest.mark.parametrize("over, kw, match", [
+    ({"wsl2_pin_memory": ""}, {}, "wsl2_pin_memory"),
+    ({}, {"gpu_memory_utilization": "0.85"}, "gpu_memory_utilization"),
+    ({"gdn_prefill_backend": "flashinfer"}, {}, "gdn_prefill_backend"),
+    ({"kv_cache_memory_bytes": 2**30}, {}, "kv_cache_memory_bytes"),
+])
+def test_formal_runs_must_match_the_pinned_stage_b_values(tmp_path, pins, over, kw, match):
+    p = stage_b_pins(pins, **over)
+    plan = small_plan(pins)
+    plan["kv_cache_memory_bytes"], plan["gpu_memory_utilization"] = 6400 * 2**20, "0.91"
+    with pytest.raises(rb.RunError, match=match):
+        run(World(tmp_path), p, plan, formal=True, **kw)
+
+
+def test_formal_run_refuses_another_vllm_or_power_limit_in_the_preflight(tmp_path, pins):
+    p = stage_b_pins(pins)
+    plan = small_plan(pins)
+    plan["kv_cache_memory_bytes"], plan["gpu_memory_utilization"] = 6400 * 2**20, "0.91"
+    with pytest.raises(rb.RunError, match="vLLM"):
+        run(World(tmp_path), p, plan, formal=True, capture_env=CoreBEnv(vllm="0.31.0"))
+    with pytest.raises(rb.RunError, match="power limit"):
+        run(World(tmp_path / "x"), p, plan, formal=True, capture_env=CoreBEnv(enforced=250.0))

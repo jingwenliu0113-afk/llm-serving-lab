@@ -90,7 +90,21 @@ def test_core_b_series_and_figure():
              for L, k in ((2048, 22), (8192, 8)) for C in (1, 2, 4, 8, 16, 32)}
     cells["mixed-2048-22"] = {"n_valid": 3, "output_throughput": 1.0, "p95_ttft_ms": 1.0, "p95_tpot_ms": 1.0}
     analysis = {"cells": cells, "hypotheses": {"H-B1": {"units": [{"L": 2048, "c_knee": 22}, {"L": 8192, "c_knee": 8}]}}}
-    s = bf.series(analysis, "p95_ttft_ms")
-    assert set(s) == {"L=2048", "L=8192"} and s["L=2048"][0] == (1, 50.0) and len(s["L=2048"]) == 6
+    s, dropped = bf.series(analysis, "p95_ttft_ms")
+    assert set(s) == {"L=2048", "L=8192"} and s["L=2048"][0] == (1, 50.0) and len(s["L=2048"]) == 6 and dropped == []
     svg = bf.figure(analysis, "p95_ttft_ms", platform_label="RTX 5070 Ti")
     assert "P95 TTFT" in svg and "C_knee" in svg and "L=8192" in svg
+
+
+
+def test_core_b_figure_plots_only_cells_with_three_valid_restarts():
+    import core_b_figures as bf
+
+    cells = {f"uniform-2048-{C}": {"n_valid": 3, "p95_ttft_ms": 10.0 * C} for C in (1, 2, 4)}
+    cells["uniform-2048-8"] = {"n_valid": 2, "p95_ttft_ms": 999.0}
+    analysis = {"cells": cells, "hypotheses": {"H-B1": {"units": [
+        {"L": 2048, "status": "not testable", "missing_c": [8]}]}}}
+    s, dropped = bf.series(analysis, "p95_ttft_ms")
+    assert s["L=2048"] == [(1, 10.0), (2, 20.0), (4, 40.0)] and dropped == ["L=2048 C=8 (n=2)"]
+    svg = bf.figure(analysis, "p95_ttft_ms", platform_label="RTX")
+    assert "not testable" in svg and "C=8" in svg

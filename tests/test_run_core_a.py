@@ -369,9 +369,14 @@ def test_env_problems_on_the_mac_treat_unknown_as_invalid(rec, want):
     assert rc.env_problems(rec, "macos-metal") == want
 
 
-def test_env_problems_skip_the_rtx_desktop():
-    assert rc.env_problems({"probe_errors": ["x"]}, "wsl2-cuda") == []
-    assert rc.env_problems({"power": {"source": None, "thermal": None}}, "wsl2-cuda") == []
+def test_env_problems_on_the_rtx_check_the_power_limit_not_a_battery():
+    """§4 RTX: enforced.power.limit must equal power.default_limit (unknown = invalid, 013); no battery rules."""
+    gpu = lambda e, d: {"gpu": {"nvidia": [{"enforced_power_limit_w": e, "power_default_limit_w": d}]},  # noqa: E731
+                        "power": {"source": None, "thermal": None}}
+    assert rc.env_problems(gpu(300.0, 300.0), "wsl2-cuda") == []
+    assert rc.env_problems(gpu(250.0, 300.0), "wsl2-cuda") == ["enforced power limit 250.0 W != default 300.0 W (§4)"]
+    assert rc.env_problems(gpu(None, 300.0), "wsl2-cuda") == ["power limit unknown (§4)"]
+    assert rc.env_problems({"probe_errors": ["x"]}, "wsl2-cuda") == ["nvidia-smi power limits unknown (§4)"]
 
 
 def test_mac_session_with_a_failed_env_probe_is_env_invalid(tmp_path):

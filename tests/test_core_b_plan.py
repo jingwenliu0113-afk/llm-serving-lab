@@ -188,15 +188,20 @@ def test_mixed_plan_runs_only_the_uniform_knee_at_2k_and_8k(pins):
         {k: up[k] for k in ("num_gpu_blocks", "block_size", "c_kv", "grids", "seed")}
 
 
-def test_plan_cli_writes_uniform_and_mixed_plans(tmp_path, pins):
+def test_plan_cli_writes_uniform_and_mixed_plans(tmp_path, pins, monkeypatch):
+    import copy
     import json
 
     import core_b_analysis as ba
 
+    p = copy.deepcopy(pins)
+    p["stage_b"].update(num_gpu_blocks=160, block_size=528, kv_cache_memory_bytes=2**30, gpu_memory_utilization="0.91")
+    monkeypatch.setattr(bp, "load_pins", lambda: p)
     out = tmp_path / "uniform.json"
-    assert bp.main(["uniform", "--num-gpu-blocks", "160", "--block-size", "528", "--out", str(out)]) == 0
+    assert bp.main(["uniform", "--out", str(out)]) == 0
     up = json.loads(out.read_text())
-    assert up == json.loads(json.dumps(bp.build_uniform_plan(pins, num_gpu_blocks=160, block_size=528)))
+    assert up == json.loads(json.dumps(bp.build_uniform_plan(p, num_gpu_blocks=160, block_size=528,
+                                                             kv_cache_memory_bytes=2**30, gpu_memory_utilization="0.91")))
     session = tmp_path / "b-uniform"
     session.mkdir()
     (session / "plan.json").write_text(json.dumps(up))
@@ -226,7 +231,8 @@ def test_server_env_gives_flashinfer_a_cuda_home_but_no_nvcc_on_path():
     assert env["VLLM_GDN_DECODE_KERNEL"] == "triton"
     assert bp.server_env({})["PATH"] == bp.VENV_BIN
     assert bp.recorded_env(env) == {"HF_HOME": bp.HF_HOME, "HF_HUB_OFFLINE": "1", "VLLM_GDN_DECODE_KERNEL": "triton",
-                                    "CUDA_HOME": bp.FLASHINFER_CUDA_HOME, "PATH_PREFIX": bp.VENV_BIN}
+                                    "CUDA_HOME": bp.FLASHINFER_CUDA_HOME, "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+                                    "PATH_PREFIX": bp.VENV_BIN}
 
 
 def test_toolchain_problems_lists_what_the_server_would_miss():
@@ -286,3 +292,47 @@ def test_uniform_plan_carries_the_stage_b_server_values(pins):
     plan = bp.build_uniform_plan(pins, num_gpu_blocks=160, block_size=528, kv_cache_memory_bytes=6400 * 2**20,
                                  gpu_memory_utilization="0.94")
     assert plan["kv_cache_memory_bytes"] == 6400 * 2**20 and plan["gpu_memory_utilization"] == "0.94"
+
+
+
+# --------------------------------------------- post-freeze review fixes (018) --
+
+def test_server_env_drops_inherited_engine_variables_and_sets_the_pinned_pin_memory():
+    """§4: VLLM_* / CUDA_* / GGML_* are never set unless listed; the A/B choice (003 / 017) reaches every server."""
+    base = {"PATH": "/usr/bin", "HOME": "/h", "VLLM_ENABLE_STARTUP_PLAN": "1", "CUDA_VISIBLE_DEVICES": "1",
+            "GGML_CUDA_PDL": "0", "VLLM_WSL2_ENABLE_PIN_MEMORY": "1"}
+    env = bp.server_env(base, pin_memory="0")
+    assert not {"VLLM_ENABLE_STARTUP_PLAN", "CUDA_VISIBLE_DEVICES", "GGML_CUDA_PDL"} & set(env)
+    assert env["VLLM_WSL2_ENABLE_PIN_MEMORY"] == "0" and env["HOME"] == "/h"
+    assert bp.inherited_unlisted(base) == ["CUDA_VISIBLE_DEVICES", "GGML_CUDA_PDL", "VLLM_ENABLE_STARTUP_PLAN",
+                                           "VLLM_WSL2_ENABLE_PIN_MEMORY"]
+    assert bp.recorded_env(env)["VLLM_WSL2_ENABLE_PIN_MEMORY"] == "0"
+    assert bp.server_env({"PATH": "/usr/bin"})["VLLM_WSL2_ENABLE_PIN_MEMORY"] == "0"  # vLLM's default until pinned
+
+
+def test_server_argv_uses_the_pinned_stage_b_choice(pins):
+    import copy
+
+    p = copy.deepcopy(pins)
+    p["stage_b"]["wsl2_pin_memory"] = "1"
+    _, env = bp.server_argv(p, gdn_prefill_backend="triton", gpu_memory_utilization="0.91", port=8000,
+                            base_env={"PATH": "/usr/bin"})
+    assert env["VLLM_WSL2_ENABLE_PIN_MEMORY"] == "1"
+
+
+def test_plan_cli_takes_the_stage_b_values_from_pins(tmp_path, pins, monkeypatch):
+    import copy
+    import json
+
+    p = copy.deepcopy(pins)
+    p["stage_b"].update(num_gpu_blocks=160, block_size=528, kv_cache_memory_bytes=6400 * 2**20,
+                        gpu_memory_utilization="0.91")
+    monkeypatch.setattr(bp, "load_pins", lambda: p)
+    out = tmp_path / "u.json"
+    assert bp.main(["uniform", "--out", str(out)]) == 0
+    plan = json.loads(out.read_text())
+    assert (plan["num_gpu_blocks"], plan["block_size"], plan["kv_cache_memory_bytes"], plan["gpu_memory_utilization"]) \
+        == (160, 528, 6400 * 2**20, "0.91")
+    p["stage_b"]["kv_cache_memory_bytes"] = 0
+    with pytest.raises(SystemExit):
+        bp.main(["uniform", "--out", str(tmp_path / "x.json")])  # K not measured yet

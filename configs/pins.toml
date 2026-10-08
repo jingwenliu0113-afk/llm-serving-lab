@@ -139,6 +139,23 @@ filename = "Qwen3.5-9B-Q4_K_M.gguf"
 sha256 = "27152c4ef594a908cabfcc6efc09c864763e9e1fb56ca71a3b2c9e247bebda22"
 size_bytes = 5629109216
 
+# ------------------------------------------------------------------- Stage B --
+
+[stage_b]
+# PREREGISTRATION §6: measured values and execution parameters substituted at Stage B by the frozen §4 / 017 rules.
+# 0 / "" / -1 = not measured yet. results/stage_b/<date>/ holds the evidence.
+b_mib = 811.0                                            # 2026-10-09 baseline (GPU lock, 5 min idle, 60 x 1 Hz median)
+v_total_mib = 16303                                      # nvidia-smi memory.total
+gpu_memory_utilization = "0.91"                          # 017: largest 0.01 multiple with U x V <= V - B - 512 MiB
+gdn_prefill_backend = "triton"                           # 008: the backend the S1-S3 smoke ran with (Triton/FLA)
+rtx_n_thr = 6                                            # §4: physical cores in WSL (Ryzen 5 7600, 6 cores)
+rtx_poll = -1                                            # §4 rule, decided by the RTX Core A pilot
+c_ctx_mib = 0.0                                          # 004 / 009, stage_b.py cctx
+kv_cache_memory_bytes = 0                                # 017 K (blocked: max-num-seqs, NEXT Blocked 2)
+num_gpu_blocks = 0
+block_size = 0
+wsl2_pin_memory = ""                                     # 003 / 017 A/B: "0" or "1"
+
 # -------------------------------------------------------------------- Core B --
 
 [core_b]

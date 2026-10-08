@@ -98,9 +98,21 @@ BATTERY_MIN_PCT = 20  # decision 012
 
 
 def env_problems(rec: dict, platform: str) -> list:
-    """Power / thermal state that invalidates a Mac session (decision 012). A failed or partial probe
-    cannot show AC power or a clean thermal log, so unknown counts as a problem (013). The RTX
-    desktop has no battery and is not checked. A Mac without a battery reports no percentage."""
+    """State that invalidates a session. Mac (012): AC, battery >= 20 %, no thermal / performance warning; a
+    failed or partial probe cannot show them, so unknown counts as a problem (013); a Mac without a battery
+    reports no percentage. RTX (§4): no battery; enforced power limit == default power limit (018)."""
+    if platform == "wsl2-cuda":  # §4 RTX: no battery; the power limit must be the default one
+        gpus = ((rec or {}).get("gpu") or {}).get("nvidia") or []
+        if not gpus:
+            return ["nvidia-smi power limits unknown (§4)"]
+        out = []
+        for g in gpus:
+            e, d = g.get("enforced_power_limit_w"), g.get("power_default_limit_w")
+            if e is None or d is None:
+                out.append("power limit unknown (§4)")
+            elif e != d:
+                out.append(f"enforced power limit {e} W != default {d} W (§4)")
+        return out
     if platform != "macos-metal":
         return []
     power = (rec or {}).get("power") or {}

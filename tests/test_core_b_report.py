@@ -78,6 +78,8 @@ def test_without_a_mixed_session_h_b4_is_not_testable():
     (lambda u, m: m["session"].update(formal=False), "formal"),
     (lambda u, m: m["plan"].update(derived_from="other"), "derived"),
     (lambda u, m: m["plan"]["c_knee"].update({"2048": 16}), "C_knee"),
+    (lambda u, m: m["session"].update(server={"gdn_prefill_backend": "flashinfer"}), "server"),
+    (lambda u, m: m["session"].update(server_env={"CUDA_HOME": "/other"}), "server_env"),
 ])
 def test_report_refuses_inconsistent_or_non_formal_sessions(change, match):
     u, m = session("b-u", uniform_plan(), uniform_rows()), mixed_session()
