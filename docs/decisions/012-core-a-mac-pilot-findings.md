@@ -88,3 +88,18 @@
 - **時間**：4B 換算到正式 run 約 5.1 小時；9B pilot 後更新總時數（005 原估 19.5 小時）。
 - H-A5 的配對 ΔNLL 需要兩個 size，等 9B pilot。
 - 未發現需要修改 quality protocol 的問題。
+
+## 補充：Core A 9B pilot（`results/core_a/macos-metal/pilot-20261008-9b`，22 / 22 ok，2026-10-08 23:28–00:06）
+
+遮蔽版報告，與 4B 相同，只看下列各項。session 有效：env_valid，sentinel drift 0.53%。
+
+- **`-fa auto` probe**：9B 的三個 quant 都是 "Flash Attention enabled"，graph splits = 2。所有 process 的 splits 都是 2，fused GDN 沒有退回 CPU。
+- **`--poll`**：在同一個 sentinel cell 再比一次，poll 0 為 56.30 tok/s，poll 50 為 56.40 tok/s，poll 0 只慢 0.18%。P = 0 不變。
+- **noise**：sentinel 的 process-level CV 為 **1.03%**，兩格相對 MDE 約 **1.7%**。
+  4B pilot 是 5.9% / 9.6%，那時前景負載的 loadavg 為 6–9。這次在深夜執行，前景負載很低，與 012 第 4 點的判斷一致。
+- **記憶體**：breakdown 的 device self 從 2K 到 32K，三個 quant 都增加 **+958 MiB**，理論 KV 增量為 960 MiB。
+  footprint 增加約 1,025 MiB，與 4B 的結果一致。
+- **時間校準**：正式 Core A 的上限估計改為 **17.39 小時**（由 9B 各類 job 最慢的 wall time 換算，取代 4B 換算的 10.65 小時）。
+  不含 016 的充電暫停。
+- **電源**：接著 70 W 的 AC，電量在 38 分鐘內從 100% 降到 73%。這是 decision 016（充電閘門）的依據。
+- **smoke**（9B-Q4_K_M，`-c 2048`，greedy）：輸出 "The capital of France is Paris."，正常。

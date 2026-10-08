@@ -1,0 +1,74 @@
+{
+  "schema_version": 2,
+  "captured_at_utc": "2026-10-08T15:49:48.376621+00:00",
+  "repo": {
+    "commit": "29fce8ae33f7c9896ca70b32c3cd340eabe9d418",
+    "dirty": true,
+    "status": [
+      " M configs/llama-cuda.lock.txt",
+      " M configs/llama-cuda.requirements.in",
+      " M docs/decisions/015-llama-cpp-cuda-user-space-toolkit.md",
+      " M scripts/build_llama_cpp.sh",
+      " M scripts/wsl_toolchain_check.sh",
+      " M tests/test_build_script.py",
+      " M tests/test_wsl_scripts.py",
+      "?? results/core_a/macos-metal/pilot-20261008-9b/"
+    ],
+    "source": "git"
+  },
+  "os": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "wsl": false,
+    "product_name": "macOS",
+    "product_version": "27.0.1",
+    "build_version": "26A434"
+  },
+  "hardware": {
+    "cpu": "Apple M4 Pro",
+    "logical_cpus": 12,
+    "ram_bytes": 51539607552,
+    "iogpu_wired_limit_mb": 0
+  },
+  "gpu": {
+    "nvidia": null,
+    "cuda_toolkit_on_path": null,
+    "host_cc": null,
+    "cuda_home": null,
+    "cuda_home_nvcc": null
+  },
+  "power": {
+    "source": "AC",
+    "battery_pct": 79,
+    "powermode": 2,
+    "powermode_label": "high_power",
+    "thermal": {
+      "thermal_warning_recorded": false,
+      "performance_warning_recorded": false,
+      "cpu_limits": {}
+    }
+  },
+  "load": {
+    "loadavg_1m": 6.65673828125,
+    "loadavg_5m": 9.75439453125,
+    "loadavg_15m": 33.01123046875,
+    "mac_heavy_lock_present": true,
+    "mac_heavy_lock_owner": "pid=89200\nstarted_at=2026-10-08T15:27:40Z\ncwd=/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab\nproject=llm-serving-lab\ncommand=bash /private/tmp/claude-501/-Users-liujingwen-Desktop-AI-Portfolio-llm-serving-lab/7e882394-1a55-4068-8e62-710fa960d4fe/scratchpad/batch_9b_pilot.sh\n",
+    "gpu_lock_held": null
+  },
+  "runtime": {
+    "llama_cpp": {
+      "binary": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/third_party/llama.cpp/build-metal/bin/llama-completion",
+      "version": "0.5.0",
+      "build_number": 11146,
+      "commit": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+      "built_with": "AppleClang 21.0.0.21000334 for Darwin arm64"
+    },
+    "vllm": null
+  },
+  "env": {},
+  "capture_python": "3.12.13",
+  "config": null,
+  "probe_errors": []
+}

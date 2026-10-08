@@ -1,0 +1,228 @@
+{
+ "fa_probe": [
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "outcome": "ok",
+   "fused_ops": [
+    "Flash Attention enabled",
+    "fused DeepSeek V4 HC pre enabled",
+    "fused DeepSeek V4 HC comb enabled",
+    "fused DeepSeek V4 HC post enabled"
+   ],
+   "graph": {
+    "nodes": "1879",
+    "splits": "2"
+   },
+   "fa_enabled": true
+  }
+ ],
+ "graph_splits": {
+  "values": {
+   "2": 22
+  },
+  "max_splits": 2
+ },
+ "poll": {
+  "poll": 0,
+  "median_tok_s": {
+   "0": 56.299431,
+   "50": 56.402601
+  },
+  "poll0_slower_pct": 0.183,
+  "rule": "50 only if poll 0 is > 3.0% slower"
+ },
+ "noise": {
+  "n": 3,
+  "cv_pct": 1.0250058924966812,
+  "mde_pct": 1.673827613308625,
+  "note": "process-level CV of the sentinel cell; MDE = relative difference two cells need to be 'beyond noise' with n = 3 each"
+ },
+ "memory": [
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 9692,
+   "host_self_mib": 1048,
+   "footprint_mib": 366.72625732421875,
+   "max_rss_mib": 9257.859375,
+   "footprint_over_self": 0.03414583401529039,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 7625,
+   "host_self_mib": 813,
+   "footprint_mib": 366.06861114501953,
+   "max_rss_mib": 7221.875,
+   "footprint_over_self": 0.043383338604529455,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 5975,
+   "host_self_mib": 563,
+   "footprint_mib": 363.3486022949219,
+   "max_rss_mib": 5599.65625,
+   "footprint_over_self": 0.05557488563703302,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 9692,
+   "host_self_mib": 1048,
+   "footprint_mib": 369.27315521240234,
+   "max_rss_mib": 9213.0625,
+   "footprint_over_self": 0.0343829753456613,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 9882,
+   "host_self_mib": 1054,
+   "footprint_mib": 569.0076217651367,
+   "max_rss_mib": 9604.921875,
+   "footprint_over_self": 0.05203068962738997,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q8_0",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 10650,
+   "host_self_mib": 1078,
+   "footprint_mib": 1392.2425689697266,
+   "max_rss_mib": 10423.828125,
+   "footprint_over_self": 0.11871099667204353,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 7625,
+   "host_self_mib": 813,
+   "footprint_mib": 367.99039459228516,
+   "max_rss_mib": 7219.921875,
+   "footprint_over_self": 0.043611092035113194,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 7815,
+   "host_self_mib": 819,
+   "footprint_mib": 575.0843276977539,
+   "max_rss_mib": 7535.234375,
+   "footprint_over_self": 0.06660694089619573,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q6_K",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 8583,
+   "host_self_mib": 843,
+   "footprint_mib": 1388.600570678711,
+   "max_rss_mib": 8355.1875,
+   "footprint_over_self": 0.14731599519188532,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "L": 2048,
+   "outcome": "ok",
+   "device_self_mib": 5975,
+   "host_self_mib": 563,
+   "footprint_mib": 370.6454772949219,
+   "max_rss_mib": 5601.265625,
+   "footprint_over_self": 0.056690957065604446,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "L": 8192,
+   "outcome": "ok",
+   "device_self_mib": 6165,
+   "host_self_mib": 569,
+   "footprint_mib": 566.4737854003906,
+   "max_rss_mib": 5886.46875,
+   "footprint_over_self": 0.08412144125339927,
+   "graph_splits": "2"
+  },
+  {
+   "size": "9B",
+   "quant": "Q4_K_M",
+   "L": 32768,
+   "outcome": "ok",
+   "device_self_mib": 6933,
+   "host_self_mib": 593,
+   "footprint_mib": 1390.6618347167969,
+   "max_rss_mib": 6707.203125,
+   "footprint_over_self": 0.18478100381567855,
+   "graph_splits": "2"
+  }
+ ],
+ "calibration": {
+  "upper_bound_hours": 17.39,
+  "method": "n_jobs x (slowest pilot wall time of that kind + idle) per kind"
+ },
+ "outcomes": {
+  "ok": 22,
+  "oom": 0,
+  "error": 0
+ }
+}

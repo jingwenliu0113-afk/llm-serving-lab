@@ -1,0 +1,30 @@
+{
+ "schema_version": 2,
+ "session_id": "pilot-20261008-9b",
+ "platform": "macos-metal",
+ "mode": "pilot",
+ "seed": null,
+ "plan_sha256": "e17707198209c9479c6e3346d88e9c3b6e01e22665f0d986a557db1a75a5a80d",
+ "pins_sha256": "9d2cca72e5524136b2783ed37255d1f1484be54674f05529be67c0ce09e837a7",
+ "gpu_lock_held": false,
+ "mac_lock_held": true,
+ "bin_dir": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/third_party/llama.cpp/build-metal/bin",
+ "models_dir": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/models/gguf",
+ "preflight": "env/preflight.json",
+ "started_at": "2026-10-08T15:28:02.545803+00:00",
+ "finished_at": "2026-10-08T16:06:31.334949+00:00",
+ "outcomes": {
+  "ok": 22,
+  "oom": 0,
+  "error": 0
+ },
+ "sentinel": {
+  "start_tok_s": 55.070531,
+  "end_tok_s": 55.359761,
+  "drift_pct": 0.5252,
+  "drift": false,
+  "threshold_pct": 3.0
+ },
+ "env_flags": [],
+ "env_valid": true
+}
