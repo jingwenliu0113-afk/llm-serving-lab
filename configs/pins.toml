@@ -87,23 +87,23 @@ source_revision = "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
 # sha256 / size_bytes are recorded when produced (Week 1).
 [core_a.models.reference]
 filename = "Qwen3.5-4B-BF16.gguf"
-sha256 = ""
-size_bytes = 0
+sha256 = "9bb09df0ee96adf83ec18374df4ee03d9fb8ca52e40a27862a3bd8ffee04a9f7"
+size_bytes = 8424393664
 
 [core_a.models.files.Q8_0]
 filename = "Qwen3.5-4B-Q8_0.gguf"
-sha256 = ""
-size_bytes = 0
+sha256 = "1b394dc7df6b08c1d85f4e011f63addd5533235f587a179ab5ccfa80cb58c8fb"
+size_bytes = 4482403264
 
 [core_a.models.files.Q6_K]
 filename = "Qwen3.5-4B-Q6_K.gguf"
-sha256 = ""
-size_bytes = 0
+sha256 = "76f08dad592b65db1238388749d0975b1198b62356dfaca6de5e904313546f10"
+size_bytes = 3464055744
 
 [core_a.models.files.Q4_K_M]
 filename = "Qwen3.5-4B-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 0
+sha256 = "cb62d0b611b093bc43e0d51774dda5bf1b234e565198d18da78043ca045e71ea"
+size_bytes = 2708804544
 
 [[core_a.models]]
 size = "9B"

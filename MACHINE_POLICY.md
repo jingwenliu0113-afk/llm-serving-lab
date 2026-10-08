@@ -123,6 +123,8 @@ ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "flock -n /tmp/ai-portfolio-
 ```
 
 - 適用：Core A Apple Silicon 正式 benchmark、正式 quality 評測（約 19.5 小時）。
+- GGUF 產出（`scripts/produce_gguf.py produce`：BF16 轉換 + 量化，每個 size 約 20–40 分鐘的 CPU / IO 重負載）
+  也經 `tools/with-mac-lock` 執行，避免在其他專案正式量測期間跑重負載（2026-10-08）。
 - 使用本 Project 的 `tools/with-mac-lock <heavy-command>`。它與 Incident Investigator / Rust HNSW 共用同一個 lock path
   與相同語意（`mkdir` lock + `owner.txt`），是本 Project 自己的 script，不是跨專案共用 framework。
 - 不得與 Incident Investigator / Rust HNSW 的正式重工作業同時執行。lock 被占用時直接放棄，改做其他 Mac 輕量工作。
