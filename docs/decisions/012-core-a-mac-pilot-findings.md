@@ -103,3 +103,21 @@
   不含 016 的充電暫停。
 - **電源**：接著 70 W 的 AC，電量在 38 分鐘內從 100% 降到 73%。這是 decision 016（充電閘門）的依據。
 - **smoke**（9B-Q4_K_M，`-c 2048`，greedy）：輸出 "The capital of France is Paris."，正常。
+
+## 補充：quality pilot（4B + 9B，`results/quality/pilot-20261008-both`，52 / 52 ok，2026-10-09 00:06–01:05）
+
+遮蔽版報告，只看 SD / SE / b + c / 時間，不看任何平均差或 accuracy。session 有效：env_valid。
+
+- **determinism**：4B 與 9B 的 Q8_0 KLD、MMLU 重跑，結果完全相同。
+- **sanity**：
+  - 兩個 size 的 self-KLD 都是 0。
+  - 9B Q8_0 的 KLD：`-fa on` 為 0.000471，`-fa off` 為 0.000471，相同。
+  - 4B 同 012 前述，為 0.0014。
+- **KLD SE**（換算到 580 chunks，只列每個 size 的最大值；013）：4B 為 7.7e-4，9B 為 6.0e-4。
+- **H-A5(a) 的 power**：配對 ΔNLL 的 chunk 差值 SD 為 0.064（pilot 20 chunks）。
+  - 換算到正式的 580 chunks，95% CI 半寬約 0.0052 nats/token。
+  - 在 Holm 最嚴的 α = 0.01、80% power 下，MDE 約 **0.009 nats/token**。
+- **downstream**：相鄰配對換算到正式 N，95% CI 半寬為 0–1.7 pp，與 4B 的結論相同。
+- **時間**：正式 quality（兩個 size）約 **14.2 小時**，取代 005 原估的 19.5 小時。
+  不含 016 的充電暫停，也不含 KLD 檔案的磁碟處理。
+- 未發現需要修改 quality protocol 的問題。
