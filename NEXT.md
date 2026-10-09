@@ -90,13 +90,12 @@
 
 ## Blocked / 需要使用者
 
-0. **正式 Mac Core A 在等兩件事**
-   1. **AC 的能源模式目前是「高效能」**（powermode 2；09:30 時是 0，09:56 讀到 AC 設定為 2）。019 要求「自動」。
-      - 請到「系統設定 > 電池 > 能源模式 > 接上電源轉接器時」選「自動」。這是系統設定，我不會修改。
-   2. **Mac heavy lock** 從 09:29 起由另一個專案持有（incident-investigator 的 pilot：`collect run --set pilot`）。
-      - 依 MACHINE_POLICY 不搶占。
-      - AC 被切到 powermode 2 的時間點與它重疊，可能是那個專案的設定。兩個專案若對電源模式的要求不同，要由使用者協調。
-   - 兩件事都符合時，watcher 會自動開跑，不必再通知我。
+0. **正式 Mac Core A 在等 Mac lock**
+   - Mac heavy lock 從 09:29 起由另一個專案持有（incident-investigator 的 pilot：`collect run --set pilot`），依 MACHINE_POLICY 不搶占。
+   - 電源模式：使用者已同意高效能也可以（019 補充）。powermode 0 或 2 都接受，但同一個 session 內必須一致。
+   - 預期風險：pilot 在高效能模式加 70 W 下，電量每 30 分鐘掉 4–23 點，很可能觸發 019 的電池下降停止規則。
+     觸發時 session 作廢，我會回報，不放寬規則。
+   - watcher 會在 lock 空出、AC、70W adapter、powermode 0 或 2 都符合時自動開跑。
 
 1. **4B 的 quality 是否也在 RTX 上量**（020；正式 quality 開始前需要確認）
    - 我的建議是一起搬，理由：

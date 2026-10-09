@@ -162,3 +162,17 @@
   系統設定由使用者處理，記在 NEXT 的 Blocked。
 - `core_b_report` 原本不檢查 env_valid。這是凍結前就有的漏洞；core_a_report 與 quality_analysis 都會拒絕。
   已補上檢查與測試，記在 018 補充。
+
+## 使用者補充（2026-10-09 午間）：高效能模式也可以
+
+- 使用者：「允許電源高效能時也可以做」。
+- 規則：
+  - 正式 Mac run 的 powermode 可以是 **0（自動）或 2（高效能）**。
+  - §4「所有正式 run 的 powermode 都必須相同」仍然成立：session 內每個 process 前後的 powermode 必須等於 preflight 的值，
+    否則該 session 為 env-invalid。
+  - `session.json` 記錄 `powermode`，報告中要註明。
+- 其餘不變：原廠 70 W adapter、power state 紀錄、電池下降停止規則。
+- **事先記下的預期**（pilot 的 env 紀錄）：powermode 2 加上 70 W 時，電量 30 分鐘內下降 4–23 點，很可能觸發停止規則。
+  若觸發，照規則停止並作廢，記為 blocker 回報使用者，不自行放寬。
+- harness：`POWERMODES_ALLOWED = (0, 2)`，並在正式 Mac session 中檢查每個 process 的 powermode 是否與 preflight 一致（有測試）。
+

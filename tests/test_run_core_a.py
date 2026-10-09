@@ -460,17 +460,19 @@ def test_rtx_session_never_reads_the_battery(tmp_path):
 
 
 def test_mac_config_rules_powermode_adapter_and_wired_limit():
-    """019 (§4 had powermode 2): every formal Mac run in powermode 0 (automatic) on the Apple 70 W adapter, with
-    iogpu.wired_limit_mb = 0 (unknown = invalid, 013)."""
+    """019 + user addendum (2026-10-09): formal Mac runs in powermode 0 (automatic) or 2 (high power) on the Apple
+    70 W adapter, with iogpu.wired_limit_mb = 0 (unknown = invalid, 013)."""
     ok = {"power": GOOD_POWER, "hardware": {"iogpu_wired_limit_mb": 0}}
     assert rc.mac_config_problems(ok) == []
-    assert rc.mac_config_problems({**ok, "power": {**GOOD_POWER, "powermode": 2}}) == ["powermode 2 (019 requires 0)"]
+    assert rc.mac_config_problems({**ok, "power": {**GOOD_POWER, "powermode": 2}}) == []
+    assert rc.mac_config_problems({**ok, "power": {**GOOD_POWER, "powermode": 1}}) == \
+        ["powermode 1 (019 allows 0 or 2)"]
     assert rc.mac_config_problems({**ok, "power": {**GOOD_POWER, "powermode": None}}) == \
-        ["powermode None (019 requires 0)"]
+        ["powermode None (019 allows 0 or 2)"]
     assert rc.mac_config_problems({**ok, "hardware": {"iogpu_wired_limit_mb": 8192}}) == \
         ["iogpu.wired_limit_mb 8192 (§4 requires 0)"]
-    assert "powermode 2 (019 requires 0)" in rc.env_problems({**ok, "power": {**GOOD_POWER, "powermode": 2}},
-                                                              "macos-metal")
+    assert "powermode 1 (019 allows 0 or 2)" in rc.env_problems({**ok, "power": {**GOOD_POWER, "powermode": 1}},
+                                                                 "macos-metal")
     for adapter in (None, {**APPLE_70W, "name": "96W USB-C Power Adapter"}, {**APPLE_70W, "manufacturer": "Acme"},
                     {"wattage_w": None, "manufacturer": None, "name": None}):
         (why,) = rc.mac_config_problems({**ok, "power": {**GOOD_POWER, "ac_adapter": adapter}})
@@ -479,17 +481,37 @@ def test_mac_config_rules_powermode_adapter_and_wired_limit():
     assert rc.mac_config_problems({**ok, "power": {**GOOD_POWER, "ac_adapter": {**APPLE_70W, "wattage_w": 70}}}) == []
 
 
-def test_formal_mac_run_refuses_a_preflight_in_the_wrong_powermode(tmp_path):
-    class HighPower(EnvRecorder):
-        def __call__(self, llama_bin, out_path, gpu_lock_held):
-            rec = super().__call__(llama_bin, out_path, gpu_lock_held)
-            rec["power"] = {**GOOD_POWER, "powermode": 2}
-            Path(out_path).write_text(json.dumps(rec))
-            return rec
+class Powermode(EnvRecorder):
+    """powermode per capture, in order (then the last one forever)."""
 
+    def __init__(self, *modes):
+        super().__init__()
+        self.modes = list(modes)
+
+    def __call__(self, llama_bin, out_path, gpu_lock_held):
+        rec = super().__call__(llama_bin, out_path, gpu_lock_held)
+        mode = self.modes.pop(0) if len(self.modes) > 1 else self.modes[0]
+        rec["power"] = {**GOOD_POWER, "powermode": mode}
+        Path(out_path).write_text(json.dumps(rec))
+        return rec
+
+
+def test_formal_mac_run_refuses_a_preflight_in_the_wrong_powermode(tmp_path):
     with pytest.raises(rc.RunError, match="powermode"):
-        run(tmp_path, small_plan(platform="macos-metal", mode="formal", contexts=(2048,)), env=HighPower(),
+        run(tmp_path, small_plan(platform="macos-metal", mode="formal", contexts=(2048,)), env=Powermode(1),
             mac_lock_held=True, path_exists=lambda p: True)
+
+
+def test_formal_mac_session_accepts_high_power_but_not_a_mid_session_mode_change(tmp_path):
+    """User addendum to 019: high power (2) is allowed too, but §4 keeps one powermode for the whole session."""
+    mac = dict(mac_lock_held=True, path_exists=lambda p: True)
+    plan = small_plan(platform="macos-metal", mode="formal", contexts=(2048,))
+    _, summary, _ = run(tmp_path, plan, env=Powermode(2), **mac)
+    assert summary["env_valid"] is True and summary["powermode"] == 2
+    (tmp_path / "b").mkdir()
+    _, changed, _ = run(tmp_path / "b", plan, env=Powermode(2, 2, 2, 0), **mac)
+    assert changed["env_valid"] is False
+    assert any("powermode 0 != preflight 2" in f["reason"] for f in changed["env_flags"])
 
 
 # ----------------------------------------------------------- 019 battery drain --

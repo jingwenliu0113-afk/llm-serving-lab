@@ -97,19 +97,21 @@ class NvidiaSmiSampler:
 BATTERY_MIN_PCT = 20  # decision 012
 
 
-POWERMODE_REQUIRED = 0  # 019 (user, 2026-10-09; §4 had 2 = high power): every formal Mac run in automatic mode
+# 019 (user, 2026-10-09; §4 had 2): automatic mode; user addendum the same day: high power (2) is allowed too.
+# §4 still holds one powermode for a whole session (checked against the preflight in run_session).
+POWERMODES_ALLOWED = (0, 2)
 # 019: the Apple 70 W adapter (`pmset -g ac`); the negotiated wattage (68 W on 2026-10-09) is recorded, not required
 AC_ADAPTER_REQUIRED = {"manufacturer": "Apple Inc.", "name": "70W USB-C Power Adapter"}
 
 
 def mac_config_problems(rec: dict) -> list:
-    """§4 / 004 / 019: powermode 0, the Apple 70 W adapter and iogpu.wired_limit_mb = 0 (unknown counts as a
+    """§4 / 004 / 019: powermode 0 or 2, the Apple 70 W adapter and iogpu.wired_limit_mb = 0 (unknown counts as a
     problem, 013)."""
     power = (rec or {}).get("power") or {}
     wired = ((rec or {}).get("hardware") or {}).get("iogpu_wired_limit_mb")
     problems = []
-    if power.get("powermode") != POWERMODE_REQUIRED:
-        problems.append(f"powermode {power.get('powermode')!r} (019 requires {POWERMODE_REQUIRED})")
+    if power.get("powermode") not in POWERMODES_ALLOWED:
+        problems.append(f"powermode {power.get('powermode')!r} (019 allows 0 or 2)")
     adapter = power.get("ac_adapter") or {}
     got = {k: adapter.get(k) for k in AC_ADAPTER_REQUIRED}
     if got != AC_ADAPTER_REQUIRED:
@@ -352,6 +354,7 @@ def run_session(
         "models_dir": models_dir,
         "preflight": "env/preflight.json",
         "session_b": session_b,
+        "powermode": ((preflight or {}).get("power") or {}).get("powermode") if platform == "macos-metal" else None,
         "started_at": now(),
     }
 
@@ -419,6 +422,11 @@ def run_session(
                 if mode == "formal":
                     env_flags.extend({"job_id": jid, "phase": phase, "reason": why}
                                      for why in provenance_problems(rec, preflight))
+                if mode == "formal" and platform == "macos-metal":  # §4: one powermode for the whole session
+                    pm = ((rec or {}).get("power") or {}).get("powermode")
+                    if pm != session["powermode"]:
+                        env_flags.append({"job_id": jid, "phase": phase,
+                                          "reason": f"powermode {pm!r} != preflight {session['powermode']!r} (§4)"})
 
             stdout = (out / rel["stdout"]).read_text(errors="replace")
             stderr = (out / rel["stderr"]).read_text(errors="replace")
