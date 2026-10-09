@@ -97,6 +97,9 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
    - 019 依使用者決定，要求正式 Mac run 用自動模式（powermode 0）。
    - 09:30 時讀到 0，09:56 讀到 AC 設定為 2（`pmset -g custom`：AC Power powermode 2、Battery Power powermode 0）。
    - 請到「系統設定 > 電池 > 能源模式 > 接上電源轉接器時」選「自動」。這是系統設定，我不會修改。
+   - 另外，Mac heavy lock 從 09:29 起由另一個專案持有（incident-investigator 的 pilot：`collect run --set pilot`）。
+     依 MACHINE_POLICY 不搶占，等它釋放。
+     AC 被切到 powermode 2 的時間點和它重疊，可能是那個專案的設定。兩個專案若對電源模式要求不同，要由使用者協調。
    - 背景已有唯讀 watcher（`wait_power_then_formal_a.sh`）每 2 分鐘檢查一次。
      條件是 AC、powermode 0、Apple 70W adapter，而且 Mac lock 空著；一符合就在 Mac lock 下自動開始正式 Mac Core A，不必再通知我。
 
