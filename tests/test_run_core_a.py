@@ -110,12 +110,14 @@ class EnvRecorder:
     def __call__(self, llama_bin, out_path, gpu_lock_held):
         self.calls.append((Path(llama_bin).name, Path(out_path).name, gpu_lock_held))
         rec = {"runtime": {"llama_cpp": {"build_number": self.build, "commit": self.commit}}, "probe_errors": [],
+               "repo": {"commit": REPO_COMMIT, "dirty": False},
                "power": dict(GOOD_POWER), "hardware": {"iogpu_wired_limit_mb": 0},
                "gpu": {"nvidia": [{"enforced_power_limit_w": 300.0, "power_default_limit_w": 300.0}]}}
         Path(out_path).write_text(json.dumps(rec))
         return rec
 
 
+REPO_COMMIT = "0123456789abcdef0123456789abcdef01234567"
 APPLE_70W = {"wattage_w": 68, "manufacturer": "Apple Inc.", "name": "70W USB-C Power Adapter"}
 GOOD_POWER = {"source": "AC", "battery_pct": 80, "battery_state": "AC attached; not charging", "powermode": 0,
               "ac_adapter": APPLE_70W,
@@ -631,3 +633,55 @@ def test_main_wires_the_session_start_b_for_formal_rtx_plans(tmp_path, monkeypat
     assert rc.main(["--plan", str(tmp_path / "plan.json"), "--bin", "b", "--models", "m", "--out", str(tmp_path / "o"),
                     "--session-id", "s", "--gpu-lock-held"]) == 2
     assert seen["measure_b"] is not None and seen["measure_b"](811)["frozen_b_mib"] == 811
+
+
+# ------------------------------------------------- provenance (020 review) --
+
+
+def test_provenance_problems_compare_every_capture_with_the_preflight():
+    pre = {"repo": {"commit": "a" * 40, "dirty": False}}
+    assert rc.provenance_problems(pre, pre) == []
+    (why,) = rc.provenance_problems({"repo": {"commit": "b" * 40, "dirty": False}}, pre)
+    assert "mid-session" in why
+    (why,) = rc.provenance_problems({"repo": {"commit": "a" * 40, "dirty": True}}, pre)
+    assert "dirty" in why
+    assert len(rc.provenance_problems({}, pre)) == 2  # unknown commit and unknown dirty both count (013)
+
+
+class Redeploy(EnvRecorder):
+    """The deployed commit changes after the n-th capture (a mid-session redeploy keeps dirty = False)."""
+
+    def __init__(self, n):
+        super().__init__()
+        self.k, self.n = 0, n
+
+    def __call__(self, llama_bin, out_path, gpu_lock_held):
+        rec = super().__call__(llama_bin, out_path, gpu_lock_held)
+        self.k += 1
+        if self.k > self.n:
+            rec["repo"] = {"commit": "f" * 40, "dirty": False}
+            Path(out_path).write_text(json.dumps(rec))
+        return rec
+
+
+def test_formal_session_with_a_mid_session_code_change_is_env_invalid(tmp_path):
+    plan = small_plan(platform="macos-metal", mode="formal", contexts=(2048,))
+    _, summary, _ = run(tmp_path, plan, env=Redeploy(4), mac_lock_held=True, path_exists=lambda p: True)
+    assert summary["env_valid"] is False
+    assert any("mid-session" in f["reason"] for f in summary["env_flags"])
+    (tmp_path / "pilot").mkdir()
+    _, pilot, _ = run(tmp_path / "pilot", small_plan(platform="macos-metal", contexts=(2048,)), env=Redeploy(4),
+                      mac_lock_held=True, path_exists=lambda p: True)
+    assert pilot["env_valid"] is True  # provenance is a formal-session rule
+
+
+def test_formal_run_refuses_a_dirty_or_unknown_preflight(tmp_path):
+    class Dirty(EnvRecorder):
+        def __call__(self, llama_bin, out_path, gpu_lock_held):
+            rec = super().__call__(llama_bin, out_path, gpu_lock_held)
+            rec["repo"] = {"commit": REPO_COMMIT, "dirty": True}
+            return rec
+
+    with pytest.raises(rc.RunError, match="dirty"):
+        run(tmp_path, small_plan(platform="macos-metal", mode="formal", contexts=(2048,)), env=Dirty(),
+            mac_lock_held=True, path_exists=lambda p: True)

@@ -136,12 +136,16 @@ def main(argv: list | None = None) -> int:
         problems.append(f"mode {meta.get('mode')!r} is not formal (the pilot report stays masked: 005, 011)")
     if meta.get("env_valid") is not True:
         problems.append(f"session is env-invalid (env_valid={meta.get('env_valid')!r}; rerun it, 012)")
+    if meta.get("platform", "macos-metal") != "wsl2-cuda":
+        problems.append(f"platform {meta.get('platform', 'macos-metal')!r}: formal quality is measured on wsl2-cuda "
+                        "only (020)")
     if problems:
         print(f"quality_analysis: refusing {session}: " + "; ".join(problems), file=sys.stderr)
         return 2
     rows = [json.loads(x) for x in (session / "rows.jsonl").read_text().splitlines()]
     rows = [r for r in rows if r["kind"] != "delete_kld"]
     out = {"session": meta.get("session_id"), "mode": meta.get("mode"), "env_valid": meta.get("env_valid"),
+           "platform": meta.get("platform"),
            "h_a5": h_a5(rows, n_boot=args.n_boot), "downstream": downstream(rows, n_boot=args.n_boot)}
     (session / "analysis.json").write_text(json.dumps(out, indent=1) + "\n")
     print(json.dumps({"h_a5": out["h_a5"]["verdict"]}))

@@ -45,7 +45,7 @@ from typing import Callable
 import core_b_analysis as ba
 import core_b_plan as bp
 import coreb_smoke as smoke
-from run_core_a import env_problems, sha256_json, write_raw_manifest
+from run_core_a import env_problems, provenance_problems, sha256_json, write_raw_manifest
 
 SCHEMA_VERSION = 1
 PORT = 8000
@@ -248,7 +248,7 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
         got = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
         if got != pins["vllm"]["version"]:
             raise RunError(f"vLLM {got!r} in the preflight != pinned {pins['vllm']['version']} (003)")
-        power = env_problems(pre, "wsl2-cuda")
+        power = env_problems(pre, "wsl2-cuda") + provenance_problems(pre, pre)  # one clean commit (020 review)
         if power:
             raise RunError("preflight: " + "; ".join(power))
     _, env0 = bp.server_argv(pins, gdn_prefill_backend=gdn_prefill_backend,
@@ -267,6 +267,8 @@ def run_session(plan: dict, *, pins: dict, out_dir, gdn_prefill_backend: str, gp
         if capture_env:
             rec = capture_env(out_path=out / "env" / name, gpu_lock_held=gpu_lock_held)
             env_flags.extend({"env": name, "reason": why} for why in env_problems(rec, "wsl2-cuda"))
+            if formal:
+                env_flags.extend({"env": name, "reason": why} for why in provenance_problems(rec, pre))
     rows = []
     base = f"http://127.0.0.1:{PORT}"
     with open(out / "rows.jsonl", "w") as fh:

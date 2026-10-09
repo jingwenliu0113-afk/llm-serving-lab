@@ -67,7 +67,22 @@ def test_frontier_points_pair_kld_with_decode_speed():
     assert set(pts) == {"4B-Q8_0", "4B-Q4_K_M", "9B-Q8_0"}  # only configs with both measurements
     assert pts["4B-Q8_0"][0][1] == 0.002 and pts["4B-Q4_K_M"][0][0] > pts["4B-Q8_0"][0][0]
     svg = cf.frontier_figure(core_a_rows, quality_rows, platform_label="M4 Pro (Metal)")
-    assert "KLD" in svg
+    assert "KLD" in svg and "wsl2-cuda" in svg  # 020: the figure says where quality was measured
+
+
+def test_frontier_cli_needs_a_formal_rtx_quality_session(tmp_path, capsys):
+    import json
+
+    a, q = tmp_path / "a", tmp_path / "q"
+    for d, meta in ((a, {"mode": "formal", "env_valid": True, "sentinel": {"drift": False}, "seed": 20261008,
+                         "platform": "macos-metal"}),
+                    (q, {"mode": "formal", "env_valid": True, "platform": "macos-metal"})):
+        d.mkdir()
+        (d / "session.json").write_text(json.dumps(meta))
+        (d / "rows.jsonl").write_text("")
+    assert cf.main(["frontier", "--session", str(a), "--quality-session", str(q), "--platform-label", "x",
+                    "--out", str(tmp_path / "f.svg")]) == 2
+    assert "wsl2-cuda" in capsys.readouterr().err and not (tmp_path / "f.svg").exists()
 
 
 def test_latency_figures_only_from_valid_formal_sessions(tmp_path, capsys):

@@ -196,6 +196,19 @@ def charge_gate(read_power: Callable, sleep: Callable, pause_below: int = CHARGE
             "timed_out": pct is None or pct < resume_at}
 
 
+def provenance_problems(rec: dict, pre: dict) -> list:
+    """A formal session runs one commit, unmodified, from start to end. A WSL redeploy swaps DEPLOYED_COMMIT and the
+    manifest together (dirty stays False) and a Mac commit moves HEAD, so every capture is compared with the
+    preflight; an unknown commit or dirty flag counts as a problem (013)."""
+    r, p = (rec or {}).get("repo") or {}, (pre or {}).get("repo") or {}
+    out = []
+    if r.get("commit") is None or r.get("commit") != p.get("commit"):
+        out.append(f"repo commit {r.get('commit')!r} != preflight {p.get('commit')!r} (mid-session code change)")
+    if r.get("dirty") is not False:
+        out.append(f"repo dirty={r.get('dirty')!r} (the code differs from the recorded commit)")
+    return out
+
+
 # 019: a formal Mac Core A session stops, and is invalid, when a battery reading falls >= DRAIN_STOP_PTS points
 # below the highest reading of the preceding DRAIN_WINDOW_S seconds (inclusive). Readings are the battery % of the
 # before / after env captures of every process; the clock is session time minus 016 charge pauses. 1 % readings
@@ -315,6 +328,10 @@ def run_session(
         bad = mac_config_problems(preflight)
         if bad:
             raise RunError("formal Mac run refused before it starts: " + "; ".join(bad))
+    if mode == "formal":
+        bad = provenance_problems(preflight, preflight)
+        if bad:
+            raise RunError("formal run refused before it starts: " + "; ".join(bad))
     session_b = None
     if mode == "formal" and platform == "wsl2-cuda":  # §4 step 4: re-measure B at every formal session start
         if measure_b is None or not want.get("frozen_b_mib"):
@@ -399,6 +416,9 @@ def run_session(
             env_after = capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
             for phase, rec in (("before", env_before), ("after", env_after)):
                 env_flags.extend({"job_id": jid, "phase": phase, "reason": why} for why in env_problems(rec, platform))
+                if mode == "formal":
+                    env_flags.extend({"job_id": jid, "phase": phase, "reason": why}
+                                     for why in provenance_problems(rec, preflight))
 
             stdout = (out / rel["stdout"]).read_text(errors="replace")
             stderr = (out / rel["stderr"]).read_text(errors="replace")

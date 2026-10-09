@@ -75,7 +75,12 @@ RECEIVER = "/tmp/llmsl-recv-gguf.sh"
 RECEIVER_SCRIPT = f"""set -eu
 name=$1; sha=$2; size=$3
 {{ mkdir -p {REMOTE_DIR} && cd {REMOTE_DIR}; }} || {{ echo "NODIR {REMOTE_DIR}"; exit 3; }}
-if [ "$size" = query ]; then stat -c %s ".$name.part" 2>/dev/null || echo 0; exit 0; fi
+if [ "$size" = query ]; then
+  if [ -f ".$name.part" ]; then stat -c %s ".$name.part"
+  elif [ -f "$name" ] && [ "$(sha256sum "$name" | cut -d' ' -f1)" = "$sha" ]; then echo "DONE"
+  else echo 0; fi
+  exit 0
+fi
 cat >> ".$name.part"
 have=$(stat -c %s ".$name.part")
 if [ "$have" -lt "$size" ]; then echo "INCOMPLETE $name $have/$size"; exit 2; fi
@@ -97,7 +102,8 @@ def receive_command(name: str, sha256: str, size) -> list:
 
 def send_from(path: Path, offset: int, cmd: list, *, max_bytes_per_s: float | None = None,
               clock=time.monotonic, sleep=time.sleep) -> subprocess.CompletedProcess:
-    """Stream path[offset:] into the receiver's stdin, at most max_bytes_per_s on average when set."""
+    """Stream path[offset:] into the receiver's stdin, at most max_bytes_per_s when set, with at most ~1 s of burst
+    credit: after a stall the copy does not catch up at line rate."""
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False)
     size = CHUNK if not max_bytes_per_s else 256 * 2**10
     t0, sent = clock(), 0
@@ -108,9 +114,12 @@ def send_from(path: Path, offset: int, cmd: list, *, max_bytes_per_s: float | No
                 proc.stdin.write(chunk)
                 sent += len(chunk)
                 if max_bytes_per_s:
-                    ahead = sent / max_bytes_per_s - (clock() - t0)
+                    now = clock()
+                    ahead = sent / max_bytes_per_s - (now - t0)
                     if ahead > 0:
                         sleep(ahead)
+                    elif ahead < -1.0:  # stalled: forfeit credit beyond ~1 s
+                        t0 = now - sent / max_bytes_per_s - 1.0
     except BrokenPipeError:
         pass
     try:
@@ -132,6 +141,9 @@ def copy_one(name: str, sha: str, size: int, models: Path, *, run=subprocess.run
         if "NODIR" in q.stdout:
             print(q.stdout.strip(), flush=True)
             return False
+        if q.returncode == 0 and q.stdout.strip() == "DONE":  # verified and renamed; only the reply was lost
+            print(f"VERIFIED {name} (already in place)", flush=True)
+            return True
         have = int(q.stdout.strip()) if q.returncode == 0 and q.stdout.strip().isdigit() else None
         if have is not None:
             if last is not None and have > last:
@@ -165,6 +177,8 @@ def main(argv: list | None = None) -> int:
     parser.add_argument("--set", choices=["quants", "references"], default="quants")
     parser.add_argument("--max-mib-s", type=float, default=None, help="average send-rate cap in MiB/s")
     args = parser.parse_args(argv)
+    if args.max_mib_s is not None and args.max_mib_s <= 0:
+        parser.error("--max-mib-s must be > 0")
     root = Path(__file__).resolve().parent.parent
     pins = tomllib.loads((root / "configs" / "pins.toml").read_text())
     files = quant_files(pins) if args.set == "quants" else reference_files(pins)
@@ -180,7 +194,11 @@ def main(argv: list | None = None) -> int:
     if args.dry_run:
         return 0
     if todo:
-        subprocess.run(SSH, input=f"cat > {RECEIVER} <<'EOF'\n{RECEIVER_SCRIPT}EOF\n", text=True, check=True)
+        inst = subprocess.run(SSH, input=f"cat > {RECEIVER} <<'EOF'\n{RECEIVER_SCRIPT}EOF\n", capture_output=True,
+                              text=True)
+        if inst.returncode != 0:  # ssh / wsl.exe failing: temporary, like the remote check
+            print(f"receiver install failed (rc {inst.returncode}): {inst.stderr.strip()[-300:]}", file=sys.stderr)
+            return EX_TEMPFAIL
     for name, sha, size in todo:
         res = copy_one(name, sha, size, Path(args.models), max_bytes_per_s=rate)
         if res is None:

@@ -10,8 +10,9 @@ Per size, in this order:
   -> per-chunk PPL (--ppl-output-type 1) for the H-A5(a) pair.
 One process per job; ok only with positive markers and expected counts
 (quality_parse). pilot = 20 chunks / 200 tasks. Platform (020: quality moved to the RTX):
-macos-metal -> formal requires freeze.mac and tools/with-mac-lock (016 charge gate, 019 power state);
-wsl2-cuda -> formal requires freeze.nvidia, the §4 RTX N_thr / P and the GPU flock (RTX power-limit rule).
+macos-metal -> pilot only (012; the Mac lock, 016 charge gate and 019 power rules apply);
+wsl2-cuda -> every run under the GPU flock; formal also needs freeze.nvidia, the §4 RTX N_thr / P, the RTX
+power-limit rule and one clean commit for the whole session.
 
 Usage:
     uv run python quality/run_quality.py plan --mode pilot --platform wsl2-cuda --n-thr 6 --poll 0 --out plan.json
@@ -38,8 +39,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import disk_guard  # noqa: E402
 import quality_parse as qp  # noqa: E402
-from run_core_a import (charge_gate, default_run_proc, env_problems, mac_config_problems,  # noqa: E402
-                        make_env_capture, read_mac_power, sha256_json, write_raw_manifest)
+from run_core_a import (charge_gate, default_run_proc, env_problems,  # noqa: E402
+                        make_env_capture, provenance_problems, read_mac_power, sha256_json, write_raw_manifest)
 
 SCHEMA_VERSION = 1
 MAC_HEAVY_LOCK = "/tmp/ai-portfolio-mac-heavy.lock"
@@ -77,9 +78,9 @@ def build_quality_plan(pins: dict, *, mode: str, n_thr: int, poll: int, pins_sha
         raise QualityError(f"unknown platform {platform!r}; expected one of {PLATFORMS}")
     if sizes is not None and mode == "formal":
         raise QualityError("formal quality runs cover all sizes (decision 005)")
-    if mode == "formal" and platform == "macos-metal" and not pins["freeze"]["mac"]:
-        raise QualityError("formal quality runs require freeze.mac = true in pins.toml (decision 006)")
-    if mode == "formal" and platform == "wsl2-cuda":
+    if mode == "formal" and platform != "wsl2-cuda":
+        raise QualityError("formal quality runs only on wsl2-cuda (decision 020); macos-metal is pilot-only (012)")
+    if mode == "formal":
         if not pins["freeze"]["nvidia"]:
             raise QualityError("formal quality runs on wsl2-cuda require freeze.nvidia = true in pins.toml (006, 020)")
         sb = pins.get("stage_b") or {}
@@ -187,13 +188,14 @@ def run_quality(
 ) -> dict:
     platform = plan.get("platform", "macos-metal")
     mac = platform == "macos-metal"
+    if plan["mode"] == "formal" and platform != "wsl2-cuda":
+        raise QualityError("formal quality runs only on wsl2-cuda (decision 020); this plan is "
+                           f"{platform!r} (old plans without a platform are macos-metal)")
     if mac and not mac_lock_held and path_exists(MAC_HEAVY_LOCK):
         raise QualityError(f"Mac heavy lock is held by another job ({MAC_HEAVY_LOCK}); do not run now (MACHINE_POLICY)")
-    if mac and plan["mode"] == "formal" and not mac_lock_held:
-        raise QualityError("formal quality runs must run under tools/with-mac-lock (MACHINE_POLICY 'Mac Hard Lock')")
-    if not mac and plan["mode"] == "formal" and not gpu_lock_held:
-        raise QualityError("formal quality runs on the RTX must hold the GPU lock: flock -n /tmp/ai-portfolio-gpu.lock "
-                           "... --gpu-lock-held (MACHINE_POLICY)")
+    if not mac and not gpu_lock_held:
+        raise QualityError("quality runs on the RTX (pilot and formal) must hold the GPU lock: flock -n "
+                           "/tmp/ai-portfolio-gpu.lock ... --gpu-lock-held (MACHINE_POLICY, 020)")
     out = Path(out_dir)
     if out.exists():
         raise QualityError(f"{out} exists; sessions are never resumed or overwritten")
@@ -209,7 +211,7 @@ def run_quality(
     if lc.get("build_number") != want["build_number"] or lc.get("commit") != want["build_commit"]:
         raise QualityError(f"llama.cpp build mismatch: {lc} vs {want}")
     if plan["mode"] == "formal":
-        bad = mac_config_problems(pre) if mac else env_problems(pre, platform)  # 019 Mac power / §4 RTX power limit
+        bad = env_problems(pre, platform) + provenance_problems(pre, pre)  # §4 RTX power limit; one clean commit
         if bad:
             raise QualityError("formal quality run refused before it starts: " + "; ".join(bad))
 
@@ -244,6 +246,8 @@ def run_quality(
                         rows.append(row); by_id[jid] = row; fh.write(json.dumps(row) + "\n"); fh.flush()
                         continue
                 argv = [resolve(a) for a in job["argv"]]
+                if kind == "kld_base":  # data/kld is git-ignored and never deployed (020: WSL starts without it)
+                    Path(argv[argv.index("--kl-divergence-base") + 1]).parent.mkdir(parents=True, exist_ok=True)
                 rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
                        "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json"}
                 pause = charge_gate(read_power, sleep) if mac else None  # 016 (the desktop has no battery)
@@ -255,6 +259,9 @@ def run_quality(
                 for phase, rec in (("before", env_before), ("after", env_after)):
                     env_flags.extend({"job_id": jid, "phase": phase, "reason": why}
                                      for why in env_problems(rec, platform))
+                    if plan["mode"] == "formal":
+                        env_flags.extend({"job_id": jid, "phase": phase, "reason": why}
+                                         for why in provenance_problems(rec, pre))
                 res = qp.classify(kind, code, (out / rel["stdout"]).read_text(errors="replace"),
                                   (out / rel["stderr"]).read_text(errors="replace"), job["expect"])
                 row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, **res, "disk_guard": guard, **rel}

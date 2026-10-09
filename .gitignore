@@ -30,3 +30,6 @@ results/**/cache/
 *.key
 .cache/
 *.tar
+
+# Pinned git worktrees for formal Mac sessions (scratchpad batch_formal_a.sh); results are copied back
+.worktrees/

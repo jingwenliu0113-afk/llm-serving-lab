@@ -335,3 +335,41 @@ def test_formal_run_refuses_another_vllm_or_power_limit_in_the_preflight(tmp_pat
         run(World(tmp_path), p, plan, formal=True, capture_env=CoreBEnv(vllm="0.31.0"))
     with pytest.raises(rb.RunError, match="power limit"):
         run(World(tmp_path / "x"), p, plan, formal=True, capture_env=CoreBEnv(enforced=250.0))
+
+
+# ------------------------------------------------- provenance (020 review) --
+
+
+class RepoEnv(CoreBEnv):
+    """repo record: dirty flag, and a different commit after `after` captures (a mid-session redeploy)."""
+
+    def __init__(self, dirty=False, after=None):
+        super().__init__()
+        self.dirty, self.after = dirty, after
+
+    def __call__(self, out_path, gpu_lock_held):
+        rec = super().__call__(out_path, gpu_lock_held)
+        late = self.after is not None and len(self.calls) > self.after
+        rec["repo"] = {"commit": "beef" if late else "c0ffee", "dirty": self.dirty}
+        Path(out_path).write_text(json.dumps(rec))
+        return rec
+
+
+def formal_plan(pins):
+    plan = small_plan(pins)
+    plan["kv_cache_memory_bytes"], plan["gpu_memory_utilization"] = 6400 * 2**20, "0.91"
+    return plan
+
+
+def test_formal_core_b_refuses_a_dirty_preflight(tmp_path, pins):
+    with pytest.raises(rb.RunError, match="dirty"):
+        run(World(tmp_path), stage_b_pins(pins), formal_plan(pins), formal=True, capture_env=RepoEnv(dirty=True))
+
+
+def test_formal_core_b_flags_a_mid_session_code_change(tmp_path, pins):
+    _, summary, _ = run(World(tmp_path), stage_b_pins(pins), formal_plan(pins), formal=True,
+                        capture_env=RepoEnv(after=2))
+    assert summary["env_valid"] is False and any("mid-session" in f["reason"] for f in summary["env_flags"])
+    (tmp_path / "pilot").mkdir()
+    _, pilot, _ = run(World(tmp_path / "pilot"), pins, small_plan(pins), capture_env=RepoEnv(after=2))
+    assert pilot["env_valid"] is True  # provenance is a formal-session rule

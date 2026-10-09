@@ -42,8 +42,10 @@ def test_pilot_adds_fa_off_and_repeat_jobs_before_the_kld_file_is_deleted(pins):
 
 def test_formal_plan_has_no_pilot_extras(pins):
     frozen = copy.deepcopy(pins)
-    frozen["freeze"]["mac"] = True
-    jobs = rq.build_quality_plan(frozen, mode="formal", n_thr=8, poll=0)["jobs"]
+    frozen["freeze"]["mac"] = frozen["freeze"]["nvidia"] = True
+    sb = frozen["stage_b"]
+    jobs = rq.build_quality_plan(frozen, mode="formal", n_thr=sb["rtx_n_thr"], poll=sb["rtx_poll"],
+                                 platform="wsl2-cuda")["jobs"]  # 020: formal quality only on the RTX
     assert not any(j.get("variant") or j.get("repeat_of") for j in jobs)
 
 

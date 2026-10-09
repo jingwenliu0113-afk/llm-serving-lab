@@ -83,11 +83,13 @@ def frontier_points(core_a_rows: list, quality_rows: list, *, L: int = 2048) -> 
     return out
 
 
-def frontier_figure(core_a_rows: list, quality_rows: list, *, platform_label: str, L: int = 2048) -> str:
+def frontier_figure(core_a_rows: list, quality_rows: list, *, platform_label: str, L: int = 2048,
+                    quality_platform: str = "wsl2-cuda") -> str:
     return svg_chart.line_chart(title=f"Quality vs decode throughput — {platform_label}",
                                 x_label=f"decode tok/s at L = {L}", y_label="KLD vs BF16 (WikiText-2, mean)",
                                 series=frontier_points(core_a_rows, quality_rows, L=L), y_from_zero=True,
-                                note="one point per configuration; lower KLD and higher tok/s are better")
+                                note="one point per configuration; lower KLD and higher tok/s are better; "
+                                     f"KLD measured on {quality_platform} (020)")
 
 
 def _load(session: Path) -> tuple:
@@ -123,6 +125,8 @@ def main(argv: list | None = None) -> int:
                 qmeta, qrows = _load(Path(args.quality_session))
                 if qmeta.get("mode") != "formal" or qmeta.get("env_valid") is not True:
                     problems.append("the quality session is not a valid formal session")
+                if qmeta.get("platform", "macos-metal") != "wsl2-cuda":
+                    problems.append("the quality session is not on wsl2-cuda (020: formal quality is measured there)")
         if problems:
             print("core_a_figures: refusing: " + "; ".join(problems), file=sys.stderr)
             return 2

@@ -35,10 +35,10 @@ def arg(argv, flag):
 
 
 def test_job_order_per_size_follows_005(pins):
-    frozen = copy.deepcopy(pins)
-    frozen["freeze"]["mac"] = True
-    for mode, p, extra_kld, extra_mc in (("formal", frozen, 0, 0), ("pilot", pins, 2, 1)):
-        jobs = plan(p, mode=mode)["jobs"]
+    frozen = rtx_frozen(pins)
+    rtx = dict(platform="wsl2-cuda", n_thr=frozen["stage_b"]["rtx_n_thr"], poll=frozen["stage_b"]["rtx_poll"])
+    for mode, p, extra_kld, extra_mc, kw in (("formal", frozen, 0, 0, rtx), ("pilot", pins, 2, 1, {})):
+        jobs = plan(p, mode=mode, **kw)["jobs"]
         for size in [m["size"] for m in pins["core_a"]["models"]]:
             kinds = [j["kind"] for j in jobs if j["size"] == size]
             n = 6 + extra_kld
@@ -83,20 +83,24 @@ def test_pilot_vs_formal_counts(pins):
     pilot = plan(pins)
     assert pilot["expected"]["n_chunks"] == 20
     assert all(arg(j["argv"], "--chunks") == "20" for j in pilot["jobs"] if j["kind"] in ("kld_base", "ppl"))
-    frozen = copy.deepcopy(pins)
-    frozen["freeze"]["mac"] = True
-    formal = plan(frozen, mode="formal")
+    frozen = rtx_frozen(pins)
+    formal = plan(frozen, mode="formal", platform="wsl2-cuda", n_thr=frozen["stage_b"]["rtx_n_thr"],
+                  poll=frozen["stage_b"]["rtx_poll"])
     assert formal["expected"]["n_chunks"] == pins["quality"]["expected"]["wikitext_chunks"]
     assert all("--chunks" not in j["argv"] for j in formal["jobs"] if j["kind"] != "delete_kld")
     mmlu = next(j for j in formal["jobs"] if j.get("task") == "mmlu")
     assert mmlu["expect"]["n_tasks"] == pins["quality"]["expected"]["mmlu_tasks"]
 
 
-def test_formal_requires_freeze(pins):
-    unfrozen = copy.deepcopy(pins)
-    unfrozen["freeze"]["mac"] = False
-    with pytest.raises(rq.QualityError, match="freeze.mac"):
-        plan(unfrozen, mode="formal")
+def test_formal_quality_runs_only_on_the_rtx(pins):
+    """020: formal quality is measured once, on wsl2-cuda; the Mac keeps only the pilot path (012)."""
+    frozen = rtx_frozen(pins)
+    with pytest.raises(rq.QualityError, match="020"):
+        plan(frozen, mode="formal")  # macos-metal
+    unfrozen = copy.deepcopy(frozen)
+    unfrozen["freeze"]["nvidia"] = False
+    with pytest.raises(rq.QualityError, match="freeze.nvidia"):
+        plan(unfrozen, mode="formal", platform="wsl2-cuda", n_thr=6, poll=0)
 
 
 # --------------------------------------------------------------- runner --
@@ -202,12 +206,12 @@ def test_refuses_when_mac_lock_held_by_other(tmp_path, monkeypatch, pins):
         run(tmp_path, monkeypatch, small(pins), path_exists=lambda p: True)
 
 
-def test_formal_requires_our_mac_lock(tmp_path, monkeypatch, pins):
-    frozen = copy.deepcopy(pins)
-    frozen["freeze"]["mac"] = True
-    frozen["core_a"]["models"] = frozen["core_a"]["models"][:1]
-    with pytest.raises(rq.QualityError, match="with-mac-lock"):
-        run(tmp_path, monkeypatch, plan(frozen, mode="formal"))
+def test_a_formal_mac_plan_is_refused_at_run_time_too(tmp_path, monkeypatch, pins):
+    """020: an old or hand-made formal plan without platform (= macos-metal) never runs."""
+    formal_mac = {**small(pins), "mode": "formal"}
+    formal_mac.pop("platform")
+    with pytest.raises(rq.QualityError, match="020"):
+        run(tmp_path, monkeypatch, formal_mac, mac_lock_held=True)
 
 
 def test_quality_session_writes_a_raw_manifest(tmp_path, monkeypatch, pins):
@@ -221,10 +225,8 @@ def test_pilot_can_be_limited_to_available_sizes(pins):
     p = rq.build_quality_plan(pins, mode="pilot", n_thr=8, poll=0, sizes=["4B"])
     assert {j["size"] for j in p["jobs"]} == {"4B"}
     assert any(j["kind"] == "ppl" for j in p["jobs"])  # the 4B half of the H-A5 pair
-    frozen = copy.deepcopy(pins)
-    frozen["freeze"]["mac"] = True
     with pytest.raises(rq.QualityError, match="all sizes"):
-        rq.build_quality_plan(frozen, mode="formal", n_thr=8, poll=0, sizes=["4B"])
+        rq.build_quality_plan(rtx_frozen(pins), mode="formal", n_thr=6, poll=0, sizes=["4B"], platform="wsl2-cuda")
 
 
 def test_quality_session_reports_env_validity(tmp_path, monkeypatch, pins):
@@ -265,18 +267,23 @@ def test_rtx_plan_records_the_platform_and_needs_the_stage_b_freeze_and_params(p
     with pytest.raises(rq.QualityError, match="platform"):
         plan(p, platform="cuda-native")
     # the job list is the same protocol on both platforms (only -t / --poll differ)
-    mac = plan(p, mode="formal", n_thr=6, poll=0)
-    assert [j["id"] for j in mac["jobs"]] == [j["id"] for j in formal["jobs"]]
-    assert [j.get("argv") for j in mac["jobs"]] == [j.get("argv") for j in formal["jobs"]]
+    mac, rtx = plan(p, n_thr=6, poll=0), plan(p, platform="wsl2-cuda", n_thr=6, poll=0)
+    assert [j["id"] for j in mac["jobs"]] == [j["id"] for j in rtx["jobs"]]
+    assert [j.get("argv") for j in mac["jobs"]] == [j.get("argv") for j in rtx["jobs"]]
 
 
 class RtxEnv:
-    def __init__(self, enforced=300.0):
-        self.calls, self.enforced = [], enforced
+    def __init__(self, enforced=300.0, redeploy_after=None):
+        self.calls, self.enforced, self.redeploy_after = [], enforced, redeploy_after
+
+    def repo_commit(self):
+        late = self.redeploy_after is not None and len(self.calls) > self.redeploy_after
+        return ("f" if late else "a") * 40
 
     def __call__(self, llama_bin, out_path, gpu_lock_held):
         self.calls.append((Path(out_path).name, gpu_lock_held))
         rec = {"runtime": {"llama_cpp": {"build_number": 11146, "commit": COMMIT}}, "probe_errors": [],
+               "repo": {"commit": self.repo_commit(), "dirty": False},
                "power": {"source": None, "battery_pct": None, "thermal": None},
                "gpu": {"nvidia": [{"enforced_power_limit_w": self.enforced, "power_default_limit_w": 300.0}]}}
         Path(out_path).write_text(json.dumps(rec))
@@ -320,6 +327,8 @@ def test_rtx_quality_runs_under_the_gpu_lock_without_battery_or_mac_lock_rules(t
 def test_rtx_formal_quality_needs_the_gpu_lock_and_the_default_power_limit(tmp_path, monkeypatch, pins):
     with pytest.raises(rq.QualityError, match="GPU lock"):
         run_rtx(tmp_path, monkeypatch, rtx_small(pins, mode="formal"), RtxEnv())
+    with pytest.raises(rq.QualityError, match="GPU lock"):  # pilots too (MACHINE_POLICY, 020)
+        run_rtx(tmp_path, monkeypatch, rtx_small(pins), RtxEnv())
     (tmp_path / "b").mkdir()
     with pytest.raises(rq.QualityError, match="power limit"):
         run_rtx(tmp_path / "b", monkeypatch, rtx_small(pins, mode="formal"), RtxEnv(enforced=250.0),
@@ -330,3 +339,27 @@ def test_rtx_env_flags_use_the_rtx_rule(tmp_path, monkeypatch, pins):
     summary, _ = run_rtx(tmp_path, monkeypatch, rtx_small(pins), RtxEnv(enforced=250.0), gpu_lock_held=True)
     assert summary["env_valid"] is False
     assert all("power limit" in f["reason"] for f in summary["env_flags"])
+
+
+def test_kld_directory_is_created_when_missing(tmp_path, monkeypatch, pins):
+    """The WSL copy has no data/kld (git-ignored, not deployed); kld_base must create it."""
+    plan_obj = rtx_small(pins)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    exe = bin_dir / "llama-perplexity"
+    exe.write_text(f"#!{sys.executable}\n{FAKE_PPL}")
+    exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
+    data = tmp_path / "data"
+    data.mkdir()  # no kld/ inside
+    monkeypatch.setenv("FAKE_FULL_CHUNKS", str(plan_obj["expected"]["n_chunks"]))
+    monkeypatch.setenv("FAKE_TASKS", str(plan_obj["expected"]["pilot_tasks"]))
+    summary = rq.run_quality(plan_obj, bin_dir=bin_dir, models_dir=tmp_path / "models", data_dir=data,
+                             out_dir=tmp_path / "out", capture_env=RtxEnv(), session_id="q", gpu_lock_held=True,
+                             disk_ok=lambda path, need_gib: {"ok": True}, sleep=lambda s: None)
+    assert summary["outcomes"]["error"] == 0 and (data / "kld").is_dir()
+
+
+def test_formal_rtx_quality_flags_a_mid_session_code_change(tmp_path, monkeypatch, pins):
+    summary, _ = run_rtx(tmp_path, monkeypatch, rtx_small(pins, mode="formal"), RtxEnv(redeploy_after=3),
+                         gpu_lock_held=True)
+    assert summary["env_valid"] is False and any("mid-session" in f["reason"] for f in summary["env_flags"])

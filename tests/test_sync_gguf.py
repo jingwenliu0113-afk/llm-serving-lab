@@ -35,7 +35,9 @@ def test_parse_check_and_receive_command():
 def test_receiver_appends_keeps_partials_and_verifies_before_renaming():
     s = sg.RECEIVER_SCRIPT
     assert 'cat >> ".$name.part"' in s and "INCOMPLETE" in s  # resumable; an interrupted copy is kept
-    assert s.index("INCOMPLETE") < s.index("sha256sum") < s.index("mv ") and "MISMATCH" in s and sg.REMOTE_DIR in s
+    body = s[s.index('cat >> ".$name.part"'):]  # the append path (the query path may also hash a finished file)
+    assert body.index("INCOMPLETE") < body.index("sha256sum") < body.index("mv ") and "MISMATCH" in s
+    assert sg.REMOTE_DIR in s
 
 
 def test_copy_one_resumes_from_the_partial_size(tmp_path):
@@ -151,3 +153,66 @@ def test_send_from_throttles_to_the_rate_limit(tmp_path):
     free = FakeClock()
     sg.send_from(f, 0, ["sh", "-c", "cat > /dev/null"], clock=free.now, sleep=free.sleep)
     assert free.slept == 0.0  # no limit -> no sleeping
+
+
+class StallClock(FakeClock):
+    """now() jumps forward once (a write blocked by the network) on the n-th call."""
+
+    def __init__(self, at, jump):
+        super().__init__()
+        self.calls, self.at, self.jump = 0, at, jump
+
+    def now(self):
+        self.calls += 1
+        if self.calls == self.at:
+            self.t += self.jump
+        return self.t
+
+
+def test_rate_limit_keeps_at_most_one_second_of_burst_credit_after_a_stall(tmp_path):
+    f = tmp_path / "x.gguf"
+    f.write_bytes(b"\0" * (8 * 2**20))
+    rate = 2**20
+    clock = StallClock(at=3, jump=10.0)  # stalls 10 s early on, then the link is free again
+    sleeps = []
+
+    def sleep(s):
+        sleeps.append(s)
+        clock.t += s
+
+    sg.send_from(f, 0, ["sh", "-c", "cat > /dev/null"], max_bytes_per_s=rate, clock=clock.now, sleep=sleep)
+    # without a cap the 10 s stall would let ~10 MiB go out at line rate (no sleeps for the rest of the file);
+    # with ~1 s of credit, sleeping resumes after about one extra second's worth of chunks
+    assert len(sleeps) >= 8 * 4 - 3 - (rate // (256 * 2**10)) - 2
+
+
+def test_copy_one_accepts_a_file_already_verified_in_place(tmp_path):
+    """The VERIFIED line can be lost after the remote rename; the query then answers DONE (no resend from 0)."""
+    import subprocess
+
+    sent = []
+    run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "DONE\n", "")  # noqa: E731
+    assert sg.copy_one("Qwen3.5-9B-BF16.gguf", "c" * 64, 10, tmp_path, run=run,
+                       send=lambda *a, **k: sent.append(a), sleep=lambda s: None) is True
+    assert sent == []
+    assert 'echo "DONE"' in sg.RECEIVER_SCRIPT
+
+
+def test_receiver_install_failure_is_temporary(monkeypatch):
+    import subprocess
+
+    calls = []
+
+    def fake_run(*a, **k):
+        calls.append(a)
+        return subprocess.CompletedProcess(a, 0 if len(calls) == 1 else 255, "", "timed out")
+
+    monkeypatch.setattr(sg.subprocess, "run", fake_run)
+    monkeypatch.setattr(sg, "copy_one", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not copy")))
+    assert sg.main(["--set", "references"]) == sg.EX_TEMPFAIL
+
+
+def test_max_mib_s_must_be_positive():
+    with pytest.raises(SystemExit) as e:
+        sg.main(["--max-mib-s", "0", "--dry-run"])
+    assert e.value.code == 2

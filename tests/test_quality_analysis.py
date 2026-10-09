@@ -98,17 +98,21 @@ def test_quality_report_cli_writes_analysis(tmp_path):
     for i, r in enumerate(rows):
         r["job_id"] = f"j{i}"
     (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    (tmp_path / "session.json").write_text(json.dumps({"session_id": "q", "mode": "formal", "env_valid": True}))
+    (tmp_path / "session.json").write_text(json.dumps({"session_id": "q", "mode": "formal", "env_valid": True,
+                                                       "platform": "wsl2-cuda"}))
     assert qa.main(["--session", str(tmp_path), "--n-boot", "200"]) == 0
     out = json.loads((tmp_path / "analysis.json").read_text())
     assert out["h_a5"]["verdict"] == "not refuted" and out["downstream"][0]["pair"] == ["BF16", "Q8_0"]
-    assert out["session"] == "q" and out["env_valid"] is True
+    assert out["session"] == "q" and out["env_valid"] is True and out["platform"] == "wsl2-cuda"
 
 
 @pytest.mark.parametrize("meta, reason", [
-    ({"session_id": "p", "mode": "pilot", "env_valid": True}, "formal"),
-    ({"session_id": "f", "mode": "formal", "env_valid": False}, "env-invalid"),
-    ({"session_id": "f", "mode": "formal"}, "env-invalid"),
+    ({"session_id": "p", "mode": "pilot", "env_valid": True, "platform": "wsl2-cuda"}, "formal"),
+    ({"session_id": "f", "mode": "formal", "env_valid": False, "platform": "wsl2-cuda"}, "env-invalid"),
+    ({"session_id": "f", "mode": "formal", "platform": "wsl2-cuda"}, "env-invalid"),
+    # 020: formal quality is measured on wsl2-cuda only; an old session without a platform is a Mac session
+    ({"session_id": "f", "mode": "formal", "env_valid": True, "platform": "macos-metal"}, "020"),
+    ({"session_id": "f", "mode": "formal", "env_valid": True}, "020"),
 ])
 def test_quality_cli_refuses_pilot_and_env_invalid_sessions(tmp_path, capsys, meta, reason):
     """005 / 011: the pilot only reports b + c and N; an env-invalid session is rerun (012, 013)."""
