@@ -117,3 +117,37 @@ def test_send_from_streams_the_tail_through_a_real_subprocess(tmp_path):
     f.write_bytes(b"abcdef")
     res = sg.send_from(f, 2, ["sh", "-c", "wc -c | tr -d ' '; echo VERIFIED x.gguf"])
     assert res.returncode == 0 and res.stdout.split() == ["4", "VERIFIED", "x.gguf"]
+
+
+def test_reference_files_are_the_two_bf16_references_9b_first():
+    """020: quality moved to the RTX, so the BF16 references go to WSL too (9B first, it is needed in any case)."""
+    pins = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
+    files = sg.reference_files(pins)
+    assert [n for n, _, _ in files] == ["Qwen3.5-9B-BF16.gguf", "Qwen3.5-4B-BF16.gguf"]
+    assert all(len(sha) == 64 and size > 0 for _, sha, size in files)
+
+
+class FakeClock:
+    def __init__(self):
+        self.t, self.slept = 0.0, 0.0
+
+    def now(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
+        self.slept += s
+
+
+def test_send_from_throttles_to_the_rate_limit(tmp_path):
+    """--max-mib-s keeps the link usable for other traffic: 3 MiB at 1 MiB/s takes >= ~3 s on the fake clock."""
+    f = tmp_path / "x.gguf"
+    f.write_bytes(b"\0" * (3 * 2**20))
+    clock = FakeClock()
+    res = sg.send_from(f, 0, ["sh", "-c", "wc -c | tr -d ' '"], max_bytes_per_s=2**20, clock=clock.now,
+                       sleep=clock.sleep)
+    assert res.stdout.split() == [str(3 * 2**20)]
+    assert 2.0 <= clock.slept <= 3.01
+    free = FakeClock()
+    sg.send_from(f, 0, ["sh", "-c", "cat > /dev/null"], clock=free.now, sleep=free.sleep)
+    assert free.slept == 0.0  # no limit -> no sleeping

@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Copy the 6 pinned quantized GGUFs from the Mac to the WSL copy for Core A on the RTX (008).
+"""Copy the pinned GGUFs from the Mac to the WSL copy: the 6 quants for Core A on the RTX (008), and with
+--set references the 2 BF16 references for quality, which moved to the RTX (020).
 
 Only `ssh gpu-server` is used (MACHINE_POLICY). Each file is streamed into a temporary name in
 ~/llm-serving-lab/models/gguf/ inside WSL, its sha256 is checked there against configs/pins.toml,
 and only then renamed into place. Files already present with the pinned sha256 are skipped. The
-BF16 references stay on the Mac (quality runs only there). The Mac <-> desktop link is slow and
-drops; an interrupted copy keeps its partial file and the next attempt resumes from its size.
+Mac <-> desktop link is slow and drops; an interrupted copy keeps its partial file and the next
+attempt resumes from its size. --max-mib-s caps the send rate so the copy does not saturate the
+uplink that other work (git push, other projects) shares.
 
-Usage (Mac):  uv run python scripts/sync_gguf_to_wsl.py [--dry-run]
+Usage (Mac):  uv run python scripts/sync_gguf_to_wsl.py [--set quants|references] [--max-mib-s 1.2] [--dry-run]
 """
 
 from __future__ import annotations
@@ -39,6 +41,17 @@ def quant_files(pins: dict) -> list:
             if not f.get("sha256"):
                 raise SystemExit(f"{f['filename']} has no pinned sha256 yet")
             out.append((f["filename"], f["sha256"], f["size_bytes"]))
+    return out
+
+
+def reference_files(pins: dict) -> list:
+    """(filename, sha256, size_bytes) of the BF16 references, 9B first (020: quality on the RTX)."""
+    out = []
+    for m in sorted(pins["core_a"]["models"], key=lambda m: m["size"] != "9B"):
+        ref = m["reference"]
+        if not ref.get("sha256"):
+            raise SystemExit(f"{ref['filename']} has no pinned sha256 yet")
+        out.append((ref["filename"], ref["sha256"], ref["size_bytes"]))
     return out
 
 
@@ -82,14 +95,22 @@ def receive_command(name: str, sha256: str, size) -> list:
     return SSH[:-2] + ["bash", RECEIVER, name, sha256, str(size)]
 
 
-def send_from(path: Path, offset: int, cmd: list) -> subprocess.CompletedProcess:
-    """Stream path[offset:] into the receiver's stdin."""
+def send_from(path: Path, offset: int, cmd: list, *, max_bytes_per_s: float | None = None,
+              clock=time.monotonic, sleep=time.sleep) -> subprocess.CompletedProcess:
+    """Stream path[offset:] into the receiver's stdin, at most max_bytes_per_s on average when set."""
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False)
+    size = CHUNK if not max_bytes_per_s else 256 * 2**10
+    t0, sent = clock(), 0
     try:
         with open(path, "rb") as fh:
             fh.seek(offset)
-            while chunk := fh.read(CHUNK):
+            while chunk := fh.read(size):
                 proc.stdin.write(chunk)
+                sent += len(chunk)
+                if max_bytes_per_s:
+                    ahead = sent / max_bytes_per_s - (clock() - t0)
+                    if ahead > 0:
+                        sleep(ahead)
     except BrokenPipeError:
         pass
     try:
@@ -102,7 +123,7 @@ def send_from(path: Path, offset: int, cmd: list) -> subprocess.CompletedProcess
 
 
 def copy_one(name: str, sha: str, size: int, models: Path, *, run=subprocess.run, send=send_from,
-             attempts: int = ATTEMPTS, sleep=time.sleep):
+             attempts: int = ATTEMPTS, sleep=time.sleep, max_bytes_per_s: float | None = None):
     """True = verified on WSL; False = sha mismatch or the remote directory is unusable (do not retry);
     None = still failing after `attempts` tries with exponential backoff (temporary: run again later)."""
     k, last = 0, None
@@ -116,7 +137,8 @@ def copy_one(name: str, sha: str, size: int, models: Path, *, run=subprocess.run
             if last is not None and have > last:
                 k = 0  # the partial grew since the last try: the link works, it only dropped
             last = have
-            res = send(models / name, have, receive_command(name, sha, size))
+            res = (send(models / name, have, receive_command(name, sha, size), max_bytes_per_s=max_bytes_per_s)
+                   if max_bytes_per_s else send(models / name, have, receive_command(name, sha, size)))
             print((res.stdout.strip() or res.stderr.strip()[-200:]), flush=True)
             if res.returncode == 0 and f"VERIFIED {name}" in res.stdout:
                 return True
@@ -140,16 +162,19 @@ def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--models", default="models/gguf")
+    parser.add_argument("--set", choices=["quants", "references"], default="quants")
+    parser.add_argument("--max-mib-s", type=float, default=None, help="average send-rate cap in MiB/s")
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parent.parent
     pins = tomllib.loads((root / "configs" / "pins.toml").read_text())
-    files = quant_files(pins)
+    files = quant_files(pins) if args.set == "quants" else reference_files(pins)
+    rate = args.max_mib_s * 2**20 if args.max_mib_s else None
     chk = subprocess.run(SSH, input=remote_script_check(files), capture_output=True, text=True)
     if chk.returncode != 0:  # the remote script always exits 0, so this is ssh / wsl.exe failing
         print(f"remote check failed (rc {chk.returncode}): {chk.stderr.strip()[-300:]}", file=sys.stderr)
         return EX_TEMPFAIL
     have = parse_check(chk.stdout)
-    todo = copy_order([f for f in files if have.get(f[0]) != f[1]])
+    todo = [f for f in (copy_order(files) if args.set == "quants" else files) if have.get(f[0]) != f[1]]
     print(json.dumps({"present": sorted(n for n, s, _ in files if have.get(n) == s), "to_copy": [f[0] for f in todo],
                       "gib": round(sum(f[2] for f in todo) / 2**30, 2)}))
     if args.dry_run:
@@ -157,7 +182,7 @@ def main(argv: list | None = None) -> int:
     if todo:
         subprocess.run(SSH, input=f"cat > {RECEIVER} <<'EOF'\n{RECEIVER_SCRIPT}EOF\n", text=True, check=True)
     for name, sha, size in todo:
-        res = copy_one(name, sha, size, Path(args.models))
+        res = copy_one(name, sha, size, Path(args.models), max_bytes_per_s=rate)
         if res is None:
             return EX_TEMPFAIL
         if res is False:
