@@ -105,8 +105,9 @@
    - 規則 decision 021 已 commit（`41798d7`），generator `benchmarks/decision_table.py` 與 40 個測試已 commit（`278ff82`）。
      兩者都在 a2、正式 quality、正式 Core B 的分析出現之前（021 R0）。
    - 設計 agent 不讀 `results/`；我已看過 RTX Core A 的結果，021 已照實揭露。
-   - generator 的 review workflow 進行中。**審查修正 commit 之前，不跑 a2 的 `core_a_report`**，
-     確保任何修正都發生在看到新數據之前。
+   - review workflow 完成（確認約 13 項，駁回 4 項），修正已 commit（`31973d5`），全部在看到新數據之前。
+     其中 R11 的淘汰語意有修訂（只由當下未被勝過的成員淘汰，避免 KLD 與 NLL 的隱含跨 metric 遞移），已記在 021。
+   - a2 跑完後可以照常跑 `core_a_report`。
    - generator 的第一次真實執行要在所有正式分析都完成之後，輸出照原樣 commit（R0）。
 4. **全部正式數據完成後**：跑 `decision_table.py`，寫結論。
 
