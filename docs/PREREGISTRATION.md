@@ -23,6 +23,9 @@
 > **正式 quality 改在 RTX（wsl2-cuda）上執行，見 decision 020**（使用者同意，2026-10-09）。flag set 與所有 hypothesis 不變。
 >
 > hypothesis 與其門檻不變。下文相關處加了註記，原文不改寫。
+>
+> **SPEC 要求的 deployment decision table 的推導規則見 decision 021**（2026-10-10，在 Mac a2、正式 quality、正式 Core B 的分析之前寫定）。
+> 決策表是描述性整理，不是新的檢定；本文的 hypothesis、門檻、metric、protocol 都不變。
 
 > **狀態：第 1–5 節 FROZEN (Stage A)，2026-10-09**（harness commit `eb6eef1d43a15d70805cce83784646a038aed6d1`，
 > `pins.toml` `freeze.mac = true`）。
