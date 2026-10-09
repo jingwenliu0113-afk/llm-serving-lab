@@ -192,3 +192,19 @@
   - 若使用者仍要在 powermode 2 重跑一次，照做。下一個 session id 為 `formal-20261009-a2`。
 - 規則與門檻都沒有改。
 
+## 使用者決定（2026-10-09 13:xx）：刪除電池下降停止規則，然後重跑
+
+- 使用者：「刪掉觸發停止的規則 然後重跑」。
+- **電池下降停止規則刪除**：
+  - harness 移除 `BatteryDrainWatch` 與 session 的 `battery_drain`；
+  - 正式 Mac Core A 不會再因電量下降而停止或作廢。
+- 仍然適用的規則：
+  - 012：AC、電量 ≥ 20%、沒有 thermal / performance warning，否則 env-invalid；
+  - 016：電量 < 40% 時在 process 之間閒置充電到 ≥ 90%，最多 4 小時，門檻不變；
+  - 019：原廠 70 W adapter、power state 紀錄、powermode 0 或 2，同一 session 內一致；
+  - 020 審查：一個 session 只能有一個乾淨的 commit。
+- `formal-20261009-a1` 依當時有效的規則停止並作廢，照實保留，不重新解讀為有效。
+- 重跑為 `formal-20261009-a2`：同一個 seed（20261008），用當下的 powermode。
+- 預期：高效能模式下電量會持續下降，降到 40% 時 016 會暫停充電，所以 session 會比 17.39 小時的估計更長。
+- `core_a_report` 仍會拒絕帶有 `battery_drain` 紀錄的 session，這只會影響 a1，a1 本來就無效。
+

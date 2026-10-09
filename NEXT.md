@@ -20,7 +20,8 @@
 
 - **019**：
   - Mac 正式 run 用**自動電力模式**加上**原廠 70W adapter**，並記錄 power state。
-  - 正式 Mac Core A 有電池下降停止規則：30 分鐘內下降 ≥ 3 點就停止，整個 session 無效。
+  - 正式 Mac Core A 的電池下降停止規則：13:xx 依使用者決定刪除。
+  - 高效能模式（powermode 2）也可以，但同一 session 內要一致。
   - Core B 的 `--max-num-seqs` 改為 **128**，grid 上限改為 **128**。
   - Stage B 不拆分。
 - **020**：正式 quality 改在 **RTX** 上執行，flag set 與 hypothesis 不變。
@@ -60,6 +61,11 @@
 
 ### Mac
 
+- **2026-10-09 13:xx：使用者刪除 019 的電池下降停止規則，並要求重跑。**
+  - `formal-20261009-a1` 依舊規則作廢，照實保留。
+  - 重跑 `formal-20261009-a2` 在 Mac lock 下、固定 commit 的 worktree 中執行。
+  - 適用的規則：012、016 充電閘門、70W adapter、同一 session 內 powermode 一致。
+
 - 正式 Mac Core A 在等兩個條件，見 Blocked 0。
   - 背景 watcher `wait_power_then_formal_a.sh` 每 2 分鐘唯讀檢查一次。
   - 條件一符合，就在 Mac lock 下自動開始 `batch_formal_a.sh`（seed 20261008、`-t 8`、`--poll 0`、016、019）。
@@ -89,15 +95,6 @@
 3. **全部正式數據完成後**：寫 SPEC 要求的 deployment decision table，以及結論。
 
 ## Blocked / 需要使用者
-
-0. **正式 Mac Core A：在高效能模式下觸發 019 的電池停止規則，需要把 AC 能源模式切到「自動」**
-   - `formal-20261009-a1`（12:13–13:02，powermode 2）跑完 17 個 job 後，電量在 30 分鐘視窗內從 100% 降到 85%，依規則停止並作廢。
-     結果照實保留；細節見 019 的「紀錄」。
-   - 同樣條件下重跑幾乎一定會再觸發，所以不自動在高效能模式重跑。
-   - 請到「系統設定 > 電池 > 能源模式 > 接上電源轉接器時」選「自動」。pilot 顯示自動模式下電量持平或回升。
-   - watcher（`WANT_PM=0`）每 2 分鐘唯讀檢查一次。lock 空著、AC、70W、powermode 0 都符合時，自動開始 `formal-20261009-a2`。
-   - 若你仍要在高效能模式重跑一次，告訴我即可。
-   - Mac lock 目前空著（incident-investigator 已釋放）。
 
 1. **4B 的 quality 是否也在 RTX 上量**（020；正式 quality 開始前需要確認）
    - 我的建議是一起搬，理由：

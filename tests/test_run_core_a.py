@@ -514,112 +514,32 @@ def test_formal_mac_session_accepts_high_power_but_not_a_mid_session_mode_change
     assert any("powermode 0 != preflight 2" in f["reason"] for f in changed["env_flags"])
 
 
-# ----------------------------------------------------------- 019 battery drain --
-
-
-def test_battery_drain_watch_needs_three_points_within_thirty_minutes():
-    w = rc.BatteryDrainWatch()
-    assert (rc.DRAIN_WINDOW_S, rc.DRAIN_STOP_PTS) == (1800, 3)
-    assert [w.observe(t, p) for t, p in ((0, 100), (600, 99), (1200, 98))] == [None] * 3
-    trip = w.observe(1500, 97, job_id="j", phase="after")
-    assert trip == {"rule": "019", "job_id": "j", "phase": "after", "pct": 97, "window_max_pct": 100, "drop_pts": 3,
-                    "window_s": 1800}
-
-
-def test_battery_drain_watch_ignores_quantisation_slow_drains_and_unknown_readings():
-    w = rc.BatteryDrainWatch()
-    for t, pct in enumerate((80, 79, 80, 79, 78, 79, 80, None, 78)):  # +-1 point jitter, never 3 below the max
-        assert w.observe(t * 60, pct) is None
-    slow = rc.BatteryDrainWatch()  # 2 points per 30 min (4 %/h) never trips; 016 handles slow drains
-    assert all(slow.observe(t * 900, 100 - t) is None for t in range(40))
-
-
-def test_battery_drain_watch_window_is_inclusive_and_slides():
-    w = rc.BatteryDrainWatch()
-    assert w.observe(0, 100) is None and w.observe(1000, 98) is None
-    assert w.observe(1801, 97) is None  # the 100 at t = 0 left the window; 98 - 97 = 1
-    w2 = rc.BatteryDrainWatch()
-    assert w2.observe(0, 100) is None and w2.observe(1800, 97)["drop_pts"] == 3  # exactly 30 min apart: inside
+# ------------------------------------- 019 battery-drain rule removed (user) --
 
 
 class DrainingEnv(EnvRecorder):
-    """Battery readings in capture order (then the last forever); each capture advances the fake clock."""
+    """Battery readings in capture order (then the last one forever)."""
 
-    def __init__(self, pcts, clock, step_s=60):
+    def __init__(self, pcts):
         super().__init__()
-        self.pcts, self.clock, self.step_s = list(pcts), clock, step_s
+        self.pcts = list(pcts)
 
     def __call__(self, llama_bin, out_path, gpu_lock_held):
         rec = super().__call__(llama_bin, out_path, gpu_lock_held)
-        self.clock.t += self.step_s
         pct = self.pcts.pop(0) if len(self.pcts) > 1 else self.pcts[0]
         rec["power"] = {**GOOD_POWER, "battery_pct": pct}
         Path(out_path).write_text(json.dumps(rec))
         return rec
 
 
-class Clock:
-    def __init__(self):
-        self.t = 0.0
-
-    def __call__(self):
-        return self.t
-
-
-def formal_mac(tmp_path, pcts, **kw):
-    clock = Clock()
-    env = DrainingEnv(pcts, clock)
+def test_formal_mac_session_is_not_stopped_by_a_battery_drain(tmp_path):
+    """The user removed 019's battery-drain stop rule (2026-10-09): a draining battery that stays >= 20 % (012) no
+    longer stops or invalidates a formal Mac session; 016's charge gate handles low charge."""
     plan = small_plan(platform="macos-metal", mode="formal", contexts=(2048,))
-    out, summary, rows = run(tmp_path, plan, env=env, clock=clock, mac_lock_held=True, path_exists=lambda p: True, **kw)
-    return plan, summary, rows
-
-
-def test_formal_mac_session_stops_after_the_process_whose_after_reading_trips(tmp_path):
-    # captures: preflight, then before / after per job; job 0 after = 97 vs 100 -> stop with job 0's row written
-    plan, summary, rows = formal_mac(tmp_path, [100, 100, 97])
-    assert [r["job_id"] for r in rows] == [plan["jobs"][0]["id"]]
-    drain = summary["battery_drain"]
-    assert drain["job_id"] == plan["jobs"][0]["id"] and drain["phase"] == "after" and drain["drop_pts"] == 3
-    assert summary["env_valid"] is False
-    assert any("battery drain" in f["reason"] and "019" in f["reason"] for f in summary["env_flags"])
-    assert summary["sentinel"]["end_tok_s"] is None  # the end sentinel never ran
-
-
-def test_formal_mac_session_skips_the_process_whose_before_reading_trips(tmp_path):
-    plan, summary, rows = formal_mac(tmp_path, [100, 100, 99, 97])
-    assert [r["job_id"] for r in rows] == [plan["jobs"][0]["id"]]  # job 1 never ran
-    assert summary["battery_drain"]["job_id"] == plan["jobs"][1]["id"]
-    assert summary["battery_drain"]["phase"] == "before" and summary["env_valid"] is False
-
-
-def test_formal_mac_session_without_drain_runs_to_the_end(tmp_path):
-    plan, summary, rows = formal_mac(tmp_path, [100, 99, 100, 98, 99])
-    assert len(rows) == len(plan["jobs"]) and summary["battery_drain"] is None and summary["env_valid"] is True
-
-
-def test_battery_drain_clock_excludes_charge_pauses(tmp_path):
-    """019: the 30-minute window runs on session time minus 016 pauses. A pause that the fake sleep makes last
-    3600 s would otherwise push the 50 % readings out of the window."""
-    clock = Clock()
-
-    def sleep(s):
-        clock.t += s
-
-    env = DrainingEnv([50, 50, 50, 47], clock, step_s=10)
-    plan = small_plan(platform="macos-metal", mode="formal", contexts=(2048,))
-    power = Battery(100, 35, *([36] * 59), 95)  # job 0: no pause; job 1: 60 polls x 60 s = 3600 s
-    _, summary, rows = run(tmp_path, plan, env=env, clock=clock, sleep=sleep, read_power=power, mac_lock_held=True,
+    _, summary, rows = run(tmp_path, plan, env=DrainingEnv([100, 100, 85, 70, 60, 50, 45]), mac_lock_held=True,
                            path_exists=lambda p: True)
-    assert summary["charge_pauses"][0]["waited_s"] == 3600
-    assert summary["battery_drain"]["phase"] == "before" and summary["battery_drain"]["window_max_pct"] == 50
-
-
-def test_pilot_mac_sessions_record_but_never_stop_on_a_drain(tmp_path):
-    clock = Clock()
-    env = DrainingEnv([100, 90, 80], clock)
-    plan = small_plan(platform="macos-metal", contexts=(2048,))
-    _, summary, rows = run(tmp_path, plan, env=env, clock=clock, mac_lock_held=True, path_exists=lambda p: True)
-    assert len(rows) == len(plan["jobs"]) and summary["battery_drain"] is None
+    assert len(rows) == len(plan["jobs"]) and summary["env_valid"] is True
+    assert "battery_drain" not in summary and not hasattr(rc, "BatteryDrainWatch")
 
 
 def test_formal_rtx_session_remeasures_b_and_records_drift(tmp_path):
