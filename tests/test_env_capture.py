@@ -31,6 +31,26 @@ PMSET_BATT_BATTERY = (
     " -InternalBattery-0 (id=24576099)\t55%; discharging; 3:10 remaining present: true\n"
 )
 PMSET_BATT_DESKTOP = "Now drawing from 'AC Power'\n"
+# Real output on AC, fully charged (2026-10-09).
+PMSET_BATT_CHARGED = (
+    "Now drawing from 'AC Power'\n"
+    " -InternalBattery-0 (id=24576099)\t100%; charged; 0:00 remaining present: true\n"
+)
+# Real output of `pmset -g ac` with the Apple 70 W adapter (2026-10-09); the serial is replaced by a placeholder
+# and must never be recorded (019).
+PMSET_AC_APPLE70 = (
+    " Wattage = 68W\n"
+    " Current = 3390mA\n"
+    " Voltage = 20000mV\n"
+    " AdapterID = 28700\n"
+    " Manufacturer = Apple Inc.\n"
+    " Family Code = 0xe000400a\n"
+    " Serial String = PLACEHOLDERSERIAL\n"
+    " Adapter Name = 70W USB-C Power Adapter \n"
+    " Hardware Version = 1.0\n"
+    " Firmware Version = 01030030\n"
+)
+PMSET_AC_NONE = "No adapter attached.\n"
 
 # Real excerpt of `pmset -g` (2026-10-08).
 PMSET_G_HIGH = (
@@ -166,6 +186,7 @@ def darwin_system(**overrides):
         ("sysctl", "-n", "hw.memsize"): "51539607552\n",
         ("sysctl", "-n", "iogpu.wired_limit_mb"): "0\n",
         ("pmset", "-g", "batt"): PMSET_BATT_AC,
+        ("pmset", "-g", "ac"): PMSET_AC_APPLE70,
         ("pmset", "-g"): PMSET_G_HIGH,
         ("pmset", "-g", "therm"): PMSET_THERM_CLEAN,
     }
@@ -213,14 +234,31 @@ def capture(system, system_name, **kwargs):
 @pytest.mark.parametrize(
     "text, expected",
     [
-        (PMSET_BATT_AC, {"source": "AC", "battery_pct": 80}),
-        (PMSET_BATT_BATTERY, {"source": "Battery", "battery_pct": 55}),
-        (PMSET_BATT_DESKTOP, {"source": "AC", "battery_pct": None}),
-        ("", {"source": None, "battery_pct": None}),
+        (PMSET_BATT_AC, {"source": "AC", "battery_pct": 80, "battery_state": "AC attached; not charging"}),
+        (PMSET_BATT_BATTERY, {"source": "Battery", "battery_pct": 55, "battery_state": "discharging"}),
+        (PMSET_BATT_CHARGED, {"source": "AC", "battery_pct": 100, "battery_state": "charged"}),
+        (PMSET_BATT_DESKTOP, {"source": "AC", "battery_pct": None, "battery_state": None}),
+        ("", {"source": None, "battery_pct": None, "battery_state": None}),
+        (" -InternalBattery-0 (id=1)\t37%; charging; (no estimate) present: true\n",
+         {"source": None, "battery_pct": 37, "battery_state": "charging"}),
     ],
 )
 def test_parse_pmset_batt(text, expected):
     assert ec.parse_pmset_batt(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        (PMSET_AC_APPLE70, {"wattage_w": 68, "manufacturer": "Apple Inc.", "name": "70W USB-C Power Adapter"}),
+        (PMSET_AC_NONE, {"wattage_w": None, "manufacturer": None, "name": None}),
+        ("", {"wattage_w": None, "manufacturer": None, "name": None}),
+    ],
+)
+def test_parse_pmset_ac_records_the_adapter_but_never_its_serial(text, expected):
+    got = ec.parse_pmset_ac(text)
+    assert got == expected
+    assert "PLACEHOLDERSERIAL" not in json.dumps(got) and "serial" not in json.dumps(got).lower()
 
 
 @pytest.mark.parametrize(
@@ -439,10 +477,13 @@ def test_capture_darwin_core_fields():
     assert rec["power"] == {
         "source": "AC",
         "battery_pct": 80,
+        "battery_state": "AC attached; not charging",
+        "ac_adapter": {"wattage_w": 68, "manufacturer": "Apple Inc.", "name": "70W USB-C Power Adapter"},
         "powermode": 2,
         "powermode_label": "high_power",
         "thermal": {"thermal_warning_recorded": False, "performance_warning_recorded": False, "cpu_limits": {}},
     }
+    assert "PLACEHOLDERSERIAL" not in json.dumps(rec)
     assert rec["load"] == {
         "loadavg_1m": 2.5,
         "loadavg_5m": 2.0,

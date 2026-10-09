@@ -97,16 +97,24 @@ class NvidiaSmiSampler:
 BATTERY_MIN_PCT = 20  # decision 012
 
 
-POWERMODE_REQUIRED = 2  # §4: all formal Mac runs in one powermode (2 = high power)
+POWERMODE_REQUIRED = 0  # 019 (user, 2026-10-09; §4 had 2 = high power): every formal Mac run in automatic mode
+# 019: the Apple 70 W adapter (`pmset -g ac`); the negotiated wattage (68 W on 2026-10-09) is recorded, not required
+AC_ADAPTER_REQUIRED = {"manufacturer": "Apple Inc.", "name": "70W USB-C Power Adapter"}
 
 
 def mac_config_problems(rec: dict) -> list:
-    """§4 / 004: powermode 2 and iogpu.wired_limit_mb = 0 (unknown counts as a problem, 013)."""
+    """§4 / 004 / 019: powermode 0, the Apple 70 W adapter and iogpu.wired_limit_mb = 0 (unknown counts as a
+    problem, 013)."""
     power = (rec or {}).get("power") or {}
     wired = ((rec or {}).get("hardware") or {}).get("iogpu_wired_limit_mb")
     problems = []
     if power.get("powermode") != POWERMODE_REQUIRED:
-        problems.append(f"powermode {power.get('powermode')!r} (§4 requires {POWERMODE_REQUIRED})")
+        problems.append(f"powermode {power.get('powermode')!r} (019 requires {POWERMODE_REQUIRED})")
+    adapter = power.get("ac_adapter") or {}
+    got = {k: adapter.get(k) for k in AC_ADAPTER_REQUIRED}
+    if got != AC_ADAPTER_REQUIRED:
+        problems.append(f"AC adapter {got['manufacturer']!r} {got['name']!r} (019 requires Apple Inc. "
+                        f"{AC_ADAPTER_REQUIRED['name']!r})")
     if wired != 0:
         problems.append(f"iogpu.wired_limit_mb {wired!r} (§4 requires 0)")
     return problems
@@ -188,6 +196,30 @@ def charge_gate(read_power: Callable, sleep: Callable, pause_below: int = CHARGE
             "timed_out": pct is None or pct < resume_at}
 
 
+# 019: a formal Mac Core A session stops, and is invalid, when a battery reading falls >= DRAIN_STOP_PTS points
+# below the highest reading of the preceding DRAIN_WINDOW_S seconds (inclusive). Readings are the battery % of the
+# before / after env captures of every process; the clock is session time minus 016 charge pauses. 1 % readings
+# make 3 points >= 2 % real loss in 30 min; slower drains are left to 016's charge gate (thresholds unchanged).
+DRAIN_WINDOW_S = 30 * 60
+DRAIN_STOP_PTS = 3
+
+
+class BatteryDrainWatch:
+    def __init__(self, window_s: float = DRAIN_WINDOW_S, stop_pts: int = DRAIN_STOP_PTS):
+        self.window_s, self.stop_pts, self.readings = window_s, stop_pts, []
+
+    def observe(self, t_s: float, pct, **where) -> dict | None:
+        """Add a reading at drain-clock time t_s; returns the stop record when the rule trips, else None."""
+        if pct is None:
+            return None
+        self.readings = [(t, p) for t, p in self.readings if t_s - t <= self.window_s] + [(t_s, pct)]
+        top = max(p for _, p in self.readings)
+        if top - pct < self.stop_pts:
+            return None
+        return {"rule": "019", **where, "pct": pct, "window_max_pct": top, "drop_pts": top - pct,
+                "window_s": self.window_s}
+
+
 def write_raw_manifest(out: Path) -> dict:
     """raw/ is kept in the local archive, not in git; this committed manifest pins its content."""
     files = {}
@@ -252,6 +284,7 @@ def run_session(
     measure_b: Callable | None = None,
     timeout_s: float = JOB_TIMEOUT_S,
     now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(),
+    clock: Callable = time.monotonic,
 ) -> dict:
     platform, mode = plan["platform"], plan["mode"]
     if platform == "macos-metal" and not mac_lock_held and path_exists(MAC_HEAVY_LOCK):
@@ -309,6 +342,20 @@ def run_session(
     bench_expect = {"build_commit": want["build_commit"], "n_threads": params["n_thr"], "poll": params["poll"],
                     "reps": params["bench_r"]}
     rows, env_flags, charge_pauses = [], [], []
+    drain_watch = BatteryDrainWatch() if (mode == "formal" and platform == "macos-metal") else None  # 019
+    battery_drain, t0, paused_s = None, clock(), 0.0
+
+    def drained(rec: dict, jid: str, phase: str) -> dict | None:
+        if drain_watch is None:
+            return None
+        pct = ((rec or {}).get("power") or {}).get("battery_pct")
+        trip = drain_watch.observe(clock() - t0 - paused_s, pct, job_id=jid, phase=phase)
+        if trip:
+            env_flags.append({"job_id": jid, "phase": phase,
+                              "reason": f"battery drain: {trip['window_max_pct']}% -> {trip['pct']}% within "
+                                        f"{DRAIN_WINDOW_S // 60} min (019: session stopped)"})
+        return trip
+
     with open(out / "rows.jsonl", "w") as rows_file:
         for i, job in enumerate(plan["jobs"]):
             if i:
@@ -331,12 +378,18 @@ def run_session(
                 pause = charge_gate(read_power, sleep)
                 if pause:
                     charge_pauses.append({"job_id": jid, **pause})
+                    paused_s += pause["waited_s"]
             ext_kind = job.get("external_memory")
             sampler = None
             if ext_kind == "nvidia-smi" and gpu_sampler is not None:
                 rel["gpu_mem_samples"] = f"raw/{jid}.gpumem.txt"
                 sampler = gpu_sampler(out / rel["gpu_mem_samples"])
             env_before = capture_env(llama_bin=llama_bin, out_path=out / rel["env_before"], gpu_lock_held=gpu_lock_held)
+            battery_drain = drained(env_before, jid, "before")
+            if battery_drain:  # 019: the process is not run; the session stops here
+                env_flags.extend({"job_id": jid, "phase": "before", "reason": why}
+                                 for why in env_problems(env_before, platform))
+                break
             if sampler is not None:
                 sampler.start()
             try:
@@ -372,12 +425,16 @@ def run_session(
             rows.append(row)
             rows_file.write(json.dumps(row) + "\n")
             rows_file.flush()
+            battery_drain = drained(env_after, jid, "after")
+            if battery_drain:  # 019: this process's row stays; nothing else runs
+                break
 
     outcomes = {"ok": 0, "oom": 0, "error": 0}
     for row in rows:
         outcomes[row["outcome"]] += 1
     session.update({"finished_at": now(), "outcomes": outcomes, "sentinel": _sentinel_summary(rows),
-                    "env_flags": env_flags, "env_valid": not env_flags, "charge_pauses": charge_pauses})
+                    "env_flags": env_flags, "env_valid": not env_flags, "charge_pauses": charge_pauses,
+                    "battery_drain": battery_drain})
     write_raw_manifest(out)
     (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
     return session

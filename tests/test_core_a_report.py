@@ -84,3 +84,13 @@ def test_rtx_sessions_need_a_session_start_b_without_drift():
     assert any("session-start B" in x for x in cr.session_problems({**base, "session_b": {"drift": True}}))
     assert cr.session_problems({**base, "session_b": {"drift": False}}) == []
     assert cr.session_problems({**base, "platform": "macos-metal"}) == []
+
+
+def test_sessions_stopped_by_the_battery_drain_rule_are_refused():
+    """019: a formal Mac Core A session that tripped the battery-drain stop is invalid as a whole, even if a
+    later edit made env_valid / sentinel look clean."""
+    base = {"mode": "formal", "env_valid": True, "sentinel": {"drift": False}, "seed": 20261008,
+            "platform": "macos-metal"}
+    assert cr.session_problems({**base, "battery_drain": None}) == []
+    (why,) = cr.session_problems({**base, "battery_drain": {"rule": "019", "drop_pts": 3}})
+    assert "battery drain" in why and "019" in why

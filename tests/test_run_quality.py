@@ -136,7 +136,8 @@ class Env:
     def __call__(self, llama_bin, out_path, gpu_lock_held):
         self.calls.append(Path(out_path).name)
         rec = {"runtime": {"llama_cpp": {"build_number": 11146, "commit": COMMIT}}, "probe_errors": [],
-               "power": {"source": "AC", "battery_pct": 80, "powermode": 2,
+               "power": {"source": "AC", "battery_pct": 80, "powermode": 0,  # 019
+                         "ac_adapter": {"wattage_w": 68, "manufacturer": "Apple Inc.", "name": "70W USB-C Power Adapter"},
                          "thermal": {"thermal_warning_recorded": False, "performance_warning_recorded": False}},
                "hardware": {"iogpu_wired_limit_mb": 0}}
         Path(out_path).write_text(json.dumps(rec))

@@ -154,13 +154,35 @@ def _read_text(path: str) -> str:
 # ------------------------------------------------------------------ parsers --
 
 
+_BATT_TIME = re.compile(r"\d+:\d+ remaining|\(no estimate\)")
+
+
 def parse_pmset_batt(text: str) -> dict:
+    """Source, percentage and the state field(s) after it ("charged", "charging", "discharging",
+    "AC attached; not charging", ...), without the time estimate (019 records the power state)."""
     m = re.search(r"Now drawing from '(AC|Battery) Power'", text)
-    pct = re.search(r"\t(\d+)%;", text)
+    pct = re.search(r"\t(\d+)%;(.*?)(?:\s+present:.*)?$", text, re.MULTILINE)
+    state = None
+    if pct:
+        parts = [x.strip() for x in pct.group(2).split(";")]
+        state = "; ".join(x for x in parts if x and not _BATT_TIME.fullmatch(x)) or None
     return {
         "source": m.group(1) if m else None,
         "battery_pct": int(pct.group(1)) if pct else None,
+        "battery_state": state,
     }
+
+
+def parse_pmset_ac(text: str) -> dict:
+    """`pmset -g ac`: wattage, manufacturer and adapter name (019). The adapter serial is never recorded."""
+    def field(name: str) -> str | None:
+        m = re.search(rf"^\s*{name}\s*=\s*(.*?)\s*$", text, re.MULTILINE)
+        return m.group(1) if m and m.group(1) else None
+
+    watt = field("Wattage")
+    w = re.fullmatch(r"(\d+)W", watt or "")
+    return {"wattage_w": int(w.group(1)) if w else None, "manufacturer": field("Manufacturer"),
+            "name": field("Adapter Name")}
 
 
 def parse_pmset_powermode(text: str) -> dict:
@@ -367,7 +389,8 @@ def capture(
     # os / hardware / power
     os_info: dict = {"system": system_name, "release": platform.release(), "machine": platform.machine(), "wsl": False}
     hardware: dict = {"cpu": None, "logical_cpus": cpu_count(), "ram_bytes": None}
-    power: dict = {"source": None, "battery_pct": None, "powermode": None, "powermode_label": None, "thermal": None}
+    power: dict = {"source": None, "battery_pct": None, "battery_state": None, "ac_adapter": None, "powermode": None,
+                   "powermode_label": None, "thermal": None}
     mac_lock: bool | None = None
     mac_lock_owner: str | None = None
 
@@ -381,6 +404,8 @@ def capture(
             "sysctl iogpu", probe("sysctl iogpu", ["sysctl", "-n", "iogpu.wired_limit_mb"])
         )
         power.update(parse_pmset_batt(probe("pmset batt", ["pmset", "-g", "batt"]) or ""))
+        ac = probe("pmset ac", ["pmset", "-g", "ac"])
+        power["ac_adapter"] = parse_pmset_ac(ac) if ac is not None else None
         mode = parse_pmset_powermode(probe("pmset settings", ["pmset", "-g"]) or "")
         power["powermode"], power["powermode_label"] = mode["powermode"], mode["label"]
         therm = probe("pmset therm", ["pmset", "-g", "therm"])
