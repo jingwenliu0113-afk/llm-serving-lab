@@ -16,9 +16,11 @@
 
 > **凍結後、任何正式數據之前，使用者 2026-10-09 上午的決定見 decision 019**：
 > - Mac 正式 run 改為 powermode 0（自動）加上原廠 70 W adapter，並新增電池下降停止規則
->   （正式 Mac Core A；quality 是否套用待使用者確認，見 019）。
+>   （正式 Mac Core A；quality 改在 RTX 執行後不適用，見 019、020）。
 > - Core B 的 `--max-num-seqs` 從 264 改為 128，grid 上限從 256 改為 128。
 > - Stage B 不拆分。
+>
+> **正式 quality 改在 RTX（wsl2-cuda）上執行，見 decision 020**（使用者同意，2026-10-09）。flag set 與所有 hypothesis 不變。
 >
 > hypothesis 與其門檻不變。下文相關處加了註記，原文不改寫。
 
@@ -182,7 +184,7 @@
 | prefill tok/s(L) | L ÷ TTFT(L)，每個 process 各自計算後再取 cell 平均（013） | 同上 |
 | decode tok/s(L) | `-p 0 -n 128 -d (L-128)` 的 `avg_ts` | `llama-bench` |
 | peak memory | **只取 fit-run process**：llama.cpp memory breakdown（model / context / compute）逐 device 與 host 報告，另列合計。Mac 另記 `/usr/bin/time -l` 的 peak memory footprint 與 maximum resident set size（pilot：footprint 不含 mmap 的權重、含 KV / compute；012）；RTX 另記 `nvidia-smi memory.used` 峰值減 B。`-lm mmap` 固定 | `llama-completion` |
-| quality | 005 | `llama-perplexity`（只在 Mac） |
+| quality | 005 | `llama-perplexity`（只在 Mac）〔凍結後註記，020：改為只在 RTX（wsl2-cuda）量，兩個 size 都搬；flag set 不變〕 |
 
 兩平台的 peak memory 依平台分別定義，**不互相比大小**（不做排名）。pilot 要先交叉核對 breakdown 與外部量測。
 
@@ -251,7 +253,7 @@ request throughput（req/s）；output token throughput 與 total token throughp
 - **Mac**：
   - 接 AC 電源；所有正式 run 的 `powermode` 都必須相同（目前為 2 = high power）；`iogpu.wired_limit_mb` 必須為 0。
     〔凍結後註記，019：使用者決定所有正式 Mac run 改為 **powermode 0（自動）**，AC 必須是 Apple 原廠 `70W USB-C Power Adapter`；
-    每個 process 前後記錄 power state。正式 Mac Core A 另有電池下降停止規則（quality 是否套用待使用者確認）：
+    每個 process 前後記錄 power state。正式 Mac Core A 另有電池下降停止規則（quality 依 020 改在 RTX，不適用）：
     任一電量讀數比它之前 30 分鐘內（扣除 016 暫停）的最大值低 ≥ 3 個百分點，就立即停止，整個 session 無效。〕
   - process 之間至少閒置 30 秒。
   - **sentinel cell**（最小 size × 最低 bit × 最短 context，由 pins 推導；目前為 4B-Q4_K_M decode @ L = 2048）在每個 session 開頭與結尾各量一次。兩次的 decode tok/s 相差 > 3% 時，

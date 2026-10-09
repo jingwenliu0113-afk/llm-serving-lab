@@ -12,7 +12,7 @@ Mac 是主要開發機：所有一般開發、Git、Claude Code session 都留�
 
 - benchmark harness
 - Core A Apple Silicon benchmark
-- quality evaluation
+- quality evaluation〔2026-10-09 起依使用者決定改在 RTX 執行，見 decision 020〕
 - configs / scripts
 - 統一結果分析
 
@@ -30,6 +30,7 @@ Mac 是主要開發機：所有一般開發、Git、Claude Code session 都留�
 - Core A NVIDIA benchmark
 - Core B vLLM benchmark
 - CUDA / GPU profiling
+- quality evaluation（2026-10-09 起，decision 020；GPU flock 下執行）
 
 路徑：
 

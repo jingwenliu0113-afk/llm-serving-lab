@@ -12,7 +12,7 @@
 | **W：工作集（實驗期間保留；可重建）** | 6 個 quantized GGUF（Core A 兩台機器都要用，sha256 已 pin） | `models/gguf/` | 保留到 Core A 與 quality 正式 run 都完成。之後可刪，因為可依 recipe 重建且有 hash 驗證 |
 | **S：可重建 scratch** | 原始 HF safetensors（可依 pinned revision 重新下載，shard sha256 已 pin） | `models/hf/<org>__<name>@<rev>/` | BF16 GGUF 產出、sha256 寫入 pins、recipe 存檔之後即可刪 |
 | **S** | BF16 GGUF（可由 safetensors 重建） | `models/gguf/` | 量化完成後仍保留，因為它是 quality 的 BF16 reference；該 size 的 quality 正式 run 完成後即可刪 |
-| **S** | KLD logits（約 74 GB / size，可由 BF16 GGUF 重建） | `data/kld/` | 只在 Stage A 凍結後的正式 quality run 時產生；同一 size 的 3 個 quant 算完即刪；**一次只存在一個 size** |
+| **S** | KLD logits（約 74 GB / size，可由 BF16 GGUF 重建） | `data/kld/`〔020 起在 WSL：`~/llm-serving-lab/data/kld/`〕 | 只在 Stage A 凍結後的正式 quality run 時產生；同一 size 的 3 個 quant 算完即刪；**一次只存在一個 size** |
 | — | quality 資料集（數 MB，sha256 已 pin） | `data/datasets/` | 保留（很小）；不進 git |
 | **K（本機 archive，不進 git）** | 各 session 的 `raw/`（process 的完整 stdout / stderr、GPU 記憶體取樣） | `results/**/raw/` | **永不刪除**；不進 git（使用者 2026-10-08 指示），以該 session 已 commit 的 `raw_manifest.json` sha256 驗證 |
 

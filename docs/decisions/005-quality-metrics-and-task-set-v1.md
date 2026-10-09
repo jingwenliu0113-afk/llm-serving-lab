@@ -39,6 +39,8 @@ SPEC 把 quality 定義為「model × quantization」的屬性：只量一次、
 
 - **平台**：Mac Metal、pinned build（002）、單一 flag set。MACHINE_POLICY 把 quality 分給 Mac，
   而且 14B BF16 reference（27.5 GiB）放不進 16 GB VRAM。
+  〔2026-10-09 起依 020（使用者同意）改在 RTX 5070 Ti 的 wsl2-cuda 上執行，兩個 size 都搬；flag set 不變，`-t` / `--poll` 改用 RTX 的 6 / 0。
+  9B BF16 會少量 spill 到系統記憶體，所有運算仍在 CUDA 上完成。〕
 - **flags**（`llama-perplexity`）：
   `-ngl 999 -fa on --fit off -ctk f16 -ctv f16 -b 2048 -ub 512 -c 512 -lm mmap -t N_thr --poll P`；
   downstream 另加 `-np 16`。PPL / KLD 模式下 n_parallel 由工具自動設為 n_batch ÷ n_ctx = 4，因此不另給 `-np`。
@@ -156,6 +158,7 @@ SPEC 把 quality 定義為「model × quantization」的屬性：只量一次、
 - quality 數字綁定 build 11146（002）、上述 flag set、`-c 512` 與 `pins.toml` 中的資料 hash。
   其中任何一項改變，都要寫新的 decision log 並**全部重跑** quality。
 - quality 只在 Mac 量一次，RTX 不重量（EXPERIMENT_RULES）。RTX 上的效能結果引用同一批 sha256 檔案的 Mac quality 數字。
+  〔020：改為只在 RTX 量一次，Mac 不量；兩個平台的效能結果都引用同一批 sha256 檔案的 RTX quality 數字。〕
 - 成本：每個 (model, quant) 約 1.42M tokens。粗估 8B 每點約 1.6 h、14B 每點約 2.8 h，8 個點約 17.6 h；
   另有 2 次 self-KLD 與 2 次跨 size PPL pass（每次約 0.3M tokens，約 0.21 個點），約 1.9 h。
   合計約 **19.5 h** 的 Mac GPU 時間（由舊版 LLaMA-7B 數據換算，**以 pilot 校準為準**）。

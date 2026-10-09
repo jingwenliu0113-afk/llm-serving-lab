@@ -62,6 +62,7 @@
     - powermode 2 時：4B pilot 在 30 分鐘內降 4 點，9B pilot 降 23 點，兩者都會觸發。
     - quality pilot 在第 36 分鐘從 powermode 2 切到 0 之後，電量從 56% 回升到 58%。
 - **quality 是否套用電池下降停止規則：待使用者確認**（〔2026-10-09 審查後更正：原本寫成使用者決定，實際上是我的解讀〕）
+  〔2026-10-09：正式 quality 改在 RTX 執行（020）。桌機沒有電池，這個問題不再存在。〕
   - 使用者的原話「Mac 正式 benchmark……若執行中電池持續明顯下降，該 run 無效並停止」沒有區分 Core A 與 quality。
     NEXT 原本的 Blocked 0 也把「Mac 正式 benchmark 的暫停」同時套用在正式 Core A 與正式 quality。
   - 我的提案是 quality 不套用，理由：
