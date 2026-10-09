@@ -9,13 +9,14 @@ Per size, in this order:
   [pilot only: a repeat of MMLU at Q8_0 (determinism)]
   -> per-chunk PPL (--ppl-output-type 1) for the H-A5(a) pair.
 One process per job; ok only with positive markers and expected counts
-(quality_parse). pilot = 20 chunks / 200 tasks; formal requires freeze.mac and
-running under tools/with-mac-lock.
+(quality_parse). pilot = 20 chunks / 200 tasks. Platform (020: quality moved to the RTX):
+macos-metal -> formal requires freeze.mac and tools/with-mac-lock (016 charge gate, 019 power state);
+wsl2-cuda -> formal requires freeze.nvidia, the §4 RTX N_thr / P and the GPU flock (RTX power-limit rule).
 
 Usage:
-    uv run python quality/run_quality.py plan --mode pilot --n-thr 8 --poll 0 --out plan.json
-    tools/with-mac-lock uv run python quality/run_quality.py run --plan plan.json \\
-        --bin third_party/llama.cpp/build-metal/bin --models models/gguf --data data --out results/quality/<session>
+    uv run python quality/run_quality.py plan --mode pilot --platform wsl2-cuda --n-thr 6 --poll 0 --out plan.json
+    flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python quality/run_quality.py run --plan plan.json --gpu-lock-held \\
+        --bin third_party/llama.cpp/build-cuda/bin --models models/gguf --data data --out results/quality/<session>
 """
 
 from __future__ import annotations
@@ -57,6 +58,9 @@ PILOT_FILES = {t: f"{{data}}/datasets/pilot/{t}-200.bin" for t in MC_TASKS}
 PILOT_FILES["winogrande"] = FORMAL_FILES["winogrande"]
 
 
+PLATFORMS = ("macos-metal", "wsl2-cuda")
+
+
 class QualityError(RuntimeError):
     pass
 
@@ -66,13 +70,22 @@ def _flags(n_thr: int, poll: int) -> list:
 
 
 def build_quality_plan(pins: dict, *, mode: str, n_thr: int, poll: int, pins_sha256: str | None = None,
-                       sizes: list | None = None) -> dict:
+                       sizes: list | None = None, platform: str = "macos-metal") -> dict:
     if mode not in ("pilot", "formal"):
         raise QualityError(f"unknown mode {mode!r}")
+    if platform not in PLATFORMS:
+        raise QualityError(f"unknown platform {platform!r}; expected one of {PLATFORMS}")
     if sizes is not None and mode == "formal":
         raise QualityError("formal quality runs cover all sizes (decision 005)")
-    if mode == "formal" and not pins["freeze"]["mac"]:
+    if mode == "formal" and platform == "macos-metal" and not pins["freeze"]["mac"]:
         raise QualityError("formal quality runs require freeze.mac = true in pins.toml (decision 006)")
+    if mode == "formal" and platform == "wsl2-cuda":
+        if not pins["freeze"]["nvidia"]:
+            raise QualityError("formal quality runs on wsl2-cuda require freeze.nvidia = true in pins.toml (006, 020)")
+        sb = pins.get("stage_b") or {}
+        if (n_thr, poll) != (sb.get("rtx_n_thr"), sb.get("rtx_poll")):
+            raise QualityError(f"formal wsl2-cuda N_thr / P must be {sb.get('rtx_n_thr')} / {sb.get('rtx_poll')} "
+                               f"(§4, pins [stage_b]), not {n_thr} / {poll}")
     pilot = mode == "pilot"
     exp = pins["quality"]["expected"]
     n_chunks = PILOT["chunks"] if pilot else exp["wikitext_chunks"]
@@ -139,7 +152,7 @@ def build_quality_plan(pins: dict, *, mode: str, n_thr: int, poll: int, pins_sha
                     {"n_chunks": n_chunks})
 
     return {
-        "schema_version": SCHEMA_VERSION, "mode": mode, "pins_sha256": pins_sha256,
+        "schema_version": SCHEMA_VERSION, "mode": mode, "platform": platform, "pins_sha256": pins_sha256,
         "params": {"n_thr": n_thr, "poll": poll},
         "expected": {"n_chunks": n_chunks, "pilot_tasks": PILOT["tasks"] if pilot else None},
         "expect_build": {"build_number": pins["llama_cpp"]["build_number"], "build_commit": pins["llama_cpp"]["commit"]},
@@ -162,6 +175,7 @@ def run_quality(
     capture_env: Callable,
     session_id: str,
     mac_lock_held: bool = False,
+    gpu_lock_held: bool = False,
     path_exists: Callable = os.path.exists,
     disk_ok: Callable = _default_disk_ok,
     run_proc: Callable = default_run_proc,
@@ -171,10 +185,15 @@ def run_quality(
     timeout_s: float = 6 * 3600,
     now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(),
 ) -> dict:
-    if not mac_lock_held and path_exists(MAC_HEAVY_LOCK):
+    platform = plan.get("platform", "macos-metal")
+    mac = platform == "macos-metal"
+    if mac and not mac_lock_held and path_exists(MAC_HEAVY_LOCK):
         raise QualityError(f"Mac heavy lock is held by another job ({MAC_HEAVY_LOCK}); do not run now (MACHINE_POLICY)")
-    if plan["mode"] == "formal" and not mac_lock_held:
+    if mac and plan["mode"] == "formal" and not mac_lock_held:
         raise QualityError("formal quality runs must run under tools/with-mac-lock (MACHINE_POLICY 'Mac Hard Lock')")
+    if not mac and plan["mode"] == "formal" and not gpu_lock_held:
+        raise QualityError("formal quality runs on the RTX must hold the GPU lock: flock -n /tmp/ai-portfolio-gpu.lock "
+                           "... --gpu-lock-held (MACHINE_POLICY)")
     out = Path(out_dir)
     if out.exists():
         raise QualityError(f"{out} exists; sessions are never resumed or overwritten")
@@ -184,19 +203,19 @@ def run_quality(
 
     bin_dir, models_dir, data_dir = str(bin_dir), str(models_dir), str(data_dir)
     exe = f"{bin_dir}/llama-perplexity"
-    pre = capture_env(llama_bin=exe, out_path=out / "env" / "preflight.json", gpu_lock_held=False)
+    pre = capture_env(llama_bin=exe, out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held)
     lc = (pre.get("runtime") or {}).get("llama_cpp") or {}
     want = plan["expect_build"]
     if lc.get("build_number") != want["build_number"] or lc.get("commit") != want["build_commit"]:
         raise QualityError(f"llama.cpp build mismatch: {lc} vs {want}")
     if plan["mode"] == "formal":
-        bad = mac_config_problems(pre)
+        bad = mac_config_problems(pre) if mac else env_problems(pre, platform)  # 019 Mac power / §4 RTX power limit
         if bad:
             raise QualityError("formal quality run refused before it starts: " + "; ".join(bad))
 
-    session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "mode": plan["mode"],
+    session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "mode": plan["mode"], "platform": platform,
                "plan_sha256": sha256_json(plan), "pins_sha256": plan.get("pins_sha256"),
-               "mac_lock_held": mac_lock_held, "started_at": now()}
+               "mac_lock_held": mac_lock_held, "gpu_lock_held": gpu_lock_held, "started_at": now()}
     rows, by_id, skipped_sizes, env_flags, charge_pauses = [], {}, set(), [], []
     resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace("{data}", data_dir)  # noqa: E731
     with open(out / "rows.jsonl", "w") as fh:
@@ -227,15 +246,15 @@ def run_quality(
                 argv = [resolve(a) for a in job["argv"]]
                 rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
                        "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json"}
-                pause = charge_gate(read_power, sleep)  # 016
+                pause = charge_gate(read_power, sleep) if mac else None  # 016 (the desktop has no battery)
                 if pause:
                     charge_pauses.append({"job_id": jid, **pause})
-                env_before = capture_env(llama_bin=exe, out_path=out / rel["env_before"], gpu_lock_held=False)
+                env_before = capture_env(llama_bin=exe, out_path=out / rel["env_before"], gpu_lock_held=gpu_lock_held)
                 code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
-                env_after = capture_env(llama_bin=exe, out_path=out / rel["env_after"], gpu_lock_held=False)
+                env_after = capture_env(llama_bin=exe, out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
                 for phase, rec in (("before", env_before), ("after", env_after)):
                     env_flags.extend({"job_id": jid, "phase": phase, "reason": why}
-                                     for why in env_problems(rec, "macos-metal"))
+                                     for why in env_problems(rec, platform))
                 res = qp.classify(kind, code, (out / rel["stdout"]).read_text(errors="replace"),
                                   (out / rel["stderr"]).read_text(errors="replace"), job["expect"])
                 row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, **res, "disk_guard": guard, **rel}
@@ -263,16 +282,18 @@ def main(argv: list | None = None) -> int:
     p_plan.add_argument("--poll", type=int, required=True)
     p_plan.add_argument("--out", required=True)
     p_plan.add_argument("--sizes", nargs="+", default=None, help="pilot only: restrict to these sizes")
+    p_plan.add_argument("--platform", choices=PLATFORMS, default="macos-metal")
     p_run = sub.add_parser("run")
     for a in ("--plan", "--bin", "--models", "--data", "--out"):
         p_run.add_argument(a, required=True)
     p_run.add_argument("--session-id", default=None)
+    p_run.add_argument("--gpu-lock-held", action="store_true", help="set when running under the WSL GPU flock")
     args = parser.parse_args(argv)
 
     if args.cmd == "plan":
         raw = (ROOT / "configs" / "pins.toml").read_bytes()
         plan = build_quality_plan(tomllib.loads(raw.decode()), mode=args.mode, n_thr=args.n_thr, poll=args.poll,
-                                  pins_sha256=hashlib.sha256(raw).hexdigest(), sizes=args.sizes)
+                                  pins_sha256=hashlib.sha256(raw).hexdigest(), sizes=args.sizes, platform=args.platform)
         Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
         return 0
     plan = json.loads(Path(args.plan).read_text())
@@ -282,7 +303,7 @@ def main(argv: list | None = None) -> int:
             data_dir=Path(args.data).resolve(), out_dir=args.out,
             capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"),
             session_id=args.session_id or Path(args.out).name,
-            mac_lock_held=os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1",
+            mac_lock_held=os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1", gpu_lock_held=args.gpu_lock_held,
         )
     except QualityError as exc:
         print(f"run_quality: {exc}", file=sys.stderr)

@@ -238,3 +238,95 @@ def test_quality_session_pauses_to_charge(tmp_path, monkeypatch, pins):
     summary, rows, _ = run(tmp_path, monkeypatch, small(pins),
                            read_power=lambda: {"source": "AC", "battery_pct": next(levels)})
     assert len(summary["charge_pauses"]) == 1 and summary["charge_pauses"][0]["to_pct"] == 95
+
+
+# ------------------------------------------------------------ 020: on the RTX --
+
+
+def rtx_frozen(pins):
+    p = copy.deepcopy(pins)
+    p["freeze"]["mac"] = p["freeze"]["nvidia"] = True
+    return p
+
+
+def test_rtx_plan_records_the_platform_and_needs_the_stage_b_freeze_and_params(pins):
+    """020: quality runs on wsl2-cuda; formal needs freeze.nvidia and the §4 RTX N_thr / P from pins [stage_b]."""
+    p = rtx_frozen(pins)
+    sb = p["stage_b"]
+    formal = plan(p, mode="formal", platform="wsl2-cuda", n_thr=sb["rtx_n_thr"], poll=sb["rtx_poll"])
+    assert formal["platform"] == "wsl2-cuda" and formal["params"] == {"n_thr": sb["rtx_n_thr"], "poll": sb["rtx_poll"]}
+    assert plan(pins)["platform"] == "macos-metal"  # default unchanged
+    unfrozen = copy.deepcopy(p)
+    unfrozen["freeze"]["nvidia"] = False
+    with pytest.raises(rq.QualityError, match="freeze.nvidia"):
+        plan(unfrozen, mode="formal", platform="wsl2-cuda", n_thr=sb["rtx_n_thr"], poll=sb["rtx_poll"])
+    with pytest.raises(rq.QualityError, match="N_thr / P"):
+        plan(p, mode="formal", platform="wsl2-cuda", n_thr=8, poll=0)
+    with pytest.raises(rq.QualityError, match="platform"):
+        plan(p, platform="cuda-native")
+    # the job list is the same protocol on both platforms (only -t / --poll differ)
+    mac = plan(p, mode="formal", n_thr=6, poll=0)
+    assert [j["id"] for j in mac["jobs"]] == [j["id"] for j in formal["jobs"]]
+    assert [j.get("argv") for j in mac["jobs"]] == [j.get("argv") for j in formal["jobs"]]
+
+
+class RtxEnv:
+    def __init__(self, enforced=300.0):
+        self.calls, self.enforced = [], enforced
+
+    def __call__(self, llama_bin, out_path, gpu_lock_held):
+        self.calls.append((Path(out_path).name, gpu_lock_held))
+        rec = {"runtime": {"llama_cpp": {"build_number": 11146, "commit": COMMIT}}, "probe_errors": [],
+               "power": {"source": None, "battery_pct": None, "thermal": None},
+               "gpu": {"nvidia": [{"enforced_power_limit_w": self.enforced, "power_default_limit_w": 300.0}]}}
+        Path(out_path).write_text(json.dumps(rec))
+        return rec
+
+
+def rtx_small(pins, mode="pilot"):
+    p = rtx_frozen(pins)
+    p["core_a"]["models"] = p["core_a"]["models"][:1]
+    return plan(p, mode=mode, platform="wsl2-cuda", n_thr=p["stage_b"]["rtx_n_thr"], poll=p["stage_b"]["rtx_poll"])
+
+
+def run_rtx(tmp_path, monkeypatch, plan_obj, env, **kw):
+    battery = []
+    kw.setdefault("read_power", lambda: battery.append(1) or {"source": "AC", "battery_pct": 10})
+    kw.setdefault("path_exists", lambda p: True)  # a Mac lock path must not matter on the RTX
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    exe = bin_dir / "llama-perplexity"
+    exe.write_text(f"#!{sys.executable}\n{FAKE_PPL}")
+    exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
+    data = tmp_path / "data"
+    (data / "kld").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("FAKE_FULL_CHUNKS", str(plan_obj["expected"]["n_chunks"]))
+    monkeypatch.setenv("FAKE_TASKS", str(plan_obj["expected"]["pilot_tasks"] or 200))
+    summary = rq.run_quality(plan_obj, bin_dir=bin_dir, models_dir=tmp_path / "models", data_dir=data,
+                             out_dir=tmp_path / "out", capture_env=env, session_id="q-rtx",
+                             disk_ok=lambda path, need_gib: {"ok": True}, sleep=lambda s: None, **kw)
+    return summary, battery
+
+
+def test_rtx_quality_runs_under_the_gpu_lock_without_battery_or_mac_lock_rules(tmp_path, monkeypatch, pins):
+    env = RtxEnv()
+    summary, battery = run_rtx(tmp_path, monkeypatch, rtx_small(pins), env, gpu_lock_held=True)
+    assert summary["outcomes"]["error"] == 0 and summary["env_valid"] is True
+    assert summary["platform"] == "wsl2-cuda" and summary["gpu_lock_held"] is True
+    assert battery == [] and summary["charge_pauses"] == []  # no battery, no 016 gate on the desktop
+    assert all(held is True for _, held in env.calls)
+
+
+def test_rtx_formal_quality_needs_the_gpu_lock_and_the_default_power_limit(tmp_path, monkeypatch, pins):
+    with pytest.raises(rq.QualityError, match="GPU lock"):
+        run_rtx(tmp_path, monkeypatch, rtx_small(pins, mode="formal"), RtxEnv())
+    (tmp_path / "b").mkdir()
+    with pytest.raises(rq.QualityError, match="power limit"):
+        run_rtx(tmp_path / "b", monkeypatch, rtx_small(pins, mode="formal"), RtxEnv(enforced=250.0),
+                gpu_lock_held=True)
+
+
+def test_rtx_env_flags_use_the_rtx_rule(tmp_path, monkeypatch, pins):
+    summary, _ = run_rtx(tmp_path, monkeypatch, rtx_small(pins), RtxEnv(enforced=250.0), gpu_lock_held=True)
+    assert summary["env_valid"] is False
+    assert all("power limit" in f["reason"] for f in summary["env_flags"])
