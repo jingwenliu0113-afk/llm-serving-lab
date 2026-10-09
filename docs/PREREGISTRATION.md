@@ -15,7 +15,8 @@
 > 唯一的文字更正是 017 的 log 驗證句（0.30.0 不會印出），改以 non-default args 驗證同一件事。
 
 > **凍結後、任何正式數據之前，使用者 2026-10-09 上午的決定見 decision 019**：
-> - Mac 正式 run 改為 powermode 0（自動）加上原廠 70 W adapter，並新增電池下降停止規則（只適用正式 Mac Core A）。
+> - Mac 正式 run 改為 powermode 0（自動）加上原廠 70 W adapter，並新增電池下降停止規則
+>   （正式 Mac Core A；quality 是否套用待使用者確認，見 019）。
 > - Core B 的 `--max-num-seqs` 從 264 改為 128，grid 上限從 256 改為 128。
 > - Stage B 不拆分。
 >
@@ -249,7 +250,7 @@ request throughput（req/s）；output token throughput 與 total token throughp
 - **Mac**：
   - 接 AC 電源；所有正式 run 的 `powermode` 都必須相同（目前為 2 = high power）；`iogpu.wired_limit_mb` 必須為 0。
     〔凍結後註記，019：使用者決定所有正式 Mac run 改為 **powermode 0（自動）**，AC 必須是 Apple 原廠 `70W USB-C Power Adapter`；
-    每個 process 前後記錄 power state。正式 Mac Core A 另有電池下降停止規則：
+    每個 process 前後記錄 power state。正式 Mac Core A 另有電池下降停止規則（quality 是否套用待使用者確認）：
     任一電量讀數比它之前 30 分鐘內（扣除 016 暫停）的最大值低 ≥ 3 個百分點，就立即停止，整個 session 無效。〕
   - process 之間至少閒置 30 秒。
   - **sentinel cell**（最小 size × 最低 bit × 最短 context，由 pins 推導；目前為 4B-Q4_K_M decode @ L = 2048）在每個 session 開頭與結尾各量一次。兩次的 decode tok/s 相差 > 3% 時，

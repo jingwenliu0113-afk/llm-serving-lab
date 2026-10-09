@@ -93,55 +93,50 @@ NVIDIA 端（Stage B）平行推進中。Advanced / Optional 皆未觸碰。
 
 ## Blocked / 需要使用者
 
-0. **解除 Mac 正式 benchmark 的暫停**（使用者 2026-10-09 指示）：正式 Core A、正式 quality、任何 Mac heavy run 都等使用者通知。
-   - §4 規定正式 run 的 **powermode 必須為 2（高效能）**、`iogpu.wired_limit_mb` 必須為 0。
-     018 起 harness 會強制檢查；目前是 powermode 0（「自動」），正式 run 會在開跑前被拒絕。
-     請使用者在正式 run 前切到「高效能」；這是系統設定，我不會修改。
-   - 建議接上 ≥ 96 W adapter（見 1 與 4）。
+0. **AC 的能源模式目前是「高效能」（powermode 2），正式 Mac Core A 無法開始**
+   - 019 依使用者決定，要求正式 Mac run 用自動模式（powermode 0）。
+   - 09:30 時讀到 0，09:56 讀到 AC 設定為 2（`pmset -g custom`：AC Power powermode 2、Battery Power powermode 0）。
+   - 請到「系統設定 > 電池 > 能源模式 > 接上電源轉接器時」選「自動」。這是系統設定，我不會修改。
+   - 背景已有唯讀 watcher（`wait_power_then_formal_a.sh`）每 2 分鐘檢查一次。
+     條件是 AC、powermode 0、Apple 70W adapter，而且 Mac lock 空著；一符合就在 Mac lock 下自動開始正式 Mac Core A，不必再通知我。
 
-1. **正式 quality：磁碟空間，以及 016 的充電門檻**（Mac；不影響 Core A）
-   - 充電門檻（018 第 6 點）：正式 quality 中 9B 的 MC job 長 38–59 分鐘，從 40% 開始跑可能跌破 20%，使整個 session 作廢。
-     改門檻屬於修改凍結的 §4，不自行處理。選項：
-     - 換 ≥ 96 W adapter：不必改任何規則。
-     - 或同意為 quality 補一則 016 addendum（例如暫停門檻 75%）；程式已參數化。
-   - 目前可用 94 GiB。每個 size 的 KLD logits 約需 70 GiB，加上 `disk_guard` 的 50 GiB 保留量，共 120 GiB。
-   - 即使依 STORAGE_PLAN 暫時刪掉另一個 size 的 quant（4B 約 11 GB，9B 約 23 GB；之後可從 BF16 重建），仍不夠。
-     BF16 不能刪：safetensors 已刪，BF16 無法重建。
+1. **正式 quality：磁碟空間**（Mac；不影響 Core A）
+   - 使用者決定（2026-10-09，019 §4）：
+     - 016 的門檻不改，也不等 ≥ 96 W adapter。
+     - 先清理可重建的 scratch；manifest、結果、hash、recipe 不刪。
+     - 仍不足時，quality 維持 blocked。
+   - 已清理：本 session scratchpad 中研究用的原始碼與 wheel 解壓檔、舊 tar，約 2.2 GB。其餘可重建的 scratch 很少：
+     - `third_party/convert-venv`（0.5 GB）：重建 BF16 時要用，保留。
+     - `~/.cache/huggingface` 的 1.4 GB 不屬於本專案，不動。
+   - 現在可用 **94 GiB**。quality 需要 KLD 約 70 GiB 加上 50 GiB 保留量，共 120 GiB，**差約 26 GiB，所以 quality 維持 blocked**。
+   - Mac Core A 正式 run 完成後，依 STORAGE_PLAN 既定做法再實測一次（以 `disk_guard` 為準）。
+     既定做法：跑某個 size 的 quality 時，暫時移除另一個 size 的 3 個 quant，之後以 `produce_gguf.py produce` 從 BF16 依 sha256 重建。
+     - 4B quality 時移除 9B 的 quant（約 21 GiB），可用約 115 GiB，仍差約 5 GiB。
+     - 9B quality 時移除 4B 的 quant 與已用完的 4B BF16（約 18 GiB），可用約 112 GiB，仍差約 8 GiB。
    - 需要使用者擇一：
-     - 釋出約 30 GiB 以上的空間；
-     - 或同意把 KLD 檔放到外接 / 其他磁碟。
-   - 降低 50 GiB 保留量屬於規則變更，我不會自行修改。
-2. **Core B：`--max-num-seqs 264` 在這張卡上無法啟動（凍結的 §4 / 007，要由使用者決定）**
-   - 原因：Qwen3.5 是 hybrid 模型，每條 decode 序列需要一個 GDN（Mamba）狀態 block，約 50 MiB。
-     vLLM 0.30.0 在 FULL CUDA graph 下要求 max_num_seqs ≤ num_gpu_blocks。
-     U = 0.91 時 num_gpu_blocks = 134；264 條序列光是 GDN 狀態就要 13 GiB 以上，16 GB 卡上不論 U 為何都不可能達成。
-   - 007 選 264 的目的，是讓 knee 不會被 scheduler 上限截斷（grid 上限 256）。
-     實測 num_gpu_blocks = 134 時，依 §2 公式 C_KV(2K) = ⌊133 ÷ 7⌋ = 19、C_KV(8K) = 7、C_KV(32K) = 1，knee 遠低於 128。
-   - 選項（都要寫 decision log，並標明是凍結後、但在任何 Core B 數據之前的變更）：
-     - **(建議) A**：`--max-num-seqs 128`（8 的倍數，且 ≤ num_gpu_blocks），grid 上限從 256 改為 128，其餘規則不變。
-       H-B1 需要 grid 涵蓋 4 × C_knee：以 C_KV 估計約 76 ≤ 128，仍可檢驗。
-     - B：保留 264，改用 PIECEWISE-only 的 CUDA graph（`--compilation-config '{"cudagraph_mode": "PIECEWISE"}'`）。
-       decode 沒有 FULL graph，偏離 vLLM 預設，throughput 會偏低。
-     - C：保留 264，加 `--enforce-eager`。完全沒有 CUDA graph，偏離最大，不建議。
-   - 在決定之前不會跑任何 Core B 的 Stage B 或正式量測；baseline B 已量好，可以沿用。
-   - **另一個選擇（Blocked 3）**：如果 Blocked 2 需要時間決定，可以先把 Stage B 拆開凍結。
-3. **（可選）Stage B 拆成兩段凍結，讓正式 RTX Core A 先跑**
-   - 現況：Core A 在 RTX 上需要的 Stage B 值都已量完，並依規則算出，沒有任何自由度。
-     §6 剩下的 K、num_gpu_blocks、pin-memory A/B 等都屬於 Core B，卡在 Blocked 2。
-   - 006 規定的是 Stage B 整段一次凍結（`freeze.nvidia`），所以正式 RTX Core A（約 3.6 小時）也要等。
-   - 拆成兩段是修改 006 的結構，所以不自行處理：
-     - B1：Core A RTX 部分，現在就能凍結。
-     - B2：Core B 部分，等 Blocked 2 決定後再凍結。
-   - 拆開不會產生事後調整的空間：B1 的值都是實測值或依凍結規則決定，Core B 的規則也已在 Stage A 凍結。
-   - 若使用者同意，我會：
-     - 寫 decision log；
-     - 把 `freeze.nvidia` 拆成 `nvidia_core_a` / `nvidia_core_b`，並加上測試；
-     - 凍結 B1 後，在 GPU lock 下跑正式 RTX Core A。
-   - 如果 Blocked 2 直接選 A，整段 Stage B 可以一次凍結，就不需要拆。
-4. **建議（非 blocker）**：Mac 換 ≥ 96 W 的 adapter。
-   - 016 已讓長 session 在 70 W 下仍有效，但充電暫停會讓正式 Core A 從約 17 h 拉長到約 1.5–2 倍。
-5. **建議（非 blocker）**：正式 Mac run 期間盡量少開前景程式。
-   - 4B pilot 時前景負載的 loadavg 為 6–9，CV 5.9%；9B pilot 在深夜，CV 1.0%。
-   - 前景負載不會讓 session 作廢，但會增加 noise。
+     - 釋出約 10 GiB 以上的空間；
+     - 同意 KLD 放到其他磁碟；
+     - 同意在 4B quality 期間暫時刪除 9B BF16（S 級）。
+       之後要重新下載 pinned safetensors（19.3 GB），轉回 BF16 後 sha256 必須與 pins 相同。這需要下載，所以要使用者同意。
+   - 我不會降低 50 GiB 的保留量。
+   - **另一個待確認問題：quality 是否套用 019 的電池下降停止規則**（019 第 1 節）。
+     你的原話沒有區分 Core A 與 quality。我的提案是 quality 不套用，理由：
+     - quality 的結果是確定性的；
+     - 單一 job 長 38–59 分鐘，30 分鐘視窗只看前後讀數會涵蓋不到。
 
-已解決：遠端 SSH（2026-10-08）、WSL compiler（使用者已安裝）。llama.cpp 的 CUDA 12.8 系統套件已改用 user-space 路線，不再需要（015）。
+     確認之前不跑正式 quality。若要套用，我會加入 job 進行中的電量取樣。
+
+## 建議（非 blocker）
+
+- 正式 Mac run 期間盡量少開前景程式。
+  - 前景負載不會讓 session 作廢，但會增加 noise。
+  - 4B pilot 時前景 loadavg 為 6–9，CV 5.9%；9B pilot 在深夜，CV 1.0%。
+
+已解決：
+- 遠端 SSH（2026-10-08）。
+- WSL compiler（使用者已安裝）。
+- llama.cpp 的 CUDA 12.8 系統套件：改走 user-space 路線，不再需要（015）。
+- 2026-10-09 上午，使用者決定（decision 019）：
+  - Mac 正式 run 解除暫停，改用自動電力模式加上原廠 70 W adapter，並加上電池下降停止規則；
+  - Core B 選 A（`--max-num-seqs 128`，grid 上限 128）；
+  - Stage B 不拆分。

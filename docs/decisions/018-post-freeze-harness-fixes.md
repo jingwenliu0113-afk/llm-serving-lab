@@ -17,6 +17,7 @@
 ### 1. Mac 的正式 run（§4、004、012）
 
 - §4 規定「所有正式 run 的 `powermode` 都必須相同（目前為 2 = high power）；`iogpu.wired_limit_mb` 必須為 0」。
+  〔2026-10-09：使用者決定改為 powermode 0（自動），並要求原廠 70 W adapter，見 019。下列「powermode 2」的敘述屬於歷史。〕
   env_capture 一直有記錄這兩個值，但從未檢查。
   - 現在 `env_problems`（macos-metal）會在每個 process 前後檢查。
   - 正式 Core A 與正式 quality 的 preflight 若不符，在開跑前就拒絕。
@@ -112,4 +113,14 @@
   - 018 讓 `build_plan` 拒絕非 §4 的正式 seed，以及 P 未定時的 RTX plan。
   - pilot report 只為計算 job 數就建立了這樣的 plan，所以在 RTX pilot 之後失敗。
   - 已改用 `formal_job_counts`；job 集合不受 seed / N_thr / P 影響（見 012 的 RTX 補充）。
+
+## 補充（2026-10-09 10:xx）：`core_b_report` 不檢查 env_valid
+
+- 019 的審查發現：正式 `run_core_b` 會記錄 env_flags / env_valid。這些檢查涵蓋每次 restart 前後的 env，
+  包括 §4 RTX 的 power limit，以及讀不到值的情況。
+  但 `core_b_report.report()` 只檢查 formal、derived_from、server 設定與 C_knee。
+  所以 restart 中途 power limit 改變或 nvidia-smi 失敗時，session 雖為 env-invalid，仍會被算出判定。
+- `core_a_report` 與 `quality_analysis` 都會拒絕 env-invalid 的 session（§4、012、013），Core B 卻沒有。這是凍結前就存在的漏洞。
+- 已補上：uniform 或 mixed session 的 env_valid 不是 true，或是缺少這個欄位，report 一律拒絕。測試已更新。
+  這只是讓程式落實既有規則，規則不變。
 

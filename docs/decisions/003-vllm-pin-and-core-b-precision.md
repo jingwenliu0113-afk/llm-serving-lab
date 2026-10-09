@@ -2,6 +2,8 @@
 
 > **2026-10-08：Core B 的模型 / precision / dtype 已由 008 取代**（改為 `RedHatAI/Qwen3.5-9B-quantized.w4a16`、`--dtype bfloat16`）。vLLM 版本與其餘 server protocol 仍有效；hybrid 模型需要的新 flag 見 008。下方內容保留作為決策歷史。
 
+> **2026-10-09：`--max-num-seqs` 由 264 改為 128，grid 上限由 256 改為 128（019，使用者決定）。**
+
 - 狀態：**Core B 模型已由使用者固定為 `Qwen3-8B-AWQ`（2026-10-08）**；vLLM 環境待 RTX 5070 Ti smoke test 通過後改為 Accepted
 - 日期：2026-10-08
 - 對應：SPEC Day 1 #3「固定 vLLM 版本」、SPEC Core B「固定一種 precision」
@@ -83,7 +85,7 @@ f16 KV 144 KiB/token。**全部是估計值**，以實機 log 的 `GPU KV cache 
 | prefix caching | `--no-enable-prefix-caching` | vLLM 預設開啟，但 prefix caching 是 SPEC Advanced 變因；而且固定 seed 的 random dataset 重跑時會被 cache 灌水 |
 | chunked prefill | 保持預設 on，但明確寫出 | batching policy 屬 Advanced，Core 固定一種 |
 | `--max-num-batched-tokens` | `2048`（16 GB GPU 的預設值，明確寫出） | 同上 |
-| `--max-num-seqs` | 264（8 的倍數，且大於 grid 上限 256；007） | 避開 #57355；確保 knee 不是 scheduler 上限造成的 |
+| `--max-num-seqs` | 264（8 的倍數，且大於 grid 上限 256；007）〔2026-10-09 起依 019 改為 128，與 grid 上限 128 相等；仍是 8 的倍數〕 | 避開 #57355；確保 knee 不是 scheduler 上限造成的〔019：vLLM 0.30.0 在 FULL CUDA graph 加上 Mamba 層時要求 max_num_seqs ≤ num_gpu_blocks〕 |
 | performance mode / async scheduling | `--performance-mode balanced`（0.30.0 預設）與 async scheduling 的實際生效值，都明確寫入啟動指令，並從 engine config log 驗證 | 兩者都屬 batching / scheduler policy，Core 必須固定 |
 | `--max-model-len` | **32768，所有 level 與 mix 共用同一個 server 設定**（007） | 讓 request 留在原生 32k window 內；level 之間只差在 request 長度，不會改變 scheduler / CUDA graph 的上限。預設 40960 只有在 KV 池小於 5.625 GiB（一條 40960-token 序列）時才會啟動失敗；以 AWQ 的估計 KV 池不會，但不能依賴預設值 |
 | KV 池大小 | `--kv-cache-memory-bytes` 固定值；每次 run 記錄 log 的 `GPU KV cache size: N tokens` | 冷 / 熱 compile cache 會讓 KV 池相差約 5%（#54383）；先做一次丟棄用的 boot |
@@ -127,6 +129,7 @@ GPU lock 依 MACHINE_POLICY：步驟 1–2 是小型啟動 smoke test，**不需
   - 這是工具檢查，不是量測。
 - 第 6 項的 idle baseline 已量（B = 811 MiB，見 Stage B 結果）。
 - 第 3–4 項依 017 執行，但被 `--max-num-seqs 264` 的啟動問題擋住，見 NEXT 的 Blocked 2。
+  〔2026-10-09：019 改為 `--max-num-seqs 128` 後解除；第 3–4 項以新限制繼續，結果見 PREREGISTRATION §6。〕
 
 ## 放棄的替代方案
 
