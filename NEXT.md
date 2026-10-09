@@ -10,7 +10,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–020。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–021。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -101,9 +101,14 @@
       - `quality_analysis.py`。
       - frontier 圖，要註明 quality 是在 wsl2-cuda 上量的。
 2. **Mac**：a2 跑完後跑 `core_a_report.py` 與 `core_a_figures.py`，commit session，移除 worktree。
-3. **deployment decision table**（SPEC）：規則在其餘正式數據出來前寫定（decision 021，設計中）。
-   設計 agent 不讀 `results/`，以免規則受數據影響；但我已看過 RTX Core A 的結果，021 會照實寫明。
-4. **全部正式數據完成後**：依 021 產生決策表，寫結論。
+3. **deployment decision table**（SPEC）：
+   - 規則 decision 021 已 commit（`41798d7`），generator `benchmarks/decision_table.py` 與 40 個測試已 commit（`278ff82`）。
+     兩者都在 a2、正式 quality、正式 Core B 的分析出現之前（021 R0）。
+   - 設計 agent 不讀 `results/`；我已看過 RTX Core A 的結果，021 已照實揭露。
+   - generator 的 review workflow 進行中。**審查修正 commit 之前，不跑 a2 的 `core_a_report`**，
+     確保任何修正都發生在看到新數據之前。
+   - generator 的第一次真實執行要在所有正式分析都完成之後，輸出照原樣 commit（R0）。
+4. **全部正式數據完成後**：跑 `decision_table.py`，寫結論。
 
 ## Blocked / 需要使用者
 
