@@ -42,9 +42,13 @@ re-review 另外指出：如果 mix 的長度、比例與 concurrency grid 留�
   `/metrics` 的 `vllm:cache_config_info`，`GPU KV cache size` 只作交叉核對（PREREGISTRATION §2）。
   （歷史：008 之前為 ⌊KV 池 tokens ÷ ⌈L ÷ 16⌉·16⌋，KV 池 tokens 取 server log 的 `GPU KV cache size`。）
 - grid = {1, 2, 4, …, C_hi}，其中 C_hi = 大於等於 max(8, 8 × C_KV) 的最小 2 的冪次，上限 256。
+  〔2026-10-09 起依 019 改為上限 128。〕
   8 × C_KV 等於 H-B2 預測區間上界（2 × C_KV）的 4 倍。
 - 另外加入 round(C_KV × 2^(k/2))，k ∈ {−2, −1, 0, 1, 2}（≥ 1，去除重複），讓預測的 knee 附近比 2 倍更細。
 - `--max-num-seqs 264`（8 的倍數，且大於 grid 上限 256），確保 knee 不會是 scheduler 上限造成的。
+  〔2026-10-09 起依 019 改為 128，與 grid 上限相等。
+  原因：vLLM 0.30.0 在 FULL CUDA graph 加上 Mamba 層時要求 max_num_seqs ≤ num_gpu_blocks，而這張卡上只有 134 個。
+  `mixed` dataset 維持原本的 2560 列。〕
 - 每個 C：num-prompts = max(10 × C, 200)，warmup = C 個 request。
 - 每個 (L, mix) 做 3 次 server restart；每次 restart 內，C 的執行順序以固定 seed 隨機排列。
 

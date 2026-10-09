@@ -3,18 +3,19 @@
 
 - C_KV(L) = floor((num_gpu_blocks - 1) / (ceil(L / block_size) + 3)), num_gpu_blocks and
   block_size from /metrics vllm:cache_config_info (Stage B values).
-- grid = {1, 2, 4, ..., C_hi} with C_hi = smallest power of two >= max(8, 8 x C_KV), cap 256,
+- grid = {1, 2, 4, ..., C_hi} with C_hi = smallest power of two >= max(8, 8 x C_KV), cap 128 (019; 007 had 256),
   plus round(C_KV x 2^(k/2)) for k in -2..2 (>= 1, deduplicated). "round" is half-up
   (x.5 -> up), never Python's banker's rounding.
 - every C: num-prompts = max(10 C, 200), warmups = C; 3 server restarts per (L, mix);
   C order per restart is a seeded permutation stored in the plan.
-- one shared server config for all levels and mixes: --max-model-len 32768, --max-num-seqs 264.
+- one shared server config for all levels and mixes: --max-model-len 32768, --max-num-seqs 128 (019: vLLM 0.30.0
+  needs max_num_seqs <= num_gpu_blocks under FULL CUDA graphs with Mamba layers; 007 had 264).
 - `mixed` (H-B4 only, L in {2048, 8192}): 90% (L - 128, 128) + 10% (32640, 128), a custom
   dataset built with vLLM's own RandomDataset (same generator, seed and input length as
   `uniform`, so the short prompts follow the uniform distribution; token content can differ
   because RandomDataset's re-encode padding draws depend on num_requests, 013) in blocks of
-  ten (9 short + 1 long, seeded order inside each block), MIXED_ROWS = num-prompts at the
-  grid cap. It is read in file order (--disable-shuffle), so the first N rows hold exactly
+  ten (9 short + 1 long, seeded order inside each block), MIXED_ROWS = 2560 = num-prompts at the
+  007 grid cap 256 (kept when 019 lowered the cap to 128). It is read in file order (--disable-shuffle), so the first N rows hold exactly
   N / 10 long prompts for any C; its sha256 is pinned at Stage B (core_b.mix_dataset_sha256),
   before C_knee is known.
 - client (013): --temperature 0 (vLLM 0.30.0 `bench serve` no longer sends it), the pinned
@@ -38,18 +39,18 @@ LONG_INPUT = 32640  # 32768 - 128
 SEED = 20261008
 RESTARTS = 3
 MAX_MODEL_LEN = 32768
-MAX_NUM_SEQS = 264
+MAX_NUM_SEQS = 128              # 019 (007 had 264)
 MAX_NUM_BATCHED_TOKENS = 2048  # 003: the 16 GB default, written explicitly
 UTIL_MARGIN_MIB = 512          # 017
 KV_ROUND_MIB = 256             # 017
-GRID_CAP = 256
+GRID_CAP = 128                  # 019 (007 had 256)
 HF_HOME = "/home/wenn0113/.cache/huggingface"
 PROJECT_DIR = "/home/wenn0113/llm-serving-lab"
 VENV_BIN = f"{PROJECT_DIR}/.venv/bin"
 # decision 014: user-space CUDA_HOME for FlashInfer's sampler JIT, pointing at the hash-locked pip CUDA 13
 # (nvidia/cu13: nvcc 13.4.92, cudart 13, curand headers); created by scripts/wsl_cuda_home_shim.sh
 FLASHINFER_CUDA_HOME = f"{PROJECT_DIR}/.cuda-home-cu13"
-MIXED_ROWS = 10 * GRID_CAP  # = num_prompts(GRID_CAP)
+MIXED_ROWS = 2560  # num_prompts(256), the 007 cap the pinned dataset was built at; >= num_prompts(GRID_CAP) (019)
 
 
 class PlanError(ValueError):

@@ -22,18 +22,27 @@ def test_round_half_up_not_bankers():
 
 def test_grid_rule_007():
     g = bp.concurrency_grid(22)
-    # powers of two up to the smallest >= max(8, 8 x 22) = 176 -> 256 (cap 256)
-    assert {1, 2, 4, 8, 16, 32, 64, 128, 256} <= set(g)
+    # powers of two up to the smallest >= max(8, 8 x 22) = 176 -> 256, capped at 128 (019; 007 had 256)
+    assert {1, 2, 4, 8, 16, 32, 64, 128} <= set(g)
     # refinement round(22 x 2^(k/2)), k = -2..2 -> 11, 16 (15.56), 22, 31 (31.11), 44
     assert {11, 16, 22, 31, 44} <= set(g)
-    assert g == sorted(set(g)) and max(g) == 256
+    assert g == sorted(set(g)) and max(g) == 128
 
 
 def test_grid_small_c_kv_and_cap():
     assert bp.concurrency_grid(1) == [1, 2, 4, 8]  # C_hi = max(8, 8) = 8; refinement 1 (0.5 -> 1), 1, 1, 1, 2
     assert bp.concurrency_grid(2) == [1, 2, 3, 4, 8, 16]  # refinement 1, 1 (1.41), 2, 3 (2.83), 4
-    assert max(bp.concurrency_grid(200)) == 256  # 8 x 200 = 1600 -> capped at 256
-    assert all(c <= 256 for c in bp.concurrency_grid(200))
+    assert max(bp.concurrency_grid(200)) == 128  # 8 x 200 = 1600 -> capped at 128 (019)
+    assert all(c <= 128 for c in bp.concurrency_grid(200))
+    assert bp.concurrency_grid(200) == [1, 2, 4, 8, 16, 32, 64, 100, 128]  # refinement 100 kept, 141..400 dropped
+
+
+def test_scheduler_and_mixed_dataset_cover_the_grid_cap_019():
+    # 019: --max-num-seqs 128 = grid cap 128, so the scheduler never admits fewer sequences than a tested C;
+    # the pinned mixed dataset (2560 rows, built at the 007 cap 256) still holds num_prompts(cap) rows
+    assert bp.MAX_NUM_SEQS == bp.GRID_CAP == 128
+    assert bp.MAX_NUM_SEQS >= max(bp.concurrency_grid(10_000))
+    assert bp.MIXED_ROWS == 2560 >= bp.num_prompts(bp.GRID_CAP)
 
 
 def test_prompts_and_warmups():
@@ -78,7 +87,7 @@ def test_mixed_bench_argv_uses_the_seeded_custom_dataset(pins):
 
 def test_server_argv_is_shared_by_all_levels(pins):
     argv, env = bp.server_argv(pins, gdn_prefill_backend="triton", gpu_memory_utilization="0.90", port=8000)
-    assert arg(argv, "--max-model-len") == "32768" and arg(argv, "--max-num-seqs") == "264"
+    assert arg(argv, "--max-model-len") == "32768" and arg(argv, "--max-num-seqs") == "128"  # 019
     assert {"--language-model-only", "--no-enable-prefix-caching"} <= set(argv)
     assert arg(argv, "--revision") == pins["core_b"]["revision"]
     assert env["VLLM_GDN_DECODE_KERNEL"] == "triton"
