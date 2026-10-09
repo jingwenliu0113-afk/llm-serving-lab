@@ -176,3 +176,19 @@
   若觸發，照規則停止並作廢，記為 blocker 回報使用者，不自行放寬。
 - harness：`POWERMODES_ALLOWED = (0, 2)`，並在正式 Mac session 中檢查每個 process 的 powermode 是否與 preflight 一致（有測試）。
 
+## 紀錄（2026-10-09 13:02）：第一次正式 Mac Core A 在高效能模式下觸發停止規則
+
+- session `formal-20261009-a1`（`results/core_a/macos-metal/`，照實保留並 commit）：
+  - powermode 2、原廠 70 W；在固定 commit `eb5f97d` 的 worktree 中執行；12:13 開始。
+  - 跑完 17 個 job 後觸發停止規則：`ttft-9B-Q4_K_M-32768-r3` 結束時電量 85%，30 分鐘視窗內的最大值為 100%，降了 15 點。
+  - 依規則停止並作廢（`env_valid = false`，沒有結尾 sentinel）。
+- 電量讀數：前 37 分鐘一直停在 100%（`charged`、`finishing charge`），之後在一個 11.5 分鐘的 job 內降到 85%，
+  狀態變為 `AC attached; not charging`。
+  看起來是 macOS 在滿電附近會把顯示值固定在 100%，實際下降在 49 分鐘內累積，然後一次反映出來。
+  不論是哪一種情況，高效能模式加 70 W 時電量都在下降，與 pilot 的預期一致。
+- 後續：
+  - 依本文「同樣條件下重跑若再觸發，即記為 blocker」，在 powermode 2 重跑幾乎必然再觸發，所以**不自動在 powermode 2 重跑**。
+  - watcher 改成只在 powermode 0（自動）時開跑。pilot 顯示 powermode 0 時電量持平或回升。
+  - 若使用者仍要在 powermode 2 重跑一次，照做。下一個 session id 為 `formal-20261009-a2`。
+- 規則與門檻都沒有改。
+

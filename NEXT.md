@@ -90,12 +90,14 @@
 
 ## Blocked / 需要使用者
 
-0. **正式 Mac Core A 在等 Mac lock**
-   - Mac heavy lock 從 09:29 起由另一個專案持有（incident-investigator 的 pilot：`collect run --set pilot`），依 MACHINE_POLICY 不搶占。
-   - 電源模式：使用者已同意高效能也可以（019 補充）。powermode 0 或 2 都接受，但同一個 session 內必須一致。
-   - 預期風險：pilot 在高效能模式加 70 W 下，電量每 30 分鐘掉 4–23 點，很可能觸發 019 的電池下降停止規則。
-     觸發時 session 作廢，我會回報，不放寬規則。
-   - watcher 會在 lock 空出、AC、70W adapter、powermode 0 或 2 都符合時自動開跑。
+0. **正式 Mac Core A：在高效能模式下觸發 019 的電池停止規則，需要把 AC 能源模式切到「自動」**
+   - `formal-20261009-a1`（12:13–13:02，powermode 2）跑完 17 個 job 後，電量在 30 分鐘視窗內從 100% 降到 85%，依規則停止並作廢。
+     結果照實保留；細節見 019 的「紀錄」。
+   - 同樣條件下重跑幾乎一定會再觸發，所以不自動在高效能模式重跑。
+   - 請到「系統設定 > 電池 > 能源模式 > 接上電源轉接器時」選「自動」。pilot 顯示自動模式下電量持平或回升。
+   - watcher（`WANT_PM=0`）每 2 分鐘唯讀檢查一次。lock 空著、AC、70W、powermode 0 都符合時，自動開始 `formal-20261009-a2`。
+   - 若你仍要在高效能模式重跑一次，告訴我即可。
+   - Mac lock 目前空著（incident-investigator 已釋放）。
 
 1. **4B 的 quality 是否也在 RTX 上量**（020；正式 quality 開始前需要確認）
    - 我的建議是一起搬，理由：

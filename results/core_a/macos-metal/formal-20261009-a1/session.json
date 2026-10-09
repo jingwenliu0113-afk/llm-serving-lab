@@ -1,0 +1,48 @@
+{
+ "schema_version": 2,
+ "session_id": "formal-20261009-a1",
+ "platform": "macos-metal",
+ "mode": "formal",
+ "seed": 20261008,
+ "plan_sha256": "6b47416695313e5c33cff57b5a080ca98790aeb9d676db40aabd642a65170622",
+ "pins_sha256": "99fa6260d9f864575da9c6804d8d115bd23abf2bc7648f0505250951e837f556",
+ "gpu_lock_held": false,
+ "mac_lock_held": true,
+ "bin_dir": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/third_party/llama.cpp/build-metal/bin",
+ "models_dir": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/models/gguf",
+ "preflight": "env/preflight.json",
+ "session_b": null,
+ "powermode": 2,
+ "started_at": "2026-10-09T04:13:03.928655+00:00",
+ "finished_at": "2026-10-09T05:02:18.874655+00:00",
+ "outcomes": {
+  "ok": 17,
+  "oom": 0,
+  "error": 0
+ },
+ "sentinel": {
+  "start_tok_s": null,
+  "end_tok_s": null,
+  "drift_pct": null,
+  "drift": null,
+  "note": "sentinel missing or failed; session must be re-run"
+ },
+ "env_flags": [
+  {
+   "job_id": "ttft-9B-Q4_K_M-32768-r3",
+   "phase": "after",
+   "reason": "battery drain: 100% -> 85% within 30 min (019: session stopped)"
+  }
+ ],
+ "env_valid": false,
+ "charge_pauses": [],
+ "battery_drain": {
+  "rule": "019",
+  "job_id": "ttft-9B-Q4_K_M-32768-r3",
+  "phase": "after",
+  "pct": 85,
+  "window_max_pct": 100,
+  "drop_pts": 15,
+  "window_s": 1800
+ }
+}
