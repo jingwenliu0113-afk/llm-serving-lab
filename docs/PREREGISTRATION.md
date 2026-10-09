@@ -23,7 +23,8 @@
 > hypothesis 與其門檻不變。下文相關處加了註記，原文不改寫。
 
 > **狀態：第 1–5 節 FROZEN (Stage A)，2026-10-09**（harness commit `eb6eef1d43a15d70805cce83784646a038aed6d1`，
-> `pins.toml` `freeze.mac = true`）。第 6 節（Stage B）尚未凍結。
+> `pins.toml` `freeze.mac = true`）。
+> **第 6 節 FROZEN (Stage B)，2026-10-09**（harness commit `19446d7261ab0543ed5acd795b16947eaf18c075`，`pins.toml` `freeze.nvidia = true`；凍結 commit 只改 pins 與文件）。
 > 依 decision 006 分兩階段凍結：
 > - **Stage A**（本文第 1–5 節）：在任何 Mac 正式數據之前 commit，並把 `pins.toml` 設為 `freeze.mac = true`。
 > - **Stage B**（第 6 節 addendum）：在任何 NVIDIA 正式數據之前 commit，並把 `freeze.nvidia = true`。
@@ -315,9 +316,9 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 
 ## 6. Stage B addendum（任何 NVIDIA 正式數據之前；只能代入實測值與執行參數）
 
-待填（遠端可用後；所有 GPU 步驟都在 GPU lock 下）：
+**FROZEN (Stage B)，2026-10-09**（harness commit `19446d7261ab0543ed5acd795b16947eaf18c075`）。所有 GPU 步驟都在 GPU lock 下執行。
 
-- [ ] RTX 實測：V_total（`memory.total`）、B（依第 4 節程序）、C_ctx（004；4B-Q4_K_M @ 2048，009）、是否接螢幕、HAGS、`.wslconfig`
+- [x] RTX 實測：V_total（`memory.total`）、B（依第 4 節程序）、C_ctx（004；4B-Q4_K_M @ 2048，009）、是否接螢幕、HAGS、`.wslconfig`
   - 2026-10-09（`results/stage_b/20261009/`，GPU lock 下）：
     - V_total = 16,303 MiB。
     - **B = 811 MiB**（02:09–02:15，5 分鐘閒置後 60 個 1 Hz 樣本的中位數，樣本介於 799–811）。
@@ -345,18 +346,43 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
   - N_thr = 6（Ryzen 5 7600，6 個 physical core）。
   - **P = 0**：依第 4 節規則，RTX pilot 中 poll 0 為 184.37 tok/s、poll 50 為 184.06 tok/s（2026-10-09，`pilot-20261009-rtx`；012 補充）。
   - pilot 34 / 34 ok，`-fa auto` 在 6 個 quant 上都是 enabled，sentinel CV 0.80%，正式 RTX Core A 上限約 3.62 小時。
-- [ ] vLLM：smoke test 通過（003 gate）、lock 檔已 commit（`vllm.lock_file`）、`VLLM_WSL2_ENABLE_PIN_MEMORY`（依 003 規則）、
+- [x] vLLM：smoke test 通過（003 gate）、lock 檔已 commit（`vllm.lock_file`）、`VLLM_WSL2_ENABLE_PIN_MEMORY`（依 003 規則）、
       attention backend、performance mode / async scheduling 的實際生效值
   - smoke S1–S3 通過（2026-10-09 01:54–02:01，`results/core_b/smoke/20261009-s1s3-014b`）。
     003 gate 第 1、2、5 項通過（capability (12, 0)、arch list 含 sm_120、`vllm bench serve` 與 `/metrics` 名稱）。
   - lock 檔：`configs/vllm.lock.txt`（pins `vllm.lock_file`）。S1–S3 都在這份 lock 上執行。
     2026-10-09 核對 WSL 的 `.venv` 與 lock 完全一致（196 / 196 個套件）。JIT 透過 014 的 `CUDA_HOME` shim。
   - 017 的固定 flags（FLASH_ATTN、balanced、async scheduling、max_num_batched_tokens 2048）由 runner 以 log 驗證（018）。
-  - pin-memory A/B、K、boots：卡在 `--max-num-seqs`（NEXT Blocked 2）。
-- [ ] Core B：
+  - boots、K、pin-memory A/B：先前卡在 `--max-num-seqs 264`（冷 boot 失敗保留在 `boots/`）。
+    依 019 改為 128 後，在 GPU lock 下完成（09:36–10:30，`results/stage_b/20261009/boots-019`、`pin-ab-019`、`stage_b_019.log`）：
+    - **boots**（U 0.91、全新 cache、不帶 K）：
+      - 冷 boot 164.4 s、熱 boot 40.0 s，熱 boot 時 cache 有效。CUDA driver 的 PTX JIT cache 沒有重置（018 第 4 點）。
+      - 冷 boot 的 `Available KV cache memory` 換算為 2.25 GiB（已取整），熱 boot 為 4.14 GiB，因此 **K = 4,294,967,296 B（4.0 GiB）**。
+    - **pin-memory A/B**（帶 U、K；uniform L = 2048；C = 1、16 各 3 次，12 次全部有效）：
+      - 1 相對 0：C = 1 快 9.13%，C = 16 只快 3.82%；四組 CV 都 < 0.3%。
+      - 規則要求兩個 C 都快 ≥ 5%，所以 **維持 0**。
+    - **實際生效值**：
+      - non-default args 中有 `'max_num_seqs': 128`、`'max_num_batched_tokens': 2048`、`'async_scheduling': True`、`'attention_backend': 'FLASH_ATTN'`、`'gpu_memory_utilization': 0.91`。
+      - log 中有 `Using AttentionBackendEnum.FLASH_ATTN backend.`。
+      - `--performance-mode balanced` 等於 0.30.0 的預設值（`vllm/config/vllm.py`），所以不會出現在 non-default args 中。
+    - 觀察（照實記錄）：264 那次失敗的 2.17 GiB 是**冷** boot 的值，熱 boot 的可用量高很多（128 時為 4.14 GiB）。
+      但即使以熱 boot 計，約 248 個 block 仍小於 264，019 的必要性不變。
+  - 003 gate 第 1–6 項全部通過。pins 中 `vllm.verified = ["wsl2-cuda"]`、`core_b.status = "verified"`。
+- [x] Core B：
   - num_gpu_blocks 與 block_size（`/metrics` 的 `vllm:cache_config_info`；`GPU KV cache size` 只作紀錄與交叉核對）
   - 依 §2 的 C_KV 公式與 007 的 grid 規則，算出每個 L 的 C_KV 與 grid
   - `mixed` dataset 的 sha256（`core_b.mix_dataset_sha256`，每個 L 一個；2026-10-08 已在 WSL 建好並驗證可重現，見 013）
   - `--kv-cache-memory-bytes`（K）、`--gpu-memory-utilization`（U）：依 §4 的 017 規則由 B、V_total 與熱 boot 的 log 算出
   - JIT 冷 / 熱啟動秒數；pin-memory A/B 的結果與選定值
-- [ ] 本節狀態改為 FROZEN (Stage B) 並 commit
+  - **結果**（2026-10-09，帶 K 的兩次 pin-ab boot，`/metrics` 相同）：
+    - **num_gpu_blocks = 248**、**block_size = 528**。
+    - 交叉核對：⌈GPU KV cache size 123,128 × (⌈32768 ÷ 528⌉ + 3) ÷ 32768⌉ = ⌈123,128 × 66 ÷ 32768⌉ = 248，一致。
+    - C_KV（§2 公式 ⌊247 ÷ (⌈L ÷ 528⌉ + 3)⌋）：**L = 2048 → 35、8192 → 13、32768 → 3**。
+    - grid（007 規則，上限依 019 為 128）：
+      - 2048：1, 2, 4, 8, 16, 18, 25, 32, 35, 49, 64, 70, 128
+      - 8192：1, 2, 4, 7, 8, 9, 13, 16, 18, 26, 32, 64, 128
+      - 32768：1, 2, 3, 4, 6, 8, 16, 32
+    - `mixed` dataset：sha256 已於 2026-10-08 pin（2048、8192）。依 019 維持 2560 列。
+    - U = 0.91、K = 4.0 GiB、`VLLM_WSL2_ENABLE_PIN_MEMORY` = 0。JIT 冷 164.4 s、熱 40.0 s。
+    - 依 019 事先記下的後果：C_KV(2048) = 35，2 × C_KV = 70。L = 2048 的 knee 若 ≥ 33，4 × C_knee > 128，H-B1 在這個 L 只能是 supported 或 inconclusive。
+- [x] 本節狀態改為 FROZEN (Stage B) 並 commit（2026-10-09，harness commit `19446d7261ab0543ed5acd795b16947eaf18c075`，`freeze.nvidia = true`）

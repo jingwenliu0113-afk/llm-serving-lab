@@ -1,0 +1,109 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/bench-pin0-c1-r1.json": {
+   "sha256": "ef16322fc8555e13bb4da9d35c926b8a3aa3608376f93484ecb3db23028a1d71",
+   "size_bytes": 683974
+  },
+  "raw/bench-pin0-c1-r1.log": {
+   "sha256": "f6cc6c277d3b77880bfe1f808edd7aa53d02426d0fad75d7c2a92fd273913e53",
+   "size_bytes": 17897
+  },
+  "raw/bench-pin0-c1-r2.json": {
+   "sha256": "0d5906f9c80d67263838c281bd8d27764cc266f8e7d5e7b25b6a050445a72ba5",
+   "size_bytes": 684030
+  },
+  "raw/bench-pin0-c1-r2.log": {
+   "sha256": "c235979b693dc6bbb626e3483e41adb43fe3ec5b95292155f4db81af09dd69a4",
+   "size_bytes": 17897
+  },
+  "raw/bench-pin0-c1-r3.json": {
+   "sha256": "db3599bd5a0a21bc138f1dbcff443fa8fff4cdbc25f4e4e80fec140e38a17759",
+   "size_bytes": 684011
+  },
+  "raw/bench-pin0-c1-r3.log": {
+   "sha256": "b31afa11706dc45a5773d9821d829a001759e11c47bf44085c8b328bacc30ab2",
+   "size_bytes": 17897
+  },
+  "raw/bench-pin0-c16-r1.json": {
+   "sha256": "fe05073790eedcd07598b1a715597a91fb1360be1d02943e6608a678abd527ed",
+   "size_bytes": 680417
+  },
+  "raw/bench-pin0-c16-r1.log": {
+   "sha256": "96e628c82248246ba43959737c1d54029205d29981dcf52428bd607854fb45be",
+   "size_bytes": 15755
+  },
+  "raw/bench-pin0-c16-r2.json": {
+   "sha256": "36ad0c0f6b30116e4b2429b7d02b6949038221d40605e132bdd893695c0a4cca",
+   "size_bytes": 681250
+  },
+  "raw/bench-pin0-c16-r2.log": {
+   "sha256": "a7e3b0ad3c0ad7766c875c7c13d4a9e36d31a32c703063dc9f459c13b61dd966",
+   "size_bytes": 15755
+  },
+  "raw/bench-pin0-c16-r3.json": {
+   "sha256": "c87827e74b85b6bff0cb5ddc5ca339ea604702f0fb78c666d56ecab126a01c05",
+   "size_bytes": 681121
+  },
+  "raw/bench-pin0-c16-r3.log": {
+   "sha256": "5dd59ff5cb550a1721e7a2aba35c4cc91c0cc0fc3b0924b769cb851ad0741d50",
+   "size_bytes": 15755
+  },
+  "raw/bench-pin1-c1-r1.json": {
+   "sha256": "d73af334fc33b3a1ecbcabffc69a56bd10623683ae6ab294d564c58d8d37395f",
+   "size_bytes": 683586
+  },
+  "raw/bench-pin1-c1-r1.log": {
+   "sha256": "04794d024769c895bea013fd2762fe176c74a3b09b184ce0fa3afb6770ab427b",
+   "size_bytes": 17897
+  },
+  "raw/bench-pin1-c1-r2.json": {
+   "sha256": "a927efdd956da4e3f2aba1e95430e6f898d63f8ef54b6fae5db881cfeb91b6fc",
+   "size_bytes": 683539
+  },
+  "raw/bench-pin1-c1-r2.log": {
+   "sha256": "e9b03a617ee1467c163fcc54541f809161171127940c70f439cd146c80780796",
+   "size_bytes": 17897
+  },
+  "raw/bench-pin1-c1-r3.json": {
+   "sha256": "e4b27996ca813f1e0048051c87cf2cc509ee8967d43721fb720c963ec5341107",
+   "size_bytes": 683612
+  },
+  "raw/bench-pin1-c1-r3.log": {
+   "sha256": "e3415783a726b082a66526fc19f05e3eb8b157d5925faef736f8b37406bdc30c",
+   "size_bytes": 17897
+  },
+  "raw/bench-pin1-c16-r1.json": {
+   "sha256": "56798b22112238240cfdf3cb2472c311ade3bf7d4d2f561f99038dddaa3246e7",
+   "size_bytes": 680617
+  },
+  "raw/bench-pin1-c16-r1.log": {
+   "sha256": "6872ba91178c509c66fe74534d230877f3c5f50a54672db8a517225fb2c8f64a",
+   "size_bytes": 15689
+  },
+  "raw/bench-pin1-c16-r2.json": {
+   "sha256": "469f72496b85b6fe5ad9f59257faece85701e46cbef61076a0099e62c4b2b4fb",
+   "size_bytes": 680063
+  },
+  "raw/bench-pin1-c16-r2.log": {
+   "sha256": "5231e0841878caf5859f5f1ec2d7e3e867d3801643b23773c93d252c58fac292",
+   "size_bytes": 15689
+  },
+  "raw/bench-pin1-c16-r3.json": {
+   "sha256": "79bfa7fe5e0f7331123b2c448689cb03d846d2e599fb7bacecfcd548a9e732d4",
+   "size_bytes": 680740
+  },
+  "raw/bench-pin1-c16-r3.log": {
+   "sha256": "d134c55624679261e16d3c0c0f6ecd81b76a4d6294ffcf7d0509d9b37ea0425d",
+   "size_bytes": 15689
+  },
+  "raw/server-pin0.log": {
+   "sha256": "2786563f86f456d527bf873ae9f4c0e2e10bb294a13d8d6e631c43e35b1a94c6",
+   "size_bytes": 170966
+  },
+  "raw/server-pin1.log": {
+   "sha256": "1f96215df34d069f01d9fdc75baf7a477796ef8bdc391162d8ac77bd1e950179",
+   "size_bytes": 168540
+  }
+ }
+}

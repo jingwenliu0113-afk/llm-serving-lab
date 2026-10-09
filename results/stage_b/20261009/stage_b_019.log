@@ -1,0 +1,5 @@
+== boots 09:36:09
+{"gpu_memory_utilization": "0.91", "cache_effective": true, "kv_cache_memory_bytes": 4294967296, "startup_s": [164.37921545200516, 40.01682682298997]}
+== pin-ab U=0.91 K=4294967296 09:39:36
+{"decision": {"choice": 0, "gain_pct": {"1": 9.134187466513556, "16": 3.817448995957329}, "cv_pct": {"0@C1": 0.022014311287437534, "0@C16": 0.14543712629420452, "1@C1": 0.27117116151022636, "1@C16": 0.0326047085479759}, "reason": "rule not met; keep the default 0"}, "cache_config": {"0": {"num_gpu_blocks": 248, "block_size": 528}, "1": {"num_gpu_blocks": 248, "block_size": 528}}}
+== done 10:29:51

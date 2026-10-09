@@ -192,8 +192,11 @@ def test_formal_requires_gpu_lock_and_freeze(tmp_path, pins):
     plan = small_plan(pins)
     with pytest.raises(rb.RunError, match="lock"):
         run(World(tmp_path), pins, plan, gpu_lock_held=False, formal=True)
+    import copy
+    unfrozen = copy.deepcopy(pins)
+    unfrozen["freeze"]["nvidia"] = False  # Stage B was frozen on 2026-10-09; the guard itself is what is tested
     with pytest.raises(rb.RunError, match="freeze.nvidia"):
-        run(World(tmp_path), pins, plan, formal=True)
+        run(World(tmp_path), unfrozen, plan, formal=True)
 
 
 def test_existing_session_is_never_overwritten(tmp_path, pins):

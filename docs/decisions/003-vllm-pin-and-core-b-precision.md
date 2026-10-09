@@ -3,6 +3,7 @@
 > **2026-10-08：Core B 的模型 / precision / dtype 已由 008 取代**（改為 `RedHatAI/Qwen3.5-9B-quantized.w4a16`、`--dtype bfloat16`）。vLLM 版本與其餘 server protocol 仍有效；hybrid 模型需要的新 flag 見 008。下方內容保留作為決策歷史。
 
 > **2026-10-09：`--max-num-seqs` 由 264 改為 128，grid 上限由 256 改為 128（019，使用者決定）。**
+> **2026-10-09：smoke test gate 第 1–6 項全部通過，vLLM 環境改為 Accepted（結果見 PREREGISTRATION §6）。**
 
 - 狀態：**Core B 模型已由使用者固定為 `Qwen3-8B-AWQ`（2026-10-08）**；vLLM 環境待 RTX 5070 Ti smoke test 通過後改為 Accepted
 - 日期：2026-10-08
