@@ -77,8 +77,13 @@ source safetensors 的刪除由 `scripts/produce_gguf.py delete-source` 強制�
        `produce` 只在 sha256 與 pin 相同時才放回原位，不同就中止並保留現狀。
   - 若屆時其他專案使空間再減少，先記為 blocker，不降低 50 GiB 餘量。
 - quality 正式 run 屬於 Mac heavy workload，必須用 `tools/with-mac-lock`（MACHINE_POLICY）。
+  〔020 起不適用：正式 quality 與 KLD 都改在 RTX（WSL）上，使用 GPU flock。
+  本節 Q4B / Q9B 的 Mac 磁碟規劃，以及「暫時刪除另一個 size 的 quant」的步驟都不再需要。Mac 上的 BF16 依 S 級規則處理。〕
 
 ## RTX（WSL2 `Ubuntu-22.04`，家目錄 ext4，可用約 928 GB）
+
+〔2026-10-09 實測（020 審查）：WSL ext4 為 1007G，可用 873G。這是 VHDX 的上限；VHDX 所在的 Windows C: 實際剩餘 1.3 TB
+（唯一的磁碟，`/mnt/c` 與 PowerShell `Get-PSDrive` 一致），所以 873G 確實可用。〕
 
 | 內容 | 位置 | 等級 |
 |---|---|---|
@@ -86,6 +91,9 @@ source safetensors 的刪除由 `scripts/produce_gguf.py delete-source` 強制�
 | HF cache（Core B checkpoint） | `HF_HOME=/home/wenn0113/.cache/huggingface` | W（Core B 期間保留） |
 | Core A 的 quantized GGUF（由 Mac 傳過去，以 sha256 驗證） | `/home/wenn0113/llm-serving-lab/models/gguf/` | W |
 | uv 本體 / Python / cache | `~/.local/bin/uv`、`~/.local/share/uv/`、`~/.cache/uv/` | 工具 |
+| BF16 reference GGUF（2 個，約 24.5 GiB；Mac 以 `sync_gguf_to_wsl.py --set references` 傳送，sha256 驗證；020） | `/home/wenn0113/llm-serving-lab/models/gguf/` | S（該 size 的正式 quality 完成後即可刪） |
+| quality 資料集（14 個檔案，sha256 與 Mac 及 pins 一致；020） | `/home/wenn0113/llm-serving-lab/data/datasets/` | 保留 |
+| KLD logits（約 68 GiB / size） | `/home/wenn0113/llm-serving-lab/data/kld/`（`run_quality` 自動建立） | S（同一 size 的 3 個 quant 算完即刪，一次只存在一個 size） |
 
 - 一律不放在 `/mnt/c/...`，也不使用 `~/venvs/gpu-check` 或系統 Python 安裝套件。
 - 遠端空間充足，但每次大型下載前仍跑 `disk_guard.py`（同一支 script，可直接在 WSL 執行）。

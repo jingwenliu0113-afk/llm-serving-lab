@@ -23,7 +23,8 @@
   - 正式 Mac Core A 有電池下降停止規則：30 分鐘內下降 ≥ 3 點就停止，整個 session 無效。
   - Core B 的 `--max-num-seqs` 改為 **128**，grid 上限改為 **128**。
   - Stage B 不拆分。
-- **020**：正式 quality 改在 **RTX** 上執行，兩個 size 都搬。flag set 與 hypothesis 不變。
+- **020**：正式 quality 改在 **RTX** 上執行，flag set 與 hypothesis 不變。
+  - 4B 一起搬是我的建議，待使用者確認，見 Blocked 1。
   9B BF16 會少量 spill 到系統記憶體，運算仍全部在 CUDA 上完成。
 
 ### RTX（gpu-server，GPU lock 下依序執行）
@@ -52,14 +53,18 @@
   | grid 32K | 1, 2, 3, 4, 6, 8, 16, 32 |
 
 - **BF16 參考檔傳到 WSL**（020）：10:38 開始，限速 1.2 MiB/s，先 9B 後 4B，約 6 小時（`queue_sync_refs.sh`）。
-- **注意**：正式 RTX session 進行中**不得重新部署**到 WSL。env_capture 會比對部署 manifest，中途換檔會讓 session 變成 dirty。
-  目前 WSL 上是 `b42614a`；`run_quality` 的 RTX 支援要等 GPU 上的正式 session 結束後才部署。
+- **注意**：正式 RTX session 進行中**不得重新部署**到 WSL。
+  - 中途部署會悄悄換掉之後 process 使用的程式，而且不會留下標記（020 第 7 點）。
+  - 審查後三個 runner 都加了 provenance 檢查，但進行中的 session 跑的是 `b42614a`，沒有這個檢查。
+  - 等 GPU 上的正式 session 結束後，才部署 `run_quality` 的 RTX 支援。
 
 ### Mac
 
 - 正式 Mac Core A 在等兩個條件，見 Blocked 0。
   - 背景 watcher `wait_power_then_formal_a.sh` 每 2 分鐘唯讀檢查一次。
   - 條件一符合，就在 Mac lock 下自動開始 `batch_formal_a.sh`（seed 20261008、`-t 8`、`--poll 0`、016、019）。
+  - 開跑時以當下 HEAD 建立 git worktree（`.worktrees/<session>`），session 在 worktree 中執行，跑完再複製回主 repo 的 `results/`。
+    這樣我在主目錄的修改與 commit 不會影響進行中的 session。
 - 019 的 harness 已上線，並經過 review workflow：確認 10 項，均已修正。
 
 ## 下一步
@@ -92,6 +97,12 @@
       - 依 MACHINE_POLICY 不搶占。
       - AC 被切到 powermode 2 的時間點與它重疊，可能是那個專案的設定。兩個專案若對電源模式的要求不同，要由使用者協調。
    - 兩件事都符合時，watcher 會自動開跑，不必再通知我。
+
+1. **4B 的 quality 是否也在 RTX 上量**（020；正式 quality 開始前需要確認）
+   - 我的建議是一起搬，理由：
+     - H-A5(a) 是 9B-Q4_K_M 與 4B-Q8_0 逐 chunk 的配對 ΔNLL，兩個 size 跨 Metal / CUDA 會混入 backend 差異；
+     - 4B BF16 只有 7.85 GiB，放得進 VRAM。
+   - 在你確認前我照此準備：BF16 會傳過去、pilot 也會跑，但不開始正式 quality。
 
 ## 建議（非 blocker）
 

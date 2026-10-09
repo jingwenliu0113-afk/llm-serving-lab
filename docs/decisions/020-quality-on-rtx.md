@@ -1,6 +1,6 @@
 # 020 — 正式 quality 改在 RTX（wsl2-cuda）上執行
 
-- 狀態：Accepted（使用者同意，2026-10-09）
+- 狀態：Accepted（quality 搬到 RTX：使用者同意，2026-10-09；4B 一起搬：我的建議，待使用者確認，確認前照此準備）
 - 日期：2026-10-09
 - 時點：Stage A 與 Stage B 都已凍結，任何正式 quality 數據之前。quality 只有 Mac 上的 pilot（012，遮蔽版報告）。
 - 依 006，凍結後的任何變更都要記錄。本文改的是正式 quality 的**執行平台**，以及 MACHINE_POLICY 對 quality 的分工。
@@ -18,7 +18,7 @@
 ## 決策
 
 1. **兩個 size 的正式 quality 都在 wsl2-cuda 上執行**：RTX 5070 Ti，llama.cpp b11146（同一 commit）CUDA build，user-space CUDA 13.4.1（015）。
-   - **4B 也要搬**：H-A5(a) 是 9B-Q4_K_M 與 4B-Q8_0 在每個 WikiText chunk 上的配對 ΔNLL。
+   - **4B 也要搬**〔我的建議，待使用者確認；正式 quality 開始前需要確認〕：H-A5(a) 是 9B-Q4_K_M 與 4B-Q8_0 在每個 WikiText chunk 上的配對 ΔNLL。
      兩個 size 若在不同平台量（Metal 與 CUDA），ΔNLL 會混進兩個 backend 的數值差異。所以兩個 size 必須在同一平台。
    - 4B BF16（7.85 GiB）放得進 VRAM，不會 spill。
 2. **flag set 不變**（005：`-ngl 999 -fa on --fit off -ctk f16 -ctv f16 -b 2048 -ub 512 -c 512 -lm mmap`）。
@@ -48,7 +48,13 @@
 
    CUDA 若出現不可重現的結果，記為 blocker 回報使用者，不改 metric。
 7. **執行時機**：等 GPU 上的正式 RTX Core A / Core B session 結束後，才部署新的 `run_quality`。
-   原因是 env_capture 會比對部署 manifest，中途換檔會讓進行中的正式 session 變成 dirty。
+   原本寫的理由（「env_capture 比對部署 manifest，中途換檔會變成 dirty」）**不正確**，2026-10-09 審查後更正：
+   - 部署 bundle 會同時換掉 `DEPLOYED_COMMIT` 與 manifest，所以部署完成後 env_capture 記錄的是新 commit，而且 dirty = False。
+   - 中途部署會悄悄改變之後每個 process 使用的程式（含每次重新執行的 env_capture.py），**不會留下任何標記**。
+   - 因此審查後在三個 runner（`run_core_a`、`run_core_b`、`run_quality`）的正式 session 加入 provenance 檢查：
+     每次 env 紀錄的 commit 必須等於 preflight 的 commit，而且 dirty 必須是 False，否則該 session 為 env-invalid；
+     preflight 本身 dirty 或讀不到時，拒絕開跑。
+   - 目前進行中的 RTX Core A / Core B uniform 跑的是 `b42614a`，沒有這個檢查，所以仍要遵守「中途不部署」的操作規則。
 
 ## 為什麼
 
@@ -79,3 +85,27 @@
     正式 run 需要 `freeze.nvidia` 與 §4 的 RTX N_thr / P。
   - `sync_gguf_to_wsl.py` 加入 `--set references` 與 `--max-mib-s`。
   - 以上都有測試。
+
+## 審查（2026-10-09，review workflow：三個面向，每項發現另由對抗式驗證者複查；確認 12 項，駁回 9 項）
+
+確認的項目都已處理，沒有改變任何規則：
+
+- RTX 上的 quality pilot 原本不檢查 GPU lock。現在 RTX 上的 quality（pilot 與正式）一律要求 `--gpu-lock-held`。
+- harness 原本仍接受 Mac 的正式 quality。現在：
+  - `build_quality_plan` 與 `run_quality` 都拒絕非 wsl2-cuda 的正式 quality（沒有 platform 欄位的舊 plan 視為 Mac）。
+  - `quality_analysis` 與 frontier 圖只接受 wsl2-cuda 的 quality session，analysis.json 會記錄 platform，
+    frontier 圖的註記寫明 KLD 在 wsl2-cuda 上量。
+  - `run_quality plan` 的 `--platform` 預設仍是 macos-metal，只供 Mac pilot 使用。
+- WSL 上沒有 `data/kld/`（git-ignored，也不在部署 bundle 中）。現在 `kld_base` 會自動建立。
+- WSL「可用約 900 GB」的說法經實測確認無誤：VHDX 所在的 Windows C: 剩餘 1.3 TB。已記入 STORAGE_PLAN。
+- 傳輸腳本：
+  - 限速器停頓後最多只保留約 1 秒的額度；
+  - 驗證完成但回覆遺失時，query 會回 DONE，不再從 0 重傳；
+  - 安裝 receiver 失敗時回傳 75（暫時性錯誤）；
+  - `--max-mib-s` 必須 > 0。
+- STORAGE_PLAN 與 MACHINE_POLICY 補上註記（Mac 上正式 quality 的段落、GPU lock 需求、「Text-to-SQL 持有 lock 時可做 quality eval」）。
+- 「4B 一起搬」原本記成使用者同意，實際上是我的建議。已改為待使用者確認（正式 quality 之前要確認）。
+- 「中途部署會變 dirty」的理由不正確（見第 7 點）。已更正，並在三個 runner 加入 provenance 檢查。
+  Mac 的正式 Core A 另外改在固定 commit 的 git worktree 中執行（`.worktrees/<session>`，已加入 .gitignore；
+  由 scratchpad 的 `batch_formal_a.sh` 建立）。這樣我在主目錄的修改與 commit 不會碰到進行中的 session。
+
