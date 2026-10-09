@@ -253,6 +253,9 @@ def test_parse_pmset_batt(text, expected):
         (PMSET_AC_APPLE70, {"wattage_w": 68, "manufacturer": "Apple Inc.", "name": "70W USB-C Power Adapter"}),
         (PMSET_AC_NONE, {"wattage_w": None, "manufacturer": None, "name": None}),
         ("", {"wattage_w": None, "manufacturer": None, "name": None}),
+        # an empty field must not swallow the next line (it could be the serial)
+        (" Wattage = 68W\n Manufacturer = \n Serial String = PLACEHOLDERSERIAL\n Adapter Name =\n Hardware Version = 1.0\n",
+         {"wattage_w": 68, "manufacturer": None, "name": None}),
     ],
 )
 def test_parse_pmset_ac_records_the_adapter_but_never_its_serial(text, expected):

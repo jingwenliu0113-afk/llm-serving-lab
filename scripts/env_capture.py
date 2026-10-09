@@ -176,7 +176,7 @@ def parse_pmset_batt(text: str) -> dict:
 def parse_pmset_ac(text: str) -> dict:
     """`pmset -g ac`: wattage, manufacturer and adapter name (019). The adapter serial is never recorded."""
     def field(name: str) -> str | None:
-        m = re.search(rf"^\s*{name}\s*=\s*(.*?)\s*$", text, re.MULTILINE)
+        m = re.search(rf"^[ \t]*{re.escape(name)}[ \t]*=[ \t]*(.*?)[ \t]*$", text, re.MULTILINE)  # one line only
         return m.group(1) if m and m.group(1) else None
 
     watt = field("Wattage")

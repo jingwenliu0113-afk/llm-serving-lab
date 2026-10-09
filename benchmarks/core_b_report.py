@@ -5,7 +5,7 @@ Inputs: the formal `uniform` session (H-B1..H-B3, and the uniform side of H-B4) 
 formal `mixed` session whose plan was derived from it (core_b_plan.py mixed). Only runs
 that passed validation count. H-B4 uses each run's short-class P95 TTFT, which the runner
 computed from the --save-detailed per-request data. The report refuses non-formal
-sessions, a mixed plan derived from another session, or a mixed C that is not the uniform
+or env-invalid sessions, a mixed plan derived from another session, or a mixed C that is not the uniform
 C_knee recomputed here. Output: analysis.json (verdicts plus a per-(mix, L, C) table).
 
 Usage:
@@ -66,6 +66,10 @@ def report(uniform: dict, mixed: dict | None) -> dict:
             if mixed["session"].get(key) != uniform["session"].get(key):
                 problems.append(f"the mixed session's {key} {mixed['session'].get(key)!r} differs from the uniform "
                                 f"session's {uniform['session'].get(key)!r} (007)")
+    for name, part in (("uniform", uniform), ("mixed", mixed)):  # §4 / 013 / 018: unknown counts as invalid
+        if part is not None and part["session"].get("env_valid") is not True:
+            problems.append(f"the {name} session is env-invalid (env_valid={part['session'].get('env_valid')!r}); "
+                            "rerun it")
     rows, plan = uniform["rows"], uniform["plan"]
     knees = {L: ba.knee(rows, L, plan["grids"][str(L)])["c_knee"] for L in bp.MIXED_LEVELS}
     if mixed is not None:

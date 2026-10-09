@@ -469,7 +469,8 @@ def main(argv: list | None = None) -> int:
     except RunError as exc:
         print(f"run_core_a: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps({k: summary[k] for k in ("session_id", "outcomes", "sentinel")}, indent=1))
+    print(json.dumps({k: summary.get(k) for k in ("session_id", "outcomes", "sentinel", "env_valid", "battery_drain")},
+                     indent=1))
     return 0
 
 

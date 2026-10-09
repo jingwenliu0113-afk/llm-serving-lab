@@ -42,7 +42,7 @@ def uniform_plan():
 
 
 def session(sid, plan, rows, formal=True):
-    return {"session": {"session_id": sid, "formal": formal}, "plan": plan, "rows": rows}
+    return {"session": {"session_id": sid, "formal": formal, "env_valid": True}, "plan": plan, "rows": rows}
 
 
 def mixed_session(**kw):
@@ -80,6 +80,10 @@ def test_without_a_mixed_session_h_b4_is_not_testable():
     (lambda u, m: m["plan"]["c_knee"].update({"2048": 16}), "C_knee"),
     (lambda u, m: m["session"].update(server={"gdn_prefill_backend": "flashinfer"}), "server"),
     (lambda u, m: m["session"].update(server_env={"CUDA_HOME": "/other"}), "server_env"),
+    # §4 / 013 / 018: an env-invalid (or unknown) session is rerun, never analysed
+    (lambda u, m: u["session"].update(env_valid=False), "uniform session is env-invalid"),
+    (lambda u, m: m["session"].update(env_valid=False), "mixed session is env-invalid"),
+    (lambda u, m: u["session"].pop("env_valid"), "uniform session is env-invalid"),
 ])
 def test_report_refuses_inconsistent_or_non_formal_sessions(change, match):
     u, m = session("b-u", uniform_plan(), uniform_rows()), mixed_session()
