@@ -86,11 +86,12 @@
   - 重跑 `formal-20261009-a2` 在 Mac lock 下、固定 commit 的 worktree 中執行。
   - 適用的規則：012、016 充電閘門、70W adapter、同一 session 內 powermode 一致。
 
-- **`formal-20261009-a2` 進行中**：20:15 取得 Mac lock 後開始（commit `8f8dc9a`，powermode 2，70W adapter）。
-  - 23:30 時 88 / 164 個 job 完成，全部 ok；178 筆 env 紀錄的 commit 都是 `8f8dc9a`、dirty = False、powermode 都是 2。
-  - 由 `batch_formal_a.sh` 執行（seed 20261008、`-t 8`、`--poll 0`、016、019）。
-  - 開跑時以當下 HEAD 建立 git worktree（`.worktrees/<session>`），session 在 worktree 中執行，跑完再複製回主 repo 的 `results/`。
-    這樣我在主目錄的修改與 commit 不會影響進行中的 session。
+- **正式 Mac Core A 完成**（`formal-20261009-a2`，2026-10-09 20:15 至 2026-10-10 02:55，commit `8f8dc9a` 的 worktree，powermode 2，70W adapter）：
+  - 164 / 164 ok，sentinel 漂移 1.78%（門檻 3%），env 有效，沒有充電暫停；每筆 env 的 commit 都相同且 dirty = False。
+  - 判定（`analysis.json`）：H-A1、H-A3、H-A4a、H-A4b not refuted；**H-A2 refuted**。
+    - 推翻 H-A2 的是與 RTX 相同的配對：4B-Q4_K_M 對 9B-Q8_0，觀測比 2.22，預測比 2.99，偏差 −25.8%。
+    - 15 組配對中 13 組偏差為負。
+  - 圖：`results/core_a/figures/{decode,prefill,memory}-mac-formal.svg`。worktree 已移除（內容與主 repo 的副本逐檔相同）。
 - 019 的 harness 已上線，並經過 review workflow：確認 10 項，均已修正。
 
 ## 下一步
@@ -105,14 +106,13 @@
       - `core_b_report.py` 與 `core_b_figures.py`。
       - `quality_analysis.py`。
       - frontier 圖，要註明 quality 是在 wsl2-cuda 上量的。
-2. **Mac**：a2 跑完後跑 `core_a_report.py` 與 `core_a_figures.py`，commit session，移除 worktree。
+2. **Mac**：正式 Core A 已完成。依使用者要求，在使用者通知之前不在 Mac 上開始新的重負載（目前也沒有排任何 Mac 重負載）。
 3. **deployment decision table**（SPEC）：
    - 規則 decision 021 已 commit（`41798d7`），generator `benchmarks/decision_table.py` 與 40 個測試已 commit（`278ff82`）。
      兩者都在 a2、正式 quality、正式 Core B 的分析出現之前（021 R0）。
    - 設計 agent 不讀 `results/`；我已看過 RTX Core A 的結果，021 已照實揭露。
    - review workflow 完成（確認約 13 項，駁回 4 項），修正已 commit（`31973d5`），全部在看到新數據之前。
      其中 R11 的淘汰語意有修訂（只由當下未被勝過的成員淘汰，避免 KLD 與 NLL 的隱含跨 metric 遞移），已記在 021。
-   - a2 跑完後可以照常跑 `core_a_report`。
    - generator 的第一次真實執行要在所有正式分析都完成之後，輸出照原樣 commit（R0）。
 4. **全部正式數據完成後**：跑 `decision_table.py`，寫結論。
 

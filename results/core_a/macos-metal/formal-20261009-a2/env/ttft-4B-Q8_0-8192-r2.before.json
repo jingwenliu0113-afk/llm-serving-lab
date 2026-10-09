@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "captured_at_utc": "2026-10-09T16:06:51.401081+00:00",
+  "repo": {
+    "commit": "8f8dc9a8d165274c477905eb297dc03feab514b5",
+    "dirty": false,
+    "status": [
+      "?? results/core_a/macos-metal/formal-20261009-a2/"
+    ],
+    "source": "git"
+  },
+  "os": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "wsl": false,
+    "product_name": "macOS",
+    "product_version": "27.0.1",
+    "build_version": "26A434"
+  },
+  "hardware": {
+    "cpu": "Apple M4 Pro",
+    "logical_cpus": 12,
+    "ram_bytes": 51539607552,
+    "iogpu_wired_limit_mb": 0
+  },
+  "gpu": {
+    "nvidia": null,
+    "cuda_toolkit_on_path": null,
+    "host_cc": null,
+    "cuda_home": null,
+    "cuda_home_nvcc": null
+  },
+  "power": {
+    "source": "AC",
+    "battery_pct": 87,
+    "battery_state": "charging",
+    "ac_adapter": {
+      "wattage_w": 68,
+      "manufacturer": "Apple Inc.",
+      "name": "70W USB-C Power Adapter"
+    },
+    "powermode": 2,
+    "powermode_label": "high_power",
+    "thermal": {
+      "thermal_warning_recorded": false,
+      "performance_warning_recorded": false,
+      "cpu_limits": {}
+    }
+  },
+  "load": {
+    "loadavg_1m": 2.9873046875,
+    "loadavg_5m": 3.27587890625,
+    "loadavg_15m": 3.0703125,
+    "mac_heavy_lock_present": true,
+    "mac_heavy_lock_owner": "pid=80712\nstarted_at=2026-10-09T12:15:25Z\ncwd=/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab\nproject=llm-serving-lab\ncommand=bash /private/tmp/claude-501/-Users-liujingwen-Desktop-AI-Portfolio-llm-serving-lab/7e882394-1a55-4068-8e62-710fa960d4fe/scratchpad/batch_formal_a.sh\n",
+    "gpu_lock_held": null
+  },
+  "runtime": {
+    "llama_cpp": {
+      "binary": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/third_party/llama.cpp/build-metal/bin/llama-completion",
+      "version": "0.5.0",
+      "build_number": 11146,
+      "commit": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+      "built_with": "AppleClang 21.0.0.21000334 for Darwin arm64"
+    },
+    "vllm": null
+  },
+  "env": {},
+  "capture_python": "3.12.13",
+  "config": null,
+  "probe_errors": []
+}
