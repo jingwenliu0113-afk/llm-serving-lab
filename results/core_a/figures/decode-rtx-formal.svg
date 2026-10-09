@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="440" viewBox="0 0 720 440" font-family="sans-serif" font-size="12">
+<rect width="720" height="440" fill="white"/>
+<text x="360.0" y="24" text-anchor="middle" font-size="15">Core A decode speed vs context — RTX 5070 Ti 16GB (CUDA, WSL2)</text>
+<line x1="80" y1="380" x2="550" y2="380" stroke="black"/>
+<line x1="80" y1="50" x2="80" y2="380" stroke="black"/>
+<line x1="80.0" y1="380" x2="80.0" y2="385" stroke="black"/>
+<text x="80.0" y="398" text-anchor="middle">2048</text>
+<line x1="315.0" y1="380" x2="315.0" y2="385" stroke="black"/>
+<text x="315.0" y="398" text-anchor="middle">8192</text>
+<line x1="550.0" y1="380" x2="550.0" y2="385" stroke="black"/>
+<text x="550.0" y="398" text-anchor="middle">32768</text>
+<line x1="80" y1="380.0" x2="550" y2="380.0" stroke="#ddd"/>
+<text x="72" y="384.0" text-anchor="end">0</text>
+<line x1="80" y1="270.0" x2="550" y2="270.0" stroke="#ddd"/>
+<text x="72" y="274.0" text-anchor="end">50</text>
+<line x1="80" y1="160.0" x2="550" y2="160.0" stroke="#ddd"/>
+<text x="72" y="164.0" text-anchor="end">100</text>
+<line x1="80" y1="50.0" x2="550" y2="50.0" stroke="#ddd"/>
+<text x="72" y="54.0" text-anchor="end">150</text>
+<text x="315.0" y="422" text-anchor="middle">context L (tokens, log2 scale)</text>
+<text x="18" y="215.0" text-anchor="middle" transform="rotate(-90 18 215.0)">decode tok/s (process-level mean)</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="80.0,-32.4 315.0,-5.1 550.0,59.2"/>
+<circle cx="80.0" cy="-32.4" r="3" fill="#1f77b4"/>
+<circle cx="315.0" cy="-5.1" r="3" fill="#1f77b4"/>
+<circle cx="550.0" cy="59.2" r="3" fill="#1f77b4"/>
+<line x1="565" y1="60" x2="585" y2="60" stroke="#1f77b4" stroke-width="2"/>
+<text x="590" y="64">4B-Q4_K_M</text>
+<polyline fill="none" stroke="#d62728" stroke-width="2" points="80.0,18.0 315.0,34.3 550.0,88.7"/>
+<circle cx="80.0" cy="18.0" r="3" fill="#d62728"/>
+<circle cx="315.0" cy="34.3" r="3" fill="#d62728"/>
+<circle cx="550.0" cy="88.7" r="3" fill="#d62728"/>
+<line x1="565" y1="78" x2="585" y2="78" stroke="#d62728" stroke-width="2"/>
+<text x="590" y="82">4B-Q6_K</text>
+<polyline fill="none" stroke="#2ca02c" stroke-width="2" points="80.0,79.4 315.0,90.2 550.0,126.6"/>
+<circle cx="80.0" cy="79.4" r="3" fill="#2ca02c"/>
+<circle cx="315.0" cy="90.2" r="3" fill="#2ca02c"/>
+<circle cx="550.0" cy="126.6" r="3" fill="#2ca02c"/>
+<line x1="565" y1="96" x2="585" y2="96" stroke="#2ca02c" stroke-width="2"/>
+<text x="590" y="100">4B-Q8_0</text>
+<polyline fill="none" stroke="#9467bd" stroke-width="2" points="80.0,107.5 315.0,118.2 550.0,149.0"/>
+<circle cx="80.0" cy="107.5" r="3" fill="#9467bd"/>
+<circle cx="315.0" cy="118.2" r="3" fill="#9467bd"/>
+<circle cx="550.0" cy="149.0" r="3" fill="#9467bd"/>
+<line x1="565" y1="114" x2="585" y2="114" stroke="#9467bd" stroke-width="2"/>
+<text x="590" y="118">9B-Q4_K_M</text>
+<polyline fill="none" stroke="#ff7f0e" stroke-width="2" points="80.0,159.7 315.0,166.2 550.0,188.8"/>
+<circle cx="80.0" cy="159.7" r="3" fill="#ff7f0e"/>
+<circle cx="315.0" cy="166.2" r="3" fill="#ff7f0e"/>
+<circle cx="550.0" cy="188.8" r="3" fill="#ff7f0e"/>
+<line x1="565" y1="132" x2="585" y2="132" stroke="#ff7f0e" stroke-width="2"/>
+<text x="590" y="136">9B-Q6_K</text>
+<polyline fill="none" stroke="#8c564b" stroke-width="2" points="80.0,196.1 315.0,201.0 550.0,217.4"/>
+<circle cx="80.0" cy="196.1" r="3" fill="#8c564b"/>
+<circle cx="315.0" cy="201.0" r="3" fill="#8c564b"/>
+<circle cx="550.0" cy="217.4" r="3" fill="#8c564b"/>
+<line x1="565" y1="150" x2="585" y2="150" stroke="#8c564b" stroke-width="2"/>
+<text x="590" y="154">9B-Q8_0</text>
+<text x="80" y="436" font-size="10" fill="#555">llama-bench -p 0 -n 128 -d L-128, avg_ts</text>
+</svg>

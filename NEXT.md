@@ -30,7 +30,15 @@
 
 ### RTX（gpu-server，GPU lock 下依序執行）
 
-- **進行中**：正式 RTX Core A `formal-20261009-rtx-a1`。
+- **正式 RTX Core A 完成**（`formal-20261009-rtx-a1`，10:42–13:11）：
+  - 164 / 164 ok，sentinel 漂移 0.06%，env 有效，session 開頭重量的 B = 462 MiB（沒有 drift）。
+  - 判定（`analysis.json`）：H-A1、H-A3、H-A4a、H-A4b 為 not refuted；**H-A2 為 refuted**。
+    - 推翻 H-A2 的是 4B-Q4_K_M 對 9B-Q8_0 這一組：觀測比 2.24，預測比 2.99，偏差 −25%，門檻是 ±20%。
+    - 15 組配對的偏差全部是負的：bytes 少的配置都比純頻寬比例預測的慢。原因屬於推測，Core 不驗證。
+  - 圖：`results/core_a/figures/{decode,prefill,memory}-rtx-formal.svg`。
+- **正式 Core B uniform**：13:11 開始，進行中。
+
+- （歷史）正式 RTX Core A `formal-20261009-rtx-a1`。
   - 10:36 開始，session 開頭會重量 B；pilot 估計上限約 3.6 小時。
   - 跑完自動接正式 Core B uniform `formal-20261009-coreb-uniform`：3 個 L × 3 次 restart，粗估約 10 小時。
   - 背景串接腳本：`chain_rtx_formal.sh`。
