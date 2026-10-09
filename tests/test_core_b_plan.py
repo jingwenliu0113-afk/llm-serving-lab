@@ -214,7 +214,7 @@ def test_plan_cli_writes_uniform_and_mixed_plans(tmp_path, pins, monkeypatch):
     session = tmp_path / "b-uniform"
     session.mkdir()
     (session / "plan.json").write_text(json.dumps(up))
-    (session / "session.json").write_text(json.dumps({"session_id": "b-uniform", "formal": True}))
+    (session / "session.json").write_text(json.dumps({"session_id": "b-uniform", "formal": True, "env_valid": True}))
     rows = []
     for L in bp.LEVELS:
         for r in (1, 2, 3):
@@ -227,6 +227,13 @@ def test_plan_cli_writes_uniform_and_mixed_plans(tmp_path, pins, monkeypatch):
     mp = json.loads(mixed.read_text())
     assert mp["c_knee"] == {str(L): ba.knee(rows, L, up["grids"][str(L)])["c_knee"] for L in bp.MIXED_LEVELS}
     assert mp["derived_from"] == "b-uniform" and len(mp["runs"]) == 6
+
+    # C_knee only from a formal, env-valid uniform session (the rule core_b_report applies; 018 addendum)
+    for bad in ({"formal": False, "env_valid": True}, {"formal": True, "env_valid": False}, {"formal": True}):
+        (session / "session.json").write_text(json.dumps({"session_id": "b-uniform", **bad}))
+        with pytest.raises(SystemExit):
+            bp.main(["mixed", "--uniform-session", str(session), "--out", str(tmp_path / "bad.json")])
+        assert not (tmp_path / "bad.json").exists()
 
 
 def test_server_env_gives_flashinfer_a_cuda_home_but_no_nvcc_on_path():

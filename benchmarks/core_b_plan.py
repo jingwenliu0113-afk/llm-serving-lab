@@ -289,7 +289,11 @@ def main(argv: list | None = None) -> int:
         session = Path(args.uniform_session)
         up = json.loads((session / "plan.json").read_text())
         rows = [json.loads(x) for x in (session / "rows.jsonl").read_text().splitlines()]
-        sid = json.loads((session / "session.json").read_text())["session_id"]
+        meta = json.loads((session / "session.json").read_text())
+        sid = meta["session_id"]
+        if meta.get("formal") is not True or meta.get("env_valid") is not True:  # as core_b_report (018 addendum)
+            parser.error(f"uniform session {sid} is not formal and env-valid (formal={meta.get('formal')!r}, "
+                         f"env_valid={meta.get('env_valid')!r}); C_knee comes only from a valid formal session")
         knees = {L: ba.knee(rows, L, up["grids"][str(L)])["c_knee"] for L in MIXED_LEVELS}
         plan = build_mixed_plan(up, knees, uniform_session=sid)
     Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
