@@ -29,6 +29,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import statistics
 import sys
 import tomllib
@@ -68,7 +69,7 @@ FROZEN_MODULES = ("benchmarks/core_a_analysis.py", "benchmarks/core_a_plan.py", 
 HA5_A, HA5_B = (f"{s}-{q}" for s, q in qa.HA5_PAIR)  # 9B-Q4_K_M, 4B-Q8_0
 PAIRED_TEST = f"paired dNLL {HA5_A} - {HA5_B} < 0"
 TESTABLE = {"H-A2": ("tested",), "H-A3": ("tested",), "H-A4a": ("tested",), "H-A4b": ("tested",),
-            "H-B1": ("supported", "refuted", "inconclusive"), "H-B2": ("tested",), "H-B3": ("tested",),
+            "H-B1": ("supported", "refuted"), "H-B2": ("tested",), "H-B3": ("tested",),
             "H-B4": ("tested",)}
 B_METRICS = ("output_throughput", "request_throughput", "total_token_throughput",
              "p50_ttft_ms", "p95_ttft_ms", "p50_tpot_ms", "p95_tpot_ms")
@@ -163,11 +164,16 @@ def quality_problems(meta: dict) -> list:
     return problems
 
 
+def _redact(msg: str) -> str:
+    """No absolute paths in the output (021 R22): frozen refusal texts can embed server argv / env paths."""
+    return re.sub(r"(?<![\w.])/[^\s'\",\]}]+", "<path>", msg)
+
+
 def _core_b_role(plan: dict) -> str | None:
     mixes = {r.get("mix") for r in plan.get("runs", [])}
     if not plan.get("derived_from") and mixes == {"uniform"}:
         return "uniform"
-    if plan.get("derived_from") and mixes == {"mixed"}:
+    if plan.get("derived_from") and mixes <= {"mixed"}:  # a frozen mixed plan can have zero runs (no C_knee)
         return "mixed"
     return None
 
@@ -181,7 +187,8 @@ def select_sessions(root: Path) -> dict:
     excluded = []
 
     def exclude(role, d, sid, problems):
-        excluded.append({"role": role, "path": _rel(root, d), "session_id": sid, "problems": problems})
+        excluded.append({"role": role, "path": _rel(root, d), "session_id": sid,
+                         "problems": [_redact(p) for p in problems]})
 
     out = {"core_a": {}}
     for platform in PLATFORMS:
@@ -239,12 +246,12 @@ def select_sessions(root: Path) -> dict:
             exclude("core_b_mixed", d, s.get("session_id"),
                     [f"the mixed plan was derived from {plan.get('derived_from')!r}, not {uniform['session_id']!r}"])
             continue
-        try:
-            br.report(_load_b(uniform["dir"]), _load_b(d))
+        try:  # the frozen refusal checks read only session and plan: rows of a refused session stay unread (R1)
+            br.report(_load_b(uniform["dir"]), {"session": s, "plan": plan, "rows": []})
         except br.ReportError as exc:
-            exclude("core_b_mixed", d, s.get("session_id"), [str(exc)])
+            exclude("core_b_mixed", d, s.get("session_id"), [_redact(str(exc))])
             continue
-        valid.append({"dir": d, "session_id": s["session_id"], "session": s})
+        valid.append({"dir": d, "session_id": s["session_id"], "session": s, "plan": plan})
     out["core_b_mixed"] = _one("core_b_mixed", valid)
     out["excluded"] = sorted(excluded, key=lambda e: (e["role"], e["path"]))
     return out
@@ -435,14 +442,20 @@ def pick(front: list, order: tuple, rel) -> dict:
     kept, steps = list(front), []
     for k, axis in enumerate(order):
         q_before = "quality" in order[:k]
+
+        def beats(x, y):
+            return x != y and rel(axis, x, y) == "better" and (not q_before or rel("quality", x, y) == "tie")
+
         eliminated = []
-        for y in kept:
-            by = [x for x in kept if x != y and rel(axis, x, y) == "better"
-                  and (not q_before or rel("quality", x, y) == "tie")]
-            if by:
-                eliminated.append({"config": y, "by": by})
-        gone = {e["config"] for e in eliminated}
-        kept = [y for y in kept if y not in gone]
+        while True:  # only a member that is itself unbeaten eliminates: no implicit chain through a removed member
+            unbeaten = [x for x in kept if not any(beats(z, x) for z in kept)]
+            gone = [{"config": y, "by": [x for x in unbeaten if beats(x, y)]} for y in kept if y not in unbeaten]
+            gone = [g for g in gone if g["by"]]
+            if not gone:
+                break
+            eliminated += gone
+            names = {g["config"] for g in gone}
+            kept = [y for y in kept if y not in names]
         steps.append({"axis": axis, "kept": list(kept), "eliminated": eliminated})
     if len(kept) == 1:
         status = "decided"
@@ -509,11 +522,11 @@ def _memory(platform: str, rows_by_cell: dict, pins: dict) -> tuple:
 
 def _unit_counts(name: str, h: dict) -> dict:
     units = h.get("units", [])
-    if name == "H-A1":
+    if name == "H-A1":  # a boundary prediction or an error observation cannot refute (§2)
         counts: dict = {}
         for u in units:
             counts[u["observed"]] = counts.get(u["observed"], 0) + 1
-        testable = len(units)
+        testable = sum(u["predicted"] in ("fit", "oom") and u["observed"] in ("fit", "oom", "spill") for u in units)
     else:
         counts = {}
         for u in units:
@@ -598,6 +611,8 @@ def core_a_section(platform: str, sel: dict | None, pins: dict, rels: dict | Non
                 level["caveats"].append("NO_IMATRIX_Q4")
             if HA5_A in cands and HA5_B in cands and qrel(rels, HA5_A, HA5_B) in ("better", "worse"):
                 level["caveats"].append("CONTAMINATION")
+            if level.pop("contrary_used"):
+                level["caveats"].append("CONTRARY_TO_PREDICTION")
             if level["noise_cycles"]:
                 level["caveats"].append("NOISE_CYCLE")
         level["ha5a"] = _ha5a(cfg_out, vals, rels, sel.get("paired_test"))
@@ -626,9 +641,11 @@ def _front_and_picks(cands: list, vals: dict, rels: dict, downstream: list, unkn
         if b in front:
             continue
         by = [a for a in cands if (a, b) in edges]
-        dominated.append({"config": b, "dominated_by": by, "relations": {a: rel_ab[(a, b)] for a in by},
-                          "tie_dependent": any(rel_ab[(a, b)]["quality"] == "tie" for a in by),
-                          "tie_text": TIE_TEXT if any(rel_ab[(a, b)]["quality"] == "tie" for a in by) else None})
+        edge = {a: {**rel_ab[(a, b)], "tie_dependent": rel_ab[(a, b)]["quality"] == "tie",
+                    "contrary": bool(rels.get((a, b), {}).get("contrary"))} for a in by}
+        tie_dep = all(e["tie_dependent"] for e in edge.values())  # dominated only through quality ties
+        dominated.append({"config": b, "dominated_by": by, "relations": edge, "tie_dependent": tie_dep,
+                          "tie_text": TIE_TEXT if tie_dep else None})
 
     def rel(axis, x, y):
         return rel_ab[(x, y)][axis]
@@ -636,6 +653,7 @@ def _front_and_picks(cands: list, vals: dict, rels: dict, downstream: list, unkn
     picks = {}
     for w, order in WORKLOADS.items():
         p = pick(front, order, rel)
+        among = [{"a": a, "b": b, **rel_ab[(a, b)]} for i, a in enumerate(p["configs"]) for b in p["configs"][i + 1:]]
         eliminated_at = {e["config"]: (s["axis"], e["by"]) for s in p["steps"] for e in s["eliminated"]}
         alternatives = []
         for alt in front:
@@ -646,7 +664,8 @@ def _front_and_picks(cands: list, vals: dict, rels: dict, downstream: list, unkn
                 pc: {**rel_ab[(alt, pc)],
                      "decode_ratio_alt_over_pick": _ratio(vals[alt]["decode"], vals[pc]["decode"]),
                      "ttft_ratio_alt_over_pick": _ratio(vals[alt]["ttft"], vals[pc]["ttft"]),
-                     "memory_ratio_alt_over_pick": _ratio(vals[alt]["memory"], vals[pc]["memory"])}
+                     "memory_ratio_alt_over_pick": _ratio(vals[alt]["memory"], vals[pc]["memory"]),
+                     "downstream": _pair_downstream(alt, pc, downstream)}
                 for pc in p["configs"]}})
         caveats = ["NO_IMATRIX_Q4"] if any(c.endswith("Q4_K_M") for c in p["configs"]) else []
         if unknown:
@@ -654,11 +673,22 @@ def _front_and_picks(cands: list, vals: dict, rels: dict, downstream: list, unkn
         if any(rels.get((a, b), {}).get("contrary") for a in p["configs"] for b in front if a != b):
             caveats.append("CONTRARY_TO_PREDICTION")
         picks[w] = {"order": list(order), "status": p["status"], "provisional": bool(unknown),
-                    "unknown_configs": unknown, "configs": p["configs"], "steps": p["steps"],
+                    "unknown_configs": unknown, "configs": p["configs"], "relations_among_picks": among,
+                    "steps": p["steps"],
                     "alternatives": alternatives, "downstream": _pick_downstream(p["configs"], downstream),
                     "caveats": sorted(caveats)}
+    contrary = any(rels.get((a, b), {}).get("contrary") for a in cands for b in cands if a != b)
     return {"frontier": sccs, "noise_cycles": [c for c in sccs if len(c) > 1], "dominated": dominated,
-            "picks": picks}
+            "picks": picks, "contrary_used": contrary}
+
+
+def _pair_downstream(alt: str, pick_cfg: str, downstream: list):
+    """021 R13: same size -> the alt / pick pair and each one vs BF16 (descriptive); across sizes -> not compared."""
+    (sa, qa_), (sp, qp) = alt.split("-", 1), pick_cfg.split("-", 1)
+    if sa != sp:
+        return "not compared"
+    return [{**d, "note": "descriptive, no multiplicity correction (005); ci95 not re-verified"} for d in downstream
+            if d["size"] == sa and (set(d["pair"]) == {qa_, qp} or (d["pair"][0] == "BF16" and d["pair"][1] in (qa_, qp)))]
 
 
 def _pick_downstream(configs: list, downstream: list) -> list:
@@ -683,7 +713,7 @@ def _ha5a(cfg_out: dict, vals: dict, rels: dict | None, paired: dict | None) -> 
     if paired:
         test = {k: paired.get(k) for k in ("mean_delta", "ci95", "p_adj", "reject", "direction_ok")}
         test["ci95_note"] = "descriptive only (§2)"
-    return {"configs": side, "relations_9B_vs_4B": relations, "paired_test": test}
+    return {"configs": side, "relations_9B_vs_4B": relations, "paired_test": test, "caveats": ["CONTAMINATION"]}
 
 
 # ----------------------------------------------------------------- quality --
@@ -718,7 +748,8 @@ def quality_section(sel: dict | None, configs: list) -> tuple:
         for y in configs[i + 1:]:
             r = (rels or {}).get((x, y))
             listed.append({"a": x, "b": y, "rel": r["rel"] if r else "unmeasured",
-                           "source": r["source"] if r else None, "contrary": r["contrary"] if r else False})
+                           "source": r["source"] if r else None, "contrary": r["contrary"] if r else False,
+                           "caveats": ["CONTAMINATION"] if {x, y} == {HA5_A, HA5_B} else []})
     paired = next((t for t in h.get("tests", []) if t["name"] == PAIRED_TEST), None)
     downstream = [{**d, "ci95_reverified": False} for d in a.get("downstream") or []]
     sec = {"status": "ok" if rels is not None else "unavailable", "reason": reason, "platform": "wsl2-cuda",
@@ -807,12 +838,16 @@ def core_b_section(sel_u: dict | None, sel_m: dict | None, analysis: dict | None
         if L in bp.MIXED_LEVELS:
             if sel_m is None:
                 bx = {"status": "pending", "reason": "no valid formal mixed session"}
+            elif str(L) not in (sel_m["plan"].get("c_knee") or {}):
+                bx = {"status": "not measured (no uniform C_knee at this L; the mixed plan skipped it)"}
             else:
                 u4 = unit["H-B4"].get(L)
-                C = (u4 or {}).get("C") or level.get("c_knee")
-                bx = {"status": "ok", "h_b4_unit": u4, "mixed_cell": analysis["cells"].get(f"mixed-{L}-{C}"),
-                      "statement": BX_STATEMENT}
-                level["caveats"].append("MIXED_AT_KNEE_ONLY")
+                C = sel_m["plan"]["c_knee"][str(L)]
+                bx = {"status": "ok" if (u4 or {}).get("status") == "tested" else "not testable", "h_b4_unit": u4,
+                      "mixed_cell": analysis["cells"].get(f"mixed-{L}-{C}")}
+                if bx["status"] == "ok":
+                    bx["statement"] = BX_STATEMENT
+                    level["caveats"].append("MIXED_AT_KNEE_ONLY")
         else:
             bx = {"status": "not defined (007)"}
         if level.get("picks") is not None:
@@ -852,7 +887,7 @@ def _not_supported(table: dict) -> list:
                 if v["unit_counts"]["counts"].get(st):
                     out.append({"item": f"{where} {name}", "reason": f"{v['unit_counts']['counts'][st]} unit(s) {st}"})
         for L, lv in sec["levels"].items():
-            for code in ("PROVISIONAL", "NOISE_CYCLE", "KNEE_AT_GRID_TOP", "H_B1_UNREFUTABLE"):
+            for code in ("PROVISIONAL", "NOISE_CYCLE", "KNEE_AT_GRID_TOP", "H_B1_UNREFUTABLE", "CONTRARY_TO_PREDICTION"):
                 if code in lv.get("caveats", []):
                     out.append({"item": f"{where} L={L}", "reason": code})
             if where == "core_b" and lv["status"] != "ok":
@@ -865,8 +900,8 @@ def _not_supported(table: dict) -> list:
             for d in lv.get("dominated", []):
                 if d["tie_dependent"]:
                     out.append({"item": f"{where} L={L} {d['config']} dominated", "reason": TIE_TEXT})
-            if lv.get("b_x", {}).get("status") == "pending":
-                out.append({"item": f"{where} L={L} B-X", "reason": "pending"})
+            if lv.get("b_x", {}).get("status") not in (None, "ok", "not defined (007)"):
+                out.append({"item": f"{where} L={L} B-X", "reason": lv["b_x"]["status"]})
     q = table["quality"]
     if q.get("status") != "ok":
         out.append({"item": "quality", "reason": q.get("reason")})
@@ -874,19 +909,21 @@ def _not_supported(table: dict) -> list:
         for r in q["relations"]:
             if r["rel"] == "unmeasured":
                 out.append({"item": f"quality {r['a']} vs {r['b']}", "reason": "unmeasured"})
+    if q.get("downstream"):
         out.append({"item": "downstream ci95", "reason": "copied, not re-verified"})
     return out
 
 
-def build(root: Path, pins: dict) -> dict:
+def build(root: Path, pins: dict, pins_sha256: str | None = None) -> dict:
     """The decision table as one JSON object; raises DecisionTableError for exit 2 (021 R1, R3)."""
     sel = select_sessions(root)
     configs = [f"{m['size']}-{q}" for m in pins["core_a"]["models"] for q in pins["core_a"]["quants"]]
     inputs = []
 
-    def record(role, platform, d: Path, names):
+    def record(role, platform, d: Path, names, session: dict):
         files = {_rel(root, d / n): _sha(d / n) for n in names if (d / n).is_file()}
-        inputs.append({"role": role, "platform": platform, "session_id": d.name, "files": files})
+        inputs.append({"role": role, "platform": platform, "session_id": d.name, "files": files,
+                       "session_pins_sha256": session.get("pins_sha256")})
 
     q = sel["quality"]
     if q is not None:
@@ -897,7 +934,7 @@ def build(root: Path, pins: dict) -> dict:
         q["analysis"] = _json(ap_path) if ap_path.is_file() else None
         if q["analysis"] is not None:
             verify_quality(q["session"], q["analysis"], q["rows_file"])
-        record("quality", "wsl2-cuda", q["dir"], ("session.json", "rows.jsonl", "analysis.json"))
+        record("quality", "wsl2-cuda", q["dir"], ("session.json", "rows.jsonl", "analysis.json"), q["session"])
     q_sec, rels, q_reason, downstream, paired = quality_section(q, configs)
 
     core_a = {}
@@ -912,7 +949,7 @@ def build(root: Path, pins: dict) -> dict:
             if s["analysis"] is not None:
                 verify_core_a(platform, s["session"], s["analysis"], s["rows_file"], pins)
             s["paired_test"] = paired
-            record("core_a", platform, s["dir"], ("session.json", "rows.jsonl", "analysis.json"))
+            record("core_a", platform, s["dir"], ("session.json", "rows.jsonl", "analysis.json"), s["session"])
         core_a[platform] = core_a_section(platform, s, pins, rels, q_reason, downstream)
 
     u, m = sel["core_b_uniform"], sel["core_b_mixed"]
@@ -926,16 +963,18 @@ def build(root: Path, pins: dict) -> dict:
         if p.is_file():
             b_analysis = _json(p)
             verify_core_b(u["loaded"], _load_b(m["dir"]) if m else None, b_analysis)
-        record("core_b_uniform", "wsl2-cuda", u["dir"], ("session.json", "plan.json", "rows.jsonl", "analysis.json"))
+        record("core_b_uniform", "wsl2-cuda", u["dir"], ("session.json", "plan.json", "rows.jsonl", "analysis.json"),
+               {"pins_sha256": u["session"].get("pins_sha256") or u["loaded"]["plan"].get("pins_sha256")})
         if m is not None:
-            record("core_b_mixed", "wsl2-cuda", m["dir"], ("session.json", "plan.json", "rows.jsonl"))
+            record("core_b_mixed", "wsl2-cuda", m["dir"], ("session.json", "plan.json", "rows.jsonl"),
+                   {"pins_sha256": m["session"].get("pins_sha256") or m["plan"].get("pins_sha256")})
     core_b = core_b_section(u, m, b_analysis)
 
     code = {"benchmarks/decision_table.py": _sha(Path(__file__))}
     code.update({f: _sha(ROOT / f) for f in FROZEN_MODULES})
     table = {
         "schema_version": SCHEMA_VERSION, "rules": RULES,
-        "provenance": {"pins_canonical_sha256": hashlib.sha256(json.dumps(pins, sort_keys=True).encode()).hexdigest(),
+        "provenance": {"pins": {"configs/pins.toml": pins_sha256},
                        "code": code, "inputs": sorted(inputs, key=lambda i: (i["role"], i["platform"])),
                        "excluded": sel["excluded"]},
         "global_caveats": ["NO_RANKING", "CORE_A_B_SEPARATE", "TIE_NOT_EQUIVALENCE", "N3_NOISE_RULE",
@@ -990,12 +1029,15 @@ def _md_core_a(platform: str, sec: dict, q: dict) -> list:
     for w in WORKLOADS:
         out.append(f"| {w} {WORKLOAD_TEXT[w]} | " + " | ".join(_cell_text(lv["picks"][w])
                                                          for lv in sec["levels"].values()) + " |")
-    out.append("| A-F not deployable | " + " | ".join(
-        "; ".join(f"{e['config']} ({e['status']})" for e in lv["excluded"]) or "none"
-        for lv in sec["levels"].values()) + " |")
+    for label, kinds in (("not feasible (oom / spill)", ("oom", "spill")),
+                         ("unknown † (not measured / error / incomplete)", ("not measured", "error", "incomplete"))):
+        out.append(f"| {label} | " + " | ".join(
+            "; ".join(f"{e['config']} ({e['status']})" for e in lv["excluded"] if e["status"] in kinds) or "none"
+            for lv in sec["levels"].values()) + " |")
     out.append("")
     out.append("† provisional: an unknown configuration (not measured / error / incomplete) could change the pick. "
-               "`X = Y`: tie (no equivalence claimed). `X ‖ Y`: incomparable (quality not measured across sizes).")
+               "`X = Y`: tie (no equivalence claimed). `X ‖ Y`: incomparable (a quality relation among them is "
+               "unmeasured: across sizes, or a same-size chain that is not resolved).")
     for L, lv in sec["levels"].items():
         out += ["", f"### L = {L}: evidence", "",
                 "| config | state | KLD ± SE | PPL(Q) ± SE | decode tok/s | TTFT s | prefill tok/s | memory axis MiB | "
@@ -1179,9 +1221,9 @@ def write_outputs(out_dir: Path, table: dict) -> None:
         os.replace(p, out_dir / name)
 
 
-def run(root: Path, pins: dict, out_dir: Path) -> int:
+def run(root: Path, pins: dict, out_dir: Path, pins_sha256: str | None = None) -> int:
     try:
-        table = build(root, pins)
+        table = build(root, pins, pins_sha256)
     except DecisionTableError as exc:
         print(f"decision_table: refusing: {exc}", file=sys.stderr)
         return 2
@@ -1192,8 +1234,9 @@ def run(root: Path, pins: dict, out_dir: Path) -> int:
 
 def main(argv: list | None = None) -> int:
     argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args(argv)  # no selection args (021 R1)
-    pins = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
-    return run(ROOT / "results", pins, ROOT / "results" / "decision_table")
+    raw = (ROOT / "configs" / "pins.toml").read_bytes()
+    return run(ROOT / "results", tomllib.loads(raw.decode()), ROOT / "results" / "decision_table",
+               hashlib.sha256(raw).hexdigest())
 
 
 if __name__ == "__main__":

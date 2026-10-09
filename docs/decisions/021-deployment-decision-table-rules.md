@@ -194,3 +194,41 @@ SPEC 要求最後產出 deployment decision table，但 PREREGISTRATION 沒有�
 - 新增 `benchmarks/decision_table.py` 與 `tests/test_decision_table.py`，只 import 凍結模組，不修改它們。
 - PREREGISTRATION 開頭加註本文；hypothesis、門檻、metric、protocol 都不變。
 - 決策表是描述性的整理，不是新的檢定；它的任何內容都不回頭影響 verdict。
+
+## 審查（2026-10-10，第一次真實執行之前）
+
+review workflow：三個面向（規則一致性、真實輸入的穩健性、方法與誠實），每個面向的發現另由對抗式驗證者複查；
+確認的問題約 13 項（去重後），駁回 4 項。審查者沒有讀 `results/`，也沒有對真實數據執行 generator。
+以下修正都發生在 Mac a2、正式 quality、正式 Core B 的分析出現之前，也在 generator 第一次真實執行之前（R0）。
+
+### 規則修訂：R11 的淘汰語意
+
+- 原本：第 k 步一次淘汰「被同一集合內某成員勝過」的所有配置，即使勝過它的成員自己也在同一步被淘汰。
+- 問題：這會形成隱含的跨 metric 遞移。例如 4B-Q8_0 被 9B-Q4_K_M 淘汰（配對 ΔNLL），9B-Q4_K_M 又被 9B-Q8_0 淘汰（KLD），
+  結果 9B-Q8_0 與 4B-Q8_0 在沒有任何直接 quality 證據的情況下分出勝負。
+  KLD（對同 size 的 BF16）與 NLL 是不同的量，「Q6_K 的 KLD 較小」不保證「NLL 較小」，所以這條鏈不成立。
+  依同樣的機制，後續軸也可能經由已被淘汰的成員，把 quality 為 unmeasured 的配置淘汰掉，違反「unmeasured 永遠不當平手」。
+  驗證者認為原寫法符合 R11 的字面，但我判斷它違反 R8 與 R11 的意圖，所以修訂。
+- **修訂後**：每一步重複執行「只淘汰被**目前集合中未被任何成員勝過**的成員勝過的配置」，直到集合不再變動。
+  結果在該步的規則下是 antichain，必定非空，與迭代順序無關。`eliminated[].by` 只列出淘汰當下未被勝過的成員。
+- 影響：合成資料的預設情境中，A-Q 從「decided 9B-Q8_0」變為「incomparable 4B-Q8_0 ‖ 9B-Q8_0」，
+  這才符合「跨 size 除 H-A5(a) 配對以外都是 unmeasured」。
+
+### 其他修正（落實既有規則，不改規則）
+
+- R1：判定 mixed session 是否採用時，不再讀它的 `rows.jsonl`（凍結 report 的拒絕條件只用 session 與 plan）。
+  零個 run 的 mixed plan（兩個 L 都沒有 C_knee 時凍結程式會產生）視為 mixed，不再被當成無法辨識。
+- R22：凍結 report 的拒絕訊息可能含有絕對路徑（server argv、env），寫入前遮蔽為 `<path>`。
+  provenance 改記 `configs/pins.toml` 檔案本身的 sha256（可與 session 記錄的 `pins_sha256` 對照），並列出每個輸入 session 的 `pins_sha256`。
+- R16：H-B1 的 inconclusive 依 §2「只報告、不計入」，不算可檢定的 unit；H-A1 只有 predicted 為 fit / oom、observed 為 fit / oom / spill 的 unit 才算可檢定。
+- R8 / R14 / R17：H-A5(a) 配對的關係與每個 level 的並列一律附 CONTAMINATION（005），不論檢定結果。
+  與預測相反的 Holm 關係只要出現在 candidate 之間，就在該 level、支配的邊與 not_supported 標 CONTRARY_TO_PREDICTION。
+- R9：tie_dependent 改為逐邊記錄；只有所有支配邊都靠 quality 的 tie 時，整個配置才標 tie_dependent。
+- R13：每個替代方案對推薦配置附上 downstream（同 size：兩者的配對與各自對 BF16；跨 size：not compared）；
+  tie 或 incomparable 的推薦另列推薦配置彼此的逐軸關係。
+- R19：B-X 依機械規則判定：該 L 不在 mixed plan 的 C_knee 中 → not measured；H-B4 unit 不是 tested → not testable；只有 tested 才是 ok。非 ok 都列入 not_supported。
+- R21：只要輸出了 downstream，就列入「ci95 未重新驗證」，不論 quality 段是否可用。
+- markdown：推薦表原本的「A-F not deployable」列把 not measured / error / incomplete 也稱為不可部署，與 R5 矛盾；
+  改為兩列：「not feasible（oom / spill）」與「unknown †（not measured / error / incomplete）」。
+  incomparable 的說明改為「quality 關係未量測（跨 size，或同 size 的鏈不嚴格）」。
+- 測試由 40 個增為 52 個（每項修正先寫測試，確認失敗後才修改程式）。

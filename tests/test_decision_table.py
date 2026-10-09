@@ -222,7 +222,7 @@ def write_core_b(results: Path, sid: str = "b-uniform", *, rows: list | None = N
 
 def write_mixed(results: Path, sid: str = "b-mixed", uniform_sid: str = "b-uniform", knees: dict | None = None,
                 session: dict | None = None, regenerate: bool = True) -> Path:
-    knees = knees or {"2048": 4, "8192": 2}
+    knees = {"2048": 4, "8192": 2} if knees is None else knees
     d = results / "core_b" / sid
     _write(d / "session.json", {"session_id": sid, **B_SESSION, **(session or {})})
     _write(d / "plan.json", _b_plan(GRIDS, C_KV, "mixed", uniform_sid, knees))
@@ -343,11 +343,13 @@ def test_lexicographic_pick_is_nonempty_and_keeps_maximal_members():
             assert p["configs"]
             for k, step in enumerate(p["steps"]):
                 assert step["kept"]
-                for y in step["kept"]:  # nobody left is beaten on this axis under the rule
-                    prev = p["steps"][k - 1]["kept"] if k else cfgs
+                for y in step["kept"]:  # the kept set is an antichain under this step's rule
                     assert not any(rel_ab[(x, y)][step["axis"]] == "better"
                                    and ("quality" not in order[:k] or rel_ab[(x, y)]["quality"] == "tie")
-                                   for x in prev if x != y)
+                                   for x in step["kept"] if x != y)
+                for e in step["eliminated"]:  # every eliminator was unbeaten when it eliminated
+                    assert e["by"] and all(rel_ab[(b, e["config"])][step["axis"]] == "better" and b in step["kept"]
+                                           for b in e["by"])
             assert p["configs"] == [c for c in cfgs if c in p["configs"]]  # canonical order, no tie-break
 
 
@@ -358,7 +360,8 @@ def test_default_tree_front_and_picks(base_table):
     mac = t["core_a"]["macos-metal"]
     lv = mac["levels"]["2048"]
     assert [c for comp in lv["frontier"] for c in comp] == CONFIGS  # every config trades something
-    assert lv["picks"]["A-Q"]["status"] == "decided" and lv["picks"]["A-Q"]["configs"] == ["9B-Q8_0"]
+    # 9B-Q4_K_M beats 4B-Q8_0 (paired dNLL) but is itself below 9B-Q8_0 (KLD): no cross-metric chain (021 R11 fix)
+    assert lv["picks"]["A-Q"]["status"] == "incomparable" and lv["picks"]["A-Q"]["configs"] == ["4B-Q8_0", "9B-Q8_0"]
     assert lv["picks"]["A-D"]["configs"] == ["4B-Q4_K_M"]
     assert lv["picks"]["A-P"]["configs"] == ["4B-Q8_0"]
     assert lv["picks"]["A-M"]["configs"] == ["4B-Q4_K_M"]
@@ -739,4 +742,161 @@ def test_markdown_renders_every_section(base_table):
               "## Quality", "## What the evidence does not support", "### Fit map"):
         assert h in md
     assert "| A-Q quality first" in md and "C = C_knee = 4" in md
-    assert "A-Q: 4B-Q8_0 vs 9B-Q8_0 — dropped at quality by 9B-Q4_K_M;" in md  # the eliminator is named
+    assert "A-Q: 4B-Q6_K vs 4B-Q8_0 — dropped at quality by 4B-Q8_0;" in md  # the eliminator is named
+    assert "`X ‖ Y`: incomparable (a quality relation among them is unmeasured" in md
+
+
+# ------------------------------------------------- review fixes (2026-10-10) --
+
+def test_pick_never_eliminates_through_an_eliminated_member():
+    """x beats y and w beats x on TTFT (quality ties); w vs y quality is unmeasured -> y stays (021 R11 fix)."""
+    q = {("w", "x"): "tie", ("x", "y"): "tie", ("w", "y"): "unmeasured"}
+    t = {("w", "x"): "better", ("x", "y"): "better", ("w", "y"): "better"}
+
+    def rel(axis, a, b):
+        if axis == "quality":
+            return q.get((a, b)) or q.get((b, a))
+        if (a, b) in t:
+            return t[(a, b)]
+        return "worse" if (b, a) in t else "tie"
+
+    p = dt.pick(["w", "x", "y"], ("quality", "ttft"), rel)
+    assert p["configs"] == ["w", "y"] and p["status"] == "incomparable"
+    assert p["steps"][1]["eliminated"] == [{"config": "x", "by": ["w"]}]
+
+
+def test_h_b1_inconclusive_and_h_a1_boundary_are_not_testable(tmp_path):
+    rows = b_rows()
+    for r in rows:
+        r["p95_ttft_ms"] = 100.0 + 0.01 * r["restart"]  # no C reaches 3 x the knee; every grid stops below 4 x C_knee
+    results = tmp_path / "results"
+    write_core_b(results, rows=rows, analysis="uniform-only")
+    h = build(results)["core_b"]["verdicts"]["H-B1"]
+    assert h["unit_counts"]["counts"] == {"inconclusive": 3} and h["unit_counts"]["labels"] == ["NO_TESTABLE_UNITS"]
+    assert dt._unit_counts("H-A1", {"units": [{"predicted": "boundary", "observed": "fit"},
+                                               {"predicted": "fit", "observed": "error"}]})["testable"] == 0
+
+
+def test_contamination_note_is_always_on_the_ha5a_pair(tmp_path):
+    t = build(full_tree(tmp_path, q_rows=quality_rows(paired="no-difference")))
+    pair = next(r for r in t["quality"]["relations"] if {r["a"], r["b"]} == {"9B-Q4_K_M", "4B-Q8_0"})
+    assert pair["rel"] == "tie" and pair["caveats"] == ["CONTAMINATION"]
+    for p in dt.PLATFORMS:
+        for lv in t["core_a"][p]["levels"].values():
+            assert "CONTAMINATION" in lv["ha5a"]["caveats"]
+
+
+def test_alternatives_carry_same_size_downstream_and_mark_cross_size(base_table):
+    _, t = base_table
+    a_d = t["core_a"]["macos-metal"]["levels"]["2048"]["picks"]["A-D"]  # decided 4B-Q4_K_M
+    alts = {a["config"]: a for a in a_d["alternatives"]}
+    same = alts["4B-Q8_0"]["vs"]["4B-Q4_K_M"]["downstream"]
+    assert same and all(d["size"] == "4B" for d in same)
+    assert alts["9B-Q8_0"]["vs"]["4B-Q4_K_M"]["downstream"] == "not compared"
+    a_q = t["core_a"]["macos-metal"]["levels"]["2048"]["picks"]["A-Q"]  # incomparable 4B-Q8_0 / 9B-Q8_0
+    assert a_q["relations_among_picks"] == [{"a": "4B-Q8_0", "b": "9B-Q8_0", **{
+        "quality": "unmeasured", "decode": "better", "ttft": "better", "memory": "better"}}]
+
+
+def test_tie_dependent_is_per_edge(tmp_path):
+    q = quality_rows({"4B-Q4_K_M": (0.0061, 0.0002)})  # 4B Q6_K vs Q4_K_M not resolved
+    spec = {}
+    for L in LS:
+        same = {"decode": [DECODE["4B-Q8_0"] * (1 - L / 400000) + d for d in (-0.5, 0.0, 0.5)],
+                "ttft": [L / PREFILL["4B-Q8_0"] * f for f in (0.999, 1.0, 1.001)], "device": [DEVICE["4B-Q8_0"] + L // 16] * 3}
+        spec[("4B-Q6_K", L)] = same
+        spec[("4B-Q4_K_M", L)] = {"ttft": same["ttft"]}
+    lv = build(full_tree(tmp_path, q_rows=q, mac_rows=core_a_rows(spec)))["core_a"]["macos-metal"]["levels"]["2048"]
+    d = next(x for x in lv["dominated"] if x["config"] == "4B-Q6_K")
+    assert d["dominated_by"] == ["4B-Q8_0", "4B-Q4_K_M"]
+    assert d["relations"]["4B-Q8_0"]["tie_dependent"] is False and d["relations"]["4B-Q4_K_M"]["tie_dependent"] is True
+    assert d["tie_dependent"] is False  # dominated anyway by a resolved quality advantage
+    t = build(full_tree(tmp_path / "b", q_rows=q, mac_rows=core_a_rows(spec)))
+    assert not any(x["item"].startswith("core_a/macos-metal") and "4B-Q6_K dominated" in x["item"]
+                   for x in t["not_supported"])
+    assert any(x["item"] == "core_a/wsl2-cuda L=2048 4B-Q6_K dominated" for x in t["not_supported"])  # tie only
+
+
+def test_not_supported_keeps_downstream_ci_item_when_quality_unavailable(tmp_path):
+    t = build(full_tree(tmp_path, q_rows=quality_rows(drop_kld=("9B-Q6_K",))))
+    assert t["quality"]["status"] == "unavailable" and t["quality"]["downstream"]
+    assert {"item": "downstream ci95", "reason": "copied, not re-verified"} in t["not_supported"]
+
+
+def test_excluded_mixed_rows_are_never_read_and_paths_are_redacted(tmp_path, monkeypatch):
+    results = full_tree(tmp_path, mixed=False)
+    write_mixed(results, "m-env", session={"env_valid": False}, regenerate=False)
+    write_mixed(results, "m-srv", session={"server_env": {"HF_HOME": "/home/someone/.cache/huggingface"}},
+                regenerate=False)
+    seen, orig = [], Path.read_text
+
+    def spy(self, *a, **k):
+        seen.append(str(self))
+        return orig(self, *a, **k)
+
+    monkeypatch.setattr(Path, "read_text", spy)
+    t = build(results)
+    assert not [x for x in seen if ("m-env" in x or "m-srv" in x) and x.endswith("rows.jsonl")]
+    text = json.dumps(t) + dt.render_md(t)
+    assert "/home/someone" not in text and "<path>" in text
+
+
+def test_bx_is_not_ok_without_a_tested_h_b4_unit(tmp_path):
+    results = tmp_path / "results"
+    write_core_b(results, rows=b_rows(drop=((8192, 2, 3),)), analysis="none")
+    write_mixed(results, knees={"2048": 4})  # the frozen mixed plan skips 8192 (no uniform C_knee there)
+    lv = build(results)["core_b"]["levels"]
+    assert lv["8192"]["b_x"]["status"] == "not measured (no uniform C_knee at this L; the mixed plan skipped it)"
+    assert lv["2048"]["picks"]["B-X"]["status"] == "ok"
+    r2 = tmp_path / "r2" / "results"
+    write_core_b(r2, analysis="none")
+    m = write_mixed(r2, regenerate=False)
+    rows = [json.loads(x) for x in (m / "rows.jsonl").read_text().splitlines()]
+    _write_rows(m / "rows.jsonl", [r for r in rows if not (r["L"] == 2048 and r["restart"] == 2)])
+    regenerate_core_b(r2, "b-uniform", "b-mixed")
+    t = build(r2)
+    bx = t["core_b"]["levels"]["2048"]["picks"]["B-X"]
+    assert bx["status"] == "not testable" and "MIXED_AT_KNEE_ONLY" not in t["core_b"]["levels"]["2048"]["caveats"]
+    assert {"item": "core_b L=2048 B-X", "reason": "not testable"} in t["not_supported"]
+
+
+def test_zero_run_mixed_plan_is_still_the_mixed_session(tmp_path):
+    results = tmp_path / "results"
+    write_core_b(results, rows=b_rows(drop=((2048, 2, 3), (8192, 2, 3))), analysis="none")
+    write_mixed(results, knees={})
+    t = build(results)
+    assert t["core_b"]["mixed_session"] == "b-mixed"
+    assert all(t["core_b"]["levels"][L]["b_x"]["status"].startswith("not measured") for L in ("2048", "8192"))
+
+
+def test_unknown_configs_are_not_called_infeasible(tmp_path):
+    spec = {("9B-Q6_K", 8192): {"error": True}, ("9B-Q8_0", 8192): {"oom": True}}
+    md = dt.render_md(build(full_tree(tmp_path, rtx_rows=core_a_rows(spec))))
+    seg = md[md.index("## Core A — wsl2-cuda"):md.index("## Core B")]
+    assert "not deployable" not in seg
+    assert "| not feasible (oom / spill) | none | 9B-Q8_0 (oom) | none |" in seg
+    assert "| unknown † (not measured / error / incomplete) | none | 9B-Q6_K (error) | none |" in seg
+
+
+def test_contrary_relation_is_flagged_where_it_acts(tmp_path):
+    rng = random.Random(7)
+    base = [2.0 + rng.random() for _ in range(30)]
+    q = quality_rows()
+    for r in q:
+        if r["kind"] == "ppl" and r["size"] == "9B":
+            r["metrics"]["chunk_nll"] = [b + 0.05 for b in base]  # 9B-Q4_K_M worse: contrary to H-A5(a)
+    t = build(full_tree(tmp_path, q_rows=q))
+    lv = t["core_a"]["macos-metal"]["levels"]["2048"]
+    assert "CONTRARY_TO_PREDICTION" in lv["caveats"]
+    seg = dt.render_md(t)
+    assert seg.count("CONTRARY_TO_PREDICTION") > 1  # not only in the glossary
+    assert any(x["reason"] == "CONTRARY_TO_PREDICTION" for x in t["not_supported"])
+
+
+def test_provenance_records_the_pins_file_and_each_session_pins(tmp_path):
+    import hashlib
+    results = full_tree(tmp_path)
+    sha = hashlib.sha256((ROOT / "configs" / "pins.toml").read_bytes()).hexdigest()
+    t = dt.build(results, PINS, pins_sha256=sha)
+    assert t["provenance"]["pins"] == {"configs/pins.toml": sha}
+    assert all("session_pins_sha256" in i for i in t["provenance"]["inputs"])
