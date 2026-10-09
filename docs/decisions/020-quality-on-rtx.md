@@ -1,6 +1,6 @@
 # 020 — 正式 quality 改在 RTX（wsl2-cuda）上執行
 
-- 狀態：Accepted（quality 搬到 RTX：使用者同意，2026-10-09；4B 一起搬：我的建議，待使用者確認，確認前照此準備）
+- 狀態：Accepted（quality 搬到 RTX：使用者同意，2026-10-09；4B 一起搬：我的建議，使用者於同日確認「搬」）
 - 日期：2026-10-09
 - 時點：Stage A 與 Stage B 都已凍結，任何正式 quality 數據之前。quality 只有 Mac 上的 pilot（012，遮蔽版報告）。
 - 依 006，凍結後的任何變更都要記錄。本文改的是正式 quality 的**執行平台**，以及 MACHINE_POLICY 對 quality 的分工。
@@ -18,7 +18,7 @@
 ## 決策
 
 1. **兩個 size 的正式 quality 都在 wsl2-cuda 上執行**：RTX 5070 Ti，llama.cpp b11146（同一 commit）CUDA build，user-space CUDA 13.4.1（015）。
-   - **4B 也要搬**〔我的建議，待使用者確認；正式 quality 開始前需要確認〕：H-A5(a) 是 9B-Q4_K_M 與 4B-Q8_0 在每個 WikiText chunk 上的配對 ΔNLL。
+   - **4B 也要搬**〔我的建議，使用者 2026-10-09 確認〕：H-A5(a) 是 9B-Q4_K_M 與 4B-Q8_0 在每個 WikiText chunk 上的配對 ΔNLL。
      兩個 size 若在不同平台量（Metal 與 CUDA），ΔNLL 會混進兩個 backend 的數值差異。所以兩個 size 必須在同一平台。
    - 4B BF16（7.85 GiB）放得進 VRAM，不會 spill。
 2. **flag set 不變**（005：`-ngl 999 -fa on --fit off -ctk f16 -ctv f16 -b 2048 -ub 512 -c 512 -lm mmap`）。

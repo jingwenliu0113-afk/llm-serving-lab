@@ -25,7 +25,7 @@
   - Core B 的 `--max-num-seqs` 改為 **128**，grid 上限改為 **128**。
   - Stage B 不拆分。
 - **020**：正式 quality 改在 **RTX** 上執行，flag set 與 hypothesis 不變。
-  - 4B 一起搬是我的建議，待使用者確認，見 Blocked 1。
+  - 4B 一起搬：使用者 2026-10-09 確認。
   9B BF16 會少量 spill 到系統記憶體，運算仍全部在 CUDA 上完成。
 
 ### RTX（gpu-server，GPU lock 下依序執行）
@@ -104,11 +104,7 @@
 
 ## Blocked / 需要使用者
 
-1. **4B 的 quality 是否也在 RTX 上量**（020；正式 quality 開始前需要確認）
-   - 我的建議是一起搬，理由：
-     - H-A5(a) 是 9B-Q4_K_M 與 4B-Q8_0 逐 chunk 的配對 ΔNLL，兩個 size 跨 Metal / CUDA 會混入 backend 差異；
-     - 4B BF16 只有 7.85 GiB，放得進 VRAM。
-   - 在你確認前我照此準備：BF16 會傳過去、pilot 也會跑，但不開始正式 quality。
+目前沒有需要使用者決定的項目。
 
 ## 建議（非 blocker）
 
@@ -127,3 +123,4 @@
   - Stage B 不拆分（019）。
   - quality 的 Mac 磁碟不足：quality 改在 RTX 執行，問題消失（020）。清理 scratchpad 釋出約 2.2 GB。
   - 019 中「quality 是否套用電池下降停止規則」：quality 改在 RTX，不再適用（020）。
+  - 4B 的 quality 也在 RTX 上量：使用者確認（020）。

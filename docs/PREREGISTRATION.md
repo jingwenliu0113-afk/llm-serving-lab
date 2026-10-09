@@ -184,7 +184,7 @@
 | prefill tok/s(L) | L ÷ TTFT(L)，每個 process 各自計算後再取 cell 平均（013） | 同上 |
 | decode tok/s(L) | `-p 0 -n 128 -d (L-128)` 的 `avg_ts` | `llama-bench` |
 | peak memory | **只取 fit-run process**：llama.cpp memory breakdown（model / context / compute）逐 device 與 host 報告，另列合計。Mac 另記 `/usr/bin/time -l` 的 peak memory footprint 與 maximum resident set size（pilot：footprint 不含 mmap 的權重、含 KV / compute；012）；RTX 另記 `nvidia-smi memory.used` 峰值減 B。`-lm mmap` 固定 | `llama-completion` |
-| quality | 005 | `llama-perplexity`（只在 Mac）〔凍結後註記，020：改為只在 RTX（wsl2-cuda）量，兩個 size 都搬（4B 一起搬待使用者確認）；flag set 不變〕 |
+| quality | 005 | `llama-perplexity`（只在 Mac）〔凍結後註記，020：改為只在 RTX（wsl2-cuda）量，兩個 size 都搬（4B 一起搬經使用者確認）；flag set 不變〕 |
 
 兩平台的 peak memory 依平台分別定義，**不互相比大小**（不做排名）。pilot 要先交叉核對 breakdown 與外部量測。
 

@@ -39,7 +39,7 @@ SPEC 把 quality 定義為「model × quantization」的屬性：只量一次、
 
 - **平台**：Mac Metal、pinned build（002）、單一 flag set。MACHINE_POLICY 把 quality 分給 Mac，
   而且 14B BF16 reference（27.5 GiB）放不進 16 GB VRAM。
-  〔2026-10-09 起依 020（使用者同意）改在 RTX 5070 Ti 的 wsl2-cuda 上執行，兩個 size 都搬（4B 一起搬是我的建議，待使用者確認）；flag set 不變，`-t` / `--poll` 改用 RTX 的 6 / 0。
+  〔2026-10-09 起依 020（使用者同意）改在 RTX 5070 Ti 的 wsl2-cuda 上執行，兩個 size 都搬（4B 一起搬是我的建議，使用者已確認）；flag set 不變，`-t` / `--poll` 改用 RTX 的 6 / 0。
   9B BF16 會少量 spill 到系統記憶體，所有運算仍在 CUDA 上完成。〕
 - **flags**（`llama-perplexity`）：
   `-ngl 999 -fa on --fit off -ctk f16 -ctv f16 -b 2048 -ub 512 -c 512 -lm mmap -t N_thr --poll P`；
