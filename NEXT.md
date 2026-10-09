@@ -76,7 +76,8 @@
 
 ### Mac
 
-- **使用者 2026-10-10 01:45：暫時不要在 Mac 上開始新的重負載**（使用者自己有工作要跑，好了會通知）。
+- 使用者 2026-10-10 01:45 暫停 Mac 的新重負載；**03:55 解除**（由使用者的另一個 Claude session 轉達「mac 已經用好了」）。
+  解除後 Mac 也沒有待跑的重負載：Core A 已完成，quality 在 RTX，Core B 只在 RTX。
   - a2 已跑完且有效（見下）。RTX 照常進行（使用者只用 Mac）。
   - Mac 目前沒有排任何重負載；只做輕量的分析、圖與 commit。
 
@@ -105,7 +106,7 @@
       - `core_b_report.py` 與 `core_b_figures.py`。
       - `quality_analysis.py`。
       - frontier 圖，要註明 quality 是在 wsl2-cuda 上量的。
-2. **Mac**：正式 Core A 已完成。依使用者要求，在使用者通知之前不在 Mac 上開始新的重負載（目前也沒有排任何 Mac 重負載）。
+2. **Mac**：正式 Core A 已完成，沒有其他 Mac 重負載。剩下的 Mac 工作都是輕量的分析、圖與決策表。
 3. **deployment decision table**（SPEC）：
    - 規則 decision 021 已 commit（`41798d7`），generator `benchmarks/decision_table.py` 與 40 個測試已 commit（`278ff82`）。
      兩者都在 a2、正式 quality、正式 Core B 的分析出現之前（021 R0）。
