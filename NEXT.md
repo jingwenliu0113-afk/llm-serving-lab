@@ -11,7 +11,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–023。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–024。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -107,11 +107,14 @@
 
 ## 下一步
 
-1. **Advanced（H-B4 成因隔離，decision 023）**：
-   1. 設計事先登記（decision 024 與 PREREGISTRATION 新一節）：hypothesis、操弄變因、grid、判定規則。
-   2. harness 修改與測試（TDD），例如記錄 queue / prefill 的 histogram，以及新的 server 參數。
-   3. 可行性 smoke（只檢查能否執行，不看結果量）。
-   4. 凍結、commit，然後在 RTX 上收集數據、分析、報告。
+1. **Advanced（H-B4 成因隔離，decision 023、024）**：
+   1. 事先登記草稿已 commit（`ae368e6`）：decision 024、PREREGISTRATION §7（DRAFT）。
+      - 5 個 condition：B0、T（threshold 512）、G（關閉 full-ISL 准入閘門）、TG、K3（KV 3 GiB）。
+      - 每個 condition × 2 個 L × 2 種 mix × 3 次 restart = 60 次 boot，預期約 7.3 h GPU。
+   2. **harness 實作中**（workflow）：`adv_plan`、`adv_decomp`、`adv_analysis`、`run_adv`、`adv_report`、`adv_smoke`，TDD，Core 模組不改；完成後再審查。
+   3. 部署（`deploy_bundle.py` 內部呼叫 `git`，要讓 PATH 先找到 CommandLineTools 的 git）→ smoke FS1–FS5（約 40 分鐘 GPU，只看計數）。
+   4. 依 FS1 填入 K3 的實測 block 數 → `freeze.advanced = true`，§7 改為 FROZEN → commit。
+   5. 正式 run（約 7–8 h）→ `adv_report` → 結果報告。
 2. Core 的結果與 decision table 不因 Advanced 而改變。
 
 ## Blocked / 需要使用者
