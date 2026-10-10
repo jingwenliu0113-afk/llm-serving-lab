@@ -232,3 +232,8 @@ review workflow：三個面向（規則一致性、真實輸入的穩健性、�
   改為兩列：「not feasible（oom / spill）」與「unknown †（not measured / error / incomplete）」。
   incomparable 的說明改為「quality 關係未量測（跨 size，或同 size 的鏈不嚴格）」。
 - 測試由 40 個增為 52 個（每項修正先寫測試，確認失敗後才修改程式）。
+
+## 補充（2026-10-10，decision 022，generator 第一次真實執行之前）
+
+- R1 加一條機械規則：所有 run 都失敗的 session（`outcomes.ok == 0`）不採用，列入 excluded，原因為「no valid run (outcomes ok = 0)」。
+  適用 Core A、quality、Core B uniform 與 mixed。起因是第一次正式 mixed 因缺 pandas 而 6 個 run 全部失敗（022）。

@@ -900,3 +900,26 @@ def test_provenance_records_the_pins_file_and_each_session_pins(tmp_path):
     t = dt.build(results, PINS, pins_sha256=sha)
     assert t["provenance"]["pins"] == {"configs/pins.toml": sha}
     assert all("session_pins_sha256" in i for i in t["provenance"]["inputs"])
+
+
+def test_sessions_without_any_valid_run_are_excluded_not_counted(tmp_path):
+    """022: a session whose every run failed (outcomes.ok == 0) carries no data; it is listed as excluded and does
+    not count as a second valid session (the failed formal mixed of 2026-10-10 sent no request)."""
+    results = full_tree(tmp_path)
+    failed = write_mixed(results, "m-failed", regenerate=False)
+    s = json.loads((failed / "session.json").read_text())
+    _write(failed / "session.json", {**s, "outcomes": {"ok": 0, "error": 6}})
+    t = build(results)
+    ex = {e["session_id"]: e for e in t["provenance"]["excluded"]}
+    assert ex["m-failed"]["problems"] == ["no valid run (outcomes ok = 0)"]
+    assert t["core_b"]["mixed_session"] == "b-mixed"
+    q = write_quality(results, "q-failed")
+    s = json.loads((q / "session.json").read_text())
+    _write(q / "session.json", {**s, "outcomes": {"ok": 0, "error": 46}})
+    a = write_core_a(results, "macos-metal", "mac-failed")
+    s = json.loads((a / "session.json").read_text())
+    _write(a / "session.json", {**s, "outcomes": {"ok": 0, "oom": 0, "error": 164}})
+    t = build(results)
+    ex = {e["session_id"]: e for e in t["provenance"]["excluded"]}
+    assert "no valid run (outcomes ok = 0)" in ex["q-failed"]["problems"]
+    assert "no valid run (outcomes ok = 0)" in ex["mac-failed"]["problems"]

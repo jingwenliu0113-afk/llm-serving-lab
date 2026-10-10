@@ -47,6 +47,7 @@ published_utc = "2026-09-22"
 verified = ["wsl2-cuda"]                                 # 2026-10-09: 003 gate items 1-6 all passed (items 3-4 after 019; results/stage_b/20261009/*-019)
 pending = []
 lock_file = "configs/vllm.lock.txt"                      # hashed lock; the S1-S3 smoke ran on it; WSL .venv == lock (196 / 196 packages, 2026-10-09)
+bench_extra_lock_file = "configs/vllm-bench-extra.lock.txt"  # 022: pandas for `bench serve --dataset-name custom` (mixed); added 2026-10-10, before any mixed request
 
 # Versions from the v0.30.0 CI lock (requirements/test/cuda.txt). Resolve with
 # `uv pip compile --exclude-newer <exclude_newer>` so transitive deps cannot float.

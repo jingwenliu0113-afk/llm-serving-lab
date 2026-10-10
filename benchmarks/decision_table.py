@@ -169,6 +169,12 @@ def _redact(msg: str) -> str:
     return re.sub(r"(?<![\w.])/[^\s'\",\]}]+", "<path>", msg)
 
 
+def _no_valid_run(s: dict) -> list:
+    """022: a session whose every run failed carries no data; it is excluded (listed), never a valid session."""
+    ok = (s.get("outcomes") or {}).get("ok")
+    return ["no valid run (outcomes ok = 0)"] if ok == 0 else []
+
+
 def _core_b_role(plan: dict) -> str | None:
     mixes = {r.get("mix") for r in plan.get("runs", [])}
     if not plan.get("derived_from") and mixes == {"uniform"}:
@@ -195,7 +201,7 @@ def select_sessions(root: Path) -> dict:
         valid = []
         for sj in sorted((root / "core_a" / platform).glob("*/session.json")):
             s = _json(sj)
-            problems = ar.session_problems(s)
+            problems = ar.session_problems(s) + _no_valid_run(s)
             if s.get("platform") != platform:
                 problems.append(f"platform {s.get('platform')!r} is not the directory {platform!r}")
             if problems:
@@ -207,7 +213,7 @@ def select_sessions(root: Path) -> dict:
     valid = []
     for sj in sorted((root / "quality").glob("*/session.json")):
         s = _json(sj)
-        problems = quality_problems(s)
+        problems = quality_problems(s) + _no_valid_run(s)
         if problems:
             exclude("quality", sj.parent, s.get("session_id"), problems)
         else:
@@ -225,7 +231,7 @@ def select_sessions(root: Path) -> dict:
         if role == "mixed":
             mixeds.append((sj.parent, s))
             continue
-        problems = []
+        problems = _no_valid_run(s)
         if s.get("formal") is not True:
             problems.append("the uniform session is not formal")
         if s.get("env_valid") is not True:
@@ -242,6 +248,9 @@ def select_sessions(root: Path) -> dict:
             exclude("core_b_mixed", d, s.get("session_id"), ["no selected uniform session"])
             continue
         plan = _json(d / "plan.json")
+        if _no_valid_run(s):
+            exclude("core_b_mixed", d, s.get("session_id"), _no_valid_run(s))
+            continue
         if plan.get("derived_from") != uniform["session_id"]:
             exclude("core_b_mixed", d, s.get("session_id"),
                     [f"the mixed plan was derived from {plan.get('derived_from')!r}, not {uniform['session_id']!r}"])

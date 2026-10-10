@@ -1,0 +1,111 @@
+{
+ "schema_version": 1,
+ "seed": 20261008,
+ "num_gpu_blocks": 248,
+ "block_size": 528,
+ "kv_cache_memory_bytes": 4294967296,
+ "gpu_memory_utilization": "0.91",
+ "c_kv": {
+  "2048": 35,
+  "8192": 13,
+  "32768": 3
+ },
+ "grids": {
+  "2048": [
+   1,
+   2,
+   4,
+   8,
+   16,
+   18,
+   25,
+   32,
+   35,
+   49,
+   64,
+   70,
+   128
+  ],
+  "8192": [
+   1,
+   2,
+   4,
+   7,
+   8,
+   9,
+   13,
+   16,
+   18,
+   26,
+   32,
+   64,
+   128
+  ],
+  "32768": [
+   1,
+   2,
+   3,
+   4,
+   6,
+   8,
+   16,
+   32
+  ]
+ },
+ "derived_from": "formal-20261009-coreb-uniform",
+ "c_knee": {
+  "2048": 25,
+  "8192": 8
+ },
+ "skipped": {},
+ "runs": [
+  {
+   "L": 2048,
+   "mix": "mixed",
+   "restart": 1,
+   "order": [
+    25
+   ]
+  },
+  {
+   "L": 2048,
+   "mix": "mixed",
+   "restart": 2,
+   "order": [
+    25
+   ]
+  },
+  {
+   "L": 2048,
+   "mix": "mixed",
+   "restart": 3,
+   "order": [
+    25
+   ]
+  },
+  {
+   "L": 8192,
+   "mix": "mixed",
+   "restart": 1,
+   "order": [
+    8
+   ]
+  },
+  {
+   "L": 8192,
+   "mix": "mixed",
+   "restart": 2,
+   "order": [
+    8
+   ]
+  },
+  {
+   "L": 8192,
+   "mix": "mixed",
+   "restart": 3,
+   "order": [
+    8
+   ]
+  }
+ ]
+}
