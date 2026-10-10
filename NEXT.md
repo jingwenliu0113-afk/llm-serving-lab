@@ -103,9 +103,11 @@
 ## 下一步
 
 1. **RTX**（GPU lock，依序）：
-   1. 自動接續（進行中）：uniform 檢查通過、`2c2e764` 已部署並核對（09:12）→ RTX quality pilot（09:12 開始）→ 正式 Core B mixed。
-   2. 把 mixed、quality pilot 的 session 取回 Mac 並 commit（`fetch_rtx_session.sh`，`raw/` 不進 git）；uniform 已取回。
-   3. 看 quality pilot 的遮蔽版報告：self-KLD 0、重跑完全相同、9B BF16 的 spill 量。通過才排正式 quality（兩個 size）。
+   1. **RTX quality pilot 通過**（`pilot-20261010-rtx-q`，52 / 52 ok，09:12–10:04）：重跑完全相同、self-KLD 0、Q8_0 KLD 約 1.5e-3。
+      正式 quality 估計約 13.8 小時。spill 量 pilot 量不到，改由記憶體探測記錄（020 補記）。
+   2. **正式 Core B mixed 進行中**（10:04 開始，`chain_rtx_after_uniform.sh`）。
+   3. 接著自動（`chain_rtx_after_mixed.sh`）：核對部署 commit → 9B BF16 記憶體探測（約 2 分鐘，描述用）→ 正式 quality（兩個 size）。
+   4. mixed 跑完：取回 session（`fetch_rtx_session.sh`），以 `--mixed` 重產 Core B `analysis.json`（021 R3），commit。
    6. 報告：
       - `core_a_report.py`（RTX 帶 `--v-total-mib 16303 --b-mib 811 --c-ctx-mib -89`）。
       - `core_b_report.py` 與 `core_b_figures.py`。

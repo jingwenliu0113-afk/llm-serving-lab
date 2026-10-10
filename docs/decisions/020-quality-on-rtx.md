@@ -109,3 +109,21 @@
   Mac 的正式 Core A 另外改在固定 commit 的 git worktree 中執行（`.worktrees/<session>`，已加入 .gitignore；
   由 scratchpad 的 `batch_formal_a.sh` 建立）。這樣我在主目錄的修改與 commit 不會碰到進行中的 session。
 
+
+## RTX quality pilot 結果（2026-10-10，`pilot-20261010-rtx-q`，只看遮蔽版報告）
+
+- 52 / 52 ok，GPU lock 下執行，部署 commit `2c2e764`。09:12–10:04，約 52 分鐘。
+- determinism：4B、9B 的 KLD 與 MMLU 重跑都完全相同。
+- sanity：self-KLD 4B、9B 都是 0。Q8_0 KLD 為 4B 0.0017（fa on）/ 0.0015（fa off），9B 0.0015 / 0.0016，與預期的 1e-3 量級一致。
+  - Mac 上 fa on / off 完全相同（012）；CUDA 上有小差異。不影響正式 run，因為正式 run 只用 `-fa on`。
+- 正式 quality 估計約 13.8 小時（兩個 size）。
+- KLD SE 依正式 chunk 數推估：上界 4B 7.6e-4、9B 1.1e-3（Mac pilot 為 7.7e-4、6.0e-4）。
+- **9B BF16 的 spill 量**：005 的 flag set 沒有 `-lv 4`，llama-perplexity 不會印出記憶體 breakdown，所以 pilot 無法回答第 6 點的這一項。
+  - 每個 pass 的時間（9B BF16 5.24 秒，4B BF16 6.11 秒）主要花在儲存 logits 與計算 KLD，看不出 spill。
+  - **處理**：Core B mixed 之後、正式 quality 之前，在 GPU lock 下另跑一次只作描述的記憶體探測。
+    - 設定：同一組 flag 加 `-lv 4`（只影響 log），4 個 chunk，`nvidia-smi` 1 Hz 取樣。
+    - 結果放在 `results/quality/probe-<日期>-bf16-memory/`。log 留在 `raw/`（不進 git，不讀），只擷取記憶體行。
+  - 依第 3 點，spill 是允許的，探測結果不影響任何決定。正式 quality 的 flag set 不變。
+- **揭露**：找記憶體行時，我把 9B BF16 參考 job 的 stderr 整段印出，其中最後一行是它在 pilot 20 個 chunk 上的 PPL。
+  - 這是 BF16 參考值本身，不是任何 hypothesis 對比（H-A5 比的是 quant 之間，以及 9B-Q4_K_M 對 4B-Q8_0）。
+  - 但它屬於 pilot 的遮蔽範圍，照實記錄。之後讀 log 一律先過濾，只看記憶體與時間。
