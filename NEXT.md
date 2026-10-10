@@ -36,8 +36,14 @@
     - 推翻 H-A2 的是 4B-Q4_K_M 對 9B-Q8_0 這一組：觀測比 2.24，預測比 2.99，偏差 −25%，門檻是 ±20%。
     - 15 組配對的偏差全部是負的：bytes 少的配置都比純頻寬比例預測的慢。原因屬於推測，Core 不驗證。
   - 圖：`results/core_a/figures/{decode,prefill,memory}-rtx-formal.svg`。
-- **正式 Core B uniform**（`formal-20261009-coreb-uniform`）：13:11 開始，23:30 時 80 / 102 列，全部 ok。
-  - 剩下 22 個 32K 點，每點約 23 分鐘，預計 2026-10-10 早上 8 點左右結束。
+- **正式 Core B uniform 完成**（`formal-20261009-coreb-uniform`，2026-10-09 13:11 至 2026-10-10 09:11，約 20 小時）：
+  - 102 / 102 ok，formal，env 有效，沒有 teardown 問題。
+  - uniform-only 分析：H-B1、H-B2、H-B3 not refuted。
+    - C_knee：2K 為 25（C_KV 35）、8K 為 8（C_KV 13）、32K 為 2（C_KV 3），都落在 H-B2 的 [C_KV ÷ 2, 2 × C_KV] 內。
+    - H-B1 三個 L 都是 supported（首次達到 3 倍 P95 TTFT 的 C：70 / 16 / 8）。
+  - H-B4 要等 mixed，目前 0 個可檢定的 unit。
+  - mixed 跑完後，`analysis.json` 要以 `--mixed` 重產（021 R3）。
+  - 圖：`results/core_b/figures/{p95_ttft_ms,p95_tpot_ms,output_throughput}-uniform-formal.svg`。
 - **uniform 之後的自動接續**（背景 `chain_rtx_after_uniform.sh`，每一步都在 GPU flock 下、ssh 前景執行，遇到問題就停）：
   1. 唯讀檢查 uniform session：formal、env 有效、102 列全部 ok。不符合就停止，不部署、不開跑任何東西。
   2. 確認 GPU 上沒有 compute process 後，部署 `2c2e764`（bundle 事先建好），並核對 `DEPLOYED_COMMIT`。
@@ -97,10 +103,9 @@
 ## 下一步
 
 1. **RTX**（GPU lock，依序）：
-   1. 正式 Core B uniform（進行中）。
-   2. 自動接續：檢查 uniform → 部署 `2c2e764` → RTX quality pilot → 正式 Core B mixed（見上）。
-   3. 把 uniform、mixed、quality pilot 的 session 取回 Mac 並 commit（`raw/` 不進 git）。
-   4. 看 quality pilot 的遮蔽版報告：self-KLD 0、重跑完全相同、9B BF16 的 spill 量。通過才排正式 quality（兩個 size）。
+   1. 自動接續（進行中）：uniform 檢查通過、`2c2e764` 已部署並核對（09:12）→ RTX quality pilot（09:12 開始）→ 正式 Core B mixed。
+   2. 把 mixed、quality pilot 的 session 取回 Mac 並 commit（`fetch_rtx_session.sh`，`raw/` 不進 git）；uniform 已取回。
+   3. 看 quality pilot 的遮蔽版報告：self-KLD 0、重跑完全相同、9B BF16 的 spill 量。通過才排正式 quality（兩個 size）。
    6. 報告：
       - `core_a_report.py`（RTX 帶 `--v-total-mib 16303 --b-mib 811 --c-ctx-mib -89`）。
       - `core_b_report.py` 與 `core_b_figures.py`。

@@ -1,0 +1,857 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/bench-uniform-2048-r1-c1.json": {
+   "sha256": "2076c933afa04d69fcb04d835cd21d7fd35513bceb82e87148e2d2a3eaf871f5",
+   "size_bytes": 684055
+  },
+  "raw/bench-uniform-2048-r1-c1.log": {
+   "sha256": "9e1c6fc610b9e7057e30b86545c5b9bd69ff2670c789e474ff8b9816efba5005",
+   "size_bytes": 17914
+  },
+  "raw/bench-uniform-2048-r1-c128.json": {
+   "sha256": "90fb4ce3ce47381dea159332a7926f83e413bca4a2bde271397364d8e91d0f7b",
+   "size_bytes": 4253951
+  },
+  "raw/bench-uniform-2048-r1-c128.log": {
+   "sha256": "e30a469caa7766fcfea60d7459ca27a13a1bbe41fdc2ae882315d871e853d736",
+   "size_bytes": 86261
+  },
+  "raw/bench-uniform-2048-r1-c16.json": {
+   "sha256": "9c8ee1cb465d2bbc1821ce23682f4f2200a37b71e3f1ee204754e4c8f6e80867",
+   "size_bytes": 680530
+  },
+  "raw/bench-uniform-2048-r1-c16.log": {
+   "sha256": "2d501ca4f0aa1aad296b88bae8a765624de83ed9bfc884c3af88f0c0e4572731",
+   "size_bytes": 15706
+  },
+  "raw/bench-uniform-2048-r1-c18.json": {
+   "sha256": "dc368f3666442c25af81deaa419541b5c8aabd8aaed71c99f62d37c50b32c4fe",
+   "size_bytes": 675316
+  },
+  "raw/bench-uniform-2048-r1-c18.log": {
+   "sha256": "a89933a94780fc7d1585a23c126ad02c210d771baf03a64af7be4def31c5e194",
+   "size_bytes": 15812
+  },
+  "raw/bench-uniform-2048-r1-c2.json": {
+   "sha256": "4145ee378eaf4a929f6db4920ec6d0c5e6f6c0da65e5ef56f4e06fd13adffa04",
+   "size_bytes": 682760
+  },
+  "raw/bench-uniform-2048-r1-c2.log": {
+   "sha256": "7d0f840c36c6f5e9caab8dbf6af026593b520692e8e338cfcd35ea5fa76648d1",
+   "size_bytes": 11877
+  },
+  "raw/bench-uniform-2048-r1-c25.json": {
+   "sha256": "498de3060b82f007945e15c388d3d05362fe31e2f24aefe889c5fcd93afbf9d1",
+   "size_bytes": 841803
+  },
+  "raw/bench-uniform-2048-r1-c25.log": {
+   "sha256": "871facfeb2044d4924f289cb0583fba64b4b07849ec77b88c829841f8a0f7057",
+   "size_bytes": 18565
+  },
+  "raw/bench-uniform-2048-r1-c32.json": {
+   "sha256": "f631594d51532e22aa51c67deada4216fa6410a27701f337b2405aaf87d6a3b9",
+   "size_bytes": 1072018
+  },
+  "raw/bench-uniform-2048-r1-c32.log": {
+   "sha256": "b7d72aaa2e83f825cc4c19f1d5a228d4b7b262a86b4bbad43dd0c9b56245724a",
+   "size_bytes": 22475
+  },
+  "raw/bench-uniform-2048-r1-c35.json": {
+   "sha256": "2d2775362fa6f8c444138c5d5b91728f47f3372d737f1f537366739990ebb5a1",
+   "size_bytes": 1171916
+  },
+  "raw/bench-uniform-2048-r1-c35.log": {
+   "sha256": "5de4c144a39d2584924b2528d291d215b901463e0c8d310c9b6c96749e4da886",
+   "size_bytes": 24141
+  },
+  "raw/bench-uniform-2048-r1-c4.json": {
+   "sha256": "4f14f6bdddeeb36f07617e5b163f8efe71e81681ca612c55de17e6ddafc1dfcf",
+   "size_bytes": 684142
+  },
+  "raw/bench-uniform-2048-r1-c4.log": {
+   "sha256": "e5c056636c810499252f9b32b0511dea1510e7f3e226750060e19021732154f2",
+   "size_bytes": 11751
+  },
+  "raw/bench-uniform-2048-r1-c49.json": {
+   "sha256": "4d1f8eb4c214e37a0b2f7a98c6f87dcf3556a7e67aea45307b4ef9b0f08efd16",
+   "size_bytes": 1634317
+  },
+  "raw/bench-uniform-2048-r1-c49.log": {
+   "sha256": "546cfb65f512374c10eeb95e9a24997b2a986968c32cf62810dedb6d11f9c67b",
+   "size_bytes": 33647
+  },
+  "raw/bench-uniform-2048-r1-c64.json": {
+   "sha256": "bb76f5511286a682a40adee007a3ea3fa848ad24a16b8d0659785898f94e8dd0",
+   "size_bytes": 2129491
+  },
+  "raw/bench-uniform-2048-r1-c64.log": {
+   "sha256": "07b55e7f961fa808197c03f4cce69a4e9b8942557506e935c68f771fad6c67e5",
+   "size_bytes": 43443
+  },
+  "raw/bench-uniform-2048-r1-c70.json": {
+   "sha256": "919b6264144f38d84833338591c90c16d9a47c1b597b01d9f21cfe9e506c4852",
+   "size_bytes": 2351814
+  },
+  "raw/bench-uniform-2048-r1-c70.log": {
+   "sha256": "f0745bd48a71463e2764096066abffcb4b204a92fbbde4230032489d22dea861",
+   "size_bytes": 47123
+  },
+  "raw/bench-uniform-2048-r1-c8.json": {
+   "sha256": "cba60d213e6725bb3d994c9093792183147bfb2070577670fa435b89a58be35f",
+   "size_bytes": 683180
+  },
+  "raw/bench-uniform-2048-r1-c8.log": {
+   "sha256": "053da071ead32c42091409017d420ce47e8b4a5d5a8a3e84b5ab13610b31f20c",
+   "size_bytes": 14546
+  },
+  "raw/bench-uniform-2048-r2-c1.json": {
+   "sha256": "0f9c5daaae8627aa78ad93a4aa7da2d9753c995e98502798156cf36924499a2a",
+   "size_bytes": 684202
+  },
+  "raw/bench-uniform-2048-r2-c1.log": {
+   "sha256": "47faa2bc9ddaf07120f00aeca957edff000621ecff2954b4ed15bda7d41ef2eb",
+   "size_bytes": 17914
+  },
+  "raw/bench-uniform-2048-r2-c128.json": {
+   "sha256": "6d07fb5f4c4443e045bd64da597d833143d08569a0bbf5771ae2c9b8efaeb1eb",
+   "size_bytes": 4253606
+  },
+  "raw/bench-uniform-2048-r2-c128.log": {
+   "sha256": "d811c3cdd8dc7915ba36437194e171ac27afcbda09297051de7d2019f43050c3",
+   "size_bytes": 86331
+  },
+  "raw/bench-uniform-2048-r2-c16.json": {
+   "sha256": "3283df0a1d0d4c7078b3be0d36cc9b557dc6780ca59f3372358513178838cc89",
+   "size_bytes": 681244
+  },
+  "raw/bench-uniform-2048-r2-c16.log": {
+   "sha256": "39a3752a2ccdf0f9ef75535ea65db8ac4cb32af211b49466ffbca97331494fe6",
+   "size_bytes": 15706
+  },
+  "raw/bench-uniform-2048-r2-c18.json": {
+   "sha256": "f004080408cd99290d8336d5353962f1e3407d836a448fda42cf6b61c37dd12a",
+   "size_bytes": 675873
+  },
+  "raw/bench-uniform-2048-r2-c18.log": {
+   "sha256": "4ac3ea892f6a35b55412c085f2d6c70f8c85e61900d7d489f8eb7ad421ba6430",
+   "size_bytes": 15812
+  },
+  "raw/bench-uniform-2048-r2-c2.json": {
+   "sha256": "007eed8d831830878373beeff82b67e91bc0496036f40115008ae041aae1855a",
+   "size_bytes": 682735
+  },
+  "raw/bench-uniform-2048-r2-c2.log": {
+   "sha256": "30dec125d04a842560a5481bcb5a69e28f1de32d7c6a6a358506f71cc1b3825c",
+   "size_bytes": 11877
+  },
+  "raw/bench-uniform-2048-r2-c25.json": {
+   "sha256": "6ff6ab0c809b2105f0b9df290bbe8119bcb7eb3e4699cb703f965a0f1bd76eac",
+   "size_bytes": 841207
+  },
+  "raw/bench-uniform-2048-r2-c25.log": {
+   "sha256": "5c41487dbb06a09ecddbb6b5200c73880ae4f71a0714a7dc5727877f4c0c4851",
+   "size_bytes": 18565
+  },
+  "raw/bench-uniform-2048-r2-c32.json": {
+   "sha256": "d38bdef44cd11a16f0f579f9d92b6f9700c8f523214e00374eafb8acae9bde3d",
+   "size_bytes": 1072275
+  },
+  "raw/bench-uniform-2048-r2-c32.log": {
+   "sha256": "a230804e3d3257e2d85f95aabe95f58293e599c0bfe3fa925140112f1649938b",
+   "size_bytes": 22475
+  },
+  "raw/bench-uniform-2048-r2-c35.json": {
+   "sha256": "fcd067a077ffe9fc58160a76687175ac189d22bdda380ed4672803556a16ee44",
+   "size_bytes": 1172665
+  },
+  "raw/bench-uniform-2048-r2-c35.log": {
+   "sha256": "6f131b209290ae790e73c05fc7a4704955c10eec6ff4c1f2f612502389a974b7",
+   "size_bytes": 24141
+  },
+  "raw/bench-uniform-2048-r2-c4.json": {
+   "sha256": "b21f6707313a3c832d8fb6dc40acb81efadc97c5c71e4ae841bae4cdae8994fb",
+   "size_bytes": 684433
+  },
+  "raw/bench-uniform-2048-r2-c4.log": {
+   "sha256": "6b64ceaf6bb0ba3a65fa240926a48d331551f5dbbb08aaf22d50084e55396842",
+   "size_bytes": 11804
+  },
+  "raw/bench-uniform-2048-r2-c49.json": {
+   "sha256": "407c22cf687efb1c3cc3ed66ae16449d7f537e38b0066a9a809e39a93bce3308",
+   "size_bytes": 1634311
+  },
+  "raw/bench-uniform-2048-r2-c49.log": {
+   "sha256": "be686087020ab27d15ba02fe363743e87a1bd7f8736a1be6c006e1165a7d3c31",
+   "size_bytes": 33647
+  },
+  "raw/bench-uniform-2048-r2-c64.json": {
+   "sha256": "3ec74585dc41075d266b6f60adc759f0d411e2dd85a4075dc370aa5cacea6831",
+   "size_bytes": 2129874
+  },
+  "raw/bench-uniform-2048-r2-c64.log": {
+   "sha256": "db44959dbea14019ecfa284bf4dfda5cec78e0f52128201eaa524c6f5e4056f5",
+   "size_bytes": 43375
+  },
+  "raw/bench-uniform-2048-r2-c70.json": {
+   "sha256": "6772ed58246e025a6c748edd0fcc39fb4060d3b90bf8e8a96d56d4e36368a621",
+   "size_bytes": 2352879
+  },
+  "raw/bench-uniform-2048-r2-c70.log": {
+   "sha256": "567089fb12e01d150355f4f8ccf738e7b5aaa318a67ad1be3906ff92047788ea",
+   "size_bytes": 47191
+  },
+  "raw/bench-uniform-2048-r2-c8.json": {
+   "sha256": "aa3ae721ad03fc349334ebf08b70082ad00a68aac7967c037af56c3970f225d1",
+   "size_bytes": 683433
+  },
+  "raw/bench-uniform-2048-r2-c8.log": {
+   "sha256": "5b8264a98dad0771e11d0b1f19441919b4550057da48a586d9e3852bf6530835",
+   "size_bytes": 14546
+  },
+  "raw/bench-uniform-2048-r3-c1.json": {
+   "sha256": "91cf5acca3fcf0e439f03872280bc73b65bee729e0ed2e5ff16ac790f8371bc4",
+   "size_bytes": 684141
+  },
+  "raw/bench-uniform-2048-r3-c1.log": {
+   "sha256": "9db44bc53dea76b90a578f4561cfcc75b2d8062238222bc03a74b281a9e9c575",
+   "size_bytes": 17914
+  },
+  "raw/bench-uniform-2048-r3-c128.json": {
+   "sha256": "d51ae6cef11e88e1475b56f97bfdba9599f203e211a0d887fbf877975665ff33",
+   "size_bytes": 4255616
+  },
+  "raw/bench-uniform-2048-r3-c128.log": {
+   "sha256": "6c27359fd80747c097bc5052bc54886b9cf7ef054d21b6e4cd009a8d462cf289",
+   "size_bytes": 86331
+  },
+  "raw/bench-uniform-2048-r3-c16.json": {
+   "sha256": "1c0a565b30ddc782a66561d84991a8c285b2efd0a156288a3dc4ebd267cc2ca3",
+   "size_bytes": 681161
+  },
+  "raw/bench-uniform-2048-r3-c16.log": {
+   "sha256": "a1efd793a6363f05e1bfbf8a3c9e3459b44bde00846c7dcdbf047d17e15540e0",
+   "size_bytes": 15706
+  },
+  "raw/bench-uniform-2048-r3-c18.json": {
+   "sha256": "8339651d1aec4f9fc55318eef17f780cda3c97fe6a261744873b11aec8d5850c",
+   "size_bytes": 675336
+  },
+  "raw/bench-uniform-2048-r3-c18.log": {
+   "sha256": "4051865ad0d032e90b45545ad62932064d7722d047e10060e524a11a65f64843",
+   "size_bytes": 15812
+  },
+  "raw/bench-uniform-2048-r3-c2.json": {
+   "sha256": "049134dd6eb98c42343653063bd4d6af93061c642acbdd3ae7e4aad2a368c898",
+   "size_bytes": 682677
+  },
+  "raw/bench-uniform-2048-r3-c2.log": {
+   "sha256": "334baa089dc645108ff6736edc0ac715d9615aaa3c95a0421632fcad7352c5d4",
+   "size_bytes": 11877
+  },
+  "raw/bench-uniform-2048-r3-c25.json": {
+   "sha256": "b95422d25b67d10adf08ea7bb76f5a3d6c6431a331edacde274de4ccaa8c8bea",
+   "size_bytes": 841738
+  },
+  "raw/bench-uniform-2048-r3-c25.log": {
+   "sha256": "a745e325e4af018a828b577f98d2100fd2213486e9f6925cffa7a581f18f3892",
+   "size_bytes": 18565
+  },
+  "raw/bench-uniform-2048-r3-c32.json": {
+   "sha256": "72331688c2e943485d79adcd543016522aa5890deb003817dfb561b91bf4439a",
+   "size_bytes": 1072103
+  },
+  "raw/bench-uniform-2048-r3-c32.log": {
+   "sha256": "6f0f5b94d112360f485afb539d2be6d72641ca91bb6d4d203f3a3f275804a22c",
+   "size_bytes": 22475
+  },
+  "raw/bench-uniform-2048-r3-c35.json": {
+   "sha256": "104e7ac75af24643fa9f5d25228660b6b883fcc5b330c82e619e081d130efe13",
+   "size_bytes": 1172087
+  },
+  "raw/bench-uniform-2048-r3-c35.log": {
+   "sha256": "1af263c64c01ec7bef5e5cf0a9a40092999ed6276f7b517c754c7015cc50f6d5",
+   "size_bytes": 24207
+  },
+  "raw/bench-uniform-2048-r3-c4.json": {
+   "sha256": "1104d684d9024942b64825af94c665b2aebe801356eda228f2286f6b0c197e57",
+   "size_bytes": 684265
+  },
+  "raw/bench-uniform-2048-r3-c4.log": {
+   "sha256": "276d6ca058dec99ffe73e49d57e573ccf29e22ffb77226e748c0597f72e72246",
+   "size_bytes": 11804
+  },
+  "raw/bench-uniform-2048-r3-c49.json": {
+   "sha256": "701b8e6a22ac43ca772d88a858a297b84967509f3c61a8f34e9d71df751fa021",
+   "size_bytes": 1634207
+  },
+  "raw/bench-uniform-2048-r3-c49.log": {
+   "sha256": "e297d41f7356c05530d3fe456f69476efc13c6f0a82afd7bc2d408b39cd91050",
+   "size_bytes": 33577
+  },
+  "raw/bench-uniform-2048-r3-c64.json": {
+   "sha256": "b5f005673fa0b18adb27540e55ab7e7374b686404ce500262a68ebae709d041a",
+   "size_bytes": 2129203
+  },
+  "raw/bench-uniform-2048-r3-c64.log": {
+   "sha256": "db46226a7e4480b077d564065daaa6043cbc9ca5baaebecf357a7fd37a16703a",
+   "size_bytes": 43443
+  },
+  "raw/bench-uniform-2048-r3-c70.json": {
+   "sha256": "5a434165660677af4b8dbee0f8f66632952abe643dcbb325638bd10046e90b0d",
+   "size_bytes": 2353577
+  },
+  "raw/bench-uniform-2048-r3-c70.log": {
+   "sha256": "92681ca33585f984efe559cd8148a137edb3cfd87cbbce97fedb0339428cb351",
+   "size_bytes": 47191
+  },
+  "raw/bench-uniform-2048-r3-c8.json": {
+   "sha256": "485440c58d3e7aa5690a071555a53336b22d47698b50c3e6982483a7c5a2982e",
+   "size_bytes": 683053
+  },
+  "raw/bench-uniform-2048-r3-c8.log": {
+   "sha256": "8faceaf3ef6db8100f22bd0cd77d2f422a25613e31ea4312fd4065b37be9df5c",
+   "size_bytes": 14546
+  },
+  "raw/bench-uniform-32768-r1-c1.json": {
+   "sha256": "c2105c03d3049f5e1e50d81ddc5b5c2067e2835c5b2b3799328493c9b13fa73a",
+   "size_bytes": 1214360
+  },
+  "raw/bench-uniform-32768-r1-c1.log": {
+   "sha256": "e75d77d898c7b37fee3d3a86271005eaaa184e4cdfd3e9e4c27ff963a210a270",
+   "size_bytes": 17918
+  },
+  "raw/bench-uniform-32768-r1-c16.json": {
+   "sha256": "82802877ce206bd9146821f8cc3b412962b9a97f897f2a5fea11949ce5090c62",
+   "size_bytes": 1202553
+  },
+  "raw/bench-uniform-32768-r1-c16.log": {
+   "sha256": "e8f109e39aee4326bbe27cfa7c645e148f76b9afff7a4c3bbe9daa8caa20b8a3",
+   "size_bytes": 18807
+  },
+  "raw/bench-uniform-32768-r1-c2.json": {
+   "sha256": "3f412561c89b02f29dad2433e04b27a214fa1a1e6ad281dbdf554ae23a0ef7a9",
+   "size_bytes": 1213355
+  },
+  "raw/bench-uniform-32768-r1-c2.log": {
+   "sha256": "eb98ef8d940dc8ce0e100e17cb993f82e89ca4d3eceee8a20c0e0ad35c3d3a41",
+   "size_bytes": 17974
+  },
+  "raw/bench-uniform-32768-r1-c3.json": {
+   "sha256": "76f2b3b780279b4309df56ede75853f8d99e5a1bbba261d314c8ac5feae71d9b",
+   "size_bytes": 1202222
+  },
+  "raw/bench-uniform-32768-r1-c3.log": {
+   "sha256": "144cae3e1a6d7eefa362650df4d767725ee04183953167b3f07d7909a277911e",
+   "size_bytes": 18036
+  },
+  "raw/bench-uniform-32768-r1-c32.json": {
+   "sha256": "3e9ddd5d47f3004e5d8ca929fe97c529f05ef3eb9b67f220b79b67d23ad4adeb",
+   "size_bytes": 1612259
+  },
+  "raw/bench-uniform-32768-r1-c32.log": {
+   "sha256": "bef5c5a62fd835cc30509777a6caa7cad03215f69e128fe504f8cb397f67b178",
+   "size_bytes": 27049
+  },
+  "raw/bench-uniform-32768-r1-c4.json": {
+   "sha256": "6493e01807d1a8afbbcb4b3dc55ee473e6cc27c263b2c51eba0ddf9934f15820",
+   "size_bytes": 1202694
+  },
+  "raw/bench-uniform-32768-r1-c4.log": {
+   "sha256": "4494c59e472043574587fef1a8f0865b91f3311333ef9c68b7c4a6e31aa26a0c",
+   "size_bytes": 18092
+  },
+  "raw/bench-uniform-32768-r1-c6.json": {
+   "sha256": "1a714398e647757fc3572ece0b9e443a984d10a9f1b3a59fab02ed23c94d9824",
+   "size_bytes": 1202565
+  },
+  "raw/bench-uniform-32768-r1-c6.log": {
+   "sha256": "20bfa0bbd9d5369c594bb6b32aa4c754390f5a77cea9984989f5acdfd0ff725f",
+   "size_bytes": 18206
+  },
+  "raw/bench-uniform-32768-r1-c8.json": {
+   "sha256": "149870b8007def5995ba9c26fc413e2958be234878c7a7dfd1fa024bef42f825",
+   "size_bytes": 1202151
+  },
+  "raw/bench-uniform-32768-r1-c8.log": {
+   "sha256": "4d879e0df17e96f1d91483d9f4f437ef6d5710f7de95805e55175863b220eb96",
+   "size_bytes": 18320
+  },
+  "raw/bench-uniform-32768-r2-c1.json": {
+   "sha256": "1b59b2d6ddb9ae3ee6c71c5d5069e89eb61d345bc37355b7fd11fb4f64442abf",
+   "size_bytes": 1214326
+  },
+  "raw/bench-uniform-32768-r2-c1.log": {
+   "sha256": "40e780eecd83285dc326dc898d63c1a9994ff0141ceb68a6e88d4bfefcfe878d",
+   "size_bytes": 17918
+  },
+  "raw/bench-uniform-32768-r2-c16.json": {
+   "sha256": "84988fdb71ca5522fe74523a791ce4a930606d137e550cfdbae1cc59bf917017",
+   "size_bytes": 1202419
+  },
+  "raw/bench-uniform-32768-r2-c16.log": {
+   "sha256": "d9adad167255dfa9891489bb4b94c379691e1ed5437efcfed768a7b949564811",
+   "size_bytes": 18807
+  },
+  "raw/bench-uniform-32768-r2-c2.json": {
+   "sha256": "e7c4ae19c34ebf7d1d3744f261a5d3fdb55362bd6daf1b5d938a8f0818047b42",
+   "size_bytes": 1213777
+  },
+  "raw/bench-uniform-32768-r2-c2.log": {
+   "sha256": "6b5b95586fce2db032e31c20dc4728df16cdc40e69e2a0faf5a1ebebe0dca2de",
+   "size_bytes": 17974
+  },
+  "raw/bench-uniform-32768-r2-c3.json": {
+   "sha256": "7cdfe0f07c61f4f0c36e6dc491829c7a5c388bfb145d279987acc86f6e62655c",
+   "size_bytes": 1202761
+  },
+  "raw/bench-uniform-32768-r2-c3.log": {
+   "sha256": "04fcce8d588c1ed676432a5c5af68b873ef2356de6b2a83076776bc30d9e6911",
+   "size_bytes": 18036
+  },
+  "raw/bench-uniform-32768-r2-c32.json": {
+   "sha256": "f86da7d761ff434b6fcbabc5389f0560e5f0a641a6adef4a21d60987cca2e284",
+   "size_bytes": 1611752
+  },
+  "raw/bench-uniform-32768-r2-c32.log": {
+   "sha256": "3b926769a8e84b206295d0555a9193eb6f6a79f83d72abe496702a7581f21027",
+   "size_bytes": 27049
+  },
+  "raw/bench-uniform-32768-r2-c4.json": {
+   "sha256": "d82e42be6afe3992b1d1b2bed333e31fa815c3a98aa7eef158f931d5ee016e8a",
+   "size_bytes": 1202558
+  },
+  "raw/bench-uniform-32768-r2-c4.log": {
+   "sha256": "80fb552ebcfc625c773306a66d052acf718cd79475bb1723d04b2be6ad11a1e6",
+   "size_bytes": 18092
+  },
+  "raw/bench-uniform-32768-r2-c6.json": {
+   "sha256": "7dfc0d55b23c707432ebd34590f5ddbcc53cdfa7c181381e77dbe8b58e336a8e",
+   "size_bytes": 1202604
+  },
+  "raw/bench-uniform-32768-r2-c6.log": {
+   "sha256": "5bf02ec7f73da6fbf289a676dcb323615083ff3219d4d2685bd099b59cd0af47",
+   "size_bytes": 18206
+  },
+  "raw/bench-uniform-32768-r2-c8.json": {
+   "sha256": "822094cb70aa66d66d22197c2c66ff969924ca8a5b05eeaf234dbac3d42174ac",
+   "size_bytes": 1202301
+  },
+  "raw/bench-uniform-32768-r2-c8.log": {
+   "sha256": "50d168d5920ac1fbdfc6bafbbca5bf3c31055ad35cacf64a3525298d4ff5c815",
+   "size_bytes": 18320
+  },
+  "raw/bench-uniform-32768-r3-c1.json": {
+   "sha256": "3f6cb424ac5b2f3aa6c669b66aaf78626b9cb7713a57b1c6a2cd50cf0fac342d",
+   "size_bytes": 1214336
+  },
+  "raw/bench-uniform-32768-r3-c1.log": {
+   "sha256": "066959586f0ef6d5ce740d78865702c65e9c160ed8b2953e76aa452ef2d257fb",
+   "size_bytes": 17918
+  },
+  "raw/bench-uniform-32768-r3-c16.json": {
+   "sha256": "18b5d27d11f78f2da8b9cddd45f828e9af7eb9c64dcfbe7009b7b70af4a18652",
+   "size_bytes": 1202395
+  },
+  "raw/bench-uniform-32768-r3-c16.log": {
+   "sha256": "f23a09c91c9c2dd0caad8995a69531d7c266b01b1def6733f14047690cae7d20",
+   "size_bytes": 18807
+  },
+  "raw/bench-uniform-32768-r3-c2.json": {
+   "sha256": "cfba5b046a922943f0cf2a56dee63b4f2ca40f7bc658768aef235fed6960d06a",
+   "size_bytes": 1213613
+  },
+  "raw/bench-uniform-32768-r3-c2.log": {
+   "sha256": "7349ca9ff4f190e53a3568f5f6cb04d91a2069cacd7595f1b6268da3abee7802",
+   "size_bytes": 17974
+  },
+  "raw/bench-uniform-32768-r3-c3.json": {
+   "sha256": "8b68f1c3ca3191f90ba854cc612aa23da0d58a9abd45a6b2e7a1a94342a12859",
+   "size_bytes": 1202723
+  },
+  "raw/bench-uniform-32768-r3-c3.log": {
+   "sha256": "163449d61e08b8a1055c28053260ae4469edb19790903872958848464a7414f4",
+   "size_bytes": 18036
+  },
+  "raw/bench-uniform-32768-r3-c32.json": {
+   "sha256": "6350f0b8fb7c7ed45ab14768e2f0fec5bf27aac734bac703452e6f4e881ea1d4",
+   "size_bytes": 1611103
+  },
+  "raw/bench-uniform-32768-r3-c32.log": {
+   "sha256": "555bca8484a1b2ffdfa447c76b26df7e849f2e81920d49339ad3619069e7ab97",
+   "size_bytes": 27049
+  },
+  "raw/bench-uniform-32768-r3-c4.json": {
+   "sha256": "abda69da97b2caf47fab491a2ace3d33b06a80d339b851d5676480268543c917",
+   "size_bytes": 1202495
+  },
+  "raw/bench-uniform-32768-r3-c4.log": {
+   "sha256": "94c00f850e6c1da13cc971a41fbc9ebe7f021dfade8084d3c1f83ea846f57eaa",
+   "size_bytes": 18092
+  },
+  "raw/bench-uniform-32768-r3-c6.json": {
+   "sha256": "f3226e6bc9dac363e398cb83e0fbf895283896e99e8aa194fb8b175ef2f9fdd8",
+   "size_bytes": 1202359
+  },
+  "raw/bench-uniform-32768-r3-c6.log": {
+   "sha256": "914b92723a2148d0c02ce67ad8d3b5aedea6615fb62b02f99c86b3c17eea3008",
+   "size_bytes": 18206
+  },
+  "raw/bench-uniform-32768-r3-c8.json": {
+   "sha256": "4ae900e70adb701780afebadcae633d31aaedaeebea88e9f8090104043cd6a73",
+   "size_bytes": 1202257
+  },
+  "raw/bench-uniform-32768-r3-c8.log": {
+   "sha256": "7b228cc2d9b458b4604e30b308bbe3c4ae24dc5d742ea39bd8a672e433e71e85",
+   "size_bytes": 18320
+  },
+  "raw/bench-uniform-8192-r1-c1.json": {
+   "sha256": "9713fe57011d37cedfa29b3cdd105dbc72cb3e3cfa81ac3d1758204b1fe4bbf5",
+   "size_bytes": 818950
+  },
+  "raw/bench-uniform-8192-r1-c1.log": {
+   "sha256": "ba9be00e5bbbabe2f686b2e97a0d529c6f995ebbbf2cc90a1ce826f9a5754fc6",
+   "size_bytes": 17914
+  },
+  "raw/bench-uniform-8192-r1-c128.json": {
+   "sha256": "5dd98b626e3791994f5764c50e2c3dc5d6327294f48f5c1612780271f9bba7b2",
+   "size_bytes": 4376358
+  },
+  "raw/bench-uniform-8192-r1-c128.log": {
+   "sha256": "bdcf05fecfe1f67d5bbe344811c69dbb3f3cf4d437c07324f9e9e6973239c599",
+   "size_bytes": 91959
+  },
+  "raw/bench-uniform-8192-r1-c13.json": {
+   "sha256": "e66c8c38306e75470e842df06fca1db299f6eef2d636b6e1d9d8b92ebd075942",
+   "size_bytes": 801683
+  },
+  "raw/bench-uniform-8192-r1-c13.log": {
+   "sha256": "d529392bc41e732bf36fac320488fdcdc2d6a4b655c27b5b99c5013ea85536b9",
+   "size_bytes": 17783
+  },
+  "raw/bench-uniform-8192-r1-c16.json": {
+   "sha256": "74a25e20fb87269e7c1441f9152c7cb59f36bd02b01fb6afc6bc04d9a51016c5",
+   "size_bytes": 800661
+  },
+  "raw/bench-uniform-8192-r1-c16.log": {
+   "sha256": "843d100992a0ffd0302aa6c79732bad366fdbcf71db00370eda6668db74256bc",
+   "size_bytes": 18011
+  },
+  "raw/bench-uniform-8192-r1-c18.json": {
+   "sha256": "2df90b23e9d9f7037e83eb9ed60074eeaf870dd0e80ae7ee998eef06618b4ed5",
+   "size_bytes": 800596
+  },
+  "raw/bench-uniform-8192-r1-c18.log": {
+   "sha256": "3d19b03c0e2e90b45646d7529402ad275795fed457381be4b0fc468ea4b6c9c4",
+   "size_bytes": 18120
+  },
+  "raw/bench-uniform-8192-r1-c2.json": {
+   "sha256": "aeb928c6de8a802835dfaf6bdc3fd2712e5a84ac363ce05788662dc054644a9f",
+   "size_bytes": 815887
+  },
+  "raw/bench-uniform-8192-r1-c2.log": {
+   "sha256": "8aa5786a8d21dea550c64900a28e5a88ce89dd64bb8709b4c9f795f26dc9ea1a",
+   "size_bytes": 14826
+  },
+  "raw/bench-uniform-8192-r1-c26.json": {
+   "sha256": "8df2bb1314386e8e8645bb5859ef4c932baab58f5ef503a234cbff7b3ccfcfda",
+   "size_bytes": 997164
+  },
+  "raw/bench-uniform-8192-r1-c26.log": {
+   "sha256": "e87cd80e8edd981b456415c875ad9516ecb39b176f0e47aeaa78dcc836a3d897",
+   "size_bytes": 22225
+  },
+  "raw/bench-uniform-8192-r1-c32.json": {
+   "sha256": "f35ab2c6a968f1d87d15a76d62ad84346c2ca1898fdecc90f58e472f950270ab",
+   "size_bytes": 1271455
+  },
+  "raw/bench-uniform-8192-r1-c32.log": {
+   "sha256": "f841515b29035fe634ef3f50bc559e76b18a646fca626c0e111a4971f5a12750",
+   "size_bytes": 26229
+  },
+  "raw/bench-uniform-8192-r1-c4.json": {
+   "sha256": "ed1be2292db0f0175355b8d4c5a10ae5ca42329b8fa9c571abf4055a6cb25ef4",
+   "size_bytes": 814230
+  },
+  "raw/bench-uniform-8192-r1-c4.log": {
+   "sha256": "b396229bc00415536d1735e0b1f625b99d725050f05fa4374b4b358f2c7e7107",
+   "size_bytes": 17369
+  },
+  "raw/bench-uniform-8192-r1-c64.json": {
+   "sha256": "4cc97f7c3780ec0b929a896354adb4a0facaa63635004b32f83a529af506f190",
+   "size_bytes": 2255408
+  },
+  "raw/bench-uniform-8192-r1-c64.log": {
+   "sha256": "1d7764cccc8e2ad0301a694dac53df9cc51a9193f5f2310a5f1528c2504d61c1",
+   "size_bytes": 47543
+  },
+  "raw/bench-uniform-8192-r1-c7.json": {
+   "sha256": "b3ba59f8ba88461b91efd9cf312ef4ac74216ee257a5cf1830df81c640525b99",
+   "size_bytes": 811567
+  },
+  "raw/bench-uniform-8192-r1-c7.log": {
+   "sha256": "d087e07f8ebb13e90e56632fcf6d812812cf55c6b0e5dc1d675826ec52f565ef",
+   "size_bytes": 17813
+  },
+  "raw/bench-uniform-8192-r1-c8.json": {
+   "sha256": "872d88775d2d12dde0b7a2701e9d8d4494dd9b224ae8d2384381a049ab2c0fae",
+   "size_bytes": 808646
+  },
+  "raw/bench-uniform-8192-r1-c8.log": {
+   "sha256": "d708c3d140361c8c8ee1632e9986bb88bbe56cc73fb426fb47fd142f916b2bff",
+   "size_bytes": 17618
+  },
+  "raw/bench-uniform-8192-r1-c9.json": {
+   "sha256": "f3d85fdd6cd11fd931484f4b91d6c1962c52f649d69e5093a22f17535b2956b2",
+   "size_bytes": 805915
+  },
+  "raw/bench-uniform-8192-r1-c9.log": {
+   "sha256": "fdc6a892b514814e4acaf98bd9dbaab1d1bd7baebc4c8c844f4ad42fb3895e76",
+   "size_bytes": 17856
+  },
+  "raw/bench-uniform-8192-r2-c1.json": {
+   "sha256": "0abf398ca7c8f3aa834921b7b286ed9806e35cc199207df3a98fd4e427b2b7dc",
+   "size_bytes": 819082
+  },
+  "raw/bench-uniform-8192-r2-c1.log": {
+   "sha256": "9a9f05d34187bf3aaabc733c17ce512afcd7303178fbbd689c0151004549aa6f",
+   "size_bytes": 17914
+  },
+  "raw/bench-uniform-8192-r2-c128.json": {
+   "sha256": "4ab7e735f22df1bfc0e089a7ae189e6b7b9283d07a29a9082fd4cdde5a9740f1",
+   "size_bytes": 4375290
+  },
+  "raw/bench-uniform-8192-r2-c128.log": {
+   "sha256": "ba36b2555c9cd869570c23ded4068e73afb9c9c48c33294401c29ad68751e273",
+   "size_bytes": 91959
+  },
+  "raw/bench-uniform-8192-r2-c13.json": {
+   "sha256": "56364579209a0a841973c4fa15a2cc911d0d32bb0550a0af676c34b48accd1af",
+   "size_bytes": 801639
+  },
+  "raw/bench-uniform-8192-r2-c13.log": {
+   "sha256": "a3694187d91c40a8eabaef0b7fdfe9cc882773d8e12375d710a9ef441ae67a26",
+   "size_bytes": 17851
+  },
+  "raw/bench-uniform-8192-r2-c16.json": {
+   "sha256": "eee6e8223fbf312552db12b3b1bd7e334454138f6ddc07f89ccaca06bf2c9995",
+   "size_bytes": 800845
+  },
+  "raw/bench-uniform-8192-r2-c16.log": {
+   "sha256": "b0c4ba7e184a195e7a66b3675afe5442e55b623fe148ae8293ff526c4eef1284",
+   "size_bytes": 18011
+  },
+  "raw/bench-uniform-8192-r2-c18.json": {
+   "sha256": "c9364d8421548acf47694a4cef51f945ab2bc33463421c3fdb37d847a8be9bc6",
+   "size_bytes": 800797
+  },
+  "raw/bench-uniform-8192-r2-c18.log": {
+   "sha256": "2d890855a14b32ae50c29d670e1841edb2b3da4f430c17ba3ccbced7e37e698d",
+   "size_bytes": 18120
+  },
+  "raw/bench-uniform-8192-r2-c2.json": {
+   "sha256": "a42b7a793507c5e29a619ed76e234a50de4e04731699fa0204f4ccd3ccea8724",
+   "size_bytes": 815970
+  },
+  "raw/bench-uniform-8192-r2-c2.log": {
+   "sha256": "dae752d3c063f24534fe00c630a502e072a72504a5ee8b9a9525dc446fd02e3a",
+   "size_bytes": 14696
+  },
+  "raw/bench-uniform-8192-r2-c26.json": {
+   "sha256": "67a161a50b03c92dcc43fc2b6be52401c42ba18d5d29f41bfbc5d6710291eee1",
+   "size_bytes": 997541
+  },
+  "raw/bench-uniform-8192-r2-c26.log": {
+   "sha256": "bafa689aba7c91a72cc2cd3a5cc42c1ee733fe8942bcbe3ad47f56d4f1f560b5",
+   "size_bytes": 22225
+  },
+  "raw/bench-uniform-8192-r2-c32.json": {
+   "sha256": "48a66a687115c03812f900e34e90840371663dbdf9bf76b7f6ce517d90207801",
+   "size_bytes": 1271773
+  },
+  "raw/bench-uniform-8192-r2-c32.log": {
+   "sha256": "36d49fe97ef70d8045bbd06bd634b1f5d3059c745c76bfeff131316439b55613",
+   "size_bytes": 26229
+  },
+  "raw/bench-uniform-8192-r2-c4.json": {
+   "sha256": "4e547c853e236e7453da266721d313c6c55e9aede950ff181b146f3e2402f957",
+   "size_bytes": 813960
+  },
+  "raw/bench-uniform-8192-r2-c4.log": {
+   "sha256": "56ec60f902ee27519e365bccef8663d23949fa11b2afc5b5c941a8bcd1b576c6",
+   "size_bytes": 16940
+  },
+  "raw/bench-uniform-8192-r2-c64.json": {
+   "sha256": "e9265425d4e94425e8600a285556ec966778e6f7194b9bbf1bcbe4aaa737d72e",
+   "size_bytes": 2255367
+  },
+  "raw/bench-uniform-8192-r2-c64.log": {
+   "sha256": "fd3cf6d58f0f5ac002fca79bf155df58acfcc67395fb19d735950b92c3f09e4c",
+   "size_bytes": 47543
+  },
+  "raw/bench-uniform-8192-r2-c7.json": {
+   "sha256": "3799f9c363a7af14db698acba6bdbc8f2b1d846172499a0ea948811ccefc74e5",
+   "size_bytes": 811538
+  },
+  "raw/bench-uniform-8192-r2-c7.log": {
+   "sha256": "e978f8aa2cf63709e81783ad4b1aee59a20970b352fc6a0faaa61a18dedf28dd",
+   "size_bytes": 17301
+  },
+  "raw/bench-uniform-8192-r2-c8.json": {
+   "sha256": "9df56bc9e2c7420790bd812daa53f4d39483054e1d670d8f4a7ba0eaf546eb4f",
+   "size_bytes": 809159
+  },
+  "raw/bench-uniform-8192-r2-c8.log": {
+   "sha256": "e86fac64a107d19dfe2cf199738ee5e5360a4e5d4a2d2e6f4c3bc2971484d23b",
+   "size_bytes": 17616
+  },
+  "raw/bench-uniform-8192-r2-c9.json": {
+   "sha256": "9053f187fc4e116c739663be25cead0898c20bdc16de448a8df7661a43fa78b6",
+   "size_bytes": 806196
+  },
+  "raw/bench-uniform-8192-r2-c9.log": {
+   "sha256": "0640987ebc1329244e80dcdd9ae1487510a17aebf09537cfb15408ef62fc73f4",
+   "size_bytes": 17748
+  },
+  "raw/bench-uniform-8192-r3-c1.json": {
+   "sha256": "eba658d62753a010629bd7c0b2ef9f6f8eab7129f51b2133921e16df8edf7993",
+   "size_bytes": 819132
+  },
+  "raw/bench-uniform-8192-r3-c1.log": {
+   "sha256": "5f0774abf21492ee33b542d787d73c7802268216f2583ac996f3451ea96daf4e",
+   "size_bytes": 17914
+  },
+  "raw/bench-uniform-8192-r3-c128.json": {
+   "sha256": "a841813e8e470f526b41146ccbc0adb2d2613c47df81e75327ce550eddd8192a",
+   "size_bytes": 4377985
+  },
+  "raw/bench-uniform-8192-r3-c128.log": {
+   "sha256": "fa9acbc98f254971dc53a9bbed4484048a858c6c247f33a29665ad5f4c262380",
+   "size_bytes": 91959
+  },
+  "raw/bench-uniform-8192-r3-c13.json": {
+   "sha256": "bd48dd52212260cd4884f5d17b6aa51fd3d10e7d2dae784046892327b82f88fa",
+   "size_bytes": 801974
+  },
+  "raw/bench-uniform-8192-r3-c13.log": {
+   "sha256": "c2a0aa26d1f168620380022362600db396ab85933053f6d26e67e8ff71b2498e",
+   "size_bytes": 17851
+  },
+  "raw/bench-uniform-8192-r3-c16.json": {
+   "sha256": "76c18b02cc2ca5e6a926d5bceabbfae1cebd7be447301666443eb258d68156fd",
+   "size_bytes": 801006
+  },
+  "raw/bench-uniform-8192-r3-c16.log": {
+   "sha256": "90d710bef253bd19d9e30a58c1678faada5993ea8054408a03bb16775c66fb0c",
+   "size_bytes": 18011
+  },
+  "raw/bench-uniform-8192-r3-c18.json": {
+   "sha256": "0d3d1a78115624f2bffd3d97df7f398c4443c2bb7424a08c112a82672a6cc5fd",
+   "size_bytes": 800997
+  },
+  "raw/bench-uniform-8192-r3-c18.log": {
+   "sha256": "65b55bc444e55ab7fe1784363e7ed99802bc5be4baea1a47247879a529b12882",
+   "size_bytes": 18120
+  },
+  "raw/bench-uniform-8192-r3-c2.json": {
+   "sha256": "8ec7adbdbae8fe42301c1e4cec9367125d78afac85110a3f5a8316ba24d7a49d",
+   "size_bytes": 816498
+  },
+  "raw/bench-uniform-8192-r3-c2.log": {
+   "sha256": "cb532d7a998a4505f89d9fb6db8e135efe908e11681f34bbd3cb1fa8c71e9431",
+   "size_bytes": 15152
+  },
+  "raw/bench-uniform-8192-r3-c26.json": {
+   "sha256": "98ab670ab345066a686e3ac4d71a20a4036173068a5e61f23251ba866d6b4520",
+   "size_bytes": 997411
+  },
+  "raw/bench-uniform-8192-r3-c26.log": {
+   "sha256": "e800b3ccf0c5b8afc7c01ecfc84b228912f6f5fd483a3c155596a1bf0fc1134a",
+   "size_bytes": 22225
+  },
+  "raw/bench-uniform-8192-r3-c32.json": {
+   "sha256": "07687e13e58ddc48d4b0b2547105e890219946323ba6ec0990dd1092421f9115",
+   "size_bytes": 1271944
+  },
+  "raw/bench-uniform-8192-r3-c32.log": {
+   "sha256": "a89c38c90b8fdcb0dccef51c1e042231cdda159f196ce7aacf5eaffee1756412",
+   "size_bytes": 26229
+  },
+  "raw/bench-uniform-8192-r3-c4.json": {
+   "sha256": "91c6a37f4d3a580a5a2b6c2cc82fc87a45887b97ff9c6165499cae601db1eaff",
+   "size_bytes": 814838
+  },
+  "raw/bench-uniform-8192-r3-c4.log": {
+   "sha256": "2ce99bc3b2c6404db60c8e38529d2759400b5e5b701d030ee41dcd8365b050fc",
+   "size_bytes": 17003
+  },
+  "raw/bench-uniform-8192-r3-c64.json": {
+   "sha256": "6bf8f2713b44229d3afb95fb5172f6b0fb6ce9ef883dd1fb8f051ce8039832a3",
+   "size_bytes": 2256361
+  },
+  "raw/bench-uniform-8192-r3-c64.log": {
+   "sha256": "cef23eda4f5743da12f8d27fec49a02ac3946cca50e086fee04fc4d2609ee8a2",
+   "size_bytes": 47543
+  },
+  "raw/bench-uniform-8192-r3-c7.json": {
+   "sha256": "6a4df3a18d71927ba29caf582564b022cdc69974997268c1ddf865ee1e42c185",
+   "size_bytes": 811337
+  },
+  "raw/bench-uniform-8192-r3-c7.log": {
+   "sha256": "2030a11ed96a440793afbf6141ccef1f5562e36429e7945de60e4c767fc012b9",
+   "size_bytes": 17808
+  },
+  "raw/bench-uniform-8192-r3-c8.json": {
+   "sha256": "b93051c89bc679c5021d83e5fde2b15893d3ed39b844ae781305084d3c9dcdaf",
+   "size_bytes": 808435
+  },
+  "raw/bench-uniform-8192-r3-c8.log": {
+   "sha256": "ae8ea16120ba53629608b3a4088715907f18515370899cc7bc196c2ff64ffb1f",
+   "size_bytes": 17673
+  },
+  "raw/bench-uniform-8192-r3-c9.json": {
+   "sha256": "75a7bccb1c2c2e15f089851cd588f5776b5b70bf99d3a5a738c8f25d78dd46d5",
+   "size_bytes": 805998
+  },
+  "raw/bench-uniform-8192-r3-c9.log": {
+   "sha256": "b54811c507847b6f5f8466a4e97d500a3e13f6265e1ee3d1430459fd8fdf4849",
+   "size_bytes": 17856
+  },
+  "raw/server-uniform-2048-r1.log": {
+   "sha256": "1c70f59dd7a933d774a2be7ebd83b6dae3963e0a10bd677aff9b80dc6dd9b641",
+   "size_bytes": 842299
+  },
+  "raw/server-uniform-2048-r2.log": {
+   "sha256": "f0c2b28a486de66bf3eda1525e9c5a5f30006208a48668d089acbded03d3a89b",
+   "size_bytes": 842540
+  },
+  "raw/server-uniform-2048-r3.log": {
+   "sha256": "90b9d5e7f93441b5bf10d249206c75b4062fb2e677e6a321d407bf8bb9fdd59b",
+   "size_bytes": 843260
+  },
+  "raw/server-uniform-32768-r1.log": {
+   "sha256": "4382563bdd82c53ab33336511d2917f82713bd15621212d854b9cc1462c63ccb",
+   "size_bytes": 1537659
+  },
+  "raw/server-uniform-32768-r2.log": {
+   "sha256": "d31f295d8994cb2ebff0e0b265b7abef4a1e19a3caa03855c566115d6f3018d8",
+   "size_bytes": 1537489
+  },
+  "raw/server-uniform-32768-r3.log": {
+   "sha256": "3b59a6e16ed1ca045b1791cb1f48a323e8f65cebdb79ae2255edd485f8357444",
+   "size_bytes": 1538054
+  },
+  "raw/server-uniform-8192-r1.log": {
+   "sha256": "cf3b7e495fdf9f6ceae0c8e827a43a98ab2e3ee29bede2376a52da217d7a48f2",
+   "size_bytes": 1264092
+  },
+  "raw/server-uniform-8192-r2.log": {
+   "sha256": "01f8422ae5b3336278cbc03f988d917f5eaf874201b2620abbecdab3700b96bd",
+   "size_bytes": 1273708
+  },
+  "raw/server-uniform-8192-r3.log": {
+   "sha256": "f341420689e27fedef44a80a2a104e0d6c8ffd3a127f164d0ac6568f41a0f806",
+   "size_bytes": 1266100
+  }
+ }
+}
