@@ -10,6 +10,7 @@ schema_version = 1
 [freeze]
 mac = true                                               # Stage A frozen 2026-10-09 (PREREGISTRATION §5; harness commit eb6eef1)
 nvidia = true                                            # Stage B frozen 2026-10-09 (PREREGISTRATION §6; harness commit 19446d7)
+advanced = false                                         # decision 024 / PREREGISTRATION §7; true only after smoke FS1 sets [advanced] num_gpu_blocks_k3
 
 # ------------------------------------------------------------------ runtimes --
 
@@ -244,3 +245,29 @@ index_file = "quality/subsets/mmlu-test-4000.json"
 pre_exclusion_sha256 = "49e128209c344e359ccaed1c415f49857d3a8b66cf472f7eb9350c203e085ffa"
 exclude_file = "quality/subsets/mmlu-test-4000.exclude.json"  # 3 tasks, Qwen3.5 tokenizer; llama.cpp tokenizer agrees (quality/subsets/tokenizer-crosscheck.json)
 sha256 = "209ee07d5d7a918a6f9e8ad69e24e8222644edbe9141f65eee7db7a196a9bf89"  # 3997 tasks after exclusion
+
+# ------------------------------------------------------------------ Advanced --
+
+[advanced]
+# decision 024 / PREREGISTRATION §7: isolating the cause of H-B4 (RTX only). benchmarks/adv_plan.py checks every value
+# against the 024 rules and refuses a plan otherwise. num_gpu_blocks_k3 = 0 = not measured yet (smoke FS1 sets it).
+seed = 20261008                                          # Core B seed; block r order = shuffle seeded by sha256("20261008:advanced:block:r")
+derived_from = "formal-20261009-coreb-uniform"           # c below = core_b_analysis.knee on this session, recomputed by adv_plan
+c = { "2048" = 25, "8192" = 8 }                          # Core's uniform C_knee
+long_prefill_token_threshold = 512                       # T = MNBT 2048 // (C_KV(32768) 3 + 1)
+kv_low_bytes = 3221225472                                # K3 = 3 GiB: smallest 256 MiB multiple with C_KV >= C_knee, >= 128 and >= 67 blocks
+num_gpu_blocks_k4 = 248                                  # B0 / T / G / TG at the Stage B K (4 GiB), = [stage_b] num_gpu_blocks
+num_gpu_blocks_k3 = 0                                    # K3, from /metrics at smoke FS1 (bracketed to 186 by 248 at 4 GiB)
+otlp_endpoint = "http://127.0.0.1:4318/v1/traces"        # run_adv's in-process OTLP receiver
+otel_protocol = "http/protobuf"                          # server OTEL_EXPORTER_OTLP_TRACES_PROTOCOL (vLLM otel.py defaults to grpc)
+timeouts_s = { uniform_2048 = 300, mixed_2048 = 600, uniform_8192 = 720, mixed_8192 = 960 }  # Core bench time x 2 + 60 s, up to 60 s
+
+[advanced.conditions]
+# 024: each condition's argv delta, appended to the Core B server argv after the two observability flags. It is
+# exactly adv_plan.condition_flags (adv_plan.pins_problems refuses any drift). K3 appends nothing: it passes
+# kv_low_bytes as Core's --kv-cache-memory-bytes value instead of the Stage B K.
+B0 = []
+T = ["--long-prefill-token-threshold", "512"]
+G = ["--no-scheduler-reserve-full-isl"]
+TG = ["--long-prefill-token-threshold", "512", "--no-scheduler-reserve-full-isl"]
+K3 = []

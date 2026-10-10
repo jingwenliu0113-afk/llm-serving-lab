@@ -709,3 +709,31 @@ TG 也跑一次 mixed（C 2，N 20），只確認能完成。
 - 新增 PREREGISTRATION §7（Advanced），凍結後與本文一起約束 Advanced 的所有分析。
 - Core 的判定、decision table（021）與 README 的 Core 結論都不因 Advanced 而改變；Advanced 的結果另外報告。
 - GPU 預算：預期約 7.3 h（含 smoke），上限約 8.1 h。只用 RTX；Mac 不參與。
+
+## 實作補記（2026-10-10，凍結前；沒有任何 Advanced 數據）
+
+harness 由 workflow 依本文實作（`adv_plan`、`adv_decomp`、`adv_analysis`、`run_adv`、`adv_report`、`adv_smoke`，嚴格 TDD），
+再經三個面向的審查與對抗式驗證（確認 13 項，其中 1 項是既有、與 Advanced 無關的 `test_disk_guard` 環境相依），全部修正後再驗證（60 個 mutant 抓到 56 個，所有「撤銷修正」的 mutant 都被抓到）。
+以下是本文原文沒有寫死、在實作時決定的細節，凍結時一併凍結：
+
+- **TTFT 拆解恆等式**：本文同時寫「O = client TTFT − server TTFT」與「O + Q + P 等於 client TTFT」，兩者只在 arrival → queued 為 0 時一致。
+  實作保留 O 的定義，另加 **F = server TTFT − Q − P**（arrival 到 queued：frontend 與 IPC），使 O + F + Q + P = client TTFT 精確成立。F 只作描述。
+- **plan JSON** 另含 `gpu_memory_utilization`、`kv_cache_memory_bytes`（Stage B 的 K）、`block_size`，讓凍結的 `run_core_b.stage_b_problems` 可以核對。
+- **pins `[advanced.conditions]`**：每個 condition 的 argv 差異（B0 []、T threshold 512、G `--no-scheduler-reserve-full-isl`、TG 兩者、K3 [] 而改 K），
+  `adv_plan.pins_problems` 要求它與程式產生的 flags 完全相同；endpoint、protocol、各格逾時也要求等於本文的值。
+- **Core 未改動的回歸測試**（`tests/test_core_untouched.py`）：比對 Core 6 個檔案在 `68f6a65` 的位元組 sha256（本文寫 git blob hash；效果相同，測試不呼叫 git）。
+- **`test_pins`**：`freeze.advanced = true` 時，所有 `[advanced]` 值不得是 placeholder（`num_gpu_blocks_k3` > 0 且符合 K3 規則），且 `freeze.nvidia`、`freeze.mac` 都必須為 true。
+- **分析的邊界情況**：
+  - H-C0 不可檢定（B0 某格不足 3 次有效 restart）時，該 L 仍落在 R0（first match），但結論改為「H-C0 不可檢定，無法判定是否重現 H-B4，不做歸因」，並標 incomplete；與 H-C0 真的失敗（未重現）區分。
+  - R4 只有在 H-C3 為 supported 時才寫「H-C3 成立」；cat(T) 或 cat(G) 為 NT 時改用「無法確認是串聯瓶頸」的變體，並標 incomplete。
+  - 跨 L：任一 L 的 H-C0 不可檢定，就不寫一般結論。
+  - A13 / A8 的描述量（histogram 的 queue / prefill 平均、1 Hz 份額、client 的短類 P50 / P99、長類 P50、短類 P95 TPOT、≥ P95 尾端的 O / Q / P 與其 mixed − uniform 差）
+    逐 (condition, L, mix) 對有效 restart 取平均與 SE；任一有效 run 缺值則整項為 None，不算部分平均；只有 1 個 run 時不給 SE。判定一律不讀這些量。
+- **runner 的安全措施**：
+  - `--gpu-lock-held` 不再只信任旗標：session 開始與每次 boot 前，都由 `/proc/self/fd` 找到 lock 檔的 fd 並以 `flock(LOCK_EX|LOCK_NB)` 確認確實持有，否則拒絕。
+  - teardown 期間收到的 SIGINT / SIGTERM / SIGHUP 先記錄，等 server 停止（含 SIGKILL 升級）、log 收完、receiver 關閉後才處理。
+  - log reader 寫檔失敗、receiver 存檔失敗：中止 session，不寫成 timeout row。
+  - boot 期間只作描述的 `nvidia-smi` 量測有 15 秒逾時，失敗只記錄，不影響有效性。
+  - OTLP receiver 的連線與關閉都有逾時上限。
+- **smoke 的遮蔽**：session.json 中的 bench 視窗時間（`t_before`、`t_after`、`startup_s`）也一併移除；FS4 另檢查 scrape delta、1 Hz 序列與 one_hz 份額都存在。
+- **範圍外、照實記錄**：Core 的 runner（`run_core_b` 等）仍只信任 `--gpu-lock-held` 旗標；依「Core 模組不改」的原則不修改。

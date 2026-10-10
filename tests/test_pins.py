@@ -8,14 +8,18 @@ encode SPEC invariants so a later edit cannot silently break them:
   - staged pre-registration (decision 006):
       freeze.mac    -> every derived GGUF hash + Mac toolchain + quality data pinned
       freeze.nvidia -> additionally CUDA toolchain, vLLM stack and Core B verified
+      freeze.advanced (decision 024) -> every [advanced] value set, no placeholder, and stages A and B frozen
 """
 
+import copy
 import json
 import re
 import tomllib
 from pathlib import Path
 
 import pytest
+
+import adv_plan  # the 024 K3 rule and the condition names; pins_problems' own rules are tested in test_adv_plan
 
 ROOT = Path(__file__).resolve().parent.parent
 PINS_PATH = ROOT / "configs" / "pins.toml"
@@ -42,8 +46,11 @@ def test_schema_and_freeze_flags(pins):
     assert pins["schema_version"] == 1
     assert isinstance(pins["freeze"]["mac"], bool)
     assert isinstance(pins["freeze"]["nvidia"], bool)
+    assert isinstance(pins["freeze"]["advanced"], bool)
     # Stage B is an addendum to stage A, never a replacement (decision 006).
     assert not (pins["freeze"]["nvidia"] and not pins["freeze"]["mac"])
+    # Advanced (024) is frozen on top of both stages, never instead of them.
+    assert not (pins["freeze"]["advanced"] and not (pins["freeze"]["nvidia"] and pins["freeze"]["mac"]))
 
 
 def test_llama_cpp_pinned_to_release_tag_and_commit(pins):
@@ -187,6 +194,122 @@ def test_stage_b_freeze_requires_verified_nvidia_stack(pins):
     mix = pins["core_b"]["mix_dataset_sha256"]
     assert set(mix) == {"2048", "8192"} and all(SHA256.fullmatch(v) for v in mix.values())
     assert stage_b_unmeasured(pins["stage_b"]) == []
+
+
+ADVANCED_KEYS = ("seed", "derived_from", "c", "conditions", "long_prefill_token_threshold", "kv_low_bytes",
+                 "num_gpu_blocks_k4", "num_gpu_blocks_k3", "otlp_endpoint", "otel_protocol", "timeouts_s")
+ADVANCED_CELLS = {f"{mix}_{L}" for mix in ("uniform", "mixed") for L in (2048, 8192)}
+
+
+def _positive_int(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and v > 0
+
+
+def advanced_unfrozen(pins: dict) -> list:
+    """Why pins [advanced] cannot carry freeze.advanced = true yet (024 test list): stage A or B not frozen, a value
+    missing or still a placeholder (0 / "" / empty), an unmeasured or rule-breaking K3 block count, or an incomplete
+    conditions table. Each problem starts with the offending key."""
+    fr, sb, adv = pins.get("freeze") or {}, pins.get("stage_b") or {}, pins.get("advanced") or {}
+    problems = [f"freeze.{k} must be true before freeze.advanced (024)" for k in ("mac", "nvidia") if fr.get(k) is not True]
+    problems += [f"{k} is missing" for k in ADVANCED_KEYS if k not in adv]
+    problems += [f"{k} {adv[k]!r} is a placeholder" for k in ("seed", "long_prefill_token_threshold", "kv_low_bytes",
+                                                             "num_gpu_blocks_k4", "num_gpu_blocks_k3")
+                 if k in adv and not _positive_int(adv[k])]
+    problems += [f"{k} {adv[k]!r} is a placeholder" for k in ("derived_from", "otlp_endpoint", "otel_protocol")
+                 if k in adv and not (isinstance(adv[k], str) and adv[k])]
+    c = adv.get("c")
+    c_ok = isinstance(c, dict) and set(c) == {"2048", "8192"} and all(_positive_int(v) for v in c.values())
+    if "c" in adv and not c_ok:
+        problems.append(f"c {c!r} needs a positive C_knee at 2048 and 8192")
+    to = adv.get("timeouts_s")
+    if "timeouts_s" in adv and not (isinstance(to, dict) and set(to) == ADVANCED_CELLS
+                                    and all(_positive_int(v) for v in to.values())):
+        problems.append(f"timeouts_s {to!r} needs a positive timeout per {sorted(ADVANCED_CELLS)}")
+    cond = adv.get("conditions")
+    if "conditions" in adv and not (
+            isinstance(cond, dict) and set(cond) == set(adv_plan.CONDITIONS)
+            and all(isinstance(v, list) and all(isinstance(a, str) and a for a in v) for v in cond.values())
+            and all(cond[k] for k in ("T", "G", "TG"))):
+        problems.append(f"conditions {cond!r} needs every condition {adv_plan.CONDITIONS}, each an argv list "
+                        f"(T / G / TG non-empty)")
+    k3 = adv.get("num_gpu_blocks_k3")
+    if _positive_int(k3) and c_ok and _positive_int(sb.get("block_size")):
+        rule = adv_plan.k3_problems(k3, block_size=sb["block_size"], c={int(L): C for L, C in c.items()})
+        if rule:
+            problems.append(f"num_gpu_blocks_k3 {k3} breaks the K3 rule: {'; '.join(rule)}")
+    return problems
+
+
+@pytest.fixture()
+def advanced_frozen(pins):
+    """The repo pins as the Advanced freeze would leave them: freeze.advanced = true, K3 measured (186 blocks)."""
+    p = copy.deepcopy(pins)
+    p["freeze"].update(mac=True, nvidia=True, advanced=True)
+    p["advanced"]["num_gpu_blocks_k3"] = 186
+    return p
+
+
+def test_advanced_unfrozen_accepts_a_complete_measured_table(advanced_frozen):
+    assert advanced_unfrozen(advanced_frozen) == []
+
+
+def _drop(key):
+    return lambda p: p["advanced"].pop(key)
+
+
+def _set(**kw):
+    return lambda p: p["advanced"].update(kw)
+
+
+@pytest.mark.parametrize("change, key", [
+    (lambda p: p["freeze"].update(nvidia=False), "freeze.nvidia"),
+    (lambda p: p["freeze"].update(mac=False), "freeze.mac"),
+    (_set(num_gpu_blocks_k3=0), "num_gpu_blocks_k3"),          # not measured yet (smoke FS1)
+    (_set(num_gpu_blocks_k3=-1), "num_gpu_blocks_k3"),
+    (_set(num_gpu_blocks_k3=170), "num_gpu_blocks_k3"),        # measured, but C_KV(2048) = 24 < C_knee 25
+    (_set(num_gpu_blocks_k3=127), "num_gpu_blocks_k3"),
+    (_set(seed=0), "seed"), (_set(derived_from=""), "derived_from"),
+    (_set(c={"2048": 25}), "c"), (_set(c={"2048": 0, "8192": 8}), "c"),
+    (_set(long_prefill_token_threshold=0), "long_prefill_token_threshold"),
+    (_set(kv_low_bytes=0), "kv_low_bytes"), (_set(num_gpu_blocks_k4=0), "num_gpu_blocks_k4"),
+    (_set(otlp_endpoint=""), "otlp_endpoint"), (_set(otel_protocol=""), "otel_protocol"),
+    (_set(timeouts_s={}), "timeouts_s"),
+    (_set(timeouts_s={"uniform_2048": 300, "mixed_2048": 600, "uniform_8192": 720}), "timeouts_s"),
+    (_set(timeouts_s={"uniform_2048": 300, "mixed_2048": 600, "uniform_8192": 720, "mixed_8192": 0}), "timeouts_s"),
+    (_set(conditions={}), "conditions"),
+    (_set(conditions={"B0": [], "T": ["--long-prefill-token-threshold", "512"], "G": ["--no-scheduler-reserve-full-isl"],
+                      "TG": ["--long-prefill-token-threshold", "512", "--no-scheduler-reserve-full-isl"]}),
+     "conditions"),                                              # K3 missing
+    (_set(conditions={"B0": [], "T": [], "G": ["--no-scheduler-reserve-full-isl"],
+                      "TG": ["--long-prefill-token-threshold", "512", "--no-scheduler-reserve-full-isl"], "K3": []}),
+     "conditions"),                                              # T's delta left empty
+    (_set(conditions={"B0": [], "T": ["--long-prefill-token-threshold", ""], "G": ["--no-scheduler-reserve-full-isl"],
+                      "TG": ["--long-prefill-token-threshold", "512", "--no-scheduler-reserve-full-isl"], "K3": []}),
+     "conditions"),                                              # placeholder argument
+    *[(_drop(k), k) for k in ADVANCED_KEYS],
+])
+def test_advanced_unfrozen_names_each_placeholder(advanced_frozen, change, key):
+    change(advanced_frozen)
+    problems = advanced_unfrozen(advanced_frozen)
+    assert len(problems) == 1 and problems[0].split()[0] == key, problems
+
+
+def test_advanced_freeze_requires_every_value_set_and_stages_a_and_b_frozen(pins):
+    """024: freeze.advanced = true needs T, the K3 bytes, every measured block count, the timeouts, the conditions
+    table, the seed and the endpoint, with no placeholder; freeze.mac and freeze.nvidia are enforced only then."""
+    if not pins["freeze"]["advanced"]:
+        pytest.skip("Advanced pre-registration (024) not frozen yet")
+    assert advanced_unfrozen(pins) == []
+
+
+def test_advanced_draft_may_only_leave_the_k3_block_count_unmeasured(pins):
+    """Before the freeze the draft table exists from day one; only num_gpu_blocks_k3 may still be the 0 placeholder
+    (smoke FS1 measures it)."""
+    if pins["freeze"]["advanced"]:
+        pytest.skip("frozen: test_advanced_freeze_requires_every_value_set_and_stages_a_and_b_frozen applies")
+    assert set(ADVANCED_KEYS) <= set(pins["advanced"])
+    assert pins["advanced"]["num_gpu_blocks_k3"] == 0 or _positive_int(pins["advanced"]["num_gpu_blocks_k3"])
+    assert [p for p in advanced_unfrozen(pins) if not p.startswith("num_gpu_blocks_k3")] == []
 
 
 def test_core_b_single_fixed_precision(pins):

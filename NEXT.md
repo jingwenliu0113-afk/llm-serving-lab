@@ -111,7 +111,8 @@
    1. 事先登記草稿已 commit（`ae368e6`）：decision 024、PREREGISTRATION §7（DRAFT）。
       - 5 個 condition：B0、T（threshold 512）、G（關閉 full-ISL 准入閘門）、TG、K3（KV 3 GiB）。
       - 每個 condition × 2 個 L × 2 種 mix × 3 次 restart = 60 次 boot，預期約 7.3 h GPU。
-   2. **harness 實作中**（workflow）：`adv_plan`、`adv_decomp`、`adv_analysis`、`run_adv`、`adv_report`、`adv_smoke`，TDD，Core 模組不改；完成後再審查。
+   2. **harness 完成**：`adv_plan`、`adv_decomp`、`adv_analysis`、`run_adv`、`adv_report`、`adv_smoke`（TDD；Core 模組不改，有 sha256 回歸測試）。
+      審查確認 13 項，全部修正並再驗證；完整測試 1006 passed。實作時的細節記在 024「實作補記」。
    3. 部署（`deploy_bundle.py` 內部呼叫 `git`，要讓 PATH 先找到 CommandLineTools 的 git）→ smoke FS1–FS5（約 40 分鐘 GPU，只看計數）。
    4. 依 FS1 填入 K3 的實測 block 數 → `freeze.advanced = true`，§7 改為 FROZEN → commit。
    5. 正式 run（約 7–8 h）→ `adv_report` → 結果報告。
