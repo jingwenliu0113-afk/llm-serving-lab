@@ -112,7 +112,8 @@
       - Core B `analysis.json` 已以 `--mixed` 重產（021 R3）。
       - **H-B4 not refuted**：在 C = C_knee 時，短 request 的 P95 TTFT 從 uniform 到 mixed，2K（C 25）由 4.26 秒增為 23.2 秒（+444%），8K（C 8）由 2.83 秒增為 7.80 秒（+175%），都超出 noise。
         mixed 下 KV cache 使用率峰值 100%，沒有 preemption。
-   4. **進行中**（`chain_rtx_mixed2_quality.sh`）：9B BF16 記憶體探測（11:02 開始）→ 正式 quality（約 14 小時）。
+   4. **9B BF16 記憶體探測完成**（020 補記）：CUDA0 self 15,906 MiB，載入前可用 15,009 MiB，約 897 MiB spill 到系統記憶體；33 / 33 層在 GPU。
+   5. **正式 quality 進行中**（11:04 開始，約 14 小時，`chain_rtx_mixed2_quality.sh`）。完成後：取回、`quality_analysis.py`、frontier 圖、決策表。
    6. 報告：
       - `core_a_report.py`（RTX 帶 `--v-total-mib 16303 --b-mib 811 --c-ctx-mib -89`）。
       - `core_b_report.py` 與 `core_b_figures.py`。

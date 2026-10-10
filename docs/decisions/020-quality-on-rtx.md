@@ -127,3 +127,14 @@
 - **揭露**：找記憶體行時，我把 9B BF16 參考 job 的 stderr 整段印出，其中最後一行是它在 pilot 20 個 chunk 上的 PPL。
   - 這是 BF16 參考值本身，不是任何 hypothesis 對比（H-A5 比的是 quant 之間，以及 9B-Q4_K_M 對 4B-Q8_0）。
   - 但它屬於 pilot 的遮蔽範圍，照實記錄。之後讀 log 一律先過濾，只看記憶體與時間。
+
+## 9B BF16 記憶體探測結果（2026-10-10 11:02–11:04，`results/quality/probe-20261010-bf16-memory/`）
+
+- 設定：005 的 flag set 加 `-lv 4`，4 個 chunk，GPU lock 下，`nvidia-smi` 1 Hz 取樣。log 留在 WSL 的 `raw/`，只擷取記憶體行（`memory_lines.txt`）。
+- llama.cpp breakdown：
+  - CUDA0 self = 15,906 MiB（model 15,140 + context 265 + compute 501），結束時 free = 0。
+  - Host = 1,956 MiB（`CPU_Mapped` 的 token_embd 1,940 + compute 16），是 CUDA 下的正常配置，不屬於 spill。
+- 載入前裝置可用 15,009 MiB（`llama_prepare_model_devices`）。因此約 **897 MiB** 超出可用 VRAM，由 WSL2 / WDDM 放到系統記憶體。
+  這落在第 3 點估計的 0.5–1 GiB 之內。
+- `nvidia-smi memory.used` 峰值 15,885 MiB（總量 16,303），受實體 VRAM 限制。
+- 33 / 33 層都在 GPU（`-ngl 999`），運算全部由 CUDA kernel 完成，符合第 3 點。正式 quality 照原計畫執行，flag set 不變。
