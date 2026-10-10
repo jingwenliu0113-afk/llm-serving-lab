@@ -1,0 +1,116 @@
+{
+  "schema_version": 2,
+  "captured_at_utc": "2026-10-10T18:15:03.330027+00:00",
+  "repo": {
+    "commit": "97a948c911940249b3d04bff38727a1fcb8b1d64",
+    "dirty": false,
+    "status": [],
+    "source": "DEPLOYED_COMMIT"
+  },
+  "os": {
+    "system": "Linux",
+    "release": "6.6.114.1-microsoft-standard-WSL2",
+    "machine": "x86_64",
+    "wsl": true,
+    "pretty_name": "Ubuntu 22.04.5 LTS",
+    "id": "ubuntu",
+    "version_id": "22.04"
+  },
+  "hardware": {
+    "cpu": "AMD Ryzen 5 7600 6-Core Processor",
+    "logical_cpus": 12,
+    "ram_bytes": 32599273472
+  },
+  "gpu": {
+    "nvidia": [
+      {
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "driver_version": "617.42",
+        "compute_cap": "12.0",
+        "memory_total_mib": 16303,
+        "memory_used_mib": 617,
+        "utilization_gpu_pct": 0,
+        "pstate": "P5",
+        "power_draw_w": 16.02,
+        "temperature_c": 50,
+        "clocks_sm_mhz": 382,
+        "clocks_max_sm_mhz": 3090,
+        "power_limit_w": 300.0,
+        "enforced_power_limit_w": 300.0,
+        "power_default_limit_w": 300.0,
+        "clocks_event_reasons_active": "0x0000000000000400"
+      }
+    ],
+    "cuda_toolkit_on_path": null,
+    "host_cc": "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+    "cuda_home": null,
+    "cuda_home_nvcc": null
+  },
+  "power": {
+    "source": null,
+    "battery_pct": null,
+    "battery_state": null,
+    "ac_adapter": null,
+    "powermode": null,
+    "powermode_label": null,
+    "thermal": null
+  },
+  "load": {
+    "loadavg_1m": 0.9208984375,
+    "loadavg_5m": 1.0087890625,
+    "loadavg_15m": 0.99462890625,
+    "mac_heavy_lock_present": null,
+    "mac_heavy_lock_owner": null,
+    "gpu_lock_held": true
+  },
+  "runtime": {
+    "llama_cpp": null,
+    "vllm": {
+      "python": "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+      "vllm": "0.30.0",
+      "torch": "2.13.0+cu130",
+      "torch_cuda": "13.0",
+      "transformers": "5.16.1",
+      "triton": "3.7.1",
+      "tokenizers": "0.23.1",
+      "huggingface_hub": "1.31.0",
+      "nvidia_wheels": {
+        "nvidia-cublas": "13.1.1.3",
+        "nvidia-cuda-cccl": "13.3.4.3.1",
+        "nvidia-cuda-crt": "13.4.92",
+        "nvidia-cuda-cupti": "13.0.85",
+        "nvidia-cuda-nvcc": "13.4.92",
+        "nvidia-cuda-nvdisasm": "13.4.92",
+        "nvidia-cuda-nvrtc": "13.0.88",
+        "nvidia-cuda-runtime": "13.0.96",
+        "nvidia-cudnn-cu13": "9.20.0.48",
+        "nvidia-cudnn-frontend": "1.29.0",
+        "nvidia-cufft": "12.0.0.61",
+        "nvidia-cufile": "1.15.1.6",
+        "nvidia-curand": "10.4.0.35",
+        "nvidia-cusolver": "12.0.4.66",
+        "nvidia-cusparse": "12.6.3.3",
+        "nvidia-cusparselt-cu13": "0.8.1",
+        "nvidia-cutlass-dsl": "4.7.1",
+        "nvidia-cutlass-dsl-libs-base": "4.7.1",
+        "nvidia-cutlass-dsl-libs-core": "4.7.1",
+        "nvidia-cutlass-dsl-libs-cu12": "4.7.1",
+        "nvidia-cutlass-dsl-libs-cu13": "4.7.1",
+        "nvidia-ml-py": "13.610.43",
+        "nvidia-nccl-cu13": "2.29.7",
+        "nvidia-nvjitlink": "13.4.92",
+        "nvidia-nvshmem-cu13": "3.4.5",
+        "nvidia-nvtx": "13.0.85",
+        "nvidia-nvvm": "13.4.92"
+      },
+      "freeze_sha256": "e934798bd7577fd7684958d319546cdae1b697f7f81373e2588d7ba49c3305e1"
+    }
+  },
+  "env": {},
+  "capture_python": "3.12.13",
+  "config": null,
+  "probe_errors": [
+    "git rev-parse: exit 128: fatal: not a git repository (or any of the parent directories): .git",
+    "nvcc: command not found (nvcc)"
+  ]
+}
