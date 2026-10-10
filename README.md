@@ -5,8 +5,8 @@
 這是一個事先登記（pre-registered）的實驗：hypothesis、門檻、metric 與 protocol 都在看到正式數據之前寫定並凍結，
 之後的任何變更都有 decision log。結論只來自有效的正式 session，失敗、OOM、not testable 的單位照實報告。
 
-> **狀態（2026-10-10）**：Core（A、B、quality）的正式數據與 deployment decision table 都已完成，結果見下方。
-> 是否進入 Advanced 依 SPEC 的 Gate 由使用者決定。
+> **狀態（2026-10-11）**：Core（A、B、quality）的正式數據與 deployment decision table 都已完成。
+> 使用者在 Gate 選擇進入 Advanced，範圍只限隔離 H-B4 的成因（decision 023）；事先登記、凍結後的正式 session 也已完成（decision 024、025）。結果見下方。
 
 ## 研究範圍
 
@@ -34,14 +34,17 @@
 - **H-B2** KV 容量決定 knee。
 - **H-B3** TPOT 的成長慢於 TTFT。
 - **H-B4** request mix 提高短 request 的尾延遲。
+- **Advanced**（§7，decision 024）：H-C0 在 session 內重現 H-B4；H-C1 batching（chunked prefill 壟斷 step budget）；H-C2 scheduler 的准入閘門；
+  H-C3 兩者串聯；H-C4 KV 容量（推論級）；H-C5 分解與操弄一致。
 
 ## 文件
 
 - [SPEC.md](SPEC.md)：研究問題與範圍。
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
   分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
-- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–022）。
+- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–025）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
+  - 023 是 Gate 的決定，024 是 Advanced 的事先登記（凍結 commit `97a948c`），025 是 Advanced 的結果。
 - [docs/EXPERIMENT_RULES.md](docs/EXPERIMENT_RULES.md)、[docs/RESULTS_FORMAT.md](docs/RESULTS_FORMAT.md)、[docs/STORAGE_PLAN.md](docs/STORAGE_PLAN.md)。
 - [MACHINE_POLICY.md](MACHINE_POLICY.md)：兩台機器的分工與 lock。
 - [configs/pins.toml](configs/pins.toml)：所有 pin。
@@ -91,6 +94,11 @@ uv sync && uv run pytest -q
    - 沒有任何選擇 session 的參數。
    - 每類輸入要恰好一個有效的正式 session；每份 analysis 都會用凍結程式重算比對。
    - 輸出 `results/decision_table/`。
+6. **Advanced**（WSL，GPU lock；decision 024）：
+   - `benchmarks/adv_plan.py --uniform-session results/core_b/formal-20261009-coreb-uniform --out …`
+   - `benchmarks/run_adv.py --plan … --out … --gdn-prefill-backend triton --gpu-memory-utilization 0.91 --formal --gpu-lock-held --mixed-dataset 2048=… --mixed-dataset 8192=…`
+   - `benchmarks/adv_report.py --session … --uniform-session … --core-mixed-session … --out …/analysis.json`（在 Mac 上執行）
+   - `benchmarks/adv_smoke.py`：凍結前的可行性 smoke（只輸出 pass / fail 與計數）。
 
 各指令的完整參數見檔案開頭的 docstring。
 
@@ -147,7 +155,7 @@ sessions：`formal-20261009-coreb-uniform`（102 / 102 ok）、`formal-20261010-
   - 2K：4.26 → 23.2 秒（+444%）。
   - 8K：2.83 → 7.80 秒（+175%）。
   - 兩者都超出 noise。mixed 下 KV cache 使用率峰值為 99.6%（2K）與 99.2%（8K），這個使用率包含 GDN 狀態 block；沒有 preemption。
-  - 機制（chunked prefill 干擾）是 conjecture。
+  - 機制（chunked prefill 干擾）在 Core 是 conjecture；Advanced 的檢驗結果見下方。
   - 描述性（不屬於 H-B4）：同一個 C 下，mixed 全部 request 的 P95 TPOT 是 uniform 的 2.0 倍（2K：150 對 74.5 ms）與 1.5 倍（8K：130 對 88.8 ms）。
     output tok/s 也較低（120.8 對 314.9、60.2 對 80.2），但 mixed 含 32K prompt，不是同一負載（total token throughput 只低約 4% 與 2%）。
 - 圖：`results/core_b/figures/{p95_ttft_ms,p95_tpot_ms,output_throughput}-uniform-formal.svg`。
@@ -216,11 +224,48 @@ session：`formal-20261010-quality`（46 / 46 ok，env 有效）。quality 視�
   - P95 TTFT 會急升：C_max 時為 C_knee 的 9–63 倍（2K 約 9 倍、8K 約 63 倍、32K 約 21 倍）。
 - 延遲敏感：依延遲目標選並發屬於 Advanced（fixed-SLO），Core 只提供完整曲線。
 - 長短 request 混合：在 C_knee 加入 10% 的 32K request，短 request 的 P95 TTFT 變為 2.8–5.4 倍（+175% 至 +444%；H-B4），全部 request 的 P95 TPOT 變為 1.5–2.0 倍。
-  需要短 request 低延遲時，這是 Core 量到的主要風險；緩解方法屬於 Advanced。
+  需要短 request 低延遲時，這是 Core 量到的主要風險；緩解方法屬於 Advanced（成因的結果見下一節，決策表本身不因此改變）。
+
+### Advanced：H-B4 的成因（[decision 025](docs/decisions/025-advanced-hb4-results.md)）
+
+session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 commit `97a948c`）。規則在任何 Advanced 數據之前凍結（024、PREREGISTRATION §7）。
+
+- 同一 session 內比較 5 個 server condition：
+  - B0：Core 設定，加上觀測（OTLP、逐 step log）。
+  - T：每個 request 的 prefill chunk 上限 512 token。
+  - G：關閉 full-ISL 准入閘門。
+  - TG：T 加 G。
+  - K3：KV cache 從 4 GiB 降到 3 GiB。
+- 格子：每個 condition × L {2K @ C 25, 8K @ C 8} × {uniform, mixed} × 3 次 restart。
+- 主要量：短類 P95 TTFT 的 ρ = ln(mixed ÷ uniform)。移除比例 f = 1 − ρ_c ÷ ρ_B0；M = 移除過半，而且 ρ 與 mixed 的絕對值都下降並超出 noise；W = ρ 反而上升至少 20% 並超出 noise；N = 其他（本 session 沒有出現部分移除的 P 或 R 類）。
+
+| | 2K（C 25） | 8K（C 8） |
+|---|---|---|
+| H-C0：B0 重現 H-B4 | 通過（+445%；Core +444%） | 通過（+200%；Core +175%） |
+| T：chunk 上限 512 | N（f 0.08） | **M（f 1.09）** |
+| G：關閉准入閘門 | **W**（f −0.44：變差；mixed 3 次共 263 次 preemption） | N（f 0.00） |
+| TG | N（f 0.02） | M（f 1.09） |
+| K3：KV 3 GiB | ρ +12%，未達 +20% 門檻 | ρ +22%，劑量敏感成立 |
+| 判讀列 | **R6：KV 可能有關，但未確立** | **R1：主因是 batching，即長 request 的 chunked prefill 壟斷每個 step 的 budget（H-C1 成立）** |
+| 分解與操弄（H-C5） | 不一致：分解指向 budget-long，但 T 的移除未達門檻（f 0.08，N）；以操弄為準 | 一致（budget-long） |
+
+- **跨 L：成因依 L 而異**（兩個 L 落在不同列，依規則不合併）。事先預期 8K 為 R1 或 R4（符合）、2K 為 R5 或 R2 / R4（不符合）。
+- **8K**：限制 chunk 到 512 後，ρ 從 1.10 降到 −0.09：mixed 的短類 P95 TTFT 從 7.8 秒降到 6.2 秒，但 uniform 也從 2.6 秒變 6.8 秒。
+  - ρ 的下降中約 80% 來自 uniform 變慢，約 20% 來自 mixed 變快。依凍結規則仍是 M，因為 mixed 的絕對值也下降並超出 noise。
+  - 其他代價：mixed 中長 request 的 P95 TTFT 多 17%，output tok/s 少約 4%。
+  - 事後的描述：T 不是免費的修正。它主要把 uniform 拉慢，而不是讓 mixed 變快。
+- **2K**：三種移除都沒有消掉過半。關閉預設的准入閘門反而使 mixed 的短類 P95 TTFT 變為 2.1 倍、output tok/s 少 43%，代表預設閘門在這裡有保護作用。
+  KV 的角色只到「可能有關」：唯一的 KV 證據是關閉閘門後出現 preemption 而且變差。
+  降低 KV 讓 ρ 上升 12%，未達事先定的 20%；准入受阻的觀測份額 0.10，未達 0.5。
+- allocator 沒有操弄。KV 只能往下調（熱 boot 可用量上限約 4.14 GiB，sm_120 不支援 fp8 KV），所以「KV 是主因」最多只能是推論級（R5）；兩個 L 都沒有落在 R5。
+- 8K uniform 的 boot 之間有兩個模式（約 2.48 與 2.82 秒，成因未知），使 8K 的 noise 偏大。事後把模式拉齊重算（敏感度計算，不是判定），8K 的類別與列都不變（025「限制」）。
+- Core 的判定與 deployment decision table 都不因 Advanced 改變。
 
 ### 證據不支持的部分
 
 - Metal 上的 quality、長 context（> 512）的 quality、Core B（W4A16）的 quality：都沒有量。
 - Mac 的多使用者 serving：沒有量（SPEC：Core B 只在 NVIDIA）。
 - 跨 size 的 quality 只有 H-A5(a) 這一組配對；其他 4B 對 9B 的 quality 關係都是 unmeasured。
-- H-A2 被推翻的原因、H-B4 的機制：Core 都沒有檢驗。
+- H-A2 被推翻的原因：沒有檢驗。
+- H-B4 的機制：只在 8K 隔離出主因（Advanced R1）。2K 落在 R6：T、G、TG 都沒有移除過半，KV 可能有關，但未確立（未達 R5）。allocator 沒有操弄。
+- Advanced 只測了一個 chunk threshold（512）與一個 KV 劑量（3 GiB）；其他值、其他模型與 runtime 版本的效果未知。

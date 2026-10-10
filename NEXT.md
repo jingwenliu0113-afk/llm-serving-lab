@@ -4,6 +4,8 @@
 
 **Core 全部完成（2026-10-10）**：Mac / RTX Core A、Core B（uniform + mixed）、quality、deployment decision table。
 **Gate 通過（使用者 2026-10-10 決定，decision 023）**：進入 Advanced，範圍只限隔離 H-B4 的成因。Optional 未觸碰。
+**Advanced 完成（2026-10-11，decision 025）**：正式 session `formal-20261011-adv` 60 / 60 有效；
+2K 落在 R6（KV 可能有關，但未確立），8K 落在 R1（主因是 chunked prefill 壟斷 step budget，H-C1 成立）；跨 L「成因依 L 而異」。
 
 - Stage A：harness commit `eb6eef1`，`freeze.mac = true`。
 - Stage B：harness commit `19446d7`，凍結 commit `b42614a`，`freeze.nvidia = true`。
@@ -11,7 +13,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–024。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–025。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -107,7 +109,14 @@
 
 ## 下一步
 
-1. **Advanced（H-B4 成因隔離，decision 023、024）**：
+0. **023 的 Advanced 範圍已完成**（decision 025，README「Advanced」一節）。
+   - 正式 session `formal-20261011-adv`（部署 `97a948c`，GPU lock 下，2026-10-11 00:27–06:33）：60 / 60 次 boot 有效，0 逾時，env 有效。
+   - `adv_report`（Mac，project venv）：2K → R6，8K → R1，跨 L 不合併。事先預期 8K 符合、2K 不符合，照實報告。
+   - 以 `rows.jsonl` 獨立重算 U、M、ρ、f、a，與 `analysis.json` 一致；獨立核對者重跑 `adv_report` 逐位元相同，並核對 025 / README 的文字（14 項修正已納入）。
+   - Core 判定與 decision table 不變（重跑只差 pins sha256，commit 的仍是第一次執行的輸出）。
+   - 之後的任何 Advanced 項目或 Optional 都需要使用者決定（見下方「需要使用者」）。
+
+1. （歷史）**Advanced（H-B4 成因隔離，decision 023、024）**：
    1. 事先登記草稿已 commit（`ae368e6`）：decision 024、PREREGISTRATION §7（DRAFT）。
       - 5 個 condition：B0、T（threshold 512）、G（關閉 full-ISL 准入閘門）、TG、K3（KV 3 GiB）。
       - 每個 condition × 2 個 L × 2 種 mix × 3 次 restart = 60 次 boot，預期約 7.3 h GPU。
@@ -120,7 +129,11 @@
 
 ## Blocked / 需要使用者
 
-目前沒有需要使用者決定的項目。
+- **下一步方向**（023：其他 Advanced 項目要使用者另外決定）：
+  - 收尾（Core + Advanced 都已完成，README 為最終結論）；或
+  - 另一個 Advanced 項目，例如 fixed-SLO 最大並發、其他 chunk threshold / KV 劑量；都要先事先登記並凍結，再收集數據。
+  - （小）8K uniform 在 boot 之間有兩個模式（約 2.48 / 2.82 秒，成因未知；025「限制」）。事後敏感度顯示 8K 的判定不受影響，追查與否由使用者決定。
+  - 沒有使用者決定之前，不開始任何新的實驗。
 
 ## 建議（非 blocker）
 
