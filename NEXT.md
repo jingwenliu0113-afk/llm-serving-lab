@@ -10,7 +10,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–021。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–022。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -105,9 +105,12 @@
 1. **RTX**（GPU lock，依序）：
    1. **RTX quality pilot 通過**（`pilot-20261010-rtx-q`，52 / 52 ok，09:12–10:04）：重跑完全相同、self-KLD 0、Q8_0 KLD 約 1.5e-3。
       正式 quality 估計約 13.8 小時。spill 量 pilot 量不到，改由記憶體探測記錄（020 補記）。
-   2. **正式 Core B mixed 進行中**（10:04 開始，`chain_rtx_after_uniform.sh`）。
-   3. 接著自動（`chain_rtx_after_mixed.sh`）：核對部署 commit → 9B BF16 記憶體探測（約 2 分鐘，描述用）→ 正式 quality（兩個 size）。
-   4. mixed 跑完：取回 session（`fetch_rtx_session.sh`），以 `--mixed` 重產 Core B `analysis.json`（021 R3），commit。
+   2. **第一次正式 mixed 全部失敗**（`formal-20261010-coreb-mixed`，10:04–10:10，0 / 6）：client 缺 pandas（vllm[bench] extra），沒有送出任何 request。
+      依 decision 022 補裝 pandas（hash lock，只新增 2 個套件），CPU 檢查通過，失敗 session 照原樣保留並 commit。
+      期間另一個專案（text-to-sql）10:11 起短暫持有 GPU lock，沒有搶占。
+   3. **進行中**（`chain_rtx_mixed2_quality.sh`，唯讀等待 GPU lock，不搶占）：
+      正式 mixed 重跑 `formal-20261010-coreb-mixed2`（10:19 開始）→ 9B BF16 記憶體探測（約 2 分鐘）→ 正式 quality（約 14 小時）。
+   4. mixed2 跑完：取回 session（`fetch_rtx_session.sh`），以 `--mixed` 重產 Core B `analysis.json`（021 R3），commit。
    6. 報告：
       - `core_a_report.py`（RTX 帶 `--v-total-mib 16303 --b-mib 811 --c-ctx-mib -89`）。
       - `core_b_report.py` 與 `core_b_figures.py`。
