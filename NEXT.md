@@ -108,9 +108,11 @@
    2. **第一次正式 mixed 全部失敗**（`formal-20261010-coreb-mixed`，10:04–10:10，0 / 6）：client 缺 pandas（vllm[bench] extra），沒有送出任何 request。
       依 decision 022 補裝 pandas（hash lock，只新增 2 個套件），CPU 檢查通過，失敗 session 照原樣保留並 commit。
       期間另一個專案（text-to-sql）10:11 起短暫持有 GPU lock，沒有搶占。
-   3. **進行中**（`chain_rtx_mixed2_quality.sh`，唯讀等待 GPU lock，不搶占）：
-      正式 mixed 重跑 `formal-20261010-coreb-mixed2`（10:19 開始）→ 9B BF16 記憶體探測（約 2 分鐘）→ 正式 quality（約 14 小時）。
-   4. mixed2 跑完：取回 session（`fetch_rtx_session.sh`），以 `--mixed` 重產 Core B `analysis.json`（021 R3），commit。
+   3. **正式 Core B mixed 完成**（`formal-20261010-coreb-mixed2`，10:19–11:02）：6 / 6 ok，env 有效，server 設定與 uniform 相同。
+      - Core B `analysis.json` 已以 `--mixed` 重產（021 R3）。
+      - **H-B4 not refuted**：在 C = C_knee 時，短 request 的 P95 TTFT 從 uniform 到 mixed，2K（C 25）由 4.26 秒增為 23.2 秒（+444%），8K（C 8）由 2.83 秒增為 7.80 秒（+175%），都超出 noise。
+        mixed 下 KV cache 使用率峰值 100%，沒有 preemption。
+   4. **進行中**（`chain_rtx_mixed2_quality.sh`）：9B BF16 記憶體探測（11:02 開始）→ 正式 quality（約 14 小時）。
    6. 報告：
       - `core_a_report.py`（RTX 帶 `--v-total-mib 16303 --b-mib 811 --c-ctx-mib -89`）。
       - `core_b_report.py` 與 `core_b_figures.py`。

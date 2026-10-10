@@ -1,0 +1,77 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/bench-mixed-2048-r1-c25.json": {
+   "sha256": "4a05a296b194a2a49e4ae4a02c12d9760961dfb81fc564077e1b0586049adc07",
+   "size_bytes": 840844
+  },
+  "raw/bench-mixed-2048-r1-c25.log": {
+   "sha256": "f33759b42aa2f0f8c56883287bc51a629cae74ab3189e3e7e58b087f562fdd80",
+   "size_bytes": 17315
+  },
+  "raw/bench-mixed-2048-r2-c25.json": {
+   "sha256": "83a664df3e2c4bf2af4239776cfe7b7eff896e675a3946e6f3e5ad925bf762c5",
+   "size_bytes": 836691
+  },
+  "raw/bench-mixed-2048-r2-c25.log": {
+   "sha256": "443417b8c14788ddf63934954189da00ada193ec1f6464779aaf7bfcafa659df",
+   "size_bytes": 17370
+  },
+  "raw/bench-mixed-2048-r3-c25.json": {
+   "sha256": "e010d887ef231dfee5b2bb9a75d937aa0d3cf58e2b553920b3fa8633c36d5524",
+   "size_bytes": 838358
+  },
+  "raw/bench-mixed-2048-r3-c25.log": {
+   "sha256": "eb3ae105b273c4e91f7a05b0fd0ff3a6c00e4d53345493c85f7deb5d05bd15cc",
+   "size_bytes": 17370
+  },
+  "raw/bench-mixed-8192-r1-c8.json": {
+   "sha256": "e5fb2b0b43d1163a73c49158b744fd9f05c48d7114dd61047bc7b66129685319",
+   "size_bytes": 807227
+  },
+  "raw/bench-mixed-8192-r1-c8.log": {
+   "sha256": "e6941197365d16332e55de8678ff707f1bb8ec9143582f3a828b0662bf5b4dcc",
+   "size_bytes": 17561
+  },
+  "raw/bench-mixed-8192-r2-c8.json": {
+   "sha256": "19fafff42cf70d2cbd7c7c798f0da6c35980e2eb3425f4cc46fe681d8d69fea3",
+   "size_bytes": 808956
+  },
+  "raw/bench-mixed-8192-r2-c8.log": {
+   "sha256": "b40633673913a31a61fdf66efdd99388dbff6ca194ae591a1042b5f8abf0f3b5",
+   "size_bytes": 17690
+  },
+  "raw/bench-mixed-8192-r3-c8.json": {
+   "sha256": "a71418f62ccc0f0e388bc7de592a3da31702760527b3bfb627f9b80cc99c933a",
+   "size_bytes": 807923
+  },
+  "raw/bench-mixed-8192-r3-c8.log": {
+   "sha256": "e8a7013b9dea05db4ddf264b52337b7c7a40d44cf171d0e993a7fb194aac4c8e",
+   "size_bytes": 17631
+  },
+  "raw/server-mixed-2048-r1.log": {
+   "sha256": "c09ee037318e349a83961ffe85b4d6ae76d865f1d5adb3af0ad63794ec8c70d9",
+   "size_bytes": 76758
+  },
+  "raw/server-mixed-2048-r2.log": {
+   "sha256": "0c8956df9cebf32c033dcd26f0915e107f8999fffc5b9c588b26063c25b535db",
+   "size_bytes": 75993
+  },
+  "raw/server-mixed-2048-r3.log": {
+   "sha256": "6adc219d13b5f01682decea06aaf1eb5ce201fc81a260f33c4075e9f6a0018d4",
+   "size_bytes": 76144
+  },
+  "raw/server-mixed-8192-r1.log": {
+   "sha256": "efa69679dcd9cdf3ffcdac6998602f666c1dbab9387f0f3ca9ba733be259ecb4",
+   "size_bytes": 87682
+  },
+  "raw/server-mixed-8192-r2.log": {
+   "sha256": "ddd310fbefa4537b0c8daaa719a3c64ec8dccf16daf6e3a43410761ff934a669",
+   "size_bytes": 87517
+  },
+  "raw/server-mixed-8192-r3.log": {
+   "sha256": "249160c712af70e9f8b0d9d0c4ae9dea17030d1d733f1410fc13f3283b0d97fd",
+   "size_bytes": 87761
+  }
+ }
+}
