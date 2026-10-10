@@ -402,7 +402,8 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 
 ## 7. Advanced addendum：隔離 H-B4 的成因（decision 023、024）
 
-**狀態：DRAFT（凍結前）**。K3 的實測 num_gpu_blocks 由 smoke FS1 決定後，連同分析程式、測試與 `pins.toml` `freeze.advanced = true` 一起凍結並 commit，之後才收集任何 Advanced 正式數據。
+**狀態：FROZEN (Advanced)，2026-10-11**。harness commit `6930d8f`；smoke FS1 實測 K3 = 186 個 block 後，`pins.toml` `freeze.advanced = true`，
+連同分析程式與測試在同一個凍結 commit 中（凍結時的兩個小修正見 024「凍結」）。在這之前沒有任何 Advanced 正式數據。
 本節只摘要；完整規則、門檻依據與原始碼依據見 decision 024。第 1–6 節不變，Core 的判定不受影響。
 
 - **平台與固定項**：RTX 5070 Ti、vLLM 0.30.0、Core B 的模型、server argv、client flags、mixed dataset（pin 過 sha256）與 uniform seed。

@@ -1,0 +1,51 @@
+{
+ "schema_version": 1,
+ "smoke": "FS1",
+ "seed": 20261008,
+ "derived_from": "formal-20261009-coreb-uniform",
+ "c": {
+  "2048": 1
+ },
+ "conditions": [
+  "B0",
+  "T",
+  "G",
+  "TG",
+  "K3"
+ ],
+ "boots": [
+  {
+   "block": 1,
+   "cond": "T",
+   "L": 2048,
+   "mix": "uniform",
+   "restart": 1,
+   "C": 1,
+   "N": 200,
+   "warmup": 1,
+   "timeout_s": 300,
+   "prefix": "adv-T-2048-uniform-r1-"
+  }
+ ],
+ "smoke_counts": {
+  "N": 1,
+  "warmup": 0
+ },
+ "expected_blocks": {
+  "B0": 248,
+  "T": 248,
+  "G": 248,
+  "TG": 248,
+  "K3": 186
+ },
+ "timeouts_s": {
+  "uniform_2048": 300,
+  "mixed_2048": 600,
+  "uniform_8192": 720,
+  "mixed_8192": 960
+ },
+ "pins_sha256": "96257933f924be57c38116b9e87c2073d43ccac0909503a039e27b129c35d87c",
+ "gpu_memory_utilization": "0.91",
+ "kv_cache_memory_bytes": 4294967296,
+ "block_size": 528
+}

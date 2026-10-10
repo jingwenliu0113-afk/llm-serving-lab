@@ -197,6 +197,8 @@ def pins_for_smoke(pins: dict, k3_bytes: int | None = None) -> dict:
     if k3_bytes is not None:
         if not (isinstance(k3_bytes, int) and k3_bytes > 0 and k3_bytes % ap.KV_STEP == 0):
             raise SmokeError(f"--k3-bytes {k3_bytes!r} is not a positive multiple of 256 MiB (024)")
+        if k3_bytes != p["advanced"]["kv_low_bytes"]:
+            p["advanced"]["num_gpu_blocks_k3"] = 0  # a count measured at other bytes no longer applies
         p["advanced"]["kv_low_bytes"] = k3_bytes
     return p
 

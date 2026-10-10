@@ -1,0 +1,57 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/B0-2048-mixed-r1.bench.json": {
+   "sha256": "aa6e3595a3daaa7fd9578ba41e8afbac118a1a3e810ff9934e2e2837e40c32ea",
+   "size_bytes": 5336
+  },
+  "raw/B0-2048-mixed-r1.bench.log": {
+   "sha256": "eb0efd17e966db9b3b994652369b0875f04ce6b5b58acb0adcb94e8a7f448ef4",
+   "size_bytes": 5663
+  },
+  "raw/B0-2048-mixed-r1.metrics.after.txt": {
+   "sha256": "d5d3d3d894aa9fe745ed2a84f5790d0517ef90c9002a28199c28ed1da07abbed",
+   "size_bytes": 97608
+  },
+  "raw/B0-2048-mixed-r1.metrics.before.txt": {
+   "sha256": "3e212965a0730372dc5c6ebc6a5aca173b69b4dc6e056a1891d50812101e0192",
+   "size_bytes": 95398
+  },
+  "raw/B0-2048-mixed-r1.otlp/00001.pb": {
+   "sha256": "1e29e911bbe0fde4066b2659576f882c3b09f0cae2cc9b802cf94b1486a412a0",
+   "size_bytes": 2253
+  },
+  "raw/B0-2048-mixed-r1.otlp/00002.pb": {
+   "sha256": "c5619d5fa4273f151fcc3df697540b9d9be9f0491c579623b9326336fbfb4cb8",
+   "size_bytes": 2256
+  },
+  "raw/B0-2048-mixed-r1.otlp/00003.pb": {
+   "sha256": "5a49c845ae53ac67e40322ec9758c6dff141ebde9220be91f4668bce5d4c1e6b",
+   "size_bytes": 1361
+  },
+  "raw/B0-2048-mixed-r1.otlp/00004.pb": {
+   "sha256": "30a6c3c97bd55a0d6e37784df04514d625fd67b9bd37a75615cf229cc4be76fb",
+   "size_bytes": 968
+  },
+  "raw/B0-2048-mixed-r1.otlp/00005.pb": {
+   "sha256": "54035c49ee43f8177777c84950d175bf79aa3d184395baf711ddee191d88e872",
+   "size_bytes": 893
+  },
+  "raw/B0-2048-mixed-r1.series.jsonl": {
+   "sha256": "df19def6aacc0d8fa82d1b2219a5386159cad34222f128b5e59279eb2f5c1ef0",
+   "size_bytes": 2874
+  },
+  "raw/B0-2048-mixed-r1.server.log": {
+   "sha256": "b03213abdf2fb918aece60266b29bd33ae715297b16f23a02b77ae66cfcd6b92",
+   "size_bytes": 62187
+  },
+  "raw/B0-2048-mixed-r1.spans.jsonl": {
+   "sha256": "57c87aff02fae660e9baf067c3a493e6685b9150a65782b1d011870c0bd01548",
+   "size_bytes": 757
+  },
+  "raw/B0-2048-mixed-r1.steps.jsonl": {
+   "sha256": "e62a5377decb811cc0de098de14582e85a644cb1137c35a22a4bfb7274d1fcfc",
+   "size_bytes": 17510
+  }
+ }
+}

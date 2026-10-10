@@ -1,0 +1,1609 @@
+{
+ "schema_version": 1,
+ "session_id": "20261011-fs",
+ "formal": false,
+ "gpu_lock_held": true,
+ "pins_sha256": "96257933f924be57c38116b9e87c2073d43ccac0909503a039e27b129c35d87c",
+ "kv_low_bytes": 3221225472,
+ "started_at": "2026-10-10T16:00:27.532490+00:00",
+ "datasets": {
+  "pinned_sha256": "3fc75fcadaa5d457ade882598ba129402469ff2393f32a8dd24753f3fe69f2f8",
+  "long_rows": [
+   4,
+   10,
+   27,
+   33
+  ]
+ },
+ "fs": {
+  "FS1": {
+   "ok": true,
+   "reasons": [],
+   "k3": {
+    "kv_low_bytes": 3221225472,
+    "num_gpu_blocks": 186,
+    "block_size": 528,
+    "c_kv": {
+     "2048": 26,
+     "8192": 9,
+     "32768": 2
+    },
+    "rule_ok": true,
+    "problems": [],
+    "lower_bytes": 2952790016,
+    "lower_blocks_max": 171,
+    "lower_fails": true,
+    "next_kv_low_bytes": null,
+    "freeze_ready": true
+   },
+   "probes": [
+    {
+     "name": "fs1-B0",
+     "fs": "FS1",
+     "cond": "B0",
+     "L": 2048,
+     "mix": "uniform",
+     "C": 1,
+     "N": 1,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs1-B0",
+     "row": {
+      "cond": "B0",
+      "L": 2048,
+      "mix": "uniform",
+      "restart": 1,
+      "block": 1,
+      "C": 1,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=1 failed=0 (expected 200 / 0)",
+       "input_lens do not match the uniform mix at L=2048 (1 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 1,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 128,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 1,
+      "N_bench": 1,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 1
+     },
+     "decomp_ran": true,
+     "steps": {
+      "n_iteration_lines": 128,
+      "n_steps": 128,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 1,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": 1920,
+      "n_ctx_over_threshold": 1,
+      "n_chunk_violations": 1
+     },
+     "series_samples": 11,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 1,
+      "completed": 1,
+      "failed": 0,
+      "n_input_ok": 1,
+      "inputs_ok": true,
+      "n_output_ok": 1,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/B0-2048-uniform-r1.bench.json",
+       "raw/B0-2048-uniform-r1.metrics.after.txt",
+       "raw/B0-2048-uniform-r1.metrics.before.txt",
+       "raw/B0-2048-uniform-r1.otlp/00005.pb",
+       "raw/B0-2048-uniform-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/B0-2048-uniform-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/B0-2048-uniform-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    },
+    {
+     "name": "fs1-T",
+     "fs": "FS1",
+     "cond": "T",
+     "L": 2048,
+     "mix": "uniform",
+     "C": 1,
+     "N": 1,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs1-T",
+     "row": {
+      "cond": "T",
+      "L": 2048,
+      "mix": "uniform",
+      "restart": 1,
+      "block": 1,
+      "C": 1,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=1 failed=0 (expected 200 / 0)",
+       "input_lens do not match the uniform mix at L=2048 (1 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 1,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": true,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 131,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 1,
+      "N_bench": 1,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 1
+     },
+     "decomp_ran": true,
+     "steps": {
+      "n_iteration_lines": 131,
+      "n_steps": 131,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 4,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": 512,
+      "n_ctx_over_threshold": 0,
+      "n_chunk_violations": 0
+     },
+     "series_samples": 11,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 1,
+      "completed": 1,
+      "failed": 0,
+      "n_input_ok": 1,
+      "inputs_ok": true,
+      "n_output_ok": 1,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/T-2048-uniform-r1.bench.json",
+       "raw/T-2048-uniform-r1.metrics.after.txt",
+       "raw/T-2048-uniform-r1.metrics.before.txt",
+       "raw/T-2048-uniform-r1.otlp/00005.pb",
+       "raw/T-2048-uniform-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/T-2048-uniform-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/T-2048-uniform-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    },
+    {
+     "name": "fs1-G",
+     "fs": "FS1",
+     "cond": "G",
+     "L": 2048,
+     "mix": "uniform",
+     "C": 1,
+     "N": 1,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs1-G",
+     "row": {
+      "cond": "G",
+      "L": 2048,
+      "mix": "uniform",
+      "restart": 1,
+      "block": 1,
+      "C": 1,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=1 failed=0 (expected 200 / 0)",
+       "input_lens do not match the uniform mix at L=2048 (1 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 1,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 128,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 1,
+      "N_bench": 1,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 1
+     },
+     "decomp_ran": true,
+     "steps": {
+      "n_iteration_lines": 128,
+      "n_steps": 128,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 1,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": 1920,
+      "n_ctx_over_threshold": 1,
+      "n_chunk_violations": 1
+     },
+     "series_samples": 11,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 1,
+      "completed": 1,
+      "failed": 0,
+      "n_input_ok": 1,
+      "inputs_ok": true,
+      "n_output_ok": 1,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/G-2048-uniform-r1.bench.json",
+       "raw/G-2048-uniform-r1.metrics.after.txt",
+       "raw/G-2048-uniform-r1.metrics.before.txt",
+       "raw/G-2048-uniform-r1.otlp/00006.pb",
+       "raw/G-2048-uniform-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/G-2048-uniform-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/G-2048-uniform-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    },
+    {
+     "name": "fs1-TG",
+     "fs": "FS1",
+     "cond": "TG",
+     "L": 2048,
+     "mix": "uniform",
+     "C": 1,
+     "N": 1,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs1-TG",
+     "row": {
+      "cond": "TG",
+      "L": 2048,
+      "mix": "uniform",
+      "restart": 1,
+      "block": 1,
+      "C": 1,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=1 failed=0 (expected 200 / 0)",
+       "input_lens do not match the uniform mix at L=2048 (1 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 1,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": true,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 131,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 1,
+      "N_bench": 1,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 1
+     },
+     "decomp_ran": true,
+     "steps": {
+      "n_iteration_lines": 131,
+      "n_steps": 131,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 4,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": 512,
+      "n_ctx_over_threshold": 0,
+      "n_chunk_violations": 0
+     },
+     "series_samples": 11,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 1,
+      "completed": 1,
+      "failed": 0,
+      "n_input_ok": 1,
+      "inputs_ok": true,
+      "n_output_ok": 1,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/TG-2048-uniform-r1.bench.json",
+       "raw/TG-2048-uniform-r1.metrics.after.txt",
+       "raw/TG-2048-uniform-r1.metrics.before.txt",
+       "raw/TG-2048-uniform-r1.otlp/00006.pb",
+       "raw/TG-2048-uniform-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/TG-2048-uniform-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/TG-2048-uniform-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    },
+    {
+     "name": "fs1-K3",
+     "fs": "FS1",
+     "cond": "K3",
+     "L": 2048,
+     "mix": "uniform",
+     "C": 1,
+     "N": 1,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 3221225472,
+     "expected_blocks": 186,
+     "session_dir": "fs1-K3",
+     "row": {
+      "cond": "K3",
+      "L": 2048,
+      "mix": "uniform",
+      "restart": 1,
+      "block": 1,
+      "C": 1,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=1 failed=0 (expected 200 / 0)",
+       "input_lens do not match the uniform mix at L=2048 (1 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 1,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 186
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 128,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 1,
+      "N_bench": 1,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 1
+     },
+     "decomp_ran": true,
+     "steps": {
+      "n_iteration_lines": 128,
+      "n_steps": 128,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 1,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": 1920,
+      "n_ctx_over_threshold": 1,
+      "n_chunk_violations": 1
+     },
+     "series_samples": 11,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 1,
+      "completed": 1,
+      "failed": 0,
+      "n_input_ok": 1,
+      "inputs_ok": true,
+      "n_output_ok": 1,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 186,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/K3-2048-uniform-r1.bench.json",
+       "raw/K3-2048-uniform-r1.metrics.after.txt",
+       "raw/K3-2048-uniform-r1.metrics.before.txt",
+       "raw/K3-2048-uniform-r1.otlp/00006.pb",
+       "raw/K3-2048-uniform-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/K3-2048-uniform-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/K3-2048-uniform-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    }
+   ]
+  },
+  "FS2": {
+   "ok": true,
+   "reasons": [],
+   "probes": [
+    {
+     "name": "fs2-B0",
+     "fs": "FS2",
+     "cond": "B0",
+     "L": 2048,
+     "mix": "mixed",
+     "C": 1,
+     "N": 1,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs2-B0",
+     "row": {
+      "cond": "B0",
+      "L": 2048,
+      "mix": "mixed",
+      "restart": 1,
+      "block": 1,
+      "C": 1,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=1 failed=0 (expected 200 / 0)",
+       "input_lens do not match the mixed mix at L=2048 (1 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 1,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 143,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 1,
+      "N_bench": 1,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 1
+     },
+     "decomp_ran": false,
+     "steps": {
+      "n_iteration_lines": 143,
+      "n_steps": 143,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 16,
+      "n_ctx_budget_single": 15,
+      "max_step_tokens": 2048,
+      "n_ctx_over_threshold": 16,
+      "n_chunk_violations": 16
+     },
+     "series_samples": 17,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 1,
+      "completed": 1,
+      "failed": 0,
+      "n_input_ok": 1,
+      "inputs_ok": true,
+      "n_output_ok": 1,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/B0-2048-mixed-r1.bench.json",
+       "raw/B0-2048-mixed-r1.metrics.after.txt",
+       "raw/B0-2048-mixed-r1.metrics.before.txt",
+       "raw/B0-2048-mixed-r1.otlp/00005.pb",
+       "raw/B0-2048-mixed-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/B0-2048-mixed-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/B0-2048-mixed-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    },
+    {
+     "name": "fs2-T",
+     "fs": "FS2",
+     "cond": "T",
+     "L": 2048,
+     "mix": "mixed",
+     "C": 1,
+     "N": 1,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs2-T",
+     "row": {
+      "cond": "T",
+      "L": 2048,
+      "mix": "mixed",
+      "restart": 1,
+      "block": 1,
+      "C": 1,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=1 failed=0 (expected 200 / 0)",
+       "input_lens do not match the mixed mix at L=2048 (1 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 1,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": true,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 191,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 1,
+      "N_bench": 1,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 1
+     },
+     "decomp_ran": false,
+     "steps": {
+      "n_iteration_lines": 191,
+      "n_steps": 191,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 64,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": 512,
+      "n_ctx_over_threshold": 0,
+      "n_chunk_violations": 0
+     },
+     "series_samples": 17,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 1,
+      "completed": 1,
+      "failed": 0,
+      "n_input_ok": 1,
+      "inputs_ok": true,
+      "n_output_ok": 1,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/T-2048-mixed-r1.bench.json",
+       "raw/T-2048-mixed-r1.metrics.after.txt",
+       "raw/T-2048-mixed-r1.metrics.before.txt",
+       "raw/T-2048-mixed-r1.otlp/00005.pb",
+       "raw/T-2048-mixed-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/T-2048-mixed-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/T-2048-mixed-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    }
+   ]
+  },
+  "FS3": {
+   "ok": true,
+   "reasons": [],
+   "probes": [
+    {
+     "name": "fs3-G",
+     "fs": "FS3",
+     "cond": "G",
+     "L": 2048,
+     "mix": "mixed",
+     "C": 4,
+     "N": 4,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs3-G",
+     "row": {
+      "cond": "G",
+      "L": 2048,
+      "mix": "mixed",
+      "restart": 1,
+      "block": 1,
+      "C": 4,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=4 failed=0 (expected 200 / 0)",
+       "input_lens do not match the mixed mix at L=2048 (4 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 4,
+      "failed": 0,
+      "preemptions": 7,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 282,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": null,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 4,
+      "N_bench": 4,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 4
+     },
+     "decomp_ran": false,
+     "steps": {
+      "n_iteration_lines": 282,
+      "n_steps": 282,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 148,
+      "n_ctx_budget_single": 15,
+      "max_step_tokens": 2048,
+      "n_ctx_over_threshold": 148,
+      "n_chunk_violations": 148
+     },
+     "series_samples": 68,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 4,
+      "completed": 4,
+      "failed": 0,
+      "n_input_ok": 4,
+      "inputs_ok": true,
+      "n_output_ok": 4,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 7,
+     "preemptions_scraped": 7,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/G-2048-mixed-r1.bench.json",
+       "raw/G-2048-mixed-r1.metrics.after.txt",
+       "raw/G-2048-mixed-r1.metrics.before.txt",
+       "raw/G-2048-mixed-r1.otlp/00005.pb",
+       "raw/G-2048-mixed-r1.otlp/00006.pb",
+       "raw/G-2048-mixed-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/G-2048-mixed-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/G-2048-mixed-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    },
+    {
+     "name": "fs3-B0",
+     "fs": "FS3",
+     "cond": "B0",
+     "L": 2048,
+     "mix": "mixed",
+     "C": 4,
+     "N": 4,
+     "warmup": 0,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs3-B0",
+     "row": {
+      "cond": "B0",
+      "L": 2048,
+      "mix": "mixed",
+      "restart": 1,
+      "block": 1,
+      "C": 4,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=4 failed=0 (expected 200 / 0)",
+       "input_lens do not match the mixed mix at L=2048 (4 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 4,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 287,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 4,
+      "N_bench": 4,
+      "warmup_bench": 0
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 4
+     },
+     "decomp_ran": false,
+     "steps": {
+      "n_iteration_lines": 287,
+      "n_steps": 287,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 64,
+      "n_ctx_budget_single": 15,
+      "max_step_tokens": 2048,
+      "n_ctx_over_threshold": 64,
+      "n_chunk_violations": 64
+     },
+     "series_samples": 38,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 4,
+      "completed": 4,
+      "failed": 0,
+      "n_input_ok": 4,
+      "inputs_ok": true,
+      "n_output_ok": 4,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/B0-2048-mixed-r1.bench.json",
+       "raw/B0-2048-mixed-r1.metrics.after.txt",
+       "raw/B0-2048-mixed-r1.metrics.before.txt",
+       "raw/B0-2048-mixed-r1.otlp/00005.pb",
+       "raw/B0-2048-mixed-r1.otlp/00006.pb",
+       "raw/B0-2048-mixed-r1.otlp/00007.pb",
+       "raw/B0-2048-mixed-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/B0-2048-mixed-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/B0-2048-mixed-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    }
+   ]
+  },
+  "FS4": {
+   "ok": true,
+   "reasons": [],
+   "probes": [
+    {
+     "name": "fs4-B0-uniform",
+     "fs": "FS4",
+     "cond": "B0",
+     "L": 2048,
+     "mix": "uniform",
+     "C": 2,
+     "N": 20,
+     "warmup": 2,
+     "timeout_s": 300,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs4-B0-uniform",
+     "row": {
+      "cond": "B0",
+      "L": 2048,
+      "mix": "uniform",
+      "restart": 1,
+      "block": 1,
+      "C": 2,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=20 failed=0 (expected 200 / 0)",
+       "input_lens do not match the uniform mix at L=2048 (20 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 20,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 1419,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 20,
+      "N_bench": 20,
+      "warmup_bench": 2
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 20
+     },
+     "decomp_ran": true,
+     "steps": {
+      "n_iteration_lines": 1419,
+      "n_steps": 1419,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 22,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": 1921,
+      "n_ctx_over_threshold": 22,
+      "n_chunk_violations": 22
+     },
+     "series_samples": 34,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 20,
+      "completed": 20,
+      "failed": 0,
+      "n_input_ok": 20,
+      "inputs_ok": true,
+      "n_output_ok": 20,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/B0-2048-uniform-r1.bench.json",
+       "raw/B0-2048-uniform-r1.metrics.after.txt",
+       "raw/B0-2048-uniform-r1.metrics.before.txt",
+       "raw/B0-2048-uniform-r1.otlp/00005.pb",
+       "raw/B0-2048-uniform-r1.otlp/00006.pb",
+       "raw/B0-2048-uniform-r1.otlp/00007.pb",
+       "raw/B0-2048-uniform-r1.otlp/00008.pb",
+       "raw/B0-2048-uniform-r1.otlp/00009.pb",
+       "raw/B0-2048-uniform-r1.otlp/00010.pb",
+       "raw/B0-2048-uniform-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/B0-2048-uniform-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/B0-2048-uniform-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    },
+    {
+     "name": "fs4-B0-mixed",
+     "fs": "FS4",
+     "cond": "B0",
+     "L": 2048,
+     "mix": "mixed",
+     "C": 2,
+     "N": 20,
+     "warmup": 2,
+     "timeout_s": 600,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs4-B0-mixed",
+     "row": {
+      "cond": "B0",
+      "L": 2048,
+      "mix": "mixed",
+      "restart": 1,
+      "block": 1,
+      "C": 2,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=20 failed=0 (expected 200 / 0)",
+       "input_lens do not match the mixed mix at L=2048 (20 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 20,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 1449,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 20,
+      "N_bench": 20,
+      "warmup_bench": 2
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 20
+     },
+     "decomp_ran": true,
+     "steps": {
+      "n_iteration_lines": 1449,
+      "n_steps": 1449,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 52,
+      "n_ctx_budget_single": 30,
+      "max_step_tokens": 2048,
+      "n_ctx_over_threshold": 52,
+      "n_chunk_violations": 52
+     },
+     "series_samples": 47,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 20,
+      "completed": 20,
+      "failed": 0,
+      "n_input_ok": 20,
+      "inputs_ok": true,
+      "n_output_ok": 20,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/B0-2048-mixed-r1.bench.json",
+       "raw/B0-2048-mixed-r1.metrics.after.txt",
+       "raw/B0-2048-mixed-r1.metrics.before.txt",
+       "raw/B0-2048-mixed-r1.otlp/00005.pb",
+       "raw/B0-2048-mixed-r1.otlp/00006.pb",
+       "raw/B0-2048-mixed-r1.otlp/00007.pb",
+       "raw/B0-2048-mixed-r1.otlp/00008.pb",
+       "raw/B0-2048-mixed-r1.otlp/00009.pb",
+       "raw/B0-2048-mixed-r1.otlp/00010.pb",
+       "raw/B0-2048-mixed-r1.otlp/00011.pb",
+       "raw/B0-2048-mixed-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/B0-2048-mixed-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/B0-2048-mixed-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    },
+    {
+     "name": "fs4-TG-mixed",
+     "fs": "FS4",
+     "cond": "TG",
+     "L": 2048,
+     "mix": "mixed",
+     "C": 2,
+     "N": 20,
+     "warmup": 2,
+     "timeout_s": 600,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs4-TG-mixed",
+     "row": {
+      "cond": "TG",
+      "L": 2048,
+      "mix": "mixed",
+      "restart": 1,
+      "block": 1,
+      "C": 2,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "completed=20 failed=0 (expected 200 / 0)",
+       "input_lens do not match the mixed mix at L=2048 (20 values)",
+       "output_lens not all 128"
+      ],
+      "timeout": false,
+      "skipped": false,
+      "num_prompts": 200,
+      "completed": 20,
+      "failed": 0,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": true,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 1525,
+      "decomp": {
+       "valid": true,
+       "checks": {
+        "a": true,
+        "b": true,
+        "c": true,
+        "d": true
+       }
+      },
+      "kv_peak_present": true,
+      "spans_main": 20,
+      "N_bench": 20,
+      "warmup_bench": 2
+     },
+     "field_problems": [],
+     "derived": {
+      "files": 1,
+      "rows": 20
+     },
+     "decomp_ran": true,
+     "steps": {
+      "n_iteration_lines": 1525,
+      "n_steps": 1525,
+      "epoch_ms_stamps": true,
+      "n_ctx_steps": 191,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": 1024,
+      "n_ctx_over_threshold": 17,
+      "n_chunk_violations": 0
+     },
+     "series_samples": 48,
+     "observability": [],
+     "bench": {
+      "exists": true,
+      "n": 20,
+      "completed": 20,
+      "failed": 0,
+      "n_input_ok": 20,
+      "inputs_ok": true,
+      "n_output_ok": 20,
+      "outputs_ok": true
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/TG-2048-mixed-r1.bench.json",
+       "raw/TG-2048-mixed-r1.metrics.after.txt",
+       "raw/TG-2048-mixed-r1.metrics.before.txt",
+       "raw/TG-2048-mixed-r1.otlp/00005.pb",
+       "raw/TG-2048-mixed-r1.otlp/00006.pb",
+       "raw/TG-2048-mixed-r1.otlp/00007.pb",
+       "raw/TG-2048-mixed-r1.otlp/00008.pb",
+       "raw/TG-2048-mixed-r1.otlp/00009.pb",
+       "raw/TG-2048-mixed-r1.otlp/00010.pb",
+       "raw/TG-2048-mixed-r1.otlp/00011.pb",
+       "raw/TG-2048-mixed-r1.otlp/00012.pb",
+       "raw/TG-2048-mixed-r1.spans.jsonl"
+      ],
+      "truncated": [
+       "raw/TG-2048-mixed-r1.bench.log"
+      ],
+      "rewritten": [
+       "rows.jsonl",
+       "derived/TG-2048-mixed-r1-requests.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    }
+   ]
+  },
+  "FS5": {
+   "ok": true,
+   "reasons": [],
+   "probes": [
+    {
+     "name": "fs5-B0-uniform",
+     "fs": "FS5",
+     "cond": "B0",
+     "L": 2048,
+     "mix": "uniform",
+     "C": 2,
+     "N": 20,
+     "warmup": 2,
+     "timeout_s": 5,
+     "kv_cache_memory_bytes": 4294967296,
+     "expected_blocks": 248,
+     "session_dir": "fs5-B0-uniform",
+     "row": {
+      "cond": "B0",
+      "L": 2048,
+      "mix": "uniform",
+      "restart": 1,
+      "block": 1,
+      "C": 2,
+      "N": 200,
+      "ok": false,
+      "reasons": [
+       "timeout: the bench exceeded 5 s; its process group was killed (024)"
+      ],
+      "timeout": true,
+      "skipped": false,
+      "preemptions": 0,
+      "manip": {
+       "facts_ok": true,
+       "blocks_ok": true,
+       "chunk_ok": null,
+       "num_gpu_blocks": 248
+      },
+      "healthy_after_bench": true,
+      "n_steps_window": 0,
+      "decomp": null,
+      "kv_peak_present": true,
+      "spans_main": 0,
+      "N_bench": 20,
+      "warmup_bench": 2
+     },
+     "field_problems": [
+      "num_prompts",
+      "completed",
+      "failed",
+      "duration",
+      "request_throughput",
+      "output_throughput",
+      "total_token_throughput",
+      "p95_tpot_ms",
+      "decomp is null"
+     ],
+     "derived": {
+      "files": 0,
+      "rows": 0
+     },
+     "decomp_ran": false,
+     "steps": {
+      "n_iteration_lines": 0,
+      "n_steps": 0,
+      "epoch_ms_stamps": false,
+      "n_ctx_steps": 0,
+      "n_ctx_budget_single": 0,
+      "max_step_tokens": null,
+      "n_ctx_over_threshold": 0,
+      "n_chunk_violations": 0
+     },
+     "series_samples": 7,
+     "observability": [],
+     "bench": {
+      "exists": false
+     },
+     "health_after_bench": true,
+     "residual_client_procs": 0,
+     "cache_config": {
+      "num_gpu_blocks": 248,
+      "block_size": 528
+     },
+     "preemptions": 0,
+     "preemptions_scraped": 0,
+     "teardown_problems": [],
+     "runner_aborted": null,
+     "post": {
+      "server_port_open": false,
+      "receiver_port_open": false,
+      "gpu_idle_after": true
+     },
+     "masked": {
+      "deleted": [
+       "raw/B0-2048-uniform-r1.metrics.after.txt",
+       "raw/B0-2048-uniform-r1.metrics.before.txt"
+      ],
+      "truncated": [],
+      "rewritten": [
+       "rows.jsonl",
+       "session.json"
+      ],
+      "unmasked_fields": []
+     },
+     "reasons": []
+    }
+   ]
+  }
+ },
+ "aborted": null,
+ "ok": true,
+ "finished_at": "2026-10-10T16:20:45.474626+00:00"
+}

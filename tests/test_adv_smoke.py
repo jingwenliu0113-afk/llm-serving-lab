@@ -176,7 +176,8 @@ def test_every_smoke_plan_passes_the_runners_plan_check(pins):
 
 
 def test_k3_expected_blocks_before_and_after_measurement(pins):
-    assert pins["advanced"]["num_gpu_blocks_k3"] == 0
+    pins = copy.deepcopy(pins)
+    pins["advanced"]["num_gpu_blocks_k3"] = 0  # the draft state, whatever the repo pins are now
     assert sm.expected_blocks(pins)["K3"] == 186  # 3 GiB bracketed exactly by 248 blocks at 4 GiB
     measured = copy.deepcopy(pins)
     measured["advanced"]["num_gpu_blocks_k3"] = 185
@@ -184,6 +185,11 @@ def test_k3_expected_blocks_before_and_after_measurement(pins):
     assert sm.expected_blocks(measured, k3_bytes=3 * GIB + STEP)["K3"] == 201  # an override is predicted again
     assert sm.pins_for_smoke(pins, 3 * GIB + STEP)["advanced"]["kv_low_bytes"] == 3 * GIB + STEP
     assert pins["advanced"]["kv_low_bytes"] == 3 * GIB  # the caller's pins are never changed
+    frozen = copy.deepcopy(pins)
+    frozen["advanced"]["num_gpu_blocks_k3"] = 186
+    stepped = sm.pins_for_smoke(frozen, 3 * GIB + STEP)  # a count measured at 3 GiB must not survive a step-up
+    assert stepped["advanced"]["num_gpu_blocks_k3"] == 0 and sm.expected_blocks(stepped)["K3"] == 201
+    assert sm.pins_for_smoke(frozen, 3 * GIB)["advanced"]["num_gpu_blocks_k3"] == 186  # same bytes: kept
 
 
 def test_k3_override_must_be_a_256_mib_multiple(pins):

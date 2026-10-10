@@ -1,0 +1,51 @@
+{
+ "schema_version": 1,
+ "smoke": "FS5",
+ "seed": 20261008,
+ "derived_from": "formal-20261009-coreb-uniform",
+ "c": {
+  "2048": 2
+ },
+ "conditions": [
+  "B0",
+  "T",
+  "G",
+  "TG",
+  "K3"
+ ],
+ "boots": [
+  {
+   "block": 1,
+   "cond": "B0",
+   "L": 2048,
+   "mix": "uniform",
+   "restart": 1,
+   "C": 2,
+   "N": 200,
+   "warmup": 2,
+   "timeout_s": 5,
+   "prefix": "adv-B0-2048-uniform-r1-"
+  }
+ ],
+ "smoke_counts": {
+  "N": 20,
+  "warmup": 2
+ },
+ "expected_blocks": {
+  "B0": 248,
+  "T": 248,
+  "G": 248,
+  "TG": 248,
+  "K3": 186
+ },
+ "timeouts_s": {
+  "uniform_2048": 5,
+  "mixed_2048": 600,
+  "uniform_8192": 720,
+  "mixed_8192": 960
+ },
+ "pins_sha256": "96257933f924be57c38116b9e87c2073d43ccac0909503a039e27b129c35d87c",
+ "gpu_memory_utilization": "0.91",
+ "kv_cache_memory_bytes": 4294967296,
+ "block_size": 528
+}

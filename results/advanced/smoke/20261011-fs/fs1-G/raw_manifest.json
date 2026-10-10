@@ -1,0 +1,61 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/G-2048-uniform-r1.bench.json": {
+   "sha256": "380b9ab07ad9d35ddfe21dbe32ad9d7b5348db26d95a082bf71ae958530ef7fa",
+   "size_bytes": 5058
+  },
+  "raw/G-2048-uniform-r1.bench.log": {
+   "sha256": "d47cf336cbda40b194463b830e95241814baeaf0326b7fcbef763e3caaee784a",
+   "size_bytes": 5699
+  },
+  "raw/G-2048-uniform-r1.metrics.after.txt": {
+   "sha256": "d90c41f090340b5da446bed935710e6948d8bf8fcd0f5468e7f80cb19658a8ba",
+   "size_bytes": 98756
+  },
+  "raw/G-2048-uniform-r1.metrics.before.txt": {
+   "sha256": "74d68abf19b9bbe323acdf37f01b9637010451065f238275267c7b6eb0764db8",
+   "size_bytes": 95396
+  },
+  "raw/G-2048-uniform-r1.otlp/00001.pb": {
+   "sha256": "72a0e527dda668f5d1b9bb7442d831505571ec22d45059c5bc41441307d03d90",
+   "size_bytes": 2253
+  },
+  "raw/G-2048-uniform-r1.otlp/00002.pb": {
+   "sha256": "b5b4fb4abbdd1fb037443b18019fcc0211767ce26a3629ead085e43d727a784a",
+   "size_bytes": 2256
+  },
+  "raw/G-2048-uniform-r1.otlp/00003.pb": {
+   "sha256": "a8d1171278f34ad5bbbbe99695d6358e8728db9dd73f7271147fe7aedc6c930d",
+   "size_bytes": 1054
+  },
+  "raw/G-2048-uniform-r1.otlp/00004.pb": {
+   "sha256": "e3ce550e97cb95e92147535f40bb8efba020d1f07773c3f96d7f545084e53f67",
+   "size_bytes": 968
+  },
+  "raw/G-2048-uniform-r1.otlp/00005.pb": {
+   "sha256": "6241f68a35d689a8c17ac082be0a27ed2be32dd20ff743e9aaf12740ac2f8421",
+   "size_bytes": 701
+  },
+  "raw/G-2048-uniform-r1.otlp/00006.pb": {
+   "sha256": "c8357e255816d624762fbad9a77d2b99de0c5efa957a4900acccdb2bbbaad530",
+   "size_bytes": 893
+  },
+  "raw/G-2048-uniform-r1.series.jsonl": {
+   "sha256": "cd5918620ee329bedcaf63ff7e851e6a934be2b7a787bbd7e9bfbaf94e6cbd68",
+   "size_bytes": 1812
+  },
+  "raw/G-2048-uniform-r1.server.log": {
+   "sha256": "4fae05c8c57077caa78c5d5b35ed456b53f67cbb2edd49cb96018503e8c9930f",
+   "size_bytes": 58279
+  },
+  "raw/G-2048-uniform-r1.spans.jsonl": {
+   "sha256": "bffc7a0d29de7ca85263b1d624e6ea71115471aa84d0f9be949ed56db598b09f",
+   "size_bytes": 761
+  },
+  "raw/G-2048-uniform-r1.steps.jsonl": {
+   "sha256": "dc0a37af20c2967deb2699ddae3e95863ff88070fc5a8457980db76027b762cb",
+   "size_bytes": 15495
+  }
+ }
+}

@@ -1,6 +1,6 @@
 # 024 — Advanced 事先登記：隔離 H-B4 的成因（RTX，vLLM 0.30.0）
 
-- 狀態：Accepted（草稿已 commit；K3 的實測 block 數由 smoke FS1 決定後，連同 `freeze.advanced = true` 凍結）
+- 狀態：Accepted，**FROZEN 2026-10-11**（smoke FS1 實測 K3 = 186 個 block 後，`freeze.advanced = true`）
 - 日期：2026-10-10
 - 對應：decision 023（Gate 通過，範圍只限 H-B4）；SPEC「Advanced」；PREREGISTRATION §2 H-B4、§4、§6、新增的 §7；007、011、013、019、022
 - 時點：任何 Advanced 數據之前。Core 的所有結果已 commit。
@@ -737,3 +737,19 @@ harness 由 workflow 依本文實作（`adv_plan`、`adv_decomp`、`adv_analysis
   - OTLP receiver 的連線與關閉都有逾時上限。
 - **smoke 的遮蔽**：session.json 中的 bench 視窗時間（`t_before`、`t_after`、`startup_s`）也一併移除；FS4 另檢查 scrape delta、1 Hz 序列與 one_hz 份額都存在。
 - **範圍外、照實記錄**：Core 的 runner（`run_core_b` 等）仍只信任 `--gpu-lock-held` 旗標；依「Core 模組不改」的原則不修改。
+
+## 凍結（2026-10-11）
+
+- **smoke**（`results/advanced/smoke/20261011-fs`，部署 commit `6930d8f`，GPU lock 下，00:00–00:20，非正式、已遮蔽）：FS0–FS5 全部通過。
+  - FS0（CPU）：在 WSL 上由 `formal-20261009-coreb-uniform` 建出 60 次 boot 的 plan（C 為 25 / 8，3 個 block 各 20 次）；OTLP protobuf 往返（gzip 與非 gzip）正確。
+  - FS1：5 個 condition 都能啟動，log facts 與 non-default args 符合 condition 表，block 數正確，span 與 iteration log 都收得到。
+    **K3（3 GiB）實測 num_gpu_blocks = 186**（C_KV：2K 26、8K 9、32K 2），符合 K3 規則；下一個較低的 256 MiB 倍數最多 171 個 block，不符合。
+  - FS2–FS5：旋鈕的語意（B0 有 2048-token 的 step，T 沒有超過 512 的 step）、G 的 preemption 路徑、端到端欄位、逾時路徑都通過。
+  - smoke 輸出只有 pass / fail 與計數；session.json 與 rows 都沒有延遲欄位（已檢查）。
+- **pins**：`num_gpu_blocks_k3 = 186`、`freeze.advanced = true`。
+- **凍結時發現並修正的問題**（先有紅燈測試，再修程式）：
+  - `adv_plan.pins_problems`：K3 已實測時，原本只檢查「實測值符合規則」與「下一級較低的倍數不符合」，沒有檢查實測 block 數在 `kv_low_bytes` 下是否可能。
+    vLLM 的 pool 是 `available // bytes_per_block`，由 4 GiB 的 248 個可精確推得 3 GiB 必為 186；現在範圍外的數字一律拒絕。原本一個以不可能情境（3.25 GiB 實測 177）寫成的測試改用自洽的情境。
+  - `adv_smoke.pins_for_smoke`：以 `--k3-bytes` 改變 K3 時，清掉在舊 bytes 下量到的 block 數（只影響之後重跑 smoke）。
+  - 幾個測試原本假設 pins 停在草稿狀態，改為不論凍結與否都自行建構兩種狀態。
+- 凍結後，hypothesis、門檻、判讀矩陣、分析程式都不得修改；任何修改都要寫 post-hoc decision log。正式 run 在凍結 commit 部署後、GPU lock 下執行，session 中途不重新部署。

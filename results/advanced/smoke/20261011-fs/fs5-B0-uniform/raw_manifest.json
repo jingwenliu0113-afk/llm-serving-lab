@@ -1,0 +1,49 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/B0-2048-uniform-r1.bench.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "size_bytes": 0
+  },
+  "raw/B0-2048-uniform-r1.metrics.after.txt": {
+   "sha256": "4f43c9a97f1fce9e348ada150542fad2da1fc6a6983bff780d5725452bba7760",
+   "size_bytes": 95403
+  },
+  "raw/B0-2048-uniform-r1.metrics.before.txt": {
+   "sha256": "40b2ef2af5366f86e5eea9f7feac18b29e64de024d7df9bcd460395f3cf3c126",
+   "size_bytes": 95416
+  },
+  "raw/B0-2048-uniform-r1.otlp/00001.pb": {
+   "sha256": "1d76a4a8f8f2ffca163eea8231164475a99d3410d2b3e07dbeb32d1433fc162f",
+   "size_bytes": 2253
+  },
+  "raw/B0-2048-uniform-r1.otlp/00002.pb": {
+   "sha256": "bb08ac0da3c4fcfe352a5333e16ddfb9bda89c3e77e9f16f83fa264d31521765",
+   "size_bytes": 2256
+  },
+  "raw/B0-2048-uniform-r1.otlp/00003.pb": {
+   "sha256": "1a74fa062787fbaa020db49846ade4cac6cc2880fc2d3f5732cf86167c2aa9d2",
+   "size_bytes": 968
+  },
+  "raw/B0-2048-uniform-r1.otlp/00004.pb": {
+   "sha256": "5e46f13d4f2d5b53e2b7f8af864084377652a0da4f8304e449e13b3fd2d5f52d",
+   "size_bytes": 1361
+  },
+  "raw/B0-2048-uniform-r1.series.jsonl": {
+   "sha256": "90c53304fa923d2239ea3e589322072ad9011ae9c47442e335071c56b3fa7edf",
+   "size_bytes": 1131
+  },
+  "raw/B0-2048-uniform-r1.server.log": {
+   "sha256": "a1c4184e3493cc2dfa205e27a3430bcc42b2758763e489ef5d1b8dc68eebe583",
+   "size_bytes": 25550
+  },
+  "raw/B0-2048-uniform-r1.spans.jsonl": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "size_bytes": 0
+  },
+  "raw/B0-2048-uniform-r1.steps.jsonl": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "size_bytes": 0
+  }
+ }
+}

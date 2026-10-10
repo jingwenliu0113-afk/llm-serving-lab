@@ -170,6 +170,10 @@ def _k3_pin_problems(adv: dict, sb: dict, freeze_advanced: bool) -> list:
         problems.append(f"kv_low_bytes {kv!r} is not a multiple of 256 MiB below the Stage B K {k4}")
     elif measured:
         problems += [f"K3 measured {k3} blocks: {p}" for p in k3_problems(k3, block_size=bs, c=C_KNEE)]
+        lo, hi = blocks_bounds(kv, ref_bytes=k4, ref_blocks=nb4)  # the count must be possible at kv_low_bytes
+        if not lo <= k3 <= hi:
+            problems.append(f"num_gpu_blocks_k3 {k3} is impossible at kv_low_bytes {kv} B "
+                            f"({lo}-{hi} blocks given {nb4} at {k4} B)")
         below = blocks_bounds(kv - KV_STEP, ref_bytes=kv, ref_blocks=k3)[1]
         if not k3_problems(below, block_size=bs, c=C_KNEE):
             problems.append(f"kv_low_bytes {kv} is not the smallest 256 MiB multiple: {kv - KV_STEP} B "

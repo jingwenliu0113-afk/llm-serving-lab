@@ -260,7 +260,7 @@ def edited(pins, freeze=None, **adv):
     {"conditions": {}}])
 def test_pins_problems_catch_each_deviation_from_024(pins, change):
     p = edited(pins, **change)
-    assert len(ap.pins_problems(p)) == 1, ap.pins_problems(p)
+    assert len(ap.pins_problems(p)) >= 1, ap.pins_problems(p)  # e.g. a K3 count of 170 is both too small and impossible
     with pytest.raises(ap.PlanError):
         build(p)
 
@@ -310,10 +310,17 @@ def test_freeze_needs_the_measured_k3_block_count(pins):
     assert ap.pins_problems(edited(pins, freeze=False, num_gpu_blocks_k3=186)) == []
 
 
-def test_measured_k3_must_be_the_smallest_256_mib_multiple_that_passes(pins):
-    # FS1 rule: step up by 256 MiB when the measured pool fails; the pinned K3 is then the smallest passing multiple
-    assert ap.pins_problems(edited(pins, kv_low_bytes=13 * STEP, num_gpu_blocks_k3=177)) == []  # 3 GiB had failed
-    assert len(ap.pins_problems(edited(pins, kv_low_bytes=13 * STEP, num_gpu_blocks_k3=201))) == 1  # 3 GiB would pass
+def test_measured_k3_must_be_possible_and_the_smallest_256_mib_multiple_that_passes(pins):
+    # vLLM's pool is available // bytes_per_block, so 248 blocks at 4 GiB bound the count at any K exactly
+    assert ap.pins_problems(edited(pins, num_gpu_blocks_k3=186)) == []  # 3 GiB -> exactly 186
+    assert any("impossible" in x for x in ap.pins_problems(edited(pins, num_gpu_blocks_k3=185)))  # typo / tampering
+    assert any("impossible" in x for x in ap.pins_problems(edited(pins, kv_low_bytes=11 * STEP,
+                                                                       num_gpu_blocks_k3=186)))  # 2.75 GiB: <= 171
+    # FS1 step-up path on a pool where 3 GiB fails (228 blocks at 4 GiB): 3.25 GiB is then the smallest passing multiple
+    p = copy.deepcopy(pins)
+    p["stage_b"]["num_gpu_blocks"] = p["advanced"]["num_gpu_blocks_k4"] = 228
+    assert ap.pins_problems(edited(p, kv_low_bytes=13 * STEP, num_gpu_blocks_k3=185)) == []
+    assert any("smallest" in x for x in ap.pins_problems(edited(p, kv_low_bytes=14 * STEP, num_gpu_blocks_k3=199)))
     assert len(ap.pins_problems(edited(pins, kv_low_bytes=4 * GIB, num_gpu_blocks_k3=248))) == 1  # not below K4
 
 
@@ -421,9 +428,17 @@ def write_session(path, session, up, rows):
 def test_cli_writes_the_plan_with_the_sha256_of_the_pins_bytes(tmp_path, pins, pins_bytes, monkeypatch):
     session, up, rows = uniform_session(pins)
     write_session(tmp_path / "u", session, up, rows)
-    edited_bytes = pins_bytes.replace(b"\nnum_gpu_blocks_k3 = 0 ", b"\nnum_gpu_blocks_k3 = 186 ", 1)
-    assert pins_bytes.count(b"\nnum_gpu_blocks_k3 = 0 ") == 1 and edited_bytes != pins_bytes
-    for raw in (pins_bytes, edited_bytes):
+    # independent of the repo's freeze state: the draft (K3 unmeasured) and the frozen pins, both valid
+    if pins_bytes.count(b"\nnum_gpu_blocks_k3 = 0 ") == 1:
+        draft = pins_bytes
+        frozen = (draft.replace(b"\nnum_gpu_blocks_k3 = 0 ", b"\nnum_gpu_blocks_k3 = 186 ", 1)
+                  .replace(b"\nadvanced = false ", b"\nadvanced = true  ", 1))
+    else:
+        frozen = pins_bytes
+        draft = (frozen.replace(b"\nnum_gpu_blocks_k3 = 186 ", b"\nnum_gpu_blocks_k3 = 0 ", 1)
+                 .replace(b"\nadvanced = true ", b"\nadvanced = false ", 1))
+    assert draft != frozen and draft.count(b"\nnum_gpu_blocks_k3 = 0 ") == 1
+    for raw in (draft, frozen):
         monkeypatch.setattr(ap, "load_pins_bytes", lambda raw=raw: raw)
         out = tmp_path / f"plan-{hashlib.sha256(raw).hexdigest()[:8]}.json"
         assert ap.main(["--uniform-session", str(tmp_path / "u"), "--out", str(out)]) == 0

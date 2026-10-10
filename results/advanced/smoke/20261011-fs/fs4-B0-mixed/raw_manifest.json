@@ -1,0 +1,81 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/B0-2048-mixed-r1.bench.json": {
+   "sha256": "26897661f5dd1df9d92181f2c24e43cc60fb5cedad05a32bae309ffe46f4916d",
+   "size_bytes": 68404
+  },
+  "raw/B0-2048-mixed-r1.bench.log": {
+   "sha256": "2474f4ebf024c1474028dbbd30410b64014812aacfb3f469f9c43dd1a0fc6fc9",
+   "size_bytes": 6364
+  },
+  "raw/B0-2048-mixed-r1.metrics.after.txt": {
+   "sha256": "08e2c89f66ff7e9aea42bf2927040f07968c941980ec93dbf1a24803c3cc63d2",
+   "size_bytes": 97872
+  },
+  "raw/B0-2048-mixed-r1.metrics.before.txt": {
+   "sha256": "34b39e74063e0b2bc2f016e743e2154d20881ccab095b2167ddb8b52e4f6729c",
+   "size_bytes": 95403
+  },
+  "raw/B0-2048-mixed-r1.otlp/00001.pb": {
+   "sha256": "f0c94578ffaf2629d930e8b9293f526ecd9fd12ce05ed571b1c25fb3f02a5603",
+   "size_bytes": 2253
+  },
+  "raw/B0-2048-mixed-r1.otlp/00002.pb": {
+   "sha256": "402e6c7bc4091cc5a8180429c85a8c8b32c317cbbbcb59385e44b4346e81725a",
+   "size_bytes": 2256
+  },
+  "raw/B0-2048-mixed-r1.otlp/00003.pb": {
+   "sha256": "67ce48e7cdd29814e1609269563cdbe7c91c9bd4483f2154058c906ea99b1741",
+   "size_bytes": 968
+  },
+  "raw/B0-2048-mixed-r1.otlp/00004.pb": {
+   "sha256": "7cc85946be6645406d05fbf074db75e8058642a03c85f2f05c31713c97cc7307",
+   "size_bytes": 1361
+  },
+  "raw/B0-2048-mixed-r1.otlp/00005.pb": {
+   "sha256": "71caffa11092b8266b9797fad2c3f9b6b367fadcf3e64eef2d00c0e431416752",
+   "size_bytes": 2596
+  },
+  "raw/B0-2048-mixed-r1.otlp/00006.pb": {
+   "sha256": "0c71d6428d9875402ebd1fe1b2c54b1a97a2feabf07b572fcc71c37048bf752b",
+   "size_bytes": 1464
+  },
+  "raw/B0-2048-mixed-r1.otlp/00007.pb": {
+   "sha256": "1883f9bff699ab4eab092cd58b4c4942d8c7ca48fbbf9ea7e4b8dc3abcb9d1d4",
+   "size_bytes": 1465
+  },
+  "raw/B0-2048-mixed-r1.otlp/00008.pb": {
+   "sha256": "11d980f702b13c8bc2349c753ae521c600da6f0f54f1bd7e161e0d6079afeac8",
+   "size_bytes": 2608
+  },
+  "raw/B0-2048-mixed-r1.otlp/00009.pb": {
+   "sha256": "d0ae46d22729391a21263b72ebfcf2f0ff0fb2a95107e3ed81b408d9359cb7de",
+   "size_bytes": 2613
+  },
+  "raw/B0-2048-mixed-r1.otlp/00010.pb": {
+   "sha256": "476799893597bfd20d79a5e8573ec916e3f131099b52fa768181c01064b29349",
+   "size_bytes": 2612
+  },
+  "raw/B0-2048-mixed-r1.otlp/00011.pb": {
+   "sha256": "8f342384924594e6d3ddceacb6a4a974170229af3a3290ff9d06918f52fdcd0f",
+   "size_bytes": 1466
+  },
+  "raw/B0-2048-mixed-r1.series.jsonl": {
+   "sha256": "e230caf0b83373b73c732e11f626e64869d2fe047d14ad5c49acbf64af4d4d98",
+   "size_bytes": 8154
+  },
+  "raw/B0-2048-mixed-r1.server.log": {
+   "sha256": "0083cf471e27f8c645709ddc0714886794db8481604c395a4da87242192b2ab0",
+   "size_bytes": 384768
+  },
+  "raw/B0-2048-mixed-r1.spans.jsonl": {
+   "sha256": "a17914b85124afae4ce8e8da06e18c2720895d66007f596ae2d40f42b8703799",
+   "size_bytes": 16635
+  },
+  "raw/B0-2048-mixed-r1.steps.jsonl": {
+   "sha256": "7c7c1f582b6b8a35da69461324cbe17cdf2450100733c35aa4fd2e2d424914e8",
+   "size_bytes": 177377
+  }
+ }
+}

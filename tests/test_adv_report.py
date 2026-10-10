@@ -27,11 +27,21 @@ Y = {"B0": (100.0, 400.0), "T": (90.0, 150.0), "G": (100.0, 380.0), "TG": (90.0,
 
 
 def frozen_pins_bytes() -> bytes:
-    """configs/pins.toml as it will be after the freeze: freeze.advanced = true and the K3 count measured."""
+    """configs/pins.toml frozen: freeze.advanced = true and the K3 count measured (186; smoke FS1 2026-10-11).
+    Works whether the repo pins are still the draft or already frozen."""
     text = (ROOT / "configs" / "pins.toml").read_text()
-    assert text.count("\nadvanced = false") == 1 and text.count("\nnum_gpu_blocks_k3 = 0 ") == 1
-    return (text.replace("\nadvanced = false", "\nadvanced = true", 1)
-            .replace("\nnum_gpu_blocks_k3 = 0 ", "\nnum_gpu_blocks_k3 = 186 ", 1).encode())
+    if text.count("\nadvanced = false") == 1:
+        assert text.count("\nnum_gpu_blocks_k3 = 0 ") == 1
+        text = (text.replace("\nadvanced = false", "\nadvanced = true", 1)
+                .replace("\nnum_gpu_blocks_k3 = 0 ", "\nnum_gpu_blocks_k3 = 186 ", 1))
+    assert text.count("\nadvanced = true") == 1 and text.count("\nnum_gpu_blocks_k3 = 186 ") == 1
+    return text.encode()
+
+
+def unfrozen_pins_bytes() -> bytes:
+    """The draft pins (freeze.advanced = false, K3 not measured), derived from the frozen bytes."""
+    return (frozen_pins_bytes().decode().replace("\nadvanced = true", "\nadvanced = false", 1)
+            .replace("\nnum_gpu_blocks_k3 = 186 ", "\nnum_gpu_blocks_k3 = 0 ", 1).encode())
 
 
 @pytest.fixture(scope="module")
@@ -347,10 +357,10 @@ def test_cli_refuses_and_writes_nothing(tmp_path, frozen, monkeypatch, capsys):
     assert not out.exists() and "refusing" in capsys.readouterr().err
 
 
-def test_cli_refuses_the_current_unfrozen_pins(tmp_path, frozen, monkeypatch, capsys):
-    """With the repo pins as they are now (freeze.advanced = false), nothing is analysed."""
+def test_cli_refuses_unfrozen_pins(tmp_path, frozen, monkeypatch, capsys):
+    """With draft pins (freeze.advanced = false), nothing is analysed."""
     s, u, out = cli_setup(tmp_path, frozen, monkeypatch)
-    monkeypatch.setattr(ar, "load_pins_bytes", lambda: (ROOT / "configs" / "pins.toml").read_bytes())
+    monkeypatch.setattr(ar, "load_pins_bytes", unfrozen_pins_bytes)
     out.parent.mkdir()
     assert ar.main(["--session", str(s), "--uniform-session", str(u), "--out", str(out)]) == 2
     err = capsys.readouterr().err

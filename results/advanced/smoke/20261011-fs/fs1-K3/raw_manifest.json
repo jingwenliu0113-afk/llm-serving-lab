@@ -1,0 +1,61 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/K3-2048-uniform-r1.bench.json": {
+   "sha256": "2921ec5ef77978e6d32fcc30bb730b84adf25280a7826e1725e3eee84c88e6c4",
+   "size_bytes": 5062
+  },
+  "raw/K3-2048-uniform-r1.bench.log": {
+   "sha256": "7c19d3cdbfa9902e9a6285465080586955d1a90e1484b21644cc917613ea0cf8",
+   "size_bytes": 5702
+  },
+  "raw/K3-2048-uniform-r1.metrics.after.txt": {
+   "sha256": "f27301ddb380a082511fd9a7c59bbac618f5b60a10bfc8065c955a03d0f460ab",
+   "size_bytes": 98759
+  },
+  "raw/K3-2048-uniform-r1.metrics.before.txt": {
+   "sha256": "a99ef8ea2ebe9d322d31c6277452643de3d0bf8b6c00668b2d1a4ba30ff88a73",
+   "size_bytes": 95406
+  },
+  "raw/K3-2048-uniform-r1.otlp/00001.pb": {
+   "sha256": "e7236fb64fd54ff0558e11f687082e29afe9307f99bd66b6d51b249f21eadea4",
+   "size_bytes": 2253
+  },
+  "raw/K3-2048-uniform-r1.otlp/00002.pb": {
+   "sha256": "1bf370b497ef3e8c9d2319769472ce8c4538a3a0f318ab5c173cf2e37a1a3af8",
+   "size_bytes": 2256
+  },
+  "raw/K3-2048-uniform-r1.otlp/00003.pb": {
+   "sha256": "103cab82ddf4ba28826d77187c72370706888e85ceb2b65464949eac271896fa",
+   "size_bytes": 1054
+  },
+  "raw/K3-2048-uniform-r1.otlp/00004.pb": {
+   "sha256": "6d4e6272ccab27d7e463475b19378fb1d758e3597686bbd31085b9d659d78b1e",
+   "size_bytes": 968
+  },
+  "raw/K3-2048-uniform-r1.otlp/00005.pb": {
+   "sha256": "52371ae5cb7b8a0c57aa39cb9652285fc3919381aeee8967a54a9cd1bc8cce17",
+   "size_bytes": 701
+  },
+  "raw/K3-2048-uniform-r1.otlp/00006.pb": {
+   "sha256": "3d58e8c18352952871c4dae918a873eb3ee4ab648defadf72004d0d243bd9b3d",
+   "size_bytes": 894
+  },
+  "raw/K3-2048-uniform-r1.series.jsonl": {
+   "sha256": "61da832448bd14f92ff20780b118c713f89d437cd648d53951defabd3ade8074",
+   "size_bytes": 1815
+  },
+  "raw/K3-2048-uniform-r1.server.log": {
+   "sha256": "a55a408585bad4605b3fd13834f18c871c2f55a722ce6e7d551a6167a73ce92c",
+   "size_bytes": 58249
+  },
+  "raw/K3-2048-uniform-r1.spans.jsonl": {
+   "sha256": "683aa0054f638dfa6b6d6b8ca8dc0231b79978df1cd71a50ac83461adfae8526",
+   "size_bytes": 759
+  },
+  "raw/K3-2048-uniform-r1.steps.jsonl": {
+   "sha256": "122ffebb07fd663843ca52a4bf2c92930d30e75690144b639a915eab82e6e9b3",
+   "size_bytes": 15497
+  }
+ }
+}

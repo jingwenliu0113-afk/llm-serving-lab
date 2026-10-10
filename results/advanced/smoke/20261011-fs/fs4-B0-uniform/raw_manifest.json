@@ -1,0 +1,77 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/B0-2048-uniform-r1.bench.json": {
+   "sha256": "d902fb644d6b95f95c9243b1eaaded95d80490efc4133c38541c19658db65b92",
+   "size_bytes": 67243
+  },
+  "raw/B0-2048-uniform-r1.bench.log": {
+   "sha256": "90127fe6a975a085ad8abcf4b258ede25d0b0415239a222a3fed318f5dcd6cd5",
+   "size_bytes": 6446
+  },
+  "raw/B0-2048-uniform-r1.metrics.after.txt": {
+   "sha256": "bb75eb904e10a48e6c464c7a574c7b86b85a8dbbcea1dd291e68f42ea037e77f",
+   "size_bytes": 99005
+  },
+  "raw/B0-2048-uniform-r1.metrics.before.txt": {
+   "sha256": "89f83869e2d81532bb272d6e06ccd1391a53a69c4dc9ef80acbac1e1a01bb798",
+   "size_bytes": 95405
+  },
+  "raw/B0-2048-uniform-r1.otlp/00001.pb": {
+   "sha256": "98228b241368337ab547692abf9d22f06a667235091484d8912e4df3d381d45e",
+   "size_bytes": 2253
+  },
+  "raw/B0-2048-uniform-r1.otlp/00002.pb": {
+   "sha256": "6e81130e38d5cf78ae9bd8cbd8442151cb3bb8b2392dde3c09d3e5b855efabdf",
+   "size_bytes": 2256
+  },
+  "raw/B0-2048-uniform-r1.otlp/00003.pb": {
+   "sha256": "e00a6cb17dc3ae2ff0b2574915aacabe568e0a8679e6679f1c8860389c5a3c22",
+   "size_bytes": 968
+  },
+  "raw/B0-2048-uniform-r1.otlp/00004.pb": {
+   "sha256": "5f8fbf9e676e2eaf60875973eb039d964dec1787e558f3eeba97fb0e5c3ffccb",
+   "size_bytes": 1361
+  },
+  "raw/B0-2048-uniform-r1.otlp/00005.pb": {
+   "sha256": "71a541991b5e03eb3d6ea33dcd7f3d247b477ad1f99e2f3c58fc90534726d3d3",
+   "size_bytes": 1452
+  },
+  "raw/B0-2048-uniform-r1.otlp/00006.pb": {
+   "sha256": "89a13b07fd4b25be0908a17f1230b7990950a9b231cb003610f96b2c192f2aab",
+   "size_bytes": 2616
+  },
+  "raw/B0-2048-uniform-r1.otlp/00007.pb": {
+   "sha256": "3c821b0c9ac3ebffeec39f4a9b46b14eb07cf00fc4e6cd327a466cbbb8eb33e2",
+   "size_bytes": 2616
+  },
+  "raw/B0-2048-uniform-r1.otlp/00008.pb": {
+   "sha256": "b3eeb1da21d14e80b2346c0fe3f45285844fe16faf07a3ba319c308107303cd5",
+   "size_bytes": 2618
+  },
+  "raw/B0-2048-uniform-r1.otlp/00009.pb": {
+   "sha256": "6b7d0d5dbd421ce7d8f03e6f2eb501816226f6f59a3ae24543afafc8500542b5",
+   "size_bytes": 2620
+  },
+  "raw/B0-2048-uniform-r1.otlp/00010.pb": {
+   "sha256": "f9ced6734315498e800dc6a5cf0e5bf1b08535fad4d9f2ecc36da92d2029fdbc",
+   "size_bytes": 2620
+  },
+  "raw/B0-2048-uniform-r1.series.jsonl": {
+   "sha256": "85481b80bb043f4de5909cc08a58713f91440e2079183648cfc4275d16fb2051",
+   "size_bytes": 5882
+  },
+  "raw/B0-2048-uniform-r1.server.log": {
+   "sha256": "24d5c1a84928108558ccb622dfa0307cddfe32859cef487ec0012ae1791569f4",
+   "size_bytes": 376052
+  },
+  "raw/B0-2048-uniform-r1.spans.jsonl": {
+   "sha256": "fb106ff44ed95aa1b2a0282a8ade1a5054a90301b7fad416e8981c7aa24ddce1",
+   "size_bytes": 16683
+  },
+  "raw/B0-2048-uniform-r1.steps.jsonl": {
+   "sha256": "20d9337325a6301ee3fc9a5c6d18bccc6a99fdaab0d4bd6187f4e436664b6e51",
+   "size_bytes": 173319
+  }
+ }
+}

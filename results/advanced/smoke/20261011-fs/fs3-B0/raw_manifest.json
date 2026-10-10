@@ -1,0 +1,65 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/B0-2048-mixed-r1.bench.json": {
+   "sha256": "b8f1381040fc8314cab0a283dca4fe67c0df2ec94ceebe1190653d63b912b33b",
+   "size_bytes": 16888
+  },
+  "raw/B0-2048-mixed-r1.bench.log": {
+   "sha256": "cdf4e7847ba799bb83337aef31a9419a9a5a9b31e88ee6d92261335b898f649d",
+   "size_bytes": 5834
+  },
+  "raw/B0-2048-mixed-r1.metrics.after.txt": {
+   "sha256": "398232dda9f9b5998e9db283225f6378aeee7a3581fa6d318aaa59bb76424777",
+   "size_bytes": 97635
+  },
+  "raw/B0-2048-mixed-r1.metrics.before.txt": {
+   "sha256": "c41cda4db6dbc72d99092b4520f0e4eaab1e39ee5a23eaf09e447377654b21b2",
+   "size_bytes": 95418
+  },
+  "raw/B0-2048-mixed-r1.otlp/00001.pb": {
+   "sha256": "d1f9cb8bb804e6a109115ea960870f44a8104d75df94d41bc9157068c96fb510",
+   "size_bytes": 2253
+  },
+  "raw/B0-2048-mixed-r1.otlp/00002.pb": {
+   "sha256": "10909f3c087ba03e5fffecca276b02b169462456e9263b3fdb73bba8361d7d3c",
+   "size_bytes": 2256
+  },
+  "raw/B0-2048-mixed-r1.otlp/00003.pb": {
+   "sha256": "e0904d6cba51e6c4852cb18c687953eee02ba096f35f0b9764126d3a1ff0ccc7",
+   "size_bytes": 968
+  },
+  "raw/B0-2048-mixed-r1.otlp/00004.pb": {
+   "sha256": "483803b9ba3d397969fb8ebfe9a405d2e414601b82730ac88d96e0dd60fe65d7",
+   "size_bytes": 1361
+  },
+  "raw/B0-2048-mixed-r1.otlp/00005.pb": {
+   "sha256": "2a84a443182abf33ce3b7d9b5ac8c63825ef69590f1c7e2f245f701045230826",
+   "size_bytes": 893
+  },
+  "raw/B0-2048-mixed-r1.otlp/00006.pb": {
+   "sha256": "545956983f2bdaf22edd8c06222449f3cbc670171c52d9714ec599ee7b71fc7d",
+   "size_bytes": 1466
+  },
+  "raw/B0-2048-mixed-r1.otlp/00007.pb": {
+   "sha256": "2dd9fe059a876a9889b73b728a8d6a516ec0bb958fe7f4a9f66aa744e8505f75",
+   "size_bytes": 893
+  },
+  "raw/B0-2048-mixed-r1.series.jsonl": {
+   "sha256": "898a131f3e0b64ec1525789e6c7c443622d8856ade4ac9eafff1decc8001774e",
+   "size_bytes": 6550
+  },
+  "raw/B0-2048-mixed-r1.server.log": {
+   "sha256": "c3d70fe6885300d1e80dfd015e2102b010ba9c21490b88cbe7dcbd7ff1f908fa",
+   "size_bytes": 100261
+  },
+  "raw/B0-2048-mixed-r1.spans.jsonl": {
+   "sha256": "239aabe6ac87ddf4c6247082987057ab2c6a754eb1ae33f82c93e24d23ea6608",
+   "size_bytes": 3019
+  },
+  "raw/B0-2048-mixed-r1.steps.jsonl": {
+   "sha256": "100f637d30f7b86e6096d5bc17ec6222f82853aff2fc2c6d2a6edba9079e91df",
+   "size_bytes": 35338
+  }
+ }
+}

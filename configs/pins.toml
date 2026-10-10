@@ -10,7 +10,7 @@ schema_version = 1
 [freeze]
 mac = true                                               # Stage A frozen 2026-10-09 (PREREGISTRATION §5; harness commit eb6eef1)
 nvidia = true                                            # Stage B frozen 2026-10-09 (PREREGISTRATION §6; harness commit 19446d7)
-advanced = false                                         # decision 024 / PREREGISTRATION §7; true only after smoke FS1 sets [advanced] num_gpu_blocks_k3
+advanced = true                                          # Advanced frozen 2026-10-11 (decision 024, PREREGISTRATION §7; smoke FS1 measured num_gpu_blocks_k3 = 186)
 
 # ------------------------------------------------------------------ runtimes --
 
@@ -257,7 +257,7 @@ c = { "2048" = 25, "8192" = 8 }                          # Core's uniform C_knee
 long_prefill_token_threshold = 512                       # T = MNBT 2048 // (C_KV(32768) 3 + 1)
 kv_low_bytes = 3221225472                                # K3 = 3 GiB: smallest 256 MiB multiple with C_KV >= C_knee, >= 128 and >= 67 blocks
 num_gpu_blocks_k4 = 248                                  # B0 / T / G / TG at the Stage B K (4 GiB), = [stage_b] num_gpu_blocks
-num_gpu_blocks_k3 = 0                                    # K3, from /metrics at smoke FS1 (bracketed to 186 by 248 at 4 GiB)
+num_gpu_blocks_k3 = 186                                  # K3, /metrics at smoke FS1 2026-10-11 (results/advanced/smoke/20261011-fs); C_KV 26 / 9 / 2; 2.75 GiB <= 171 fails
 otlp_endpoint = "http://127.0.0.1:4318/v1/traces"        # run_adv's in-process OTLP receiver
 otel_protocol = "http/protobuf"                          # server OTEL_EXPORTER_OTLP_TRACES_PROTOCOL (vLLM otel.py defaults to grpc)
 timeouts_s = { uniform_2048 = 300, mixed_2048 = 600, uniform_8192 = 720, mixed_8192 = 960 }  # Core bench time x 2 + 60 s, up to 60 s
