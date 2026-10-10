@@ -29,6 +29,9 @@
 >
 > **正式 Core B mixed 第一次執行因 client 缺 pandas 全部失敗（沒有送出任何 request），見 decision 022**：
 > 補裝 pandas（hash lock，server 不使用）後以新 session 重跑；007 的 mixed 定義與所有規則不變。
+>
+> **Gate 通過（使用者 2026-10-10 決定，decision 023）**：進入 Advanced，範圍只限隔離 H-B4 的成因。
+> Advanced 的規則會在任何 Advanced 數據之前另寫一節並凍結；本文第 1–6 節不變。
 
 > **狀態：第 1–5 節 FROZEN (Stage A)，2026-10-09**（harness commit `eb6eef1d43a15d70805cce83784646a038aed6d1`，
 > `pins.toml` `freeze.mac = true`）。

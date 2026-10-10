@@ -2,7 +2,8 @@
 
 ## 目前位置
 
-**Core 全部完成（2026-10-10）**：Mac / RTX Core A、Core B（uniform + mixed）、quality、deployment decision table。Advanced / Optional 皆未觸碰，等使用者決定 Gate。
+**Core 全部完成（2026-10-10）**：Mac / RTX Core A、Core B（uniform + mixed）、quality、deployment decision table。
+**Gate 通過（使用者 2026-10-10 決定，decision 023）**：進入 Advanced，範圍只限隔離 H-B4 的成因。Optional 未觸碰。
 
 - Stage A：harness commit `eb6eef1`，`freeze.mac = true`。
 - Stage B：harness commit `19446d7`，凍結 commit `b42614a`，`freeze.nvidia = true`。
@@ -10,7 +11,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–022。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–023。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -106,18 +107,16 @@
 
 ## 下一步
 
-1. README 的結果段落由 review workflow 逐項核對（進行中），修正後 commit。
-2. **Gate（SPEC）**：由使用者決定進 Advanced 或收尾（見 Blocked）。在 Gate 明確通過之前，不做任何 Advanced 工作。
+1. **Advanced（H-B4 成因隔離，decision 023）**：
+   1. 設計事先登記（decision 024 與 PREREGISTRATION 新一節）：hypothesis、操弄變因、grid、判定規則。
+   2. harness 修改與測試（TDD），例如記錄 queue / prefill 的 histogram，以及新的 server 參數。
+   3. 可行性 smoke（只檢查能否執行，不看結果量）。
+   4. 凍結、commit，然後在 RTX 上收集數據、分析、報告。
+2. Core 的結果與 decision table 不因 Advanced 而改變。
 
 ## Blocked / 需要使用者
 
-- **Gate：進 Advanced 或收尾（SPEC「Gate」）**。Core 暴露出的、可重現的 trade-off / bottleneck：
-  - H-B4：在 C_knee 加入 10% 長 request，短 request 的 P95 TTFT 增加 2.8–5.4 倍（3 次 restart 都重現，KV 使用率峰值 100%）。
-    對應 SPEC Advanced 的 batching policy / request-length distribution / KV cache。
-  - H-B1 / H-B3：C_knee 之後 throughput 最多再增 5.3%，P95 TTFT 增加數倍到數十倍。對應 Advanced 的 fixed-SLO 最大並發。
-  - H-A2（被推翻）：兩個平台上 bytes 少的配置都比頻寬模型預測慢，最多約 25%。原因未檢驗。
-  - 收尾的話：Core 的 decision table 與 README 已完成。
-
+目前沒有需要使用者決定的項目。
 
 ## 建議（非 blocker）
 
