@@ -399,3 +399,29 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
     - U = 0.91、K = 4.0 GiB、`VLLM_WSL2_ENABLE_PIN_MEMORY` = 0。JIT 冷 164.4 s、熱 40.0 s。
     - 依 019 事先記下的後果：C_KV(2048) = 35，2 × C_KV = 70。L = 2048 的 knee 若 ≥ 33，4 × C_knee > 128，H-B1 在這個 L 只能是 supported 或 inconclusive。
 - [x] 本節狀態改為 FROZEN (Stage B) 並 commit（2026-10-09，harness commit `19446d7261ab0543ed5acd795b16947eaf18c075`，`freeze.nvidia = true`）
+
+## 7. Advanced addendum：隔離 H-B4 的成因（decision 023、024）
+
+**狀態：DRAFT（凍結前）**。K3 的實測 num_gpu_blocks 由 smoke FS1 決定後，連同分析程式、測試與 `pins.toml` `freeze.advanced = true` 一起凍結並 commit，之後才收集任何 Advanced 正式數據。
+本節只摘要；完整規則、門檻依據與原始碼依據見 decision 024。第 1–6 節不變，Core 的判定不受影響。
+
+- **平台與固定項**：RTX 5070 Ti、vLLM 0.30.0、Core B 的模型、server argv、client flags、mixed dataset（pin 過 sha256）與 uniform seed。
+  C 固定為 Core 的 C_knee（2K 為 25、8K 為 8，由 `formal-20261009-coreb-uniform` 重算）。
+- **5 個 condition**（都加上相同的觀測：OTLP traces 與 `--enable-logging-iteration-details`）：
+  - B0：Core argv。
+  - T：`--long-prefill-token-threshold 512`（T = MNBT ÷ (C_KV(32K) + 1)）。
+  - G：`--no-scheduler-reserve-full-isl`。
+  - TG：T 與 G。
+  - K3：`--kv-cache-memory-bytes` 3 GiB（規則：C_KV(L; K) ≥ C_knee、num_gpu_blocks ≥ 128、≥ 67 的最小 256 MiB 倍數）。
+- **格子**：5 × L {2048, 8192} × mix {uniform, mixed} × 3 次 restart = 60 次 boot，每次 boot 一個 bench，3 個 block 內以 seed 20261008 隨機排列。
+- **主要量**：每個 run 的短類 P95 TTFT（Core 的 `short_class_p95_ttft_ms`）。U、M = 3 次 restart 的平均；ρ = ln(M ÷ U)。
+- **Hypotheses**：
+  - H-C0：B0 在 session 內重現 H-B4（凍結的 `h_b4_values`）。失敗的 L 不做歸因。
+  - H-C1：batching（chunked prefill 的 budget 壟斷）是主因：cat(T) = M。
+  - H-C2：scheduler 的准入閘門是主因：cat(G) = M，且 |ln(U_G ÷ U_0)| ≤ 0.10。
+  - H-C3：串聯瓶頸：cat(TG) = M，而 cat(T)、cat(G) 都不是 M。
+  - H-C4：KV 容量：(i) K3 的劑量敏感度（a ≥ 0.20、uniform 特異性）；(ii) B0 尾端 queue time 中准入受阻的份額 ≥ 0.5。
+  - H-C5：分解的主導類別與操弄的結果一致。
+- **移除類別**（f = 1 − ρ_c ÷ ρ_0）：M（f ≥ 0.5，ρ 與 M 都下降並超出 noise）、P（0.2 ≤ f < 0.5）、R（只有相對下降）、W（f ≤ −0.2）、N、NT。
+- **判讀矩陣**：逐 L，first match，R0–R7（見 024）。KV 只能往下調，任何「KV 主因」的結論都標為推論級。跨 L 一致才寫成一般結論。
+- **有效性**：Core 的驗證規則（013）加上 log facts、block 數、chunk 檢查、逾時（Core 同格時長 × 2 + 60 s）。不足 3 次有效 restart 的格記為 NT。
