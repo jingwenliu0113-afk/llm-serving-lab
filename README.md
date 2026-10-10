@@ -5,12 +5,8 @@
 這是一個事先登記（pre-registered）的實驗：hypothesis、門檻、metric 與 protocol 都在看到正式數據之前寫定並凍結，
 之後的任何變更都有 decision log。結論只來自有效的正式 session，失敗、OOM、not testable 的單位照實報告。
 
-> **狀態（2026-10-10）**：正式數據收集中。
-> - 已完成：RTX Core A（`formal-20261009-rtx-a1`）。
-> - 進行中：Mac Core A、Core B uniform。
-> - 排隊中：Core B mixed、quality。
->
-> 結果段落會在全部正式分析完成後補上。
+> **狀態（2026-10-10）**：Core A（兩個平台）與 Core B 的正式數據已完成，結果見下方。
+> 正式 quality 進行中；之後產生 deployment decision table。
 
 ## 研究範圍
 
@@ -100,8 +96,59 @@ uv sync && uv run pytest -q
 
 ## 結果
 
-尚未產生。全部正式分析完成後，這裡會放：
+> Core A（兩個平台）與 Core B 的正式數據已完成。quality（正式 run 進行中）與 deployment decision table 完成後補上。
+> 判定都由事先凍結的分析程式產生（`analysis.json`）；"not refuted" 只代表沒有被推翻，不代表被證實。
+> 依 SPEC，不做 Mac 與 PC 的排名：下面的數字只在同一平台內比較。
 
-- Core A：quality vs throughput、context vs memory、fit boundary、latency。
-- Core B：concurrency vs TTFT / TPOT、throughput、P95。
-- `results/decision_table/decision_table.md`：什麼 workload 適合什麼配置，以及證據不支持的部分。
+### Core A：single-user（llama.cpp b11146）
+
+| session | 平台 | 狀態 |
+|---|---|---|
+| `formal-20261009-a2` | macos-metal（M4 Pro 48 GB） | 164 / 164 ok，sentinel 漂移 1.78%，env 有效 |
+| `formal-20261009-rtx-a1` | wsl2-cuda（RTX 5070 Ti 16 GB） | 164 / 164 ok，sentinel 漂移 0.06%，env 有效 |
+
+| hypothesis | macos-metal | wsl2-cuda |
+|---|---|---|
+| H-A1 fit boundary | not refuted：18 / 18 fit，沒有 spill | not refuted：18 / 18 fit，沒有 spill |
+| H-A2 decode 受頻寬限制（±20%） | **refuted**：13 / 15 組偏差為負，最大 −25.8% | **refuted**：15 / 15 組偏差為負，最大 −25.1% |
+| H-A3 context 的 decode 降幅 | not refuted：順序符合預測，相鄰差距在 noise 內 | not refuted：順序符合預測，差距超出 noise |
+| H-A4(a) prefill 的 quant 差距小於 decode | not refuted | not refuted |
+| H-A4(b) TTFT(32K) ÷ TTFT(8K) > 4 | not refuted（4.49–5.11） | not refuted（4.39–4.91） |
+
+- **fit**：2K–32K 範圍內兩個平台都沒有碰到記憶體邊界，與 H-A1 的事前預測一致（16 GB 上 18 格都預測 fit）。
+- **decode（H-A2）**：bytes 較少的配置確實較快，但都比純頻寬模型預測的慢。
+  - 兩個平台上偏差最大的都是同一組：4B-Q4_K_M 對 9B-Q8_0，觀測比約 2.2，預測比 2.99。
+  - 原因 Core 沒有檢驗。未檢驗的推測：有一部分成本與權重 bytes 無關，例如 GDN recurrent 狀態與 kernel 開銷。
+- **context**：decode 從 2K 到 32K 的降幅，bit 越低越大。
+  - macos-metal：4B 0.25–0.28，9B 0.16–0.23。
+  - wsl2-cuda：4B 0.16–0.22，9B 0.12–0.15。
+- **prefill**：
+  - 同一 (size, L) 下三個 quant 的 prefill 差距（macos-metal 1.04–1.07，wsl2-cuda 1.16–1.31），都小於 decode 差距（1.26–1.48）。
+  - TTFT 隨 context 超線性成長。
+- 圖：`results/core_a/figures/{decode,prefill,memory}-{mac,rtx}-formal.svg`。
+
+### Core B：multi-user serving（vLLM 0.30.0，Qwen3.5-9B W4A16，RTX 5070 Ti）
+
+sessions：`formal-20261009-coreb-uniform`（102 / 102 ok）、`formal-20261010-coreb-mixed2`（6 / 6 ok）。
+第一次 mixed 因 client 缺 pandas 全部失敗、沒有送出 request，保留為 `formal-20261010-coreb-mixed`（decision 022）。
+
+| L | C_KV | C_knee | output tok/s：C_knee / grid 最大 | P95 TTFT（ms）：C = 1 / C_knee / C_max | G_TPOT / G_TTFT |
+|---|---|---|---|---|---|
+| 2K | 35 | 25 | 314.9 / 325.7（C 32） | 330 / 4,260 / 38,138（C_max 128） | 8.6 / 115.7 |
+| 8K | 13 | 8 | 80.2 / 83.3（C 26） | 1,407 / 2,834 / 179,098（C_max 128） | 11.8 / 127.3 |
+| 32K | 3 | 2 | 17.8 / 18.6（C 32） | 6,290 / 9,988 / 207,100（C_max 32） | 8.6 / 32.9 |
+
+- **H-B1 not refuted**：三個 L 在 knee 之後 P95 TTFT 都達到 knee 的 3 倍（首次達到的 C 分別是 70 / 16 / 8）。
+- **H-B2 not refuted**：C_knee 都落在 [C_KV ÷ 2, 2 × C_KV] 內，與「KV 容量（含 GDN 狀態 block）決定 knee」的預測一致；這不是因果檢驗。
+- **H-B3 not refuted**：從 C = 1 到 C_max，P95 TPOT 只增加 8.6–11.8 倍，P95 TTFT 增加 33–127 倍。
+- **H-B4 not refuted**：在 C = C_knee 時加入 10% 的長 request（32K），短 request 的 P95 TTFT：
+  - 2K：4.26 → 23.2 秒（+444%）。
+  - 8K：2.83 → 7.80 秒（+175%）。
+  - 兩者都超出 noise。mixed 下 KV cache 使用率峰值 100%，沒有 preemption。機制（chunked prefill 干擾）是 conjecture。
+- 圖：`results/core_b/figures/{p95_ttft_ms,p95_tpot_ms,output_throughput}-uniform-formal.svg`。
+
+### Quality 與 deployment decision table
+
+- 正式 quality 在 wsl2-cuda 上進行中（兩個 size，約 14 小時；decision 020）。
+- 完成後由 `benchmarks/decision_table.py` 依 decision 021 產生 `results/decision_table/decision_table.md`。
+  內容包括：什麼 workload 適合什麼配置，以及證據不支持的部分。
