@@ -2,7 +2,7 @@
 
 ## 目前位置
 
-**Core — Stage A（§1–5）與 Stage B（§6）都已凍結**（2026-10-09）。Advanced / Optional 皆未觸碰。
+**Core 全部完成（2026-10-10）**：Mac / RTX Core A、Core B（uniform + mixed）、quality、deployment decision table。Advanced / Optional 皆未觸碰，等使用者決定 Gate。
 
 - Stage A：harness commit `eb6eef1`，`freeze.mac = true`。
 - Stage B：harness commit `19446d7`，凍結 commit `b42614a`，`freeze.nvidia = true`。
@@ -14,7 +14,7 @@
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
-## 現況（2026-10-09 23:50）
+## 現況（2026-10-10 20:30）
 
 ### 使用者決定（2026-10-09 上午）
 
@@ -106,38 +106,24 @@
 
 ## 下一步
 
-1. **RTX**（GPU lock，依序）：
-   1. **RTX quality pilot 通過**（`pilot-20261010-rtx-q`，52 / 52 ok，09:12–10:04）：重跑完全相同、self-KLD 0、Q8_0 KLD 約 1.5e-3。
-      正式 quality 估計約 13.8 小時。spill 量 pilot 量不到，改由記憶體探測記錄（020 補記）。
-   2. **第一次正式 mixed 全部失敗**（`formal-20261010-coreb-mixed`，10:04–10:10，0 / 6）：client 缺 pandas（vllm[bench] extra），沒有送出任何 request。
-      依 decision 022 補裝 pandas（hash lock，只新增 2 個套件），CPU 檢查通過，失敗 session 照原樣保留並 commit。
-      期間另一個專案（text-to-sql）10:11 起短暫持有 GPU lock，沒有搶占。
-   3. **正式 Core B mixed 完成**（`formal-20261010-coreb-mixed2`，10:19–11:02）：6 / 6 ok，env 有效，server 設定與 uniform 相同。
-      - Core B `analysis.json` 已以 `--mixed` 重產（021 R3）。
-      - **H-B4 not refuted**：在 C = C_knee 時，短 request 的 P95 TTFT 從 uniform 到 mixed，2K（C 25）由 4.26 秒增為 23.2 秒（+444%），8K（C 8）由 2.83 秒增為 7.80 秒（+175%），都超出 noise。
-        mixed 下 KV cache 使用率峰值 100%，沒有 preemption。
-   4. **9B BF16 記憶體探測完成**（020 補記）：CUDA0 self 15,906 MiB，載入前可用 15,009 MiB，約 897 MiB spill 到系統記憶體；33 / 33 層在 GPU。
-   5. **正式 quality 進行中**（11:04 開始，約 14 小時，`chain_rtx_mixed2_quality.sh`）。完成後：取回、`quality_analysis.py`、frontier 圖、決策表。
-   6. 報告：
-      - `core_a_report.py`（RTX 帶 `--v-total-mib 16303 --b-mib 811 --c-ctx-mib -89`）。
-      - `core_b_report.py` 與 `core_b_figures.py`。
-      - `quality_analysis.py`。
-      - frontier 圖，要註明 quality 是在 wsl2-cuda 上量的。
-2. **Mac**：正式 Core A 已完成，沒有其他 Mac 重負載。剩下的 Mac 工作都是輕量的分析、圖與決策表。
-3. **deployment decision table**（SPEC）：
-   - 規則 decision 021 已 commit（`41798d7`），generator `benchmarks/decision_table.py` 與 40 個測試已 commit（`278ff82`）。
-     兩者都在 a2、正式 quality、正式 Core B 的分析出現之前（021 R0）。
-   - 設計 agent 不讀 `results/`；我已看過 RTX Core A 的結果，021 已照實揭露。
-   - review workflow 完成（確認約 13 項，駁回 4 項），修正已 commit（`31973d5`），全部在看到新數據之前。
-     其中 R11 的淘汰語意有修訂（只由當下未被勝過的成員淘汰，避免 KLD 與 NLL 的隱含跨 metric 遞移），已記在 021。
-   - generator 的第一次真實執行要在所有正式分析都完成之後，輸出照原樣 commit（R0）。
-4. **全部正式數據完成後**：跑 `decision_table.py`，寫結論。
+1. README 的結果段落由 review workflow 逐項核對（進行中），修正後 commit。
+2. **Gate（SPEC）**：由使用者決定進 Advanced 或收尾（見 Blocked）。在 Gate 明確通過之前，不做任何 Advanced 工作。
 
 ## Blocked / 需要使用者
 
-目前沒有需要使用者決定的項目。
+- **Gate：進 Advanced 或收尾（SPEC「Gate」）**。Core 暴露出的、可重現的 trade-off / bottleneck：
+  - H-B4：在 C_knee 加入 10% 長 request，短 request 的 P95 TTFT 增加 2.8–5.4 倍（3 次 restart 都重現，KV 使用率峰值 100%）。
+    對應 SPEC Advanced 的 batching policy / request-length distribution / KV cache。
+  - H-B1 / H-B3：C_knee 之後 throughput 最多再增 5.3%，P95 TTFT 增加數倍到數十倍。對應 Advanced 的 fixed-SLO 最大並發。
+  - H-A2（被推翻）：兩個平台上 bytes 少的配置都比頻寬模型預測慢，最多約 25%。原因未檢驗。
+  - 收尾的話：Core 的 decision table 與 README 已完成。
+
 
 ## 建議（非 blocker）
+
+- 2026-10-10 20:14 起，`/usr/bin/git`（Xcode shim）因 `libxcrun` 架構不相容而失敗，可能是 Xcode 更新所致。
+  目前改用 `/Library/Developer/CommandLineTools/usr/bin/git`，不修改 xcode-select 等系統設定。
+  `scripts/deploy_bundle.py` 內部呼叫 `git`；下次部署前要先確認 PATH，或由使用者修復 Xcode。
 
 - 正式 Mac run 期間盡量少開前景程式。
   - 前景負載不會讓 session 作廢，但會增加 noise。
