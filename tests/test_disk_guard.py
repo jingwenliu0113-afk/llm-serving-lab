@@ -60,3 +60,24 @@ def test_cli_exit_codes(tmp_path, monkeypatch, capsys, need, code):
     out = json.loads(capsys.readouterr().out)
     assert out["ok"] is (code == 0)
     assert out["reserve_gib"] == 50.0
+    assert out["free_gib"] == 175.0  # the patched usage, never the machine's real free space
+
+
+@pytest.mark.parametrize("free_gib, need, code", [(0, 0, 3), (10**7, 10**6, 0)])
+def test_check_reads_disk_usage_at_call_time(tmp_path, monkeypatch, free_gib, need, code):
+    """Regression: a default bound at import time ignored the patch and read the real disk, so the
+    CLI outcome depended on the machine (passes only with 60-250 GiB free). The `seen` asserts are
+    what make this fail against an import-time default on any machine; the exit codes alone could
+    still match a real disk (e.g. < 50 GiB free for the first case)."""
+    seen = []
+
+    def fake(path):
+        seen.append(path)
+        return usage(free_gib)(path)
+
+    monkeypatch.setattr(dg.shutil, "disk_usage", fake)
+    assert dg.main(["--path", str(tmp_path), "--need-gib", str(need)]) == code
+    assert seen == [str(tmp_path)]
+    seen.clear()
+    assert dg.check(str(tmp_path), need_bytes=need * GiB, reserve_bytes=50 * GiB)["ok"] is (code == 0)
+    assert seen == [str(tmp_path)]

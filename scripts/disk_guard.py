@@ -30,10 +30,11 @@ def _existing(path: str) -> str:
 
 
 def check(path: str, *, need_bytes: int, reserve_bytes: int,
-          disk_usage: Callable = shutil.disk_usage) -> dict:
+          disk_usage: Callable | None = None) -> dict:
     if need_bytes < 0 or reserve_bytes < 0:
         raise ValueError("need and reserve must be non-negative")
-    free = disk_usage(_existing(path)).free
+    # Looked up at call time (not bound as a default at import), so a patched shutil.disk_usage is honoured.
+    free = (disk_usage or shutil.disk_usage)(_existing(path)).free
     after = free - need_bytes
     return {
         "path": str(path),
