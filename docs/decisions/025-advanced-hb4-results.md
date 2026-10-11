@@ -155,3 +155,4 @@ f = 1 − ρ_c/ρ_0（log 比值的移除比例）；g = 1 − (M_c − U_c)/(M_
   - 其他 Advanced 項目：fixed-SLO 最大並發、其他 threshold 或 KV 劑量、prefix caching 等。
   - 8K uniform 雙模式的成因。
   - Optional。
+- **使用者 2026-10-11 決定收尾**：不新增 Advanced 項目，8K uniform 的雙模式記為 Future Work，不追查（decision 026）。

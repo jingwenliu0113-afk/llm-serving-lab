@@ -2,6 +2,9 @@
 
 ## 目前位置
 
+**Project 暫時完成（使用者 2026-10-11 決定，decision 026）**。目前的 defensible milestone = Core + 已完成的 Advanced（H-B4 成因隔離）。
+不新增 Advanced 項目，也不開始任何新的實驗；Future Work 見 README 與 026。之後若要繼續，要由使用者重新決定，並且先事先登記、凍結。
+
 **Core 全部完成（2026-10-10）**：Mac / RTX Core A、Core B（uniform + mixed）、quality、deployment decision table。
 **Gate 通過（使用者 2026-10-10 決定，decision 023）**：進入 Advanced，範圍只限隔離 H-B4 的成因。Optional 未觸碰。
 **Advanced 完成（2026-10-11，decision 025）**：正式 session `formal-20261011-adv` 60 / 60 有效；
@@ -13,11 +16,11 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–025。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–026。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
-## 現況（2026-10-10 20:30）
+## 歷史紀錄：Core 執行期間的現況（2026-10-10 20:30 寫下，之後未更新；目前狀態以上方「目前位置」為準）
 
 ### 使用者決定（2026-10-09 上午）
 
@@ -109,12 +112,20 @@
 
 ## 下一步
 
+**無**。Project 暫時完成（026）。在使用者重新決定之前，不做任何新的實驗或 scope 擴張。
+
+- **收尾工作（2026-10-11，已完成）**：
+  - `test_disk_guard` 的環境相依已修正（026）：`disk_guard.check()` 改為呼叫時才取 `shutil.disk_usage`；先有紅燈測試，修正後完整測試通過。
+  - README 與 NEXT 標記目前的 milestone；8K uniform 的雙模式記入 Future Work / limitations，不追查。
+
+（以下為歷史紀錄）
+
 0. **023 的 Advanced 範圍已完成**（decision 025，README「Advanced」一節）。
    - 正式 session `formal-20261011-adv`（部署 `97a948c`，GPU lock 下，2026-10-11 00:27–06:33）：60 / 60 次 boot 有效，0 逾時，env 有效。
    - `adv_report`（Mac，project venv）：2K → R6，8K → R1，跨 L 不合併。事先預期 8K 符合、2K 不符合，照實報告。
    - 以 `rows.jsonl` 獨立重算 U、M、ρ、f、a，與 `analysis.json` 一致；獨立核對者重跑 `adv_report` 逐位元相同，並核對 025 / README 的文字（14 項修正已納入）。
    - Core 判定與 decision table 不變（重跑只差 pins sha256，commit 的仍是第一次執行的輸出）。
-   - 之後的任何 Advanced 項目或 Optional 都需要使用者決定（見下方「需要使用者」）。
+   - 之後的任何 Advanced 項目或 Optional 都需要使用者決定；使用者 2026-10-11 決定收尾（026）。
 
 1. （歷史）**Advanced（H-B4 成因隔離，decision 023、024）**：
    1. 事先登記草稿已 commit（`ae368e6`）：decision 024、PREREGISTRATION §7（DRAFT）。
@@ -129,11 +140,7 @@
 
 ## Blocked / 需要使用者
 
-- **下一步方向**（023：其他 Advanced 項目要使用者另外決定）：
-  - 收尾（Core + Advanced 都已完成，README 為最終結論）；或
-  - 另一個 Advanced 項目，例如 fixed-SLO 最大並發、其他 chunk threshold / KV 劑量；都要先事先登記並凍結，再收集數據。
-  - （小）8K uniform 在 boot 之間有兩個模式（約 2.48 / 2.82 秒，成因未知；025「限制」）。事後敏感度顯示 8K 的判定不受影響，追查與否由使用者決定。
-  - 沒有使用者決定之前，不開始任何新的實驗。
+目前沒有。Project 暫時完成；是否重新開始（Future Work 中的任何一項或 Optional）由使用者決定。
 
 ## 建議（非 blocker）
 
@@ -146,6 +153,10 @@
   - 4B pilot 時前景 loadavg 為 6–9，CV 5.9%；9B pilot 在深夜，CV 1.0%。
 
 ## 已解決
+
+- 2026-10-11：
+  - 下一步方向：使用者決定收尾，不新增 Advanced 項目；8K uniform 的雙模式記入 Future Work（026）。
+  - `test_disk_guard` 的結果取決於機器的剩餘磁碟空間（只有 60–250 GiB 時通過）：已修正（026）。
 
 - 遠端 SSH（2026-10-08）。
 - WSL compiler（使用者已安裝）。
