@@ -338,3 +338,41 @@ M0 依本文以 TDD 實作，經兩個面向的審查（12 項，全部確認、
   - keep-alive 的實際值；
   - tokens 的額外常數（chat 32、per_message 16、completion 1）目前是暫定的寬鬆值。
 
+
+## 實作補記（M1，2026-10-16；尚未在 RTX 上執行）
+
+M1（`procs`、`runs`、`deploy`、`loadtest`、`itest`、`service/deploy/rtx.toml`、`profiles/provisional-rtx.json`、`tools/rtx/deploy_service.sh`）依本文以 TDD 實作，
+經兩個面向的審查：11 項發現，其中 2 項重複，9 項全部修正，每項都有回歸測試。與本文不同、或本文沒有寫到的決定：
+
+- **`state.json` 從開始就寫入**，依序為 starting → ready → stopping → stopped，所以開機期間也能 `stop`。
+- **teardown 一定執行**：teardown 前後對 `state.json`、`meta.json` 的寫入都只是盡力而為。寫入失敗（例如磁碟滿）只記成問題、exit 1，不能跳過 teardown，也不能蓋掉正在傳遞的中斷。
+- **伺服器檢查套用在所有 profile**：block 數與 block size、FLASH_ATTN、GDN prefill kernel、MNBT 2048，provisional 也一樣要檢查。
+- **verified profile 在 M2 之前的規則**：必須位於 release 目錄之內、列在 `DEPLOY_MANIFEST.json` 中，而且位元組與 manifest 的 hash 相符，否則開機前就拒絕。
+  也就是說，verified profile 只能是 commit 過的檔案，而既有的 Mac「重新產生」測試保證 M2 之前不可能有。
+- **profile 只讀一次**：讀到的位元組經檢查、記錄後複製到 `runs/<id>/profile.json`，gateway 使用這份複本。
+  就緒後，`/readyz` 的 profile id、status、active class 與四個上限都必須和 preflight 相同，否則 teardown 並 exit 2。
+- **vLLM 的環境**：另外移除會改變快取位置的變數（`XDG_*_HOME`、`TRITON_CACHE_DIR`、`TORCHINDUCTOR_CACHE_DIR`、`FLASHINFER_WORKSPACE_BASE`）。gateway 也使用服務自己的 HOME / TMPDIR。
+- **部署設定的限制**：
+  - `research_dir` 必須等於 `core_b_plan.PROJECT_DIR`，因為 server 的 PATH 與 CUDA_HOME 指向它；
+  - vLLM 的 port 不能是 8000；
+  - gateway 的 backend URL、host（固定 127.0.0.1）、port 與 drain 逾時都由 deploy 決定；
+  - `max_hold_s` 必須有限且 ≤ 3600，從 supervisor 啟動起算，包含開機；vLLM 與 gateway 的就緒等待都截到剩餘時間；
+  - `startup_timeout_s` 必須有限；`drain_timeout_s` ≤ 300（等於 gateway 預設的 request deadline）。
+- **`provisional-rtx.json`**：並發 4、佇列 4，輸出上限 1024 token（研究是 128），讓 IT-3 能區分真正的 abort 和自然結束、IT-5 有長的 request 可以 drain。
+  它的原因欄位寫明「不是容量，也不是 Core 的 C_knee」。
+- **整合測試**（`python -m capserve.itest`）：
+  - IT-1 至 IT-5 共用一次 boot：itest 持有 lock，以子 process 啟動 `capserve.deploy up`（hold 模式）並把 lock 傳下去；IT-5 走真正的 `capserve.deploy stop`。
+  - 除了 IT-0 之外都需要 lock，包括 IT-6。
+  - IT-3 要求斷線時至少還有 4 s 的生成量，而且斷線後 +1 s 到 +3 s 之間生成的 token 數不再增加。
+  - IT-4 以 `/tokenize`（不加 special tokens）實測 chat template 的額外 token 數，並和設定的常數比較；另有空訊息與 8 則訊息兩種情況。
+  - IT-0 要求 vLLM 的 keep-alive 長於 gateway 的 2 s 連線重用。
+  - itest 安裝了 SIGTERM / SIGHUP 的處理；中斷時仍會寫出 `itest.json`，未完成的測試標為 failed，並記錄 `interrupted`。
+- **`runs.py`**：`release` 與 `profile` 也是固定欄位，之後不能改寫。
+- **`deploy_service.sh`**：`~/llm-serving-service` 或其中的 `releases/` 是 symlink 時一律拒絕；解壓後重新讀取 `DEPLOYED_COMMIT`；使用 `.venv/bin/python`。
+  解壓不是原子操作，但不完整的 release 會被 `up` 的 manifest 檢查拒絕。
+- **未驗證、要在 RTX 上確認的事**：
+  - vLLM 另外啟動的 EngineCore process 是否也繼承了 lock 的 fd（IT-1 目前只檢查 API server）；
+  - abort 之後 vLLM 的 running / waiting gauge 是否會更新（IT-3 另外看生成的 token 數）；
+  - ssh / WSL 的引號處理與 vLLM 的 log 格式；
+  - IT-6 沒有檢查 `/tmp/torchinductor_<user>`（本文的清單沒有列）。
+- RTX 上的執行同樣受 1,000 MiB 的閒置上限限制，目前因 Windows 桌面應用程式占用 GPU 記憶體而 blocked。

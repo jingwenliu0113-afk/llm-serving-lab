@@ -1,0 +1,16 @@
+# capserve on the RTX (WSL2 Ubuntu-22.04), decision 029 "部署管理": product tests only, never research.
+# Read by `python -m capserve.deploy` and `python -m capserve.loadtest` / `capserve.itest` (capserve/deploy.py).
+
+[deploy]
+service_root = "/home/wenn0113/llm-serving-service"   # releases/<sha>/, runs/, state.json, .home/, .tmp/
+research_dir = "/home/wenn0113/llm-serving-lab"       # read-only: its .venv (vllm, python) and CUDA_HOME shim
+vllm_port = 8100                                      # research's server uses 8000
+gateway_port = 8080
+startup_timeout_s = 900                               # Stage B cold boot 164.4 s; the first product boot is cold (own HOME)
+max_hold_s = 3600                                     # bounds how long the shared GPU lock is held (029: <= 1 h per session)
+drain_timeout_s = 60
+
+# capserve gateway settings (capserve/config.py). backend_url, host, port and drain_timeout_s are set by the deploy
+# (127.0.0.1 only, so no API key is needed). The limits come from the profile's active class, never from here.
+[gateway]
+active_class = "rtx-it"

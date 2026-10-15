@@ -1,0 +1,27 @@
+{
+ "schema_version": 1,
+ "profile_id": "provisional-rtx",
+ "status": "provisional",
+ "provisional_reason": "RTX integration tests (decision 029 IT-0..IT-6) and product load tests only. Not a capacity: these limits are hand-set and unverified, derived from no Stage C measurement and not Core's C_knee; they are not product limits (027 §4). Concurrency 4 / queue 4 is deliberately small, and 1024 output tokens make a generation long enough to observe a disconnect (IT-3) and a drain (IT-5).",
+ "slo": null,
+ "server": {
+  "vllm_version": "0.30.0",
+  "model_repo": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+  "model_revision": "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "fingerprint_sha256": "98b9f41be7b75b6bf431e6c090124156360edfc929ccd6164001468da05b6d4f",
+  "num_gpu_blocks": 248,
+  "block_size": 528
+ },
+ "classes": [
+  {
+   "name": "rtx-it",
+   "max_prompt_tokens": 1920,
+   "max_output_tokens": 1024,
+   "max_concurrency": 4,
+   "max_queue": 4,
+   "source": "provisional:rtx-it (hand-set, unverified; integration tests only)"
+  }
+ ],
+ "provenance": null,
+ "content_sha256": "aabb68c8b80a5f58d1d532ac7381e0f2028e6f11c18f4a44788bf2e438718943"
+}

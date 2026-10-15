@@ -202,17 +202,27 @@ def _verified_problems(prof: CapacityProfile) -> list:
 def load_profile(path, *, allow_provisional: bool, pins: dict | None = None) -> CapacityProfile:
     """The profile at path, or ProfileError with every problem. pins default to configs/pins.toml."""
     try:
-        doc = json.loads(Path(path).read_text())
-    except (OSError, ValueError) as exc:
+        data = Path(path).read_bytes()
+    except OSError as exc:
         raise ProfileError(f"{path}: cannot read the profile: {exc}") from exc
+    return parse_profile(data, source=path, allow_provisional=allow_provisional, pins=pins)
+
+
+def parse_profile(data, *, source, allow_provisional: bool, pins: dict | None = None) -> CapacityProfile:
+    """The profile in data (a profile file's bytes or text; source names it in errors), or ProfileError. The deploy
+    step parses the very bytes it hands to the gateway, so what was checked is what is served."""
+    try:
+        doc = json.loads(data)
+    except ValueError as exc:
+        raise ProfileError(f"{source}: cannot read the profile: {exc}") from exc
     try:
         prof = CapacityProfile.model_validate(doc)
     except ValidationError as exc:
-        raise ProfileError(f"{path}: {exc}") from exc
+        raise ProfileError(f"{source}: {exc}") from exc
     problems = profile_problems(doc, prof, pins if pins is not None else bp.load_pins())
     if problems:
-        raise ProfileError(f"{path}: " + "; ".join(problems))
+        raise ProfileError(f"{source}: " + "; ".join(problems))
     if not prof.verified and not allow_provisional:
-        raise ProfileError(f"{path}: profile {prof.profile_id} is provisional ({prof.provisional_reason}); it is "
+        raise ProfileError(f"{source}: profile {prof.profile_id} is provisional ({prof.provisional_reason}); it is "
                            "refused without --allow-provisional or CAPSERVE_ALLOW_PROVISIONAL=1 (027 §4)")
     return prof

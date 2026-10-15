@@ -7,6 +7,10 @@ in two writes), pause_after_chunks (the stream waits for `release` after that ma
 waits for `release` before its first token), healthy / health_delay_s, model_id, tokenize_fail_status (/tokenize
 answers with vLLM's OpenAI-shaped error, as it does when the chat template raises) and tokenize_delay_s.
 
+/metrics exposes vllm:num_requests_running (generations in flight; /tokenize does not create an engine request),
+vllm:num_requests_waiting (always 0: the fake has no scheduler queue), vllm:generation_tokens_total (one per generated
+step) and vllm:cache_config_info at the Stage B values.
+
 It records peak_in_flight (generations and /tokenize calls together: every HTTP request that does model work),
 cancelled_ids (requests whose client disconnected before the end), the request bodies and headers, and exposes
 asyncio Events (started, cancelled, release) so tests synchronize on events, not on wall-clock sleeps. Runs in the
@@ -27,7 +31,9 @@ from starlette.routing import Route
 
 import core_b_plan as bp
 
-MODEL = bp.load_pins()["core_b"]["repo"]
+_PINS = bp.load_pins()
+MODEL = _PINS["core_b"]["repo"]
+NUM_GPU_BLOCKS, BLOCK_SIZE = _PINS["stage_b"]["num_gpu_blocks"], _PINS["stage_b"]["block_size"]
 
 
 class _Drop(Exception):
@@ -63,6 +69,8 @@ class FakeVLLM:
     def __init__(self, cfg: FakeConfig | None = None):
         self.cfg = cfg or FakeConfig()
         self.in_flight = 0
+        self.running = 0          # generations only (vllm:num_requests_running)
+        self.tokens_generated = 0  # vllm:generation_tokens_total
         self.peak_in_flight = 0
         self.seen: list[Seen] = []
         self.cancelled_ids: list[int] = []
@@ -75,21 +83,24 @@ class FakeVLLM:
             Route("/health", self.health, methods=["GET"]),
             Route("/v1/models", self.models, methods=["GET"]),
             Route("/tokenize", self.tokenize, methods=["POST"]),
+            Route("/metrics", self.metrics, methods=["GET"]),
             Route("/v1/completions", self.generate, methods=["POST"]),
             Route("/v1/chat/completions", self.generate, methods=["POST"]),
         ])
 
     # ------------------------------------------------------------ bookkeeping
 
-    def _enter(self) -> int:
+    def _enter(self, generation: bool = True) -> int:
         self._next_id += 1
         self.in_flight += 1
+        self.running += int(generation)
         self.peak_in_flight = max(self.peak_in_flight, self.in_flight)
         self.started.set()
         return self._next_id
 
-    def _leave(self) -> None:
+    def _leave(self, generation: bool = True) -> None:
         self.in_flight -= 1
+        self.running -= int(generation)
 
     def _cancel(self, rid: int) -> None:
         self.cancelled_ids.append(rid)
@@ -106,13 +117,21 @@ class FakeVLLM:
             await asyncio.sleep(self.cfg.health_delay_s)
         return Response(status_code=200 if self.cfg.healthy else 503)
 
+    async def metrics(self, request: Request) -> Response:
+        labels = f'model_name="{self.cfg.model_id}",engine="0"'
+        text = (f"vllm:num_requests_running{{{labels}}} {self.running}\n"
+                f"vllm:num_requests_waiting{{{labels}}} 0\n"
+                f"vllm:generation_tokens_total{{{labels}}} {self.tokens_generated}\n"
+                f'vllm:cache_config_info{{block_size="{BLOCK_SIZE}",num_gpu_blocks="{NUM_GPU_BLOCKS}"}} 1.0\n')
+        return Response(text, media_type="text/plain; version=0.0.4")
+
     async def models(self, request: Request) -> Response:
         return JSONResponse({"object": "list", "data": [{"id": self.cfg.model_id, "object": "model"}]})
 
     async def tokenize(self, request: Request) -> Response:
         body = await request.json()
         self.seen.append(Seen("/tokenize", body, dict(request.headers)))
-        self._enter()
+        self._enter(generation=False)
         try:
             if self.cfg.tokenize_delay_s:
                 await asyncio.sleep(self.cfg.tokenize_delay_s)
@@ -128,7 +147,7 @@ class FakeVLLM:
             n = len(text.split())
             return JSONResponse({"count": n, "max_model_len": 32768, "tokens": list(range(n))})
         finally:
-            self._leave()
+            self._leave(generation=False)
 
     async def generate(self, request: Request):
         body = await request.json()
@@ -194,6 +213,7 @@ class _NonStream:
                 for _ in range(fake.cfg.n_tokens):
                     if fake.cfg.itl_s:
                         await asyncio.sleep(fake.cfg.itl_s)
+                    fake.tokens_generated += 1
                 tg.cancel_scope.cancel()
             if gone:
                 fake._cancel(rid)
@@ -235,6 +255,7 @@ class _Stream:
                         await fake.release.wait()
                     if i and cfg.itl_s:
                         await asyncio.sleep(cfg.itl_s)
+                    fake.tokens_generated += 1
                     parts = [event[:len(event) // 2], event[len(event) // 2:]] if cfg.split_events else [event]
                     for part in parts:
                         await send({"type": "http.response.body", "body": part, "more_body": True})

@@ -42,4 +42,9 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve serve --config /tmp/g
 
 - 設定檔的欄位與預設值見 `capserve/config.py`。`CAPSERVE_API_KEY` 只從環境變數讀取；沒有設定時只能綁 loopback。
 - 單一 process，uvicorn 固定 `http="h11"`、`loop="asyncio"`；SIGTERM 時先 drain，exit −15 為正常結束。
-- 部署管理（`deploy`、`procs`、`runs`、`loadtest`）與 RTX 整合測試是 M1。
+- 部署管理與整合測試（M1，decision 029 的 M1 實作補記）：
+  - `python -m capserve.deploy render|up|status|stop`：在 RTX 上以 GPU lock 啟動 vLLM 與 gateway（前景 supervisor），teardown 一定執行。
+  - `python -m capserve.loadtest`：產品負載測試（smoke / steady / burst / overload），輸出到 `runs/`，**不是容量量測**。
+  - `python -m capserve.itest IT-0 … IT-6`：RTX 整合測試；除了 IT-0 都需要 GPU lock。
+  - `tools/rtx/deploy_service.sh`：把 release 部署到 WSL 的 `~/llm-serving-service/releases/<sha>`，不寫入研究目錄。
+  - RTX 上尚未執行：要等 GPU 閒置用量回到 1,000 MiB 以下。
