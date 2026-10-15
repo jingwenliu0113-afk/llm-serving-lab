@@ -118,20 +118,25 @@
 ## 下一步（Phase 2）
 
 ### Research
-1. **C0**（decision 028，計畫已寫定）：
-   - 步驟 0：先 commit `c0_step0.py` 與 `fetch_raw.sh`，再唯讀取回 WSL 的 raw 檔（已確認仍在）做桌上檢查。
-   - GPU 探針：6 次 boot × 4 個 bench，GPU lock 下最多 3.0 h，先 smoke。
-   - 結果寫成另一份 decision log，決定 §8 的分支 A–D。
-2. **§8 草稿**（decision 030、PREREGISTRATION §8 DRAFT）：
-   - **使用者已決定（2026-10-15）**：SLO S2（TTFT 2 / 6 / 20 s，TPOT 100 ms）、mixed 長 request 為 budget、穩態時間窗、
-     GPU 空著就跑（一次約 7–9 h）。O-32K、O-T 不做。
-   - 其餘依預設值處理（m = 5%、n_near = 5 或 7、C_cap = 2·C_KV）。
-3. Stage C 的 harness（TDD；只 import Core / Advanced 模組，不修改）→ smoke（FS-order 等）→ 凍結 → 正式 run → 報告。
+1. **C0**（decision 028）：
+   - harness 已 commit（`e4c23c9`），審查 6 項已處理。
+   - **步驟 0 完成**（`ac29c54`）。事先寫定的重現檢查沒有重現；每次滑移都是錯過一個 2048-token prefill step（約 349 ms）；Core r2 的滑移較多，可能有 boot 層級的成分。
+   - **GPU 探針進行中**（2026-10-16 起）：
+     - 部署 `ac29c54`；GPU lock 下、ssh 前景執行，最多 3.0 h，先跑 smoke；
+     - 輸出 `results/capacity/explore-c0-<日期>/`，遠端 log 為 `/tmp/llmsl-c0-probe.log`。
+   - 探針完成後：取回 → `c0_analysis` → 寫結果的 decision log → 在 `configs/capacity.toml` 設定 `c0_branch`。
+2. **§8**（decision 030，DRAFT）：
+   - 使用者已決定（2026-10-15）：SLO S2（TTFT 2 / 6 / 20 s，TPOT 100 ms）、mixed 長 request 為 budget、穩態時間窗、GPU 空著就跑。O-32K、O-T 不做。
+   - 設定檔放在 `configs/capacity.toml`；`pins.toml` 維持 Advanced 凍結時的位元組（030 實作補記）。
+3. **Stage C harness**：實作 workflow 進行中（capacity_plan / capacity_analysis / run_capacity / capacity_report）。
+   之後：smoke（FS-order、迷你 session）→ C0 分支 → 凍結 → 正式 run（約 7–9 h）→ 報告。
 
 ### Engineering
-1. **架構**：decision 029（capserve），已寫定。
-2. **M0**（Mac，TDD，只用假後端）：profile、admission、guard、OpenAI 介面、tokens、upstream、proxy、metrics、app、server、provisional-dev profile。
-3. **M1**：deploy、procs、runs、loadtest；在研究 session 之間於 RTX 上跑 IT-0 至 IT-6（GPU lock 下，部署到 `~/llm-serving-service`）。
+1. 架構：decision 029。
+2. **M0 完成**（`3147165`）：
+   - 審查 12 項，11 項修正，1 項延到 M2（見 029 實作補記）；service 測試 274 passed。
+   - 刪除 uvicorn 的 `limit_concurrency`，因為它數的是連線，到上限時會讓所有 request 都拿到 503。
+3. **M1**：deploy、procs、runs、loadtest；之後在研究 session 之間於 RTX 上跑 IT-0 至 IT-6（GPU lock 下，部署到 `~/llm-serving-service`）。
 4. **M2**：§8 凍結並有有效的 C1 analysis 之後，才有 verified profile 與正式的產品上限。
 
 ### Phase 1 收尾（2026-10-11，已完成）
