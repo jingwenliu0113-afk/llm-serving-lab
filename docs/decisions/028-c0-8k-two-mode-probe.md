@@ -257,3 +257,12 @@ raw 檔已從 WSL 唯讀取回（Core 18 個、Advanced 27 個，sha256 全部�
 - **S5**：Core r2 的啟動訊息和 r1、r3 只差在 CUDA graph 的擷取時間（7 s 對 6 s）。non-default args、backend、compile cache、KV 記憶體都相同。
 
 這些結果只是探索性的描述，不改變 GPU 探針的設計（6 次 boot × 4 個 bench），也不改變 §8 的任何規則。
+
+## 執行紀錄
+
+- **2026-10-16 01:10，第一次嘗試**（部署 `ac29c54`，GPU lock 下）：smoke 在第一次 boot 之前，依停止規則 2 停止：
+  memory.used 1,362 MiB，60 s 後仍 > 1,000 MiB。沒有啟動任何 vLLM，探針沒有開始。
+  - Phase 1 的閒置用量為 688 MiB（Advanced 的 preflight）。多出的部分來自 Windows 端的桌面應用程式（`nvidia-smi` 列出 Edge WebView2、ChatGPT、設定、BingWallpaper、codex-computer-use、Radeon Software 等 C+G process）。
+  - **不放寬門檻**：Phase 1 中 vLLM 就緒時整張卡用到約 14.2–15.3 GB。閒置用量增加後剩下的空間只有幾百 MiB，WDDM 不夠時會 spill 到系統記憶體而不是報錯，會悄悄改變延遲。
+  - 遠端保留 `results/capacity/smoke-c0-20261016`（stage "C0-smoke"，記錄了停止原因），不分析。
+  - 之後改為自動等待：每 5 分鐘唯讀檢查一次，lock 空著而且閒置用量 ≤ 950 MiB 時才開始（新的 smoke 目錄名稱），最多等 24 h。

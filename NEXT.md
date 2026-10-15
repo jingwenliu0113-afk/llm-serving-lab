@@ -121,9 +121,10 @@
 1. **C0**（decision 028）：
    - harness 已 commit（`e4c23c9`），審查 6 項已處理。
    - **步驟 0 完成**（`ac29c54`）。事先寫定的重現檢查沒有重現；每次滑移都是錯過一個 2048-token prefill step（約 349 ms）；Core r2 的滑移較多，可能有 boot 層級的成分。
-   - **GPU 探針進行中**（2026-10-16 起）：
-     - 部署 `ac29c54`；GPU lock 下、ssh 前景執行，最多 3.0 h，先跑 smoke；
-     - 輸出 `results/capacity/explore-c0-<日期>/`，遠端 log 為 `/tmp/llmsl-c0-probe.log`。
+   - **GPU 探針等待中**（部署 `ac29c54`）：
+     - 第一次嘗試（01:10）在 boot 之前依規則停止：Windows 桌面應用程式占用 GPU 記憶體，閒置用量 1,362 MiB，超過 1,000 MiB 的上限（Phase 1 為 688 MiB）。不放寬門檻。
+     - 背景自動等待：每 5 分鐘唯讀檢查，lock 空著且閒置 ≤ 950 MiB 時開始，最多 24 h。
+     - 開始後：GPU lock 下、ssh 前景執行，最多 3.0 h，先跑 smoke；輸出 `results/capacity/explore-c0-<日期>/`，遠端 log 為 `/tmp/llmsl-c0-probe.log`。
    - 探針完成後：取回 → `c0_analysis` → 寫結果的 decision log → 在 `configs/capacity.toml` 設定 `c0_branch`。
 2. **§8**（decision 030，DRAFT）：
    - 使用者已決定（2026-10-15）：SLO S2（TTFT 2 / 6 / 20 s，TPOT 100 ms）、mixed 長 request 為 budget、穩態時間窗、GPU 空著就跑。O-32K、O-T 不做。
@@ -167,7 +168,9 @@
 
 ## Blocked / 需要使用者
 
-目前沒有。
+- **RTX 的 Windows 桌面占用 GPU 記憶體**（2026-10-16）：閒置用量 1,362 MiB，超過研究規定的 1,000 MiB 上限，C0、C1 與產品的 RTX 測試都不能開始。
+  - 需要使用者在 Windows 端關閉使用 GPU 的桌面應用程式，例如 ChatGPT、設定、Edge WebView2 類的 app、BingWallpaper、codex-computer-use；或登出桌面工作階段。
+  - 自動等待已在背景執行，用量降到 950 MiB 以下就會自動開始。
 
 ## 建議（非 blocker）
 
