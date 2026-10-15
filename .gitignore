@@ -33,3 +33,6 @@ results/**/cache/
 
 # Pinned git worktrees for formal Mac sessions (scratchpad batch_formal_a.sh); results are copied back
 .worktrees/
+
+# 027: product (service) test / load-test outputs; never research data, never committed
+runs/
