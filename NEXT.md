@@ -121,16 +121,17 @@
 1. **C0**（decision 028）：
    - harness 已 commit（`e4c23c9`），審查 6 項已處理。
    - **步驟 0 完成**（`ac29c54`）。事先寫定的重現檢查沒有重現；每次滑移都是錯過一個 2048-token prefill step（約 349 ms）；Core r2 的滑移較多，可能有 boot 層級的成分。
-   - **GPU 探針等待中**（部署 `ac29c54`）：
-     - 第一次嘗試（01:10）在 boot 之前依規則停止：Windows 桌面應用程式占用 GPU 記憶體，閒置用量 1,362 MiB，超過 1,000 MiB 的上限（Phase 1 為 688 MiB）。不放寬門檻。
-     - 背景自動等待：每 5 分鐘唯讀檢查，lock 空著且閒置 ≤ 950 MiB 時開始，最多 24 h。
-     - 開始後：GPU lock 下、ssh 前景執行，最多 3.0 h，先跑 smoke；輸出 `results/capacity/explore-c0-<日期>/`，遠端 log 為 `/tmp/llmsl-c0-probe.log`。
-   - 探針完成後：取回 → `c0_analysis` → 寫結果的 decision log → 在 `configs/capacity.toml` 設定 `c0_branch`。
+   - **GPU 探針等待中**（部署 `eb78a35`；C0 的程式和 `ac29c54` 相同）：
+     - 第一次嘗試（10-16 01:10）在 boot 之前依規則停止：Windows 桌面應用程式占用 GPU 記憶體，閒置 1,362 MiB > 1,000 MiB（Phase 1 為 688 MiB）。不放寬門檻。
+     - 背景自動等待（每 5 分鐘唯讀檢查，最多 24 h）：lock 空著且閒置 ≤ 950 MiB 時，**同一次 lock** 依序跑 C0 探針（≤ 3.0 h）、Stage C 的 mini smoke 與 FS-order smoke。
+     - 遠端 log：`/tmp/llmsl-c0-probe.log`、`/tmp/llmsl-cap-mini.log`、`/tmp/llmsl-cap-fs.log`。
+   - 探針完成後：取回 → `c0_analysis` → 寫 C0 結果的 decision log（下一個編號）→ `configs/capacity.toml` 的 `c0_branch`。
 2. **§8**（decision 030，DRAFT）：
    - 使用者已決定（2026-10-15）：SLO S2（TTFT 2 / 6 / 20 s，TPOT 100 ms）、mixed 長 request 為 budget、穩態時間窗、GPU 空著就跑。O-32K、O-T 不做。
    - 設定檔放在 `configs/capacity.toml`；`pins.toml` 維持 Advanced 凍結時的位元組（030 實作補記）。
-3. **Stage C harness**：實作 workflow 進行中（capacity_plan / capacity_analysis / run_capacity / capacity_report）。
-   之後：smoke（FS-order、迷你 session）→ C0 分支 → 凍結 → 正式 run（約 7–9 h）→ 報告。
+3. **Stage C harness 完成**（`eb78a35`，仍為 DRAFT、未凍結）：審查 21 項已處理；030 實作補記二記錄了所有實作時的決定，
+   包括 C_PROD 一律把 MARGINAL 當 FAIL，以及凍結必須附上的證據（兩次通過的 smoke 與 C0 的 decision log）。
+   之後：smoke 通過 → C0 分支 → 填入凍結證據 → 凍結 → 正式 run（`formal-YYYYMMDD-c1`，約 7–9 h）→ 報告。
 
 ### Engineering
 1. 架構：decision 029。
