@@ -14,7 +14,8 @@ recorded and the probe goes ahead; C0's purpose does not need the mechanism).
   chance rate of 1 / 8 does not apply to them (028 implementation note).
 - S2 (Core C = 4, C = 7): is an elevated run (Y - m_A > 170 ms) slip-driven, i.e. has episodes and falls to
   Y - m_A <= 170 ms once its slipped requests are left out of the short-class P95?
-- S3 (Advanced formal-20261011-adv, <tag>.steps.jsonl of B0 / G / K3 at 8192 uniform): for every episode, the steps
+- S3 (Advanced formal-20261011-adv, <tag>.steps.jsonl of B0 / G / K3 at 8192 uniform; step wall time = gap between
+  consecutive step timestamps, since the logged iteration elapsed time is not the wall time): for every episode, the steps
   of its group (arrival(8k) <= t < arrival(8k + 8)) against the neighbouring non-slip groups k - 1 and k + 1; the
   extra queue time (median Q of the slipped requests minus that of the same positions in the neighbours) over the
   median prefill step of the slip group.
@@ -172,14 +173,23 @@ def _adv_requests(session: Path, tag: str) -> tuple:
     return reqs, cls
 
 
+def _with_wall_ms(steps: list) -> list:
+    """Each step's wall time = the gap to the previous step's log timestamp. vLLM 0.30's logged "iteration elapsed
+    time" is about 0.01 ms under async scheduling, not the step's wall time (028 implementation note); it is kept as
+    log_elapsed_ms. The first step has no predecessor (wall_ms None)."""
+    out = sorted(steps, key=lambda s: s["t"])
+    return [{**s, "wall_ms": (s["t"] - out[i - 1]["t"]) * 1000 if i else None} for i, s in enumerate(out)]
+
+
 def _group_steps(steps: list, reqs: list, k: int) -> dict:
     t0 = reqs[ADV_C * k]["arrival"]
     t1 = reqs[ADV_C * (k + 1)]["arrival"] if ADV_C * (k + 1) < len(reqs) else math.inf
     win = [s for s in steps if t0 <= s["t"] < t1]
-    ms = [s["elapsed_ms"] for s in win]
+    ms = [s["wall_ms"] for s in win if s["wall_ms"] is not None]
     return {"n_steps": len(win), "n_prefill_steps": sum(s["ctx_tok"] > 0 for s in win), "step_ms_median": _median(ms),
-            "prefill_step_ms_median": _median(s["elapsed_ms"] for s in win if s["ctx_tok"] > 0),
-            "step_ms_max": max(ms, default=None), "step_ms_sum": sum(ms)}
+            "prefill_step_ms_median": _median(s["wall_ms"] for s in win if s["ctx_tok"] > 0 and s["wall_ms"] is not None),
+            "step_ms_max": max(ms, default=None), "step_ms_sum": sum(ms),
+            "log_elapsed_ms_median": _median(s["elapsed_ms"] for s in win)}
 
 
 def s3_steps(adv_session, adv_raw, status: dict) -> dict:
@@ -191,7 +201,7 @@ def s3_steps(adv_session, adv_raw, status: dict) -> dict:
             missing.append(tag)
             continue
         reqs, cls = _adv_requests(session, tag)
-        steps = _read_jsonl(raw / name)
+        steps = _with_wall_ms(_read_jsonl(raw / name))
         slip_k = {e["k"] for e in cls["episodes"]}
         for e in cls["episodes"]:
             k, idx = e["k"], range(e["start_idx"], e["start_idx"] + e["length"])

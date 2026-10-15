@@ -158,12 +158,14 @@ def adv_requests(slips):
 
 
 def adv_steps(slips):
-    out = []
+    """Steps 345 ms apart (349 ms inside a slip group). As in vLLM 0.30's real iteration log, "elapsed_ms" is tiny
+    (about 0.01 ms, not the step's wall time), so the step time can only come from consecutive step timestamps."""
+    out, t = [], T0
     for j in range(int(25 * PERIOD / 0.35)):
-        t = T0 + 0.35 * j
         k = int((t - T0) // PERIOD)
         out.append({"t": t, "index": j, "ctx_req": 1, "ctx_tok": 2048, "gen_req": 7, "gen_tok": 7,
-                    "elapsed_ms": 349.0 if k in slips else 345.0, "u": 50.0})
+                    "elapsed_ms": 0.01, "u": 50.0})
+        t += 0.349 if k in slips else 0.345
     return out
 
 
@@ -212,8 +214,11 @@ def test_s3_compares_slip_group_steps_with_neighbours_and_the_extra_queue(tmp_pa
     assert s3["missing"] == ["B0-8192-uniform-r1"]
     (ep,) = s3["episodes"]
     assert ep["tag"] == "G-8192-uniform-r1" and ep["k"] == 8
-    assert ep["slip_group"]["step_ms_median"] == 349.0 and ep["slip_group"]["n_steps"] > 30
-    assert ep["neighbours"]["7"]["step_ms_median"] == 345.0 and ep["neighbours"]["9"]["step_ms_median"] == 345.0
+    # step wall time = gap to the previous step's log timestamp; the logged "iteration elapsed time" is reported apart
+    assert ep["slip_group"]["step_ms_median"] == pytest.approx(349.0) and ep["slip_group"]["n_steps"] > 30
+    assert ep["neighbours"]["7"]["step_ms_median"] == pytest.approx(345.0)
+    assert ep["neighbours"]["9"]["step_ms_median"] == pytest.approx(345.0)
+    assert ep["slip_group"]["log_elapsed_ms_median"] == 0.01
     assert ep["extra_q_ms"] == pytest.approx(349.0) and ep["extra_q_over_step"] == pytest.approx(1.0)
 
 

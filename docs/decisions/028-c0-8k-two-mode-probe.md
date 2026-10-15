@@ -222,3 +222,38 @@ harness 依本文以 TDD 實作，經一輪審查（6 項，4 項修正、1 項�
 - **3.0 h 上限也約束 server 啟動的等待**：等待時間取啟動逾時與上限剩餘時間的較小值；被上限截斷時以 `cap` 停止。
   - teardown 一律執行，不因上限而跳過，所以 lock 的持有時間最多可能超過上限約 80 s（最壞情況的關閉時間）。
 - **輸出路徑**：`run_c0_probe` 與 `c0_step0` 共用同一套規則，拒絕寫進任何 Phase 1 目錄。
+
+## 步驟 0 的結果（2026-10-16；描述性，不改變任何 Phase 1 的判定）
+
+raw 檔已從 WSL 唯讀取回（Core 18 個、Advanced 27 個，sha256 全部和 `raw_manifest.json` 相符；放在 gitignore 的 `results/capacity/c0-step0/raw/`）。
+輸出：`results/capacity/c0-step0/step0.json`。
+
+- **S3 的修正（取回 raw 檔之後、GPU 探針之前）**：
+  - vLLM 0.30 log 中的「iteration elapsed time」約 0.01–0.02 ms，量的不是 step 的實際耗時。
+  - 改用相鄰兩個 step 的 log 時間戳之差作為 step 的實際時間；原本的值另外保留為 `log_elapsed_ms`。
+  - 這是量測方式的錯誤，不是規則的改變；有回歸測試。
+- **S1（事先寫定的重現檢查）：沒有重現**。
+  - Core 在 C = 8 的滑移共 8 次，只有 1 次從第 8 的倍數組開始，比例 0.125，等於隨機的 1/8（binomial 上尾 p = 0.66）。
+  - Advanced 中「集中在第 8、16、24 組」的現象（線索 6）應視為巧合。
+- **S1（描述）**：Core 每個 run 的滑移段數：
+
+  | C | r1 | r2 | r3 |
+  |---|---|---|---|
+  | 4 | 8 | 15 | 14 |
+  | 7 | 1 | 9 | 1 |
+  | 8 | 3 | 3 | 2 |
+  | 9 | 0 | 2 | 0 |
+  | 13 | 0 | 1 | 0 |
+
+  - r2 在 C = 7 與 C = 9 明顯較多。r2 也是全面慢約 1% 的那次 boot（線索 8）。這暗示可能有 boot 層級的成分，但只有 3 次 boot，要由 GPU 探針判斷。
+  - C = 9 的滑移起點 idx 為 19、73。
+- **S2**：Core 在 C = 4 與 C = 7 的 6 個偏高的 run，全部是滑移造成。去掉滑移的 request 後，P95 − m_A 只剩 11–31 ms。
+- **S3（機制）**：
+  - 8 次滑移中，多出的排隊時間約 349 ms，等於該組 prefill step 實際時間的中位數，比值 0.990–0.997。
+  - 滑移的組比鄰近組多一個 step（135 對 134）。
+  - 也就是說，第 8k+1 個 request 提早到達（相隔 90–94 ms，不是 415–420 ms），錯過了正在進行的 2048-token prefill step，於是整組多等一個 step。
+    這是 request 到達時機與 step 邊界之間的競爭。
+- **S4**：滑移前後 1 s 內的 log，只有每秒一次的 `/metrics` 擷取。非滑移的組也都有，沒有找到其他週期性的事件。
+- **S5**：Core r2 的啟動訊息和 r1、r3 只差在 CUDA graph 的擷取時間（7 s 對 6 s）。non-default args、backend、compile cache、KV 記憶體都相同。
+
+這些結果只是探索性的描述，不改變 GPU 探針的設計（6 次 boot × 4 個 bench），也不改變 §8 的任何規則。
