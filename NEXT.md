@@ -138,7 +138,10 @@
 2. **M0 完成**（`3147165`）：
    - 審查 12 項，11 項修正，1 項延到 M2（見 029 實作補記）；service 測試 274 passed。
    - 刪除 uvicorn 的 `limit_concurrency`，因為它數的是連線，到上限時會讓所有 request 都拿到 503。
-3. **M1**：deploy、procs、runs、loadtest；之後在研究 session 之間於 RTX 上跑 IT-0 至 IT-6（GPU lock 下，部署到 `~/llm-serving-service`）。
+3. **M1 完成（Mac 端）**（`343155f`）：deploy、procs、runs、loadtest、itest（IT-0 至 IT-6）、`tools/rtx/deploy_service.sh`。
+   審查 11 項（2 項重複）全部修正，見 029 的 M1 實作補記；完整測試 2006 passed。
+   - **RTX 上尚未執行**：同樣受 GPU 閒置上限限制。等研究的 GPU batch 結束、GPU 閒置後，在研究 session 之間執行：
+     `tools/rtx/deploy_service.sh` → GPU lock 下 `python -m capserve.itest IT-0 … IT-6 --allow-provisional`。
 4. **M2**：§8 凍結並有有效的 C1 analysis 之後，才有 verified profile 與正式的產品上限。
 
 ### Phase 1 收尾（2026-10-11，已完成）
