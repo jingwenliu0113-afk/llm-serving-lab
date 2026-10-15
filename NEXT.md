@@ -21,7 +21,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–027。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–030（030 為 DRAFT）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -118,20 +118,20 @@
 ## 下一步（Phase 2）
 
 ### Research
-1. C0 排查的 decision log（028）：boot 數、GPU 時數上限、診斷項目、停止規則。寫完再上 RTX（GPU lock 下）。
-2. PREREGISTRATION §8 草稿與 decision log：SLO 選項、負載、容量定義、搜尋或格點、統計與判定規則。SLO 由使用者選定後才凍結。
-3. Stage C 的 harness（TDD；只 import Core / Advanced 模組，不修改）→ smoke → 凍結 → 正式 run → 報告。
+1. **C0**（decision 028，計畫已寫定）：
+   - 步驟 0：先 commit `c0_step0.py` 與 `fetch_raw.sh`，再唯讀取回 WSL 的 raw 檔（已確認仍在）做桌上檢查。
+   - GPU 探針：6 次 boot × 4 個 bench，GPU lock 下最多 3.0 h，先 smoke。
+   - 結果寫成另一份 decision log，決定 §8 的分支 A–D。
+2. **§8 草稿**（decision 030、PREREGISTRATION §8 DRAFT）：
+   - 待使用者決定：SLO（S1–S3 或自訂）、時間窗、可接受的 GPU lock 占用時間、O-32K / O-T。
+   - 其餘依預設值處理。
+3. Stage C 的 harness（TDD；只 import Core / Advanced 模組，不修改）→ smoke（FS-order 等）→ 凍結 → 正式 run → 報告。
 
 ### Engineering
-1. 服務的架構 decision log。
-2. MVP（TDD，Mac 上只用假後端）：
-   - OpenAI-compatible proxy；
-   - 准入控制與超載保護；
-   - health 與 readiness；
-   - metrics；
-   - vLLM 部署管理；
-   - capacity profile（verified / provisional）。
-3. RTX 上的整合測試（GPU lock 下，輸出寫到 `runs/`，部署到與研究分開的目錄）。
+1. **架構**：decision 029（capserve），已寫定。
+2. **M0**（Mac，TDD，只用假後端）：profile、admission、guard、OpenAI 介面、tokens、upstream、proxy、metrics、app、server、provisional-dev profile。
+3. **M1**：deploy、procs、runs、loadtest；在研究 session 之間於 RTX 上跑 IT-0 至 IT-6（GPU lock 下，部署到 `~/llm-serving-service`）。
+4. **M2**：§8 凍結並有有效的 C1 analysis 之後，才有 verified profile 與正式的產品上限。
 
 ### Phase 1 收尾（2026-10-11，已完成）
 
@@ -161,7 +161,8 @@
 
 ## Blocked / 需要使用者
 
-- 之後：Stage C 的 SLO 數值（重大研究決策；§8 草稿完成時提出選項）。
+- **Stage C 凍結前的研究決策**（decision 030 文末）：SLO、時間窗、GPU lock 的占用時間、O-32K / O-T。已向使用者提出（2026-10-15）。
+  不影響 C0 與 Engineering 的進行。
 
 ## 建議（非 blocker）
 

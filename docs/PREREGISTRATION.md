@@ -429,3 +429,23 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 - **移除類別**（f = 1 − ρ_c ÷ ρ_0）：M（f ≥ 0.5，ρ 與 M 都下降並超出 noise）、P（0.2 ≤ f < 0.5）、R（只有相對下降）、W（f ≤ −0.2）、N、NT。
 - **判讀矩陣**：逐 L，first match，R0–R7（見 024）。KV 只能往下調，任何「KV 主因」的結論都標為推論級。跨 L 一致才寫成一般結論。
 - **有效性**：Core 的驗證規則（013）加上 log facts、block 數、chunk 檢查、逾時（Core 同格時長 × 2 + 60 s）。不足 3 次有效 restart 的格記為 NT。
+
+## 8. Stage C addendum：Fixed-SLO 下的最大並發容量（decision 027、028、030）
+
+**狀態：DRAFT（2026-10-15）**。SLO、時間窗、預算與範圍選項由使用者選定後，連同 harness 與 pins `[capacity]` 一起凍結（`freeze.capacity = true`）。
+在那之前沒有任何 C1 數據。本節只摘要；完整規則、揭露與依據見 decision 030。第 1–7 節不變，Phase 1 的判定不受影響。
+
+- **C0**（028，探索性）：8K 雙模式的有限度排查（GPU lock 下最多 3.0 h），只決定本節的分支 A–D。
+- **平台與固定項**：Core B 的 server argv 原樣（不加觀測 flag），Core B 的 client（`bench_argv`，N = max(10C, 200)），mixed dataset 使用 pin 過的 sha256。
+- **估計量**：
+  - 每個 workload 的 C_SLO（研究）與 C_PROD（產品上限，只接受 PASS，含 guard band m = 5%）；
+  - 在確認集合上向下封閉，取最差的 run，並標明狀態（EXACT / LOWER / CENSORED / INFEASIBLE / UNSTABLE / NT）。
+- **時間窗**：預設為穩態 [C, N − C)〔待使用者決定〕；全部 request 的統計量並列報告。
+- **SLO**：短類 P95 TTFT（依輸入長度分級）與全部 request 的 P95 TTFT〔待使用者決定，選項 S1–S3〕。
+- **Workload**：U2K、U8K、M2K、M8K。O-32K、O-T 為選項，預設不做。
+- **搜尋**：
+  - 階段 S：夾擠加二分，上限 2·C_KV，只用來選點。
+  - 階段 C：在 {Ĉ − 1, Ĉ, Ĉ + 1, c_low} 上，以新的 boot 確認；關鍵點 n = 5，C0 落在分支 B / C 時為 7。
+  - 有跳過規則；session 前後各一次 sentinel；replay 檢查。
+- **Hypotheses**：H-S1（mixed 降低容量）、H-S2（C_SLO ≤ C_KV）；只凍結選定 SLO 的預測。
+- **輸出**：`results/capacity/<session>/analysis.json`。verified profile 只能由產生器從這份 analysis 產生（029）。
