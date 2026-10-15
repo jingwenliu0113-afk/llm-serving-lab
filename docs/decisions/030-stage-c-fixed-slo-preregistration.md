@@ -5,8 +5,8 @@
 - 對應：decision 027 §2、028（C0）、PREREGISTRATION §8（DRAFT）
 - 時點：任何 C1 數據之前。設計經過三份獨立設計（validity、product、efficiency 三個角度）與一位評審綜合（評審重新核對了所有引用的數字）。
 - 凍結的方式比照 011 / 024：
-  - 一起 commit 並 push：§8、本文、pins `[capacity]`、分析程式與測試；
-  - 再設定 `freeze.capacity = true`；
+  - 一起 commit 並 push：§8、本文、`configs/capacity.toml`、分析程式與測試；
+  - 再設定 `configs/capacity.toml` 的 `[freeze] capacity = true`（下文簡稱 `freeze.capacity`）；
   - 之後才收集任何 C1 數據。
 
 ## 使用者決定（2026-10-15，任何 C1 數據之前）
@@ -21,6 +21,15 @@
 - 選項 O-32K、O-T 沒有被選，依預設不做；要做需另外的決定。
 - 下列項目依預設值處理（文末），使用者沒有異議：guard band m = 5%、n_near = 5（C0 落在分支 B / C 時為 7）、C_cap = 2·C_KV、開場湧入只在 §8 揭露。
 - 依 8.5 的規則，只凍結 S2 的預測；S1、S3 只作為描述性的界線報告。
+
+## 實作補記：設定檔放在 `configs/capacity.toml`，不放進 `pins.toml`（2026-10-15，凍結前）
+
+- 凍結的 `adv_report` 會拒絕 pins sha256 和 Advanced session 不同的情況（`adv_report.py:74-85`）。
+  若把 Stage C 的設定加進 `configs/pins.toml`，Phase 1 的 Advanced 報告就再也無法用目前的 repo 重跑。
+- 因此 Stage C 的所有設定（SLO、guard band、n、上限、逾時參數、sentinel、`c0_branch`、`[freeze] capacity`）放在獨立的 `configs/capacity.toml`。
+  `configs/pins.toml` 維持 Advanced 凍結時的位元組（sha256 `232f0de9…`），由 `test_frozen_untouched` 保護。
+- Stage C 與 capserve 仍以唯讀方式讀取 `pins.toml` 的 Core B 與 Stage B 的值。
+- 這只是設定檔的位置，不改變任何規則。
 
 ## 8.0 揭露（只用已 commit 的資料，沒有新的 GPU run）
 
@@ -132,7 +141,7 @@
 
 ## 8.2 SLO（使用者選定 S2；下表保留三個選項作為紀錄）
 
-數值放在 pins `[capacity.slo]`：
+數值放在 `configs/capacity.toml` 的 `[slo]`：
 - `id`；
 - 2048 / 8192 / 32768 各自的 `ttft_p95_ms`；
 - `tpot_p95_ms`；
@@ -288,7 +297,7 @@
 
 **凍結**：commit 並 push 下列內容，再設定 `freeze.capacity = true`：
 - §8 與本文；
-- pins `[capacity]`；
+- `configs/capacity.toml`；
 - 模組 `capacity_plan`、`run_capacity`、`capacity_analysis`、`capacity_report` 與它們的測試。
   這些模組只 import Core 與 Advanced 的程式，由 `test_core_untouched` 與 `test_frozen_untouched` 把關。
 

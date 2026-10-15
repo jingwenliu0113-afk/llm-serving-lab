@@ -4,6 +4,7 @@ committed Core / Advanced conclusions.
 - Advanced: every Advanced module is byte-identical to the freeze commit 97a948c (024).
 - Core analysis that test_core_untouched does not cover (Core A, quality, the deployment decision table): byte-identical
   to the commit 4cb751f that closed Phase 1 (026).
+- configs/pins.toml: byte-identical to the Advanced freeze (030 implementation note).
 
 Digests were computed once with `git show <commit>:<path> | shasum -a 256` and are hard-coded, so this test needs no git.
 """
@@ -26,6 +27,9 @@ FROZEN_SHA256 = {
     "benchmarks/core_a_parse.py": "d2defe8604abbbd7721b60e852154b4e4746a32b1fd4fcabc5522814c80f5926",
     "quality/quality_analysis.py": "ad9b6d31c40fe8966fcdff2ae0bb1f35a77000ab44fbd36bf11d933e1a0957c8",
     "benchmarks/decision_table.py": "7e874d058671d30c538337f3e8543e39734a699f7b736ba399e753dd423127d1",
+    # 030: Stage C config lives in configs/capacity.toml; pins.toml stays byte-identical to the Advanced freeze, because
+    # the frozen adv_report refuses a pins sha256 different from the session's (adv_report.py:74-85)
+    "configs/pins.toml": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
 }
 
 

@@ -145,7 +145,7 @@
 
 ## 對 §8 的對應（C0 只決定這一件事）
 
-結果寫進 pins `[capacity].c0_branch`，並在 §8 凍結之前另寫一份結果的 decision log。
+結果寫進 `configs/capacity.toml` 的 `c0_branch`，並在 §8 凍結之前另寫一份結果的 decision log。
 
 | C0 結果 | §8 分支 | §8 的變更 |
 |---|---|---|

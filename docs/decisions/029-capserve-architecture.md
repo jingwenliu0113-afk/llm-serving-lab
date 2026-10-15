@@ -160,7 +160,7 @@ pyproject：testpaths 加入 `service/tests`，pythonpath 加入 `service`。
 
 **產生器**（`python -m capserve.profile_gen`）
 - 沒有任何覆寫參數（021 R1）。
-- 在 pins `[freeze].capacity` 為 true 之前一律 exit 2。
+- 在 `configs/capacity.toml` 的 `[freeze] capacity` 為 true 之前一律 exit 2（檔案不存在也視為 false）。
 - §8 凍結後：
   - 要求 session 為 formal 且 env 有效；
   - 用凍結的 Stage C 模組重算 analysis，並要求完全相同（021 R3）；

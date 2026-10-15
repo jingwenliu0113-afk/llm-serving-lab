@@ -34,7 +34,7 @@
 > Advanced 的規則會在任何 Advanced 數據之前另寫一節並凍結；本文第 1–6 節不變。
 >
 > **Phase 2（使用者 2026-10-15 決定，decision 027）**：新增 Stage C（Fixed-SLO 容量）。它的規則會在任何 Stage C 正式數據之前
-> 另寫為第 8 節並凍結（`freeze.capacity = true`）；本文第 1–7 節不變。
+> 另寫為第 8 節並凍結（`configs/capacity.toml` 的 `freeze.capacity = true`；`pins.toml` 維持 Advanced 凍結時的位元組）；本文第 1–7 節不變。
 
 > **狀態：第 1–5 節 FROZEN (Stage A)，2026-10-09**（harness commit `eb6eef1d43a15d70805cce83784646a038aed6d1`，
 > `pins.toml` `freeze.mac = true`）。
@@ -433,7 +433,7 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 ## 8. Stage C addendum：Fixed-SLO 下的最大並發容量（decision 027、028、030）
 
 **狀態：DRAFT（2026-10-15）**。使用者已選定 SLO S2、mixed 長 request 為 budget、穩態時間窗，並接受一次連續占用 GPU lock（030「使用者決定」）。
-harness、smoke 與 C0 完成後，連同 pins `[capacity]` 一起凍結（`freeze.capacity = true`）。
+harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結（`freeze.capacity = true`）。
 在那之前沒有任何 C1 數據。本節只摘要；完整規則、揭露與依據見 decision 030。第 1–7 節不變，Phase 1 的判定不受影響。
 
 - **C0**（028，探索性）：8K 雙模式的有限度排查（GPU lock 下最多 3.0 h），只決定本節的分支 A–D。
