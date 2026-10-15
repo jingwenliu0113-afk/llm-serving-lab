@@ -1,6 +1,6 @@
 # 030 — Stage C（C1）事先登記：Fixed-SLO 下的最大並發容量（DRAFT）
 
-- 狀態：**DRAFT**（未凍結；標為〔待使用者決定〕的項目由使用者選定後，才能連同 harness 一起凍結）
+- 狀態：**DRAFT**（未凍結）。使用者已於 2026-10-15 選定研究決策（見下方「使用者決定」）；harness、smoke 與 C0 完成後才凍結。
 - 日期：2026-10-15
 - 對應：decision 027 §2、028（C0）、PREREGISTRATION §8（DRAFT）
 - 時點：任何 C1 數據之前。設計經過三份獨立設計（validity、product、efficiency 三個角度）與一位評審綜合（評審重新核對了所有引用的數字）。
@@ -8,6 +8,19 @@
   - 一起 commit 並 push：§8、本文、pins `[capacity]`、分析程式與測試；
   - 再設定 `freeze.capacity = true`；
   - 之後才收集任何 C1 數據。
+
+## 使用者決定（2026-10-15，任何 C1 數據之前）
+
+| 項目 | 選擇 |
+|---|---|
+| SLO | **S2 標準互動**：短類 P95 TTFT 2 / 6 / 20 s（2K / 8K / 32K），全部 request 的 P95 TPOT 100 ms |
+| mixed 的長 request | **budget**：長 request 也要符合 32K 的 TTFT 門檻（20 s） |
+| 時間窗 | **穩態** [C, N − C)；全部 request 的統計量並列報告 |
+| GPU lock 的占用 | 可以一次連續占用約 7–9 h（最壞約 12 h），GPU 空著就跑 |
+
+- 選項 O-32K、O-T 沒有被選，依預設不做；要做需另外的決定。
+- 下列項目依預設值處理（文末），使用者沒有異議：guard band m = 5%、n_near = 5（C0 落在分支 B / C 時為 7）、C_cap = 2·C_KV、開場湧入只在 §8 揭露。
+- 依 8.5 的規則，只凍結 S2 的預測；S1、S3 只作為描述性的界線報告。
 
 ## 8.0 揭露（只用已 commit 的資料，沒有新的 GPU run）
 
@@ -43,8 +56,8 @@
 - Client：原樣 import `core_b_plan.bench_argv`。
 
 **每個 run（在某個 C 跑一次 bench）**
-- **時間窗**：〔待使用者決定〕預設為穩態時間窗 W = 序號在 [C, N − C) 的 request（|W| = N − 2C ≥ 160）。
-  另一個選擇是 Core 的做法，使用全部 request。
+- **時間窗**（使用者選定）：穩態時間窗 W = 序號在 [C, N − C) 的 request（|W| = N − 2C ≥ 160）。
+  Core 的做法（全部 request）只並列報告。
 - Y_short：W 中短類的 P95 TTFT（uniform 時就是全部 request）。
 - Y_TPOT：W 中全部 request 的 (latency − ttft) / (out − 1) 的 P95。這是新的統計量（run_adv 只算短類）。
 - Y_long（只有 mixed）：W 中 32,640-token request 的 P95 TTFT，把該 C 所有有效 restart 合併計算，因為每個 run 只有約 18–20 個。
@@ -117,7 +130,7 @@
 
 任何分支都不改變 S、時間窗、統計量、m、上限、搜尋、確認規則、workload 或 hypothesis，也不減少 n。
 
-## 8.2 SLO〔待使用者決定〕
+## 8.2 SLO（使用者選定 S2；下表保留三個選項作為紀錄）
 
 數值放在 pins `[capacity.slo]`：
 - `id`；
@@ -167,7 +180,7 @@
 - **Client**：每個 bench（搜尋與確認都一樣）都用 N = max(10C, 200)。
   - 因此在 Core 格點上，uniform 的 prompt 和 Core 完全相同。
   - `run_core_b.summarize_result` 原樣套用。
-- **選項 O-32K**〔待使用者決定，預設不做〕：加入 uniform-32K，上限 6，約多 3–8 h。
+- **選項 O-32K**（不做，使用者沒有選）：加入 uniform-32K，上限 6，約多 3–8 h。
 
 ## 8.4 搜尋與確認（決定性，單一 session）
 
@@ -209,7 +222,7 @@
 - server 就緒：1,800 s。
 - 逾時的 run 無效，並終止它的 process group。
 
-**預算**〔待使用者決定：是否接受一次連續占用 GPU lock 這麼長的時間〕
+**預算**（使用者接受一次連續占用，GPU 空著就跑）
 - 估算方式：Core 的 bench 時間，加上每個 bench 55 s、每次 boot 90 s。
 
   | 情境 | n_near 5 | n_near 7 |
@@ -324,7 +337,7 @@
 ## 8.8 Advanced R1（T = 512）
 
 - **不在預設範圍內**：027 §2 固定使用 Core B 的 argv，T 會產生不同的 fingerprint，也就是另一份 profile。
-- **選項 O-T**〔待使用者決定，預設不做〕：
+- **選項 O-T**（不做，使用者沒有選）：
   - 對 U8K 與 M8K 用同一協定測 `[advanced.conditions].T`，約多 3–4 h。
   - 測出的 T profile 只能用於明確宣告為 M8K 的部署，而且要 C_PROD(M8K) 大於 B0 的值，同時要報告 T 下的 U8K。
 
@@ -347,14 +360,11 @@
   - 第一個 C1 bench 之後任何規則改變（需要 post-hoc decision log 與新的 session）；
   - 所有接近邊界的點都是 NT。
 
-## 待使用者決定（凍結前）
+## 凍結前的決定
 
-1. **SLO**：S1、S2、S3，或自訂；以及 mixed 長 request 的處理（budget 或 best_effort）。
-2. **時間窗**：穩態 [C, N − C)（建議），或 Core 式的全部 request。這個選擇是在看過開場湧入的數據後提出的，已揭露。
-3. **預算**：可否接受一次連續占用 GPU lock 約 7–9 h（最壞約 12 h）。
-4. **範圍選項**：O-32K、O-T，預設都不做。
+使用者的選擇見上方「使用者決定」。時間窗的選擇是在看過開場湧入的數據後提出的，已揭露。
 
-以下由我依預設值處理，若使用者沒有異議就照此凍結：
+以下由我依預設值處理，使用者沒有異議：
 - guard band m = 5%；
 - n_near = 5，C0 落在分支 B 或 C 時改為 7；
 - C_cap = 2·C_KV；

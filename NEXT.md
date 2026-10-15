@@ -123,8 +123,9 @@
    - GPU 探針：6 次 boot × 4 個 bench，GPU lock 下最多 3.0 h，先 smoke。
    - 結果寫成另一份 decision log，決定 §8 的分支 A–D。
 2. **§8 草稿**（decision 030、PREREGISTRATION §8 DRAFT）：
-   - 待使用者決定：SLO（S1–S3 或自訂）、時間窗、可接受的 GPU lock 占用時間、O-32K / O-T。
-   - 其餘依預設值處理。
+   - **使用者已決定（2026-10-15）**：SLO S2（TTFT 2 / 6 / 20 s，TPOT 100 ms）、mixed 長 request 為 budget、穩態時間窗、
+     GPU 空著就跑（一次約 7–9 h）。O-32K、O-T 不做。
+   - 其餘依預設值處理（m = 5%、n_near = 5 或 7、C_cap = 2·C_KV）。
 3. Stage C 的 harness（TDD；只 import Core / Advanced 模組，不修改）→ smoke（FS-order 等）→ 凍結 → 正式 run → 報告。
 
 ### Engineering
@@ -161,8 +162,7 @@
 
 ## Blocked / 需要使用者
 
-- **Stage C 凍結前的研究決策**（decision 030 文末）：SLO、時間窗、GPU lock 的占用時間、O-32K / O-T。已向使用者提出（2026-10-15）。
-  不影響 C0 與 Engineering 的進行。
+目前沒有。
 
 ## 建議（非 blocker）
 

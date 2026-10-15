@@ -432,7 +432,8 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 
 ## 8. Stage C addendum：Fixed-SLO 下的最大並發容量（decision 027、028、030）
 
-**狀態：DRAFT（2026-10-15）**。SLO、時間窗、預算與範圍選項由使用者選定後，連同 harness 與 pins `[capacity]` 一起凍結（`freeze.capacity = true`）。
+**狀態：DRAFT（2026-10-15）**。使用者已選定 SLO S2、mixed 長 request 為 budget、穩態時間窗，並接受一次連續占用 GPU lock（030「使用者決定」）。
+harness、smoke 與 C0 完成後，連同 pins `[capacity]` 一起凍結（`freeze.capacity = true`）。
 在那之前沒有任何 C1 數據。本節只摘要；完整規則、揭露與依據見 decision 030。第 1–7 節不變，Phase 1 的判定不受影響。
 
 - **C0**（028，探索性）：8K 雙模式的有限度排查（GPU lock 下最多 3.0 h），只決定本節的分支 A–D。
@@ -440,9 +441,9 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 - **估計量**：
   - 每個 workload 的 C_SLO（研究）與 C_PROD（產品上限，只接受 PASS，含 guard band m = 5%）；
   - 在確認集合上向下封閉，取最差的 run，並標明狀態（EXACT / LOWER / CENSORED / INFEASIBLE / UNSTABLE / NT）。
-- **時間窗**：預設為穩態 [C, N − C)〔待使用者決定〕；全部 request 的統計量並列報告。
-- **SLO**：短類 P95 TTFT（依輸入長度分級）與全部 request 的 P95 TTFT〔待使用者決定，選項 S1–S3〕。
-- **Workload**：U2K、U8K、M2K、M8K。O-32K、O-T 為選項，預設不做。
+- **時間窗**：穩態 [C, N − C)（使用者選定）；全部 request 的統計量並列報告。
+- **SLO**（使用者選定 S2）：短類 P95 TTFT 2 / 6 / 20 s（2K / 8K / 32K），全部 request 的 P95 TPOT 100 ms；mixed 的長 request 也要符合 20 s。
+- **Workload**：U2K、U8K、M2K、M8K。O-32K、O-T 不做（使用者沒有選）。
 - **搜尋**：
   - 階段 S：夾擠加二分，上限 2·C_KV，只用來選點。
   - 階段 C：在 {Ĉ − 1, Ĉ, Ĉ + 1, c_low} 上，以新的 boot 確認；關鍵點 n = 5，C0 落在分支 B / C 時為 7。
