@@ -5,11 +5,14 @@
 這是一個事先登記（pre-registered）的實驗：hypothesis、門檻、metric 與 protocol 都在看到正式數據之前寫定並凍結，
 之後的任何變更都有 decision log。結論只來自有效的正式 session，失敗、OOM、not testable 的單位照實報告。
 
-> **狀態（2026-10-11）：Project 暫時完成**（使用者決定，decision 026）。目前的 defensible milestone：
-> - **Core**：A（macos-metal、wsl2-cuda）、B（uniform、mixed）、quality、deployment decision table。
-> - **已完成的 Advanced**：隔離 H-B4 的成因（decision 023 的範圍；事先登記與凍結見 024，結果見 025）。
->
-> 不新增 Advanced 項目；尚未回答的問題列在下方的 Future Work。
+> **狀態（2026-10-15）：Phase 2 進行中**（使用者決定，decision 027）。
+> - **Phase 1 已完成**，結果保留、不重新分析：
+>   - Core：A（macos-metal、wsl2-cuda）、B（uniform、mixed）、quality、deployment decision table。
+>   - Advanced：隔離 H-B4 的成因（事先登記與凍結見 024，結果見 025）。
+> - **Phase 2** 分成兩條受控並行的線：
+>   - Research Stage C：Fixed-SLO 下的最大並發容量。正式數據之前會先預註冊並凍結（PREREGISTRATION §8）。
+>   - Engineering：建在 vLLM 之上的 Capacity-Aware Serving Service（`service/`）。
+>   - 尚未經 Stage C 驗證的容量都標為 provisional，不是產品限制。
 
 ## 研究範圍
 
@@ -45,9 +48,9 @@
 - [SPEC.md](SPEC.md)：研究問題與範圍。
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
   分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
-- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–026）。
+- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–027）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
-  - 023 是 Gate 的決定，024 是 Advanced 的事先登記（凍結 commit `97a948c`），025 是 Advanced 的結果，026 是收尾的決定。
+  - 023 是 Gate 的決定，024 是 Advanced 的事先登記（凍結 commit `97a948c`），025 是 Advanced 的結果，026 是 Phase 1 收尾的決定，027 是 Phase 2 的兩條線與治理規則。
 - [docs/EXPERIMENT_RULES.md](docs/EXPERIMENT_RULES.md)、[docs/RESULTS_FORMAT.md](docs/RESULTS_FORMAT.md)、[docs/STORAGE_PLAN.md](docs/STORAGE_PLAN.md)。
 - [MACHINE_POLICY.md](MACHINE_POLICY.md)：兩台機器的分工與 lock。
 - [configs/pins.toml](configs/pins.toml)：所有 pin。
@@ -273,9 +276,9 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - H-B4 的機制：只在 8K 隔離出主因（Advanced R1）。2K 落在 R6：T、G、TG 都沒有移除過半，KV 可能有關，但未確立（未達 R5）。allocator 沒有操弄。
 - Advanced 只測了一個 chunk threshold（512）與一個 KV 劑量（3 GiB）；其他值、其他模型與 runtime 版本的效果未知。
 
-## Future Work（目前不做；decision 026）
+## Future Work（decision 026；Phase 2 的處理見 027）
 
-以下都沒有在本 milestone 中回答。若要繼續，要由使用者重新決定，並且先事先登記、凍結，再收集數據。
+以下都沒有在 Phase 1 中回答。Phase 2（027）只處理其中的 fixed-SLO 最大並發，以及 8K 雙模式的有限度排查；其餘仍要使用者另外決定。
 
 - **8K uniform 的雙模式**：短類 P95 在 boot 之間落在約 2.48 秒或約 2.82 秒，成因未知（025「限制」）。
   它使 8K 的 noise 偏大；事後把模式拉齊重算，8K 的類別與判讀列都不變，也不影響既有的部署結論，所以目前不追查。

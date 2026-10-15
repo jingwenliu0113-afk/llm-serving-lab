@@ -231,3 +231,30 @@ Core 暴露出：
 
 - 寫 deployment decision table
 - 收尾
+
+---
+
+# Phase 2（2026-10-15 起，使用者決定；decision 027）
+
+上文是 Phase 1（Core + Advanced）的 SPEC，原文不改。Phase 1 的結果與判定都保留，不重新分析。
+Phase 2 分成兩條線，可以並行開發；正式 GPU 實驗必須獨占共享 GPU lock。
+
+## Research：Stage C（Capacity）
+
+- C0：8K 延遲雙模式的有限度排查（探索性；開始前另寫 decision log，事先寫定 boot 數、GPU 時數上限與停止規則）。
+- C1：Fixed-SLO 下的最大並發容量（正式）。SLO、負載、指標、判定規則與容量的定義，都在任何正式數據之前寫進 PREREGISTRATION §8 並凍結。
+  SLO 的數值由使用者選定。
+- 平台、模型與 runtime 沿用 Core B（RTX 5070 Ti、vLLM 0.30.0、Qwen3.5-9B W4A16）。
+
+## Engineering：Capacity-Aware LLM Serving Service（MVP）
+
+- 沿用 vLLM，不開發新的推論引擎、不修改 vLLM。
+- 功能：OpenAI-compatible API、部署管理、health check、metrics、超載保護，以及依研究結果制定的容量配置。
+- 只有由 Stage C 正式、有效、凍結的分析產生的容量（verified）才能成為正式的產品限制；其他一律標為 provisional。
+- 產品測試的輸出不進 `results/`，不得污染研究數據。
+
+## 不做什麼（Phase 2）
+
+- 不寫新的推論引擎或 scheduler。
+- 不擴張研究範圍：Stage C 只做 C0 與 C1。其他 Future Work（026）仍要使用者另外決定。
+- 不使用付費 API；不影響其他專案；GitHub 維持 private。

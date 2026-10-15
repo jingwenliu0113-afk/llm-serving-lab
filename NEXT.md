@@ -2,8 +2,13 @@
 
 ## 目前位置
 
-**Project 暫時完成（使用者 2026-10-11 決定，decision 026）**。目前的 defensible milestone = Core + 已完成的 Advanced（H-B4 成因隔離）。
-不新增 Advanced 項目，也不開始任何新的實驗；Future Work 見 README 與 026。之後若要繼續，要由使用者重新決定，並且先事先登記、凍結。
+**Phase 2 進行中（使用者 2026-10-15 決定，decision 027）**：Research 與 Engineering 兩條線受控並行。
+- Phase 1（Core + Advanced，026 的 milestone）結果保留，不重新分析；凍結程式由 `test_core_untouched`、`test_frozen_untouched` 保護。
+- **Research Stage C**：
+  - C0：8K 延遲雙模式的有限度排查（探索性）。
+  - C1：Fixed-SLO 最大並發（正式）。正式數據之前先凍結 PREREGISTRATION §8；SLO 的數值由使用者選定。
+- **Engineering**：Capacity-Aware Serving Service MVP（`service/`），建在 vLLM 之上。只有 Stage C 驗證過的容量能成為正式限制。
+- 任何在 RTX 上啟動 vLLM 的工作都要取得 GPU lock；產品測試的輸出不進 `results/`；正式研究 session 進行中不部署任何東西。
 
 **Core 全部完成（2026-10-10）**：Mac / RTX Core A、Core B（uniform + mixed）、quality、deployment decision table。
 **Gate 通過（使用者 2026-10-10 決定，decision 023）**：進入 Advanced，範圍只限隔離 H-B4 的成因。Optional 未觸碰。
@@ -16,7 +21,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–026。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–027。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -110,9 +115,25 @@
   - 圖：`results/core_a/figures/{decode,prefill,memory}-mac-formal.svg`。worktree 已移除（內容與主 repo 的副本逐檔相同）。
 - 019 的 harness 已上線，並經過 review workflow：確認 10 項，均已修正。
 
-## 下一步
+## 下一步（Phase 2）
 
-**無**。Project 暫時完成（026）。在使用者重新決定之前，不做任何新的實驗或 scope 擴張。
+### Research
+1. C0 排查的 decision log（028）：boot 數、GPU 時數上限、診斷項目、停止規則。寫完再上 RTX（GPU lock 下）。
+2. PREREGISTRATION §8 草稿與 decision log：SLO 選項、負載、容量定義、搜尋或格點、統計與判定規則。SLO 由使用者選定後才凍結。
+3. Stage C 的 harness（TDD；只 import Core / Advanced 模組，不修改）→ smoke → 凍結 → 正式 run → 報告。
+
+### Engineering
+1. 服務的架構 decision log。
+2. MVP（TDD，Mac 上只用假後端）：
+   - OpenAI-compatible proxy；
+   - 准入控制與超載保護；
+   - health 與 readiness；
+   - metrics；
+   - vLLM 部署管理；
+   - capacity profile（verified / provisional）。
+3. RTX 上的整合測試（GPU lock 下，輸出寫到 `runs/`，部署到與研究分開的目錄）。
+
+### Phase 1 收尾（2026-10-11，已完成）
 
 - **收尾工作（2026-10-11，已完成）**：
   - `test_disk_guard` 的環境相依已修正（026）：`disk_guard.check()` 改為呼叫時才取 `shutil.disk_usage`；先有紅燈測試，修正後完整測試通過。
@@ -140,7 +161,7 @@
 
 ## Blocked / 需要使用者
 
-目前沒有。Project 暫時完成；是否重新開始（Future Work 中的任何一項或 Optional）由使用者決定。
+- 之後：Stage C 的 SLO 數值（重大研究決策；§8 草稿完成時提出選項）。
 
 ## 建議（非 blocker）
 
