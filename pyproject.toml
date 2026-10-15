@@ -32,5 +32,5 @@ service = [
 default-groups = ["dev", "service"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["scripts", "benchmarks", "quality"]
+testpaths = ["tests", "service/tests"]
+pythonpath = ["scripts", "benchmarks", "quality", "service"]

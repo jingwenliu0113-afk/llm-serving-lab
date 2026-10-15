@@ -301,3 +301,40 @@ pyproject：testpaths 加入 `service/tests`，pythonpath 加入 `service`。
 - 其他：BackendMonitor 要連續 3 次失敗才判定掉線、IT-2 改看 running + waiting、drain 的語意、禁止多 worker、
   不用 FastAPI 的預設介面、metrics 的命名、`/tokenize` 一致性、release 目錄不覆寫、profile 的完整性檢查、
   bytes 比較 API key、hop-by-hop header、thinking 預設的待決項目。
+
+## 實作補記（M0，2026-10-16）
+
+M0 依本文以 TDD 實作，經兩個面向的審查（12 項，全部確認、11 項修正、1 項延到 M2）。以下是與本文不同、或本文沒有寫到的決定：
+
+- **刪除 uvicorn 的 `limit_concurrency`**（本文原寫 `2*max_pending+16`）：
+  - 它數的是連線，不是 request，閒置的 keep-alive socket 與從不送 request 的 socket 都算在內。
+  - 達到上限時，uvicorn 會在 Guard 之前對所有 request 回自己的純文字 503：沒有 Retry-After，也沒有 x-request-id。
+  - 審查實測：上限 4、佇列 4 時，64 個同時的 client 全部拿到 503。
+  - 改為 `None`，只用 Guard 的 pending 上限。測試涵蓋超過舊上限的同時連線與閒置 socket。
+- **串流的寫入也受 deadline 限制**：
+  - 原本 deadline 只套在讀 upstream 上。client 連著但不讀時，寫入會無限期阻塞，permit 也一直被占住。
+  - 現在每次寫入都受剩餘 deadline 限制。scope 只包住 send，不跨越 yield。
+- **`/tokenize` 的 4xx 原樣轉傳**（和生成 request 的「upstream 非 200 保留」一致），只有 5xx 或回應沒有 count 時才回 502。
+- **讀完並驗證 body 之後、准入之前，再檢查一次 draining 與 backend 狀態**：讀 body 最多 10 s，這段期間 backend 可能掉線。
+- **串流中的錯誤事件**：串流開始後，vLLM 以 `data: {"error": {...}}` 回報錯誤。這類事件照樣轉給 client，但記為 upstream_errors 的 `stream_error`。
+  vLLM 0.30 的格式要在 RTX 的 IT-1 確認。
+- **會造成 500 的輸入一律改回 400**：NaN、±Infinity、1e999、lone surrogate、巢狀過深的 JSON。
+- **cleanup 順序**：client 斷線時，不提前釋放 permit，而由 LIFO cleanup 依序先關 upstream、再釋放，所以 vLLM 中的 request 永遠 ≤ C。
+- **`profile_gen` 讀 `configs/capacity.toml` 的 `[freeze] capacity`**（030 實作補記），不讀 pins。
+- **verified profile 的治理**：
+  - M0 用「每個 commit 過的 verified profile 都要能由產生器重新產生」的測試把關。產生器在凍結前一律 exit 2，所以 M0 不可能有 verified profile。
+  - 「載入器在執行期驗證 provenance」延到 M2，和真正的產生器一起做。
+- **其他**：
+  - 測試用的 server 跑在測試自己的 event loop 中，但使用正式的 `server.build_config`（h11 / asyncio）。
+  - `/v1/models` 只回 served id。
+  - chat 的輸出上限一律以 `max_completion_tokens` 轉送。
+  - uvicorn 固定 `ws="none"`。
+  - outcome 新增 `server_error`；client 已斷線的 request 在 log 中記為 499。
+  - 斷線 watcher 另看一個停止旗標，修正了 Starlette `is_disconnected` 可能吃掉 cancel 而卡住的問題（有回歸測試）。
+  - 沒有加入 openai SDK 的測試群組，因為 M0 不安裝新套件。
+- **IT-0 / IT-4 要確認**：
+  - vLLM 0.30 的 `/tokenize` 是否接受 `add_generation_prompt` 與 `add_special_tokens`；
+  - chat 是否接受 `max_completion_tokens`；
+  - keep-alive 的實際值；
+  - tokens 的額外常數（chat 32、per_message 16、completion 1）目前是暫定的寬鬆值。
+

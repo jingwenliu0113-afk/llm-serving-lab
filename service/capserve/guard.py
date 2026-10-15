@@ -1,0 +1,145 @@
+"""The outermost pure-ASGI middleware (decision 029 steps 1 and 10; review findings 1, 7 and 13).
+
+Per HTTP request, before anything else runs:
+- a fresh x-request-id (never the client's), added with x-capserve-profile: <id>; status=<verified|provisional> to
+  every response, including the guard's own 429 and errors produced inside the app;
+- the pending cap: pending counts requests from arrival until the response finished; at max_pending
+  (max_concurrency + max_queue + pre_admission_slots) a request gets 429 queue_full before its body is read.
+  /healthz, /readyz and /metrics are exempt;
+- a RequestRecord on the scope ("capserve.record") that the endpoint fills in; at the end the guard hands it to
+  Metrics.finish and writes one JSON access-log line (no prompt or completion text, ever).
+Cleanups (on_cleanup) are registered on the scope by whoever acquires something (the admission permit, the upstream
+response) right after acquiring it; the guard runs them in a shielded finally, LIFO, each bounded by
+CLEANUP_TIMEOUT_S, whether the endpoint returned, raised, or was cancelled, and whether or not the response object
+was ever called. Release functions are idempotent, so an endpoint may also release early.
+
+Pure ASGI on purpose: BaseHTTPMiddleware would reroute receive / send through memory streams, which changes
+disconnect detection and backpressure.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import inspect
+import json
+import logging
+import time
+import uuid
+from dataclasses import asdict, dataclass
+from typing import Awaitable, Callable
+
+import anyio
+
+from capserve.openai_api import openai_error
+
+EXEMPT_PATHS = ("/healthz", "/readyz", "/metrics")
+COMPLETION_ROUTES = {"/v1/chat/completions": "chat", "/v1/completions": "completions"}
+CLEANUP_TIMEOUT_S = 5.0
+RECORD_KEY = "capserve.record"
+CLEANUPS_KEY = "capserve.cleanups"
+
+access_log = logging.getLogger("capserve.access")
+log = logging.getLogger("capserve")
+
+
+@dataclass
+class RequestRecord:
+    request_id: str
+    method: str
+    path: str
+    arrival: float
+    route: str | None = None            # "chat" / "completions" on the completion routes
+    stream: bool | None = None          # None until the body is parsed
+    status: int | None = None
+    outcome: str | None = None          # ok, client_error, rejected, upstream_error, deadline, cancelled, server_error
+    reason: str | None = None           # rejection reason
+    error_code: str | None = None       # client error code
+    upstream_error: str | None = None   # connect, timeout, status_5xx, stream_broken, stream_error, protocol
+    disconnect_phase: str | None = None  # queued, waiting_response, streaming
+    queue_wait_s: float | None = None
+    upstream_sent: float | None = None
+    ttft_s: float | None = None
+    upstream_ttft_s: float | None = None
+    duration_s: float | None = None
+
+
+def on_cleanup(scope, fn: Callable[[], Awaitable[None] | None]) -> None:
+    """Run fn when the request ends, however it ends (LIFO, shielded, bounded)."""
+    scope.setdefault(CLEANUPS_KEY, []).append(fn)
+
+
+async def run_cleanups(scope, *, timeout_s: float = CLEANUP_TIMEOUT_S) -> None:
+    cleanups = scope.get(CLEANUPS_KEY) or []
+    scope[CLEANUPS_KEY] = []
+    with anyio.CancelScope(shield=True):
+        for fn in reversed(cleanups):
+            try:
+                with anyio.move_on_after(timeout_s):
+                    result = fn()
+                    if inspect.isawaitable(result):
+                        await result
+            except Exception:
+                log.exception("cleanup failed")
+
+
+class Guard:
+    def __init__(self, app, *, max_pending: int, profile_header: str, queue_full_retry_after_s: int, metrics,
+                 clock: Callable[[], float] = time.monotonic):
+        self.app = app
+        self.max_pending = max_pending
+        self.profile_header = profile_header.encode()
+        self.queue_full_retry_after_s = queue_full_retry_after_s
+        self.metrics = metrics
+        self.clock = clock
+        self.pending = 0
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope["path"]
+        rec = RequestRecord(request_id=uuid.uuid4().hex, method=scope["method"], path=path, arrival=self.clock(),
+                            route=COMPLETION_ROUTES.get(path))
+        scope[RECORD_KEY] = rec
+        scope[CLEANUPS_KEY] = []
+        extra = [(b"x-request-id", rec.request_id.encode()), (b"x-capserve-profile", self.profile_header)]
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                rec.status = message["status"]
+                message = {**message, "headers": [*message.get("headers", []), *extra]}
+            await send(message)
+
+        limited = path not in EXEMPT_PATHS
+        if limited and self.pending >= self.max_pending:
+            rec.outcome, rec.reason = "rejected", "queue_full"
+            try:
+                await openai_error(429, "rate_limit_error", "queue_full", "too many pending requests; retry later",
+                                   retry_after_s=self.queue_full_retry_after_s)(scope, receive, send_with_headers)
+            finally:
+                self._finish(rec)
+            return
+        if limited:
+            self.pending += 1
+        try:
+            await self.app(scope, receive, send_with_headers)
+        except asyncio.CancelledError:
+            rec.outcome = rec.outcome or "cancelled"
+            raise
+        except Exception:
+            rec.outcome = "server_error"
+            raise
+        finally:
+            await run_cleanups(scope)
+            if limited:
+                self.pending -= 1
+            self._finish(rec)
+
+    def _finish(self, rec: RequestRecord) -> None:
+        rec.duration_s = max(self.clock() - rec.arrival, 0.0)
+        try:
+            self.metrics.finish(rec)
+        except Exception:
+            log.exception("metrics failed")
+        entry = {k: v for k, v in asdict(rec).items() if v is not None and k not in ("arrival", "upstream_sent")}
+        access_log.info(json.dumps({"ts": round(time.time(), 3), **entry}, sort_keys=True))

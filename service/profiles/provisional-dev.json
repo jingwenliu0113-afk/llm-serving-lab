@@ -1,0 +1,27 @@
+{
+ "schema_version": 1,
+ "profile_id": "provisional-dev",
+ "status": "provisional",
+ "provisional_reason": "Development and fake-backend integration tests only. Not a capacity: no Stage C measurement exists, so these limits are unverified and are not product limits (027 §4, 029).",
+ "slo": null,
+ "server": {
+  "vllm_version": "0.30.0",
+  "model_repo": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+  "model_revision": "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "fingerprint_sha256": null,
+  "num_gpu_blocks": null,
+  "block_size": null
+ },
+ "classes": [
+  {
+   "name": "dev-2k",
+   "max_prompt_tokens": 1920,
+   "max_output_tokens": 128,
+   "max_concurrency": 4,
+   "max_queue": 4,
+   "source": "provisional:dev (hand-set, unverified)"
+  }
+ ],
+ "provenance": null,
+ "content_sha256": "12f9615227a20ef8073e484a449f42d76db350fab7ab0ab6198d8d0d352a35f0"
+}
