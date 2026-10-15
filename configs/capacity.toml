@@ -1,0 +1,64 @@
+# Stage C (C1) settings: decision 030, PREREGISTRATION §8 (DRAFT). Machine-readable; benchmarks/capacity_plan.py
+# checks every value against the 030 rules (capacity_problems) and refuses a plan otherwise.
+# 030 implementation note: every Stage C setting lives here, never in configs/pins.toml, which stays byte-identical to
+# the Advanced freeze (the frozen adv_report refuses a pins sha256 different from its session's). Core B / Stage B
+# values (model, server argv, K, blocks, mixed datasets) are read from pins.toml read-only.
+schema_version = 1
+
+[freeze]
+# 030 凍結: commit and push §8, 030, this file, capacity_plan / run_capacity / capacity_analysis / capacity_report and
+# their tests together, then set true, then collect C1 data. capacity_plan refuses true unless c0_branch is A / B / C,
+# pins freeze.mac / nvidia / advanced are all true, and the evidence below is set (030 implementation note): the passed
+# FS-order and mini smoke sessions (results/capacity/<id>/session.json, formal false, smoke.ok true) and C0's result
+# decision log (docs/decisions/<NNN>-*.md); freeze_evidence_problems reads them.
+capacity = false
+fs_order_smoke = ""                                      # session id of the passed --smoke-fs-order run (030 8.6)
+mini_smoke = ""                                          # session id of the passed --mini run (030 8.6)
+c0_decision = ""                                         # number of C0's result decision log (028), e.g. "031"
+
+[capacity]
+c0_branch = ""                                           # 028: C0's result decision log sets "A" | "B" | "C"; "D" (harness defect) or "" refuses the freeze
+seed = 20261008                                          # Core B seed; 030 8.4 orders: sha256("20261008:capacity:block:r"), "20261008:capacity:{w}:{r}"
+derived_from = "formal-20261009-coreb-uniform"           # C_KV recomputed by capacity_plan with core_b_plan.c_kv from this session's pool (35 / 13), never typed here
+workloads = ["U2K", "U8K", "M2K", "M8K"]                 # 030 8.3 default; O-32K and O-T not chosen (使用者決定)
+window = "steady"                                        # 030 使用者決定: W = idx in [C, N - C); full-run statistics only reported beside it (D1)
+guard_band = 0.05                                        # 030 8.1 m: PASS needs every R <= 1 - m; about 2.4 x the largest Core restart range (D4, 2.06 %)
+n_near = 5                                               # 030 8.4: restarts at C^ - 1, C^, C^ + 1 and at K = {1}; catches a bad mode of per-run probability q >= 0.45 with >= 95 %
+n_near_bc = 7                                            # 030 8.1 C0 branch B / C: n_near for the affected workloads (q >= 0.35); never lowers n
+n_near_bc_workloads = ["U8K"]                            # 030 8.1: B = the affected workloads (at least U8K, C0's decision log may add more); C = U8K only
+n_low = 3                                                # 030 8.4: restarts at c_low
+c_cap = { max = 128, kv_factor = 2 }                     # 030 8.4: C_cap(L) = min(128, 2 C_KV(L)) = 70 (2K) / 26 (8K), block arithmetic only; mixed uses its L's cap
+tau1_s = { "2048" = 1.845, "8192" = 2.95, "32768" = 7.92 }  # 030 8.4: Core C 1 time per request (duration / 200); bench timeout = ceil60(2 N tau1 + 60 s), mixed tau1 = 0.9 tau1(L) + 0.1 tau1(32K)
+server_ready_timeout_s = 1800                            # 030 8.4: as run_adv STARTUP_TIMEOUT_S
+mix_dataset_sha256 = { "2048" = "3fc75fcadaa5d457ade882598ba129402469ff2393f32a8dd24753f3fe69f2f8", "8192" = "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2" }  # 030 8.3: the 007 mix, = pins [core_b].mix_dataset_sha256 (checked)
+
+[capacity.sentinel]
+# 030 8.4 / 8.6: one boot at the start and one at the end of the session, U2K at C 25 (Core 315.0 tok/s; Advanced
+# steady P95 996 ms). Gate: output throughput and W-mean TTFT each within tolerance between start and end (Core A's
+# 3 % rule); P95 is not used because it flips on the TTFT lattice.
+L = 2048
+mix = "uniform"
+C = 25
+tolerance = 0.03
+
+[slo]
+# 030 使用者決定 / 8.2: S2 standard interactive. Uniform-L uses tier L; mixed-L uses tier L for its short requests and,
+# with mixed_long = "budget", the 32K tier for its 32,640-token requests; TPOT applies to every request. P95 over W.
+id = "S2"
+ttft_p95_ms = { "2048" = 2000, "8192" = 6000, "32768" = 20000 }   # 2 s tolerable wait (Nah 2004); 8K = geometric midpoint; 32K = 20 s with a progress indicator
+tpot_p95_ms = 100                                        # about 2 x silent reading speed (Brysbaert 2019)
+mixed_long = "budget"                                    # 030 使用者決定: long requests of a mixed workload must meet the 32K tier
+
+# 030 8.2 / 8.5: the options the user did not choose, reported only as descriptive bounds from the same data; their
+# predictions are not frozen.
+[secondary_slo.S1]
+id = "S1"                                                # strict interactive
+ttft_p95_ms = { "2048" = 1000, "8192" = 3000, "32768" = 10000 }
+tpot_p95_ms = 50
+mixed_long = "budget"
+
+[secondary_slo.S3]
+id = "S3"                                                # relaxed (API / agent callers that do not read the output live)
+ttft_p95_ms = { "2048" = 2000, "8192" = 6000, "32768" = 20000 }
+tpot_p95_ms = 200
+mixed_long = "budget"

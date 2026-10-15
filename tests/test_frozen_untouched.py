@@ -25,6 +25,8 @@ FROZEN_SHA256 = {
     "benchmarks/core_a_analysis.py": "434e32555805eafcf09a88c1006558dd0f7a34d9810520ed9d99c537243f3ba4",
     "benchmarks/core_a_report.py": "a70687d2705d35f35628fba5368c9cf0847f291eb41b178605b48280c247f2c2",
     "benchmarks/core_a_parse.py": "d2defe8604abbbd7721b60e852154b4e4746a32b1fd4fcabc5522814c80f5926",
+    # imported by the frozen run_adv and the Stage C modules (sha256_json, env / provenance checks; 030 8.6)
+    "benchmarks/run_core_a.py": "bd9d8f231e891a4000bc4d01ddc9886ccf8cfb07da71e32fd72c38ecc8ef0bc5",
     "quality/quality_analysis.py": "ad9b6d31c40fe8966fcdff2ae0bb1f35a77000ab44fbd36bf11d933e1a0957c8",
     "benchmarks/decision_table.py": "7e874d058671d30c538337f3e8543e39734a699f7b736ba399e753dd423127d1",
     # 030: Stage C config lives in configs/capacity.toml; pins.toml stays byte-identical to the Advanced freeze, because

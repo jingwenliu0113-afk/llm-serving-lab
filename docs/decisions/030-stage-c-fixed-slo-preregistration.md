@@ -31,6 +31,60 @@
 - Stage C 與 capserve 仍以唯讀方式讀取 `pins.toml` 的 Core B 與 Stage B 的值。
 - 這只是設定檔的位置，不改變任何規則。
 
+## 實作補記二：harness 的細節（2026-10-16，凍結前；沒有任何 C1 數據）
+
+harness 依本文以 TDD 實作：
+- `capacity_plan` / `capacity_analysis` / `run_capacity` / `capacity_report` 與 `configs/capacity.toml`；
+- 三個面向審查，共 21 項發現：17 項修正，2 項維持原行為並以測試鎖定，1 項只補測試，1 項由我在下面第 3 點處理。
+
+本文沒有寫死、在實作時決定的細節如下，凍結時一併凍結。
+
+1. **跳過規則的「有效的 FAIL」**：
+   - 指單一 run 的 maxR_run > 1（只看短類與 TPOT）。
+   - mixed 的長類合併計算，只在最後對該點的所有 run 判定一次，不觸發跳過；這樣不會因為反覆檢查合併值而產生偏差。
+   - STRADDLE、「n 次中幾次符合」與每個 run 的結論，也都只看單一 run 的 FAIL。
+2. **Ĉ_g 的 band 只看 R_short 與 R_TPOT**（8.4 第 3 步的原文）。mixed 時 Ĉ_g 可能大於 Ĉ。審查確認確認集合 K 不受影響。
+3. **C_PROD 在所有狀態列都把 MARGINAL 當成 FAIL**：
+   - 原文只在 EXACT 那一列寫明這個替換；INFEASIBLE 與 UNSTABLE 照字面只看 FAIL，所以 K 的最低點是 MARGINAL 時，C_PROD 會變成 NT。
+   - 現在一致處理：C 1 只達到 MARGINAL 時，C_PROD 為 INFEASIBLE（值 0，profile 中代表拒絕這個 class）；最低點高於 1 時為 UNSTABLE。
+   - 理由：NT 在 profile 中代表「無法提供」，而這種情況其實已經證明在 guard band 內無法安全服務，「驗證過的 0」比較保守，也比較一致。
+4. **H-S1 照表判定**：mixed 為 CENSORED 時，不列為 refuted（表中只有 EXACT 或 LOWER），而是 inconclusive。
+   H-S2 補上原文沒寫的兩格：EXACT 或 INFEASIBLE 且 ≤ C_KV 為 supported；LOWER 且 ≤ C_KV 為 inconclusive。
+5. **C0 的共變量**：分支 B / C 的每 run 滑移數只對 uniform workload 計算。
+   凍結的 Stage C 模組不能 import `c0_analysis`，所以在 `capacity_analysis` 中重寫了 028 的滑移判定，並以真實資料重現 028 的 B0 0/2/0、G 1/0/0、K3 2/1/2。
+6. **階段 S 的順序**：
+   - workload 依固定順序：U2K、U8K、M2K、M8K。
+   - 第一個 bench 之前就失敗的 boot，在階段 S 結束時重試一次。
+   - 兩次都失敗時，K 為空，該 workload 的估計量為 NT。
+   - server 在 boot 檢查通過後、第一個 bench 之前就退出，也視為「第一個 bench 之前失敗」，不記成 C 1 失敗。
+7. **同一 boot 內的順序**：先把完整的 sorted(K) 以 seed 洗牌，寫進確認計畫；之後被跳過的點只是從中濾掉。
+8. **失敗的 boot**：階段 C 或 sentinel 的 boot 失敗時，計畫中的每個 run 都記為無效（觸發跳過規則）。開頭的 sentinel 無效時中止整個 session，因為 8.6 的閘門要求兩次 sentinel 都有效。
+9. **旗標與描述的定義**：
+   - WINDOW_SENSITIVE：C_SLO 或 C_PROD 的（值、狀態）在 W′ 下不同。
+   - binding：K 中最小的 FAIL 點上，超過 1 的項目。
+   - ABOVE_CKV：mixed 也用 C_KV(L)。
+   - analysis.json 另外記錄每個 run 與每個點的 running + waiting 峰值及是否 ≤ C，以及 C_SLO 與 C_knee（25 / 8）的比較。
+10. **比較一律精確**（Fraction）：sentinel 的 3% 含邊界；逾時剛好是 60 的倍數時不會因浮點誤差多加 60 s。
+11. **CROSS_SESSION_SHIFT 的參考值**由 report 從已 commit 的資料重算（Core 314.94 tok/s、Advanced B0 穩態 P95 996.0 ms），不寫進設定檔。
+12. **mini smoke**：
+    - 內容：U2K 與 M2K、U2K 上限 6、n_near 2、n_low 1、sentinel 在 C 2、假的 SLO 門檻、U2K C 6 強制 5 s 逾時、N = 20。
+    - 這樣可以走過夾擠、二分與 c_low（搜尋為 1, 2, 4, 6，再 5；K = {3, 4, 5, 6}），並觸發逾時與跳過規則。
+    - N = 20 是在執行期間暫時替換 `core_b_plan.num_prompts` 的回傳值做到的（只在 `--mini`；檔案位元組不變，結束後一定還原）；plan 的檢查在替換之前用 Core 的 N 先做。
+    - 跑完後丟棄所有延遲數值。
+13. **FS-order 的判讀**：最晚到達的 C 個 request 中，序號不在 [N − C, N) 的不超過 3 個；使用 B0 的 argv，每個 bench 有自己的 request-id 前綴。
+14. **formal session 在開始前就拒絕 report 會拒絕的 server env**（例如繼承了 OTEL_* 變數），避免白跑一整個 session；runner 與 report 共用同一份基準 env。
+15. **report 只寫 `<session>/analysis.json`**，其他輸出路徑一律拒絕。
+16. **`run_core_a.py` 也納入 `test_frozen_untouched`**，因為四個 Stage C 模組都 import 它（plan 與確認計畫的 sha256）。另有測試確認 Stage C 依賴的每個模組都有位元組保護。
+17. **凍結需要證據**（`configs/capacity.toml` 的 `[freeze]`）：
+    - 必填：`fs_order_smoke`、`mini_smoke`（兩次通過的 smoke 的 session id）、`c0_decision`（C0 結果的 decision log 編號）。
+    - `capacity_problems` 檢查格式；`freeze_evidence_problems` 確認兩個 smoke session 存在、mode 正確、formal 為 false、smoke.ok 為 true，而且 C0 的 decision log 存在。
+    - formal 的 runner 與 report 在證據不完整時都會拒絕。
+
+**照實記錄的限制**
+- WSL2 的 `nvidia-smi --query-compute-apps` 通常列不出 process，所以「沒有其他 compute process」這項檢查的實際防線是 memory.used ≤ 1,000 MiB（C0 已經因此停過一次）。
+- 凍結的 `run_adv.start_server` 不會把 lock 的 fd 傳給 vLLM。runner 若被 SIGKILL，lock 會釋放，但 vLLM 可能還在執行。這是 Phase 1 helper 的既有行為，沿用不改。
+- 正式 session 命名為 `formal-YYYYMMDD-c1`，因為 029 的產生器只接受 `formal-` 開頭的 session。
+
 ## 8.0 揭露（只用已 commit 的資料，沒有新的 GPU run）
 
 設計者看過所有 Core 與 Advanced 的結果。Core 的曲線只用在下列四處，SLO 的數值不取自 Core：逾時、預算、8.5 的事前預測、8.2 的「條件說明」。
