@@ -3,6 +3,7 @@ process, a stable baseline, the VRAM headroom bound) and its spill guard (Window
 read from WSL through powershell.exe), with fake nvidia-smi / powershell output and a fake clock."""
 
 import ast
+import errno
 import subprocess
 import sys
 from pathlib import Path
@@ -275,6 +276,42 @@ def test_read_shared_usage_runs_powershell_from_wsl_with_a_timeout():
     assert kw["timeout"] == 20 and kw["stdin"] == subprocess.DEVNULL and kw.get("check") is not True
     gi.read_shared_usage(run=run, timeout_s=5)
     assert calls[1][1]["timeout"] == 5
+
+
+def test_read_shared_usage_retries_through_wsl_init_when_the_interop_binfmt_is_gone():
+    """WSL with systemd can lose its WSLInterop binfmt_misc entry minutes after boot; executing a Windows binary then
+    fails with ENOEXEC (Exec format error, seen on the RTX 2026-10-16). The binfmt entry only runs `/init <exe>
+    <args>`, so the read is retried once exactly that way (no system setting is touched; 031 implementation note)."""
+    calls = []
+
+    def run(argv, **kw):
+        calls.append(argv)
+        if argv[0] == gi.POWERSHELL:
+            raise OSError(errno.ENOEXEC, "Exec format error", gi.POWERSHELL)
+        return Done(PS_OUT)
+
+    assert gi.read_shared_usage(run=run)["shared_mib"] == 64.4
+    assert calls[0][0] == gi.POWERSHELL and calls[1][:2] == [gi.WSL_INIT, gi.POWERSHELL]
+    assert calls[1][2:] == calls[0][1:]
+
+
+def test_the_init_retry_is_only_for_enoexec_and_still_fails_closed():
+    def run(argv, **kw):
+        if argv[0] == gi.WSL_INIT:
+            raise OSError(errno.ENOEXEC, "Exec format error", gi.WSL_INIT)
+        raise OSError(errno.ENOEXEC, "Exec format error", gi.POWERSHELL)
+
+    with pytest.raises(gi.SharedUsageError, match="init"):
+        gi.read_shared_usage(run=run)
+    seen = []
+
+    def denied(argv, **kw):
+        seen.append(argv[0])
+        raise PermissionError(errno.EACCES, "denied")
+
+    with pytest.raises(gi.SharedUsageError):
+        gi.read_shared_usage(run=denied)
+    assert seen == [gi.POWERSHELL]                     # no retry for anything but ENOEXEC
 
 
 @pytest.mark.parametrize("effect", [subprocess.TimeoutExpired("powershell.exe", 20), FileNotFoundError("no exe"),

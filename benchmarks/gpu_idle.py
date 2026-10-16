@@ -26,6 +26,7 @@ Stdlib only, Python 3.10 compatible.
 
 from __future__ import annotations
 
+import errno
 import re
 import subprocess
 import time
@@ -48,6 +49,10 @@ NVIDIA_SMI_TIMEOUT_S = 15   # as run_adv.NVIDIA_SMI_TIMEOUT_S: a hung nvidia-smi
 SHARED_USAGE_TIMEOUT_S = 20  # 031: a powershell.exe that does not answer within 20 s is an unreadable reading
 SAMPLE_QUERY = ("memory.used", "utilization.gpu", "pstate")
 POWERSHELL = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+# WSL's interop launcher: the WSLInterop binfmt_misc entry runs `/init <exe> <args>`. With systemd that entry can vanish
+# minutes after boot (ENOEXEC "Exec format error", seen on the RTX 2026-10-16), so read_shared_usage retries once
+# through /init directly instead of touching any system setting (031 implementation note).
+WSL_INIT = "/init"
 COUNTERS = ("\\GPU Adapter Memory(*)\\Dedicated Usage", "\\GPU Adapter Memory(*)\\Shared Usage")
 # one line per counter sample: <instance>|<counter, the last path element, lower case>|<MiB, invariant culture>
 PS_SCRIPT = ("$ErrorActionPreference = 'Stop'; "
@@ -231,12 +236,20 @@ def read_shared_usage(*, run: Callable | None = None, timeout_s: float = SHARED_
     interop, a timeout, a non-zero exit, unparsable output) raises SharedUsageError. powershell.exe writes stderr in
     the Windows OEM code page (cp950 on a zh-TW Windows): undecodable bytes are replaced, never an error, since
     stdout is ASCII by construction (InvariantCulture numbers, luid_* instance names)."""
+    run = run or subprocess.run
+    argv = [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", PS_SCRIPT]
+    kw = dict(capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout_s,
+              stdin=subprocess.DEVNULL)
     try:
-        proc = (run or subprocess.run)([POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", PS_SCRIPT],
-                                       capture_output=True, text=True, encoding="utf-8", errors="replace",
-                                       timeout=timeout_s, stdin=subprocess.DEVNULL)
+        try:
+            proc = run(argv, **kw)
+        except OSError as exc:
+            if exc.errno != errno.ENOEXEC:
+                raise
+            proc = run([WSL_INIT, *argv], **kw)       # the interop binfmt entry is gone: launch it as that entry would
     except (OSError, subprocess.SubprocessError, ValueError) as exc:   # ValueError: a decode error, whatever its cause
-        raise SharedUsageError(f"powershell.exe failed: {type(exc).__name__}: {exc}") from exc
+        via = f" (also via {WSL_INIT})" if isinstance(exc, OSError) and exc.filename == WSL_INIT else ""
+        raise SharedUsageError(f"powershell.exe failed{via}: {type(exc).__name__}: {exc}") from exc
     if proc.returncode != 0:
         raise SharedUsageError(f"powershell.exe exited {proc.returncode}: {(proc.stderr or '').strip()[:200]!r}")
     return parse_shared_usage(proc.stdout or "")

@@ -170,3 +170,13 @@ Mac 只負責 ssh，不影響 RTX 的量測；但我在 Mac 上跑完整測試�
 - **執行時間**：每次 boot 至少多約 30 s（最多約 90 s）的閒置窗；Stage C 約 40 次 boot，合計多約 20 分鐘。
 - **尚未在 RTX 上驗證**：從 WSL 呼叫 `powershell.exe` 的 `read_shared_usage`。執行前會先在 WSL 上唯讀跑一次。
 
+## 執行紀錄二（2026-10-16 22:25–22:32）
+
+- 第一次批次（部署 `635b954`）：
+  - C0、mini smoke 與 FS-order smoke 都在第一次 boot 之前，以 `spill_unreadable` 停止（fail closed），沒有啟動任何 vLLM。
+  - 原因：WSL 執行 Windows 程式的 binfmt 註冊（`/proc/sys/fs/binfmt_misc/WSLInterop`）在 WSL 開機後幾分鐘內消失，呼叫 `powershell.exe` 得到 `Exec format error`。22:24 手動驗證時（開機後約 1 分鐘）還能讀。這是啟用 systemd 的 WSL 的已知問題。
+  - 永久修好需要用 sudo 改 binfmt 的設定，屬於系統設定，不由我修改。
+- **修正（不碰系統設定）**：binfmt 的註冊本來就只是執行 `/init <exe> <args>`。`read_shared_usage` 遇到 ENOEXEC 時，改由 `/init` 再呼叫一次；其他錯誤仍 fail closed。已在 WSL 上實際驗證 `/init powershell.exe` 能讀到計數器，並有回歸測試。
+- 同一批次的**產品整合測試 IT-0 至 IT-6 在 RTX 上全部通過**。輸出在 WSL 的 `~/llm-serving-service/runs/pt-20261016T142720Z-itest`，只是產品測試，不是容量量測。
+  產品端的 shared usage 讀數因同樣的原因失敗，但只作描述，不影響結果。
+
