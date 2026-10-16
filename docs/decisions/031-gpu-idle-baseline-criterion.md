@@ -180,3 +180,30 @@ Mac 只負責 ssh，不影響 RTX 的量測；但我在 Mac 上跑完整測試�
 - 同一批次的**產品整合測試 IT-0 至 IT-6 在 RTX 上全部通過**。輸出在 WSL 的 `~/llm-serving-service/runs/pt-20261016T142720Z-itest`，只是產品測試，不是容量量測。
   產品端的 shared usage 讀數因同樣的原因失敗，但只作描述，不影響結果。
 
+
+## 執行紀錄三與 spill 規則的校準（2026-10-16 22:35–22:42；修正案為 DRAFT，待使用者確認）
+
+第二次批次（部署 `f30d17c`，閒置 616 MiB，Windows CPU 0.7%）：
+- 透過 `/init` 已能讀到 shared usage。
+- C0 smoke、mini smoke 與 FS-order smoke 的 boot 在 server 就緒時，都被 spill 偵測擋下，沒有跑任何 bench：
+  shared usage 從 35.2 MiB 升到 115.2 MiB，**+80.0 MiB**，超過容許的 64 MiB。
+- **產品整合測試 IT-0 至 IT-6 再次全部通過**（`pt-20261016T143958Z`）。它記錄了完整的三次讀數：
+
+  | 時間點 | shared usage | 比 boot 前多 | NVIDIA dedicated |
+  |---|---|---|---|
+  | boot 前 | 35.2 MiB | — | 625.6 MiB |
+  | vLLM 就緒 | 115.2 MiB | +80.0 MiB | 15,261.5 MiB |
+  | 工作負載之後 | 117.2 MiB | +82.0 MiB | 15,413.5 MiB |
+
+**判讀**
+- vLLM 就緒時 dedicated 為 15,262 MiB，離 V_total 16,303 MiB 還有約 1,040 MiB；工作負載之後還有約 890 MiB。VRAM 沒有超額，不可能是 spill。
+- +80.0 MiB 在四次 boot（三次研究、一次產品）都完全相同，應是 vLLM／CUDA 在 WSL 中正常 boot 時固定的共用記憶體配置（推測是 host 端可見的配置）。工作負載之後只再多 2 MiB。
+- 所以「以 boot 前為基準、容許 64 MiB」的規則，會把每一次正常 boot 判為 spill。64 MiB 是我在沒有實測的情況下提出的，校準錯了。
+- 依 031，讀數失敗或 spill 時一律停止，所以這兩次批次都沒有產生任何研究數據。
+
+**修正案（DRAFT，使用者確認之前研究不執行）**：spill 偵測改為兩段，以實測校準
+1. **就緒時**：shared(就緒) − shared(boot 前) ≤ 160 MiB（實測的正常 boot 配置 80 MiB 的 2 倍）。超過即為 spill，該 boot 不跑 bench。
+2. **每個 bench 之後**：shared(bench 後) − shared(就緒) < 64 MiB。達到 64 MiB 即為 spill，該 bench 無效並停止該 boot；容許值仍為 64 MiB，但基準改為就緒時的讀數。
+3. 每次讀數都同時記錄 Windows 的 NVIDIA dedicated usage，只作描述，用來判讀 spill 是否和 VRAM 接近滿載同時發生。
+
+其他規則（閒置判定、讀數失敗時 fail closed、產品只作描述）都不變。
