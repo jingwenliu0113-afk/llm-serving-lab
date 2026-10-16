@@ -89,7 +89,7 @@ harness 依本文以 TDD 實作：
 
 - 每次 boot 前改用 031 的綜合判定（`benchmarks/gpu_idle.py`，最多 3 個 30 s 的窗），不通過時中止 session，和舊規則一樣。
 - **新增 run 的有效條件 (g)「沒有 spill」**：
-  - Windows 的 shared usage 在 boot 前、server 就緒後與每個 bench 之後各讀一次。任何讀數比 boot 前多出 64 MiB 以上（含 64）即為 spill。
+  - Windows 的 shared usage 在 boot 前、server 就緒後與每個 bench 之後各讀一次。任何讀數比 boot 前多出 64 MiB 以上（含 64）即為 spill。〔2026-10-16 依 031 修正案（使用者確認）改為兩段：就緒時比 boot 前多出超過 160 MiB 即 spill（正常 boot 固定多 80 MiB）；之後每個 bench 比就緒時的讀數多出 64 MiB 以上即 spill。〕
   - spill 的 run 無效。同一 boot 中之後計畫的 run 記為無效 row，不跑 bench，處理方式和 server 結束相同。
   - 讀不到時中止 session（fail closed）。
   - `capacity_report` 由 row 的讀數重算 (g)，不一致時拒絕產生報告。
@@ -345,7 +345,7 @@ harness 依本文以 TDD 實作：
 **session 有效**的條件：
 - formal，而且 `freeze.capacity = true`；
 - session 開始時與每次 boot 前，`held_gpu_lock` 都為真；
-- 每次 boot 前 memory.used ≤ 1,000 MiB；〔2026-10-16 起由 decision 031 的綜合判定取代（lock、使用率 ≤ 5%、基線穩定、推導的 VRAM 餘裕），並新增 run 的有效性條件：boot 期間 Windows 的 shared usage 沒有比 boot 前多出 64 MiB 以上（沒有 spill）。使用者確認，凍結與任何 C1 數據之前。〕
+- 每次 boot 前 memory.used ≤ 1,000 MiB；〔2026-10-16 起由 decision 031 的綜合判定取代（lock、使用率 ≤ 5%、基線穩定、推導的 VRAM 餘裕），並新增 run 的有效性條件：boot 期間 Windows 的 shared usage 沒有比 boot 前多出 64 MiB 以上（沒有 spill）。使用者確認，凍結與任何 C1 數據之前。〕〔spill 的判定再依 031 修正案改為兩段（就緒時 > 160 MiB、之後每個 bench 相對就緒時 ≥ 64 MiB），使用者 2026-10-16 確認。〕
 - 每次 boot 前後的 env 擷取都乾淨：power limit 為預設、commit 單一且乾淨並等於 DEPLOYED_COMMIT；
 - vLLM 0.30.0；
 - `stage_b_problems` 為空；

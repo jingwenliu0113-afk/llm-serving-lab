@@ -165,7 +165,8 @@ def test_spill_problems_recompute_validity_condition_g():
     """031: a benched run needs its readings; the recorded flag must be the recomputed one; a spilled run is never
     valid. Runs without a bench (not run after a spill or a server exit) carry no readings and are invalid anyway."""
     ok = {"tag": "x", "valid": True, "argv": ["vllm"],
-          "spill": {"pre_mib": 64.4, "readings_mib": [64.4, 128.3], "spilled": False, "tol_mib": 64}}
+          "spill": {"pre_mib": 64.4, "ready_mib": 64.4, "readings_mib": [64.4, 128.3], "spilled": False, "tol_mib": 64,
+                    "ready_tol_mib": 160}}
     assert cr.spill_problems([ok]) == []
     spilled = copy.deepcopy(ok)
     spilled["spill"].update(readings_mib=[64.4, 128.4], spilled=True)          # + 64.0: 「64 MiB 以上」 (031)
@@ -348,3 +349,33 @@ def test_load_configs_hashes_the_repo_bytes():
 def test_the_report_refuses_without_the_freeze_evidence(setup, monkeypatch):
     monkeypatch.setattr(cr.cp, "freeze_evidence_problems", lambda cfg, root: ["no passed mini smoke"])
     assert "freeze evidence" in refused(setup) and "no passed mini smoke" in refused(setup)
+
+
+def test_spill_problems_use_the_amended_two_stage_rule():
+    """031 amendment: the ready reading (first) may be up to 160 MiB above pre-boot (the measured normal boot adds
+    +80 MiB); bench readings are measured from the ready one (64 MiB or more = spill)."""
+    normal = {"tag": "x", "valid": True, "argv": ["vllm"],
+              "spill": {"pre_mib": 35.2, "ready_mib": 115.2, "readings_mib": [115.2, 179.1], "spilled": False,
+                        "tol_mib": 64, "ready_tol_mib": 160}}
+    assert cr.spill_problems([normal]) == []                          # + 80 at ready, + 63.9 over ready
+    bench_spill = copy.deepcopy(normal)
+    bench_spill["spill"]["readings_mib"] = [115.2, 179.2]             # + 64.0 over ready
+    assert any("marked valid" in p for p in cr.spill_problems([bench_spill]))
+    ready_spill = copy.deepcopy(normal)
+    ready_spill["spill"]["readings_mib"] = [195.3, 195.3]             # + 160.1 at ready
+    assert any("marked valid" in p for p in cr.spill_problems([ready_spill]))
+
+
+def test_spill_problems_refuse_inconsistent_two_stage_records():
+    """031 amendment: a benched row has the ready reading first plus at least one bench reading, ready_mib equal to
+    the first reading, and the frozen tolerances (64 / 160)."""
+    good = {"tag": "x", "valid": True, "argv": ["vllm"],
+            "spill": {"pre_mib": 35.2, "ready_mib": 115.2, "readings_mib": [115.2, 120.0], "spilled": False,
+                      "tol_mib": 64, "ready_tol_mib": 160}}
+    assert cr.spill_problems([good]) == []
+    for bad in ({"readings_mib": [115.2]}, {"ready_mib": 300.0}, {"tol_mib": 128}, {"ready_tol_mib": 320},
+                {"ready_mib": None}):
+        row = copy.deepcopy(good)
+        row["spill"].update(bad)
+        assert cr.spill_problems([row]), bad
+

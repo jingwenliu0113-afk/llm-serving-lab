@@ -371,17 +371,76 @@ def reader(values):
     return read
 
 
-def test_spill_guard_records_pre_ready_and_bench_readings():
-    g = gi.SpillGuard(reader([64.4, 70.0, 128.3, 200.0]))          # + 63.9 at b1-n1: not a spill
-    assert g.start()["shared_mib"] == 64.4
-    assert g.check("ready")["spilled"] is False
-    assert g.check("b1-n1")["spilled"] is False
-    e = g.check("b1-n2")
-    assert e["spilled"] is True and e["delta_mib"] == pytest.approx(135.6) and e["when"] == "b1-n2"
+def test_ready_spill_is_more_than_160_mib_above_the_pre_boot_reading():
+    """031 amendment (user, 2026-10-16): a normal vLLM boot adds exactly +80 MiB of Windows shared usage at ready
+    (dedicated ~1 GB below V_total), so the ready reading may be up to 160 MiB (2 x 80) above pre-boot; 超過 = more."""
+    assert gi.ready_spill(35.2, 115.2) is False           # + 80.0, the measured boot allocation
+    assert gi.ready_spill(35.2, 195.2) is False           # + 160.0: allowed (<= 160)
+    assert gi.ready_spill(35.2, 195.3) is True            # + 160.1
+    assert gi.READY_TOL_MIB == 160 and gi.SPILL_TOL_MIB == 64
+
+
+@pytest.mark.parametrize("base", [35.2, 96.1, 100.1, 1234.5])
+def test_the_boundaries_hold_on_every_0_1_mib_base(base):
+    """Readings come in 0.1 MiB steps: + 160.0 at ready and + 63.9 after it are never spills, + 160.1 and + 64.0 are,
+    whatever the base (a plain float subtraction got + 160.0 wrong for about 6 % of bases)."""
+    up = lambda d: round(base + d, 1)                     # noqa: E731 - a reading d MiB above base, as read_shared_usage rounds
+    assert gi.ready_spill(base, up(160.0)) is False and gi.ready_spill(base, up(160.1)) is True
+    assert gi.spill(base, up(63.9)) is False and gi.spill(base, up(64.0)) is True
+
+
+def test_the_boundaries_hold_on_a_grid_of_bases():
+    bases = [i / 10 for i in range(0, 20001, 7)]
+    assert not any(gi.ready_spill(b, round(b + 160.0, 1)) for b in bases)
+    assert all(gi.ready_spill(b, round(b + 160.1, 1)) for b in bases)
+    assert not any(gi.spill(b, round(b + 63.9, 1)) for b in bases)
+    assert all(gi.spill(b, round(b + 64.0, 1)) for b in bases)
+
+
+def test_record_spilled_uses_the_given_tolerances():
+    assert gi.record_spilled(35.2, [40.0, 50.0], tol_mib=5) is True
+    assert gi.record_spilled(35.2, [100.0], ready_tol_mib=50) is True
+    g = gi.SpillGuard(reader([35.2, 40.0, 50.0]), tol_mib=5)
+    g.start(), g.check("ready"), g.check("b1-n1")
+    assert g.row_record()["spilled"] is True and g.row_record()["tol_mib"] == 5
+
+
+def test_spill_guard_measures_benches_from_the_ready_reading():
+    """031 amendment: after ready, each bench reading is compared with the ready reading (64 MiB or more = spill)."""
+    g = gi.SpillGuard(reader([35.2, 115.2, 179.1, 179.2]))
+    assert g.start()["shared_mib"] == 35.2
+    ready = g.check("ready")
+    assert ready["spilled"] is False and ready["delta_mib"] == pytest.approx(80.0)
+    e1 = g.check("b1-n1")                                 # + 63.9 over ready: not a spill
+    assert e1["spilled"] is False and e1["delta_ready_mib"] == pytest.approx(63.9) and e1["dedicated_mib"] == 1396.0
+    e2 = g.check("b1-n2")                                 # + 64.0 over ready: a spill (以上 includes 64)
+    assert e2["spilled"] is True and e2["when"] == "b1-n2"
     rec = g.record()
-    assert rec["tol_mib"] == 64 and rec["pre"]["shared_mib"] == 64.4 and rec["spilled"] == "b1-n2"
+    assert (rec["tol_mib"], rec["ready_tol_mib"], rec["spilled"]) == (64, 160, "b1-n2")
     assert [x["when"] for x in rec["readings"]] == ["ready", "b1-n1", "b1-n2"]
-    assert g.row_record() == {"pre_mib": 64.4, "readings_mib": [70.0, 128.3, 200.0], "spilled": True, "tol_mib": 64}
+    assert g.row_record() == {"pre_mib": 35.2, "ready_mib": 115.2, "readings_mib": [115.2, 179.1, 179.2],
+                              "spilled": True, "tol_mib": 64, "ready_tol_mib": 160}
+
+
+def test_spill_guard_flags_a_spill_at_ready():
+    g = gi.SpillGuard(reader([35.2, 200.0]))
+    g.start()
+    assert g.check("ready")["spilled"] is True and g.spilled_at() == "ready"
+    assert g.row_record()["spilled"] is True
+
+
+def test_a_bench_reading_needs_the_ready_reading_first():
+    g = gi.SpillGuard(reader([35.2, 40.0]))
+    g.start()
+    with pytest.raises(gi.SharedUsageError, match="ready"):
+        g.check("b1-n1")
+
+
+def test_record_spilled_is_the_one_rule_the_report_recomputes():
+    assert gi.record_spilled(35.2, [115.2, 179.1]) is False
+    assert gi.record_spilled(35.2, [115.2, 179.2]) is True
+    assert gi.record_spilled(35.2, [195.3]) is True
+    assert gi.record_spilled(35.2, [115.2, 100.0]) is False           # a drop is never a spill
 
 
 def test_spill_guard_fails_closed_and_records_the_error():

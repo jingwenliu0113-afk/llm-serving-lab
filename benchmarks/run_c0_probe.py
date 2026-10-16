@@ -36,8 +36,9 @@ Per boot (028 「每次 boot 都相同的量測」 and 「停止規則」; rule 
    server ends the boot (the server is torn down); its remaining benches are rows with not_run = true.
    Spill guard (031): the shared usage is read once the server is ready and after every bench (not after an 88 C or
    lost-telemetry stop, which tears down at once: that bench has no reading and is invalid, fail closed); every other
-   benched row carries spill {pre_mib, readings_mib, spilled, tol_mib}. A reading 64 MiB or more above the pre-boot
-   one makes that bench invalid ("spill") and ends the boot
+   benched row carries spill {pre_mib, ready_mib, readings_mib, spilled, tol_mib, ready_tol_mib}. 031 amendment: the
+   ready reading may be up to 160 MiB above pre-boot, each bench reading must stay under ready + 64 MiB. A spill makes
+   that bench invalid ("spill") and ends the boot
    (after the ready reading: no bench runs); the remaining benches are not_run rows. A reading that cannot be taken
    makes the bench invalid and stops the session ("spill_unreadable", like lost telemetry);
 5. teardown (run_adv.shutdown_group under run_adv.DeferredSignals, log reader joined), the sampler stopped and its
@@ -615,9 +616,13 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
         return report, guard
 
     def spill_reason(entry: dict, guard) -> str:
+        if entry["when"] == "ready":
+            return (f"spill: Windows shared usage {entry['shared_mib']} MiB at ready is {entry['delta_mib']} MiB above "
+                    f"the pre-boot {guard.pre['shared_mib']} MiB (> {guard.ready_tol_mib}; 031 amendment): VRAM "
+                    "spilled to system memory")
         return (f"spill: Windows shared usage {entry['shared_mib']} MiB at {entry['when']} is "
-                f"{entry['delta_mib']} MiB above the pre-boot {guard.pre['shared_mib']} MiB (>= {guard.tol_mib}; 031): "
-                "VRAM spilled to system memory")
+                f"{entry['delta_ready_mib']} MiB above the ready reading {guard.ready['shared_mib']} MiB "
+                f"(>= {guard.tol_mib}; 031 amendment): VRAM spilled to system memory")
 
     def checked_start(b: int, proc, rec: dict, smi) -> None:
         """The wait for /health, bounded by the startup timeout and by what is left of the cap (028 hard cap)."""

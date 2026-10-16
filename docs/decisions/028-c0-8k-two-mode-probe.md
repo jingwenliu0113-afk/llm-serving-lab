@@ -271,7 +271,7 @@ raw 檔已從 WSL 唯讀取回（Core 18 個、Advanced 27 個，sha256 全部�
 
 - 停止規則 2 改為 decision 031 的綜合判定（`benchmarks/gpu_idle.py`）：最多試 3 個 30 s 的窗，都不通過時以 `gpu_not_idle` 停止（取代舊的 `gpu_busy`）。
 - **spill 偵測**：在 boot 前、server 就緒後與每個 bench 之後讀 Windows 的 shared usage。
-  - 比 boot 前多出 64 MiB 以上：該 bench 無效（原因 `spill`），結束該 boot，之後的 bench 記為 not_run。
+  - 比 boot 前多出 64 MiB 以上：該 bench 無效（原因 `spill`），結束該 boot，之後的 bench 記為 not_run。〔2026-10-16 依 031 修正案（使用者確認）改為兩段：就緒時比 boot 前多出超過 160 MiB 即 spill（正常 boot 固定多 80 MiB）；之後每個 bench 比就緒時的讀數多出 64 MiB 以上即 spill。〕
   - 讀不到：該 bench 無效，以 `spill_unreadable` 停止 session。
 - **88 °C 或遙測中斷**：在乾淨的 bench 之後才觸發時，為了立即 teardown 不再讀 shared usage，該 bench 因缺少讀數而記為無效（fail closed）。
 - 這些停止與無效都依既有規則由 `c0_analysis` 處理：無效的 bench 排除，新的停止規則歸為「無法判定」，即分支 C。

@@ -213,11 +213,12 @@ class World:
     SPILL, one in shared_fail raises as an unreachable powershell.exe does."""
 
     def __init__(self, tmp_path, *, truth=scenario, boots=None, bench=None, mem=400, util=0, apps=(), lock=True,
-                 arrivals=None, thr_scale=None, spill_at=(), shared_fail=()):
+                 arrivals=None, thr_scale=None, spill_at=(), shared_fail=(), ready_add_mib=0.0):
         self.tmp_path, self.truth, self.boots, self.bench = Path(tmp_path), truth, boots or {}, bench or {}
         self.thr_scale = thr_scale or {}
         self.mem, self.apps, self.lock, self.arrivals = mem, list(apps), lock, arrivals
         self.util, self.spill_at, self.shared_fail = util, set(spill_at), set(shared_fail)
+        self.ready_add_mib = ready_add_mib     # a server's own shared allocation, present from ready on (031 amendment)
         self.point, self.shared_points, self.samples = "pre:1", [], 0
         self.t, self.events, self.labels, self.benches, self.bench_argvs, self.bench_timeouts = 0.0, [], [], [], [], {}
         self.server_argvs, self.server_envs, self.receivers, self.lock_calls = [], [], [], 0
@@ -253,7 +254,8 @@ class World:
         if self.point in self.shared_fail:
             raise gi.SharedUsageError("powershell.exe failed: TimeoutExpired: timed out after 20 seconds")
         return {"luid": "luid_0x00000000_0x000103ae_phys_0", "dedicated_mib": 1396.0,
-                "shared_mib": SHARED_IDLE + (SPILL if self.point in self.spill_at else 0.0)}
+                "shared_mib": SHARED_IDLE + (0.0 if self.point.startswith("pre:") else self.ready_add_mib)
+                + (SPILL if self.point in self.spill_at else 0.0)}
 
     def compute_apps(self):
         self.events.append("apps")
@@ -1000,7 +1002,8 @@ def test_every_benched_run_carries_its_spill_readings_and_every_boot_its_031_rec
     assert benched and all(r["valid"] for r in benched)
     for r in benched:
         sp = r["spill"]
-        assert (sp["pre_mib"], sp["spilled"], sp["tol_mib"]) == (SHARED_IDLE, False, 64)
+        assert (sp["pre_mib"], sp["spilled"], sp["tol_mib"], sp["ready_tol_mib"]) == (SHARED_IDLE, False, 64, 160)
+        assert sp["ready_mib"] == SHARED_IDLE
         assert len(sp["readings_mib"]) >= 2 and set(sp["readings_mib"]) == {SHARED_IDLE}      # ready + benches so far
     for b in s["boots"]:
         rec = s["runs"][b["tag"]]
@@ -1382,3 +1385,36 @@ def test_a_formal_session_needs_the_freeze_evidence(tmp_path, cfg, pins):
     with pytest.raises(rc.RunError, match="freeze evidence"):
         run(world, plan, c, p, mixed_datasets=ds, evidence=False)
     assert not (tmp_path / "repo" / "results" / "capacity" / "s1").exists()
+
+
+def test_the_normal_80_mib_boot_allocation_at_ready_is_not_a_spill(tmp_path, cfg, pins):
+    """031 amendment: on the RTX every normal boot adds exactly +80 MiB of shared usage at ready; a session runs."""
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    out, s, rows = run(World(tmp_path, ready_add_mib=80.0), plan, c, p, mixed_datasets=ds)
+    benched = [r for r in rows if "argv" in r]
+    assert benched and all(r["valid"] for r in benched)
+    assert all(r["spill"]["ready_mib"] == SHARED_IDLE + 80.0 and not r["spill"]["spilled"] for r in benched)
+
+
+def test_spill_reasons_name_the_amended_baselines():
+    """031 amendment: a ready spill is judged against pre-boot (> 160), a bench spill against the ready reading."""
+    g = gi.SpillGuard(lambda: {"luid": "l", "dedicated_mib": 15000.0, "shared_mib": next(vals)})
+    vals = iter([35.2, 135.2, 199.2])
+    g.start()
+    ready = g.check("ready")
+    assert not ready["spilled"]                                   # + 100.0 at ready
+    bench = g.check("C-U2K-c8-r1")
+    assert bench["spilled"] and "64.0 MiB above the ready reading 135.2" in rc.spill_reason(bench, g)
+    g2 = gi.SpillGuard(lambda: {"luid": "l", "dedicated_mib": 15000.0, "shared_mib": next(vals2)})
+    vals2 = iter([35.2, 196.2])
+    g2.start()
+    e = g2.check("ready")
+    assert e["spilled"] and "at ready" in rc.spill_reason(e, g2) and "> 160" in rc.spill_reason(e, g2)
+
+
+def test_a_ready_reading_100_mib_above_pre_boot_still_runs(tmp_path, cfg, pins):
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    out, s, rows = run(World(tmp_path, ready_add_mib=100.0), plan, c, p, mixed_datasets=ds)
+    benched = [r for r in rows if "argv" in r]
+    assert benched and all(r["valid"] and r["spill"]["ready_mib"] == SHARED_IDLE + 100.0 for r in benched)
+

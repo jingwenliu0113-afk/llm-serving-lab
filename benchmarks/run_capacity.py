@@ -46,8 +46,9 @@ no compute process, memory.used range <= 64 MiB and idle <= pins [stage_b].v_tot
 (capacity_plan.server_argv_for: the Stage B values, no observation flag) through run_adv.start_server in its own
 process group; /health within server_ready_timeout_s (1800 s); checks (b) ready and FLASH_ATTN, (c)
 run_adv.parse_nondefault holds max_num_batched_tokens 2048 and kv_cache_memory_bytes K and no observation, T or G
-key, (d) /metrics num_gpu_blocks / block_size = 248 / 528, then (031) the shared usage once ready: 64 MiB or more
-above the pre-boot reading fails the boot before its first bench like a failed check; then the runs; teardown
+key, (d) /metrics num_gpu_blocks / block_size = 248 / 528, then (031 amendment) the shared usage once ready: more than
+160 MiB above the pre-boot reading (a normal boot adds +80 MiB) fails the boot before its first bench like a failed
+check; then the runs; teardown
 (run_adv.shutdown_group under run_adv.DeferredSignals: SIGINT -> SIGTERM -> SIGKILL on the whole group, interrupts
 deferred until it is down, the log reader joined); env capture after. A server log that cannot be written aborts the
 session (a harness failure, not a result).
@@ -56,9 +57,10 @@ Per run: a server that already exited makes the run invalid without a bench; els
 client's process group is killed at the timeout), run_core_b.MetricsSampler at 1 Hz (descriptive: KV peak,
 preemptions, running + waiting peak), then (a) run_core_b.summarize_result ok, (e) ttfts / latencies / input_lens /
 output_lens of length N and capacity_analysis.derived_problems (mixed: a long request in W), (f) no timeout (a result
-file never rescues a timed-out or failed bench), (g) no spill (031): the shared usage read after the bench is less
-than 64 MiB above the boot's pre-boot reading; the row carries spill {pre_mib, readings_mib (ready and every bench of
-the boot so far), spilled, tol_mib} and capacity_report recomputes it. A spill also ends the boot: its remaining runs
+file never rescues a timed-out or failed bench), (g) no spill (031 amendment): the shared usage read after the bench
+is less than 64 MiB above the boot's ready reading; the row carries spill {pre_mib, ready_mib, readings_mib (ready and
+every bench of the boot so far), spilled, tol_mib, ready_tol_mib} and capacity_report recomputes it with
+gpu_idle.record_spilled. A spill also ends the boot: its remaining runs
 (the rest of a Phase S search, the planned points of a sentinel / Phase C boot) are invalid rows without a bench, as
 after a server exit. A shared usage that cannot be read aborts the session (fail closed; no row for that bench).
 derived/<tag>-requests.jsonl (idx, cls, ttft_ms, latency_ms, out; no prompt text) comes from the --save-detailed
@@ -353,9 +355,13 @@ def compute_apps_bounded(timeout_s: float = ra.NVIDIA_SMI_TIMEOUT_S) -> list:
 
 def spill_reason(entry: dict, guard: gi.SpillGuard) -> str:
     """030 8.6 (g) / 031: why a reading is a spill."""
-    return (f"spill: Windows shared usage {entry['shared_mib']} MiB at {entry['when']} is {entry['delta_mib']} MiB "
-            f"above the pre-boot {guard.pre['shared_mib']} MiB (>= {guard.tol_mib}; 031, 030 8.6 (g)): VRAM spilled to "
-            "system memory")
+    if entry["when"] == "ready":
+        return (f"spill: Windows shared usage {entry['shared_mib']} MiB at ready is {entry['delta_mib']} MiB above the "
+                f"pre-boot {guard.pre['shared_mib']} MiB (> {guard.ready_tol_mib}; 031 amendment, 030 8.6 (g)): VRAM "
+                "spilled to system memory")
+    return (f"spill: Windows shared usage {entry['shared_mib']} MiB at {entry['when']} is {entry['delta_ready_mib']} "
+            f"MiB above the ready reading {guard.ready['shared_mib']} MiB (>= {guard.tol_mib}; 031 amendment, 030 8.6 "
+            "(g)): VRAM spilled to system memory")
 
 
 # ---------------------------------------------------------------- smokes (030 8.6, before the freeze)

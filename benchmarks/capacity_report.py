@@ -21,9 +21,9 @@ and configs/pins.toml. It refuses (exit 2) and writes nothing when (030 8.7, wit
 - plan.json is not capacity_plan.build_plan of the uniform session and these capacity.toml / pins bytes;
 - a recorded server argv / env is not the Core B one with the Stage B values (capacity_plan.server_argv_for), or a
   bench argv is not core_b_plan.bench_argv (capacity_plan.bench_argv_for);
-- run validity (g) (031, spill_problems): a run that ran a bench (or is valid) without its spill readings, a recorded
-  spilled flag that is not the one recomputed with gpu_idle.spill from pre_mib / readings_mib, or a valid run that
-  spilled;
+- run validity (g) (031 and its amendment, spill_problems, recomputed with gpu_idle.record_spilled): a run that ran a
+  bench (or is valid) without its spill readings (ready first, then one per bench, the 64 / 160 MiB tolerances), a recorded
+  spilled flag that is not the one recomputed from pre_mib / readings_mib, or a valid run that spilled;
 - after capacity_analysis.analyze: a replay mismatch (every search decision, K, n, skip and order recomputed from the
   rows) or a failed sentinel gate (drift > 3 % in output throughput or W-mean TTFT, or a sentinel invalid).
 Otherwise analysis.json (schema_version 1) is capacity_analysis.analyze's body plus provenance (session, the
@@ -282,8 +282,9 @@ def _num(v) -> bool:
 
 def spill_problems(rows: list) -> list:
     """030 8.6 (g) / 031 recomputed from the rows: every run that ran a bench (it has an argv) or is valid carries its
-    spill record (pre_mib, readings_mib: numbers), its recorded spilled flag is the recomputed one (gpu_idle.spill: a
-    reading SPILL_TOL_MIB or more above pre_mib), and no valid run spilled. Runs without a bench (not run after a
+    spill record (pre_mib, readings_mib: numbers, the ready reading first), its recorded spilled flag is the recomputed
+    one (gpu_idle.record_spilled, the 031 amendment: ready more than READY_TOL_MIB above pre_mib, or a bench reading
+    SPILL_TOL_MIB or more above the ready one), and no valid run spilled. Runs without a bench (not run after a
     spill or a server exit, or on a failed boot) carry no readings and are invalid anyway."""
     problems = []
     for r in rows:
@@ -296,7 +297,15 @@ def spill_problems(rows: list) -> list:
             problems.append(f"{tag}: no spill readings (pre_mib, readings_mib) for a run that ran a bench "
                             "(031; 030 8.6 (g))")
             continue
-        spilled = any(gi.spill(pre, x) for x in readings)
+        if "argv" in r and len(readings) < 2:
+            problems.append(f"{tag}: a run that ran a bench has no reading after it (031: ready + one per bench)")
+        if sp.get("ready_mib") != readings[0]:
+            problems.append(f"{tag}: ready_mib {sp.get('ready_mib')!r} is not the first reading {readings[0]!r} "
+                            "(031 amendment)")
+        if (sp.get("tol_mib"), sp.get("ready_tol_mib")) != (gi.SPILL_TOL_MIB, gi.READY_TOL_MIB):
+            problems.append(f"{tag}: spill tolerances {sp.get('tol_mib')!r} / {sp.get('ready_tol_mib')!r} are not the "
+                            f"031 amendment's {gi.SPILL_TOL_MIB} / {gi.READY_TOL_MIB} MiB")
+        spilled = gi.record_spilled(pre, readings)
         if sp.get("spilled") is not spilled:
             problems.append(f"{tag}: recorded spill {sp.get('spilled')!r} != {spilled} recomputed from its readings "
                             "(031)")

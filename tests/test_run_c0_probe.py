@@ -206,11 +206,12 @@ class World:
 
     def __init__(self, tmp_path, *, behave=None, slips=None, blocks=248, nondefault=None, mem=(400,), util=(0,),
                  apps=(), lock=(True,), hot_at_start=(), lost_at_start=(), halt_at_teardown=None, smi="ok",
-                 startup_s=32.0, bench_s=330.0, never_ready=False, health_s=0.0, spill_at=(), shared_fail=(),
+                 startup_s=32.0, bench_s=330.0, never_ready=False, health_s=0.0, spill_at=(), shared_fail=(), ready_add_mib=0.0,
                  sample_raises=False):
         self.tmp_path, self.behave, self.slips = tmp_path, behave or {}, slips or {}
         self.blocks, self.nondefault, self.mem, self.apps = blocks, nondefault, list(mem), list(apps)
         self.util, self.spill_at, self.shared_fail = list(util), set(spill_at), set(shared_fail)
+        self.ready_add_mib = ready_add_mib     # a server's own shared allocation, present from ready on (031 amendment)
         self.sample_raises, self.point, self.shared_points = sample_raises, "pre:1", []
         self.lock, self.hot_at_start, self.never_ready = list(lock), set(hot_at_start), never_ready
         self.lost_at_start, self.halt_at_teardown, self.smi_mode = set(lost_at_start), halt_at_teardown or {}, smi
@@ -250,7 +251,8 @@ class World:
         if self.point in self.shared_fail:
             raise gi.SharedUsageError("powershell.exe failed: TimeoutExpired: timed out after 20 seconds")
         return {"luid": "luid_0x00000000_0x000103ae_phys_0", "dedicated_mib": 1396.0,
-                "shared_mib": SHARED_IDLE + (SPILL if self.point in self.spill_at else 0.0)}
+                "shared_mib": SHARED_IDLE + (0.0 if self.point.startswith("pre:") else self.ready_add_mib)
+                + (SPILL if self.point in self.spill_at else 0.0)}
 
     def compute_apps(self):
         self.events.append("apps")
@@ -784,8 +786,9 @@ def test_no_data_driven_stop(tmp_path, pins, plan):
 def test_every_benched_row_carries_its_spill_readings(tmp_path, pins, plan):
     world = World(tmp_path)
     out, session, rows = run(world, plan, pins)
-    assert all(r["spill"] == {"pre_mib": SHARED_IDLE, "readings_mib": [SHARED_IDLE] * (r["bench"] + 1),
-                              "spilled": False, "tol_mib": 64} for r in rows)
+    assert all(r["spill"] == {"pre_mib": SHARED_IDLE, "ready_mib": SHARED_IDLE,
+                              "readings_mib": [SHARED_IDLE] * (r["bench"] + 1), "spilled": False, "tol_mib": 64,
+                              "ready_tol_mib": 160} for r in rows)
     rec = session["boots"]["b1"]["spill"]
     assert rec["pre"]["shared_mib"] == SHARED_IDLE and rec["spilled"] is None and rec["error"] is None
     assert [x["when"] for x in rec["readings"]] == ["ready", "b1-n1", "b1-n2", "b1-n3", "b1-n4"]
@@ -1103,3 +1106,34 @@ def test_nondefault_problems_need_exactly_mnbt_and_k():
     assert rp.nondefault_problems({"max_num_batched_tokens": 2048, "kv_cache_memory_bytes": k,
                                    "enable_logging_iteration_details": True}, kv_bytes=k)
     assert rp.nondefault_problems({"max_num_batched_tokens": 2048.0, "kv_cache_memory_bytes": k}, kv_bytes=k)
+
+
+def test_the_normal_80_mib_boot_allocation_at_ready_is_not_a_spill(tmp_path, pins, plan):
+    """031 amendment: on the RTX every normal boot adds exactly +80 MiB of shared usage at ready; the boot runs its
+    benches, which are measured from the ready reading."""
+    world = World(tmp_path, ready_add_mib=80.0)
+    out, session, rows = run(world, plan, pins)
+    assert rows and all(r["ok"] for r in rows if not r.get("not_run"))
+    assert all(r["spill"]["ready_mib"] == SHARED_IDLE + 80.0 and r["spill"]["spilled"] is False for r in rows)
+
+
+def test_a_bench_spill_is_measured_from_a_ready_reading_above_pre_boot(tmp_path, pins, plan):
+    """031 amendment: with the ready reading +100 MiB above pre-boot (allowed: <= 160), a bench reading is judged
+    against the ready one, and the reason says so."""
+    world = World(tmp_path, ready_add_mib=100.0, spill_at={"bench:1-2"})
+    out, session, rows = run(world, plan, pins)
+    r = {x["tag"]: x for x in rows}
+    assert r["b1-n1"]["ok"] and r["b1-n1"]["spill"]["ready_mib"] == SHARED_IDLE + 100.0
+    assert not r["b1-n2"]["ok"] and r["b1-n2"]["spill"]["spilled"] is True
+    assert any("above the ready reading" in x for x in r["b1-n2"]["reasons"]), r["b1-n2"]["reasons"]
+
+
+def test_a_ready_spill_reason_names_the_160_mib_tolerance(tmp_path, pins, plan):
+    world = World(tmp_path, ready_add_mib=161.0)              # + 161.0 at ready: more than 160
+    out, session, rows = run(world, plan, pins)
+    rec = session["boots"]["b1"]
+    assert rec["spill"]["spilled"] == "ready" and rec["failed"] is True
+    b1 = [r for r in rows if r["tag"].startswith("b1-")]
+    assert b1 and all(r.get("not_run") for r in b1)
+    assert all(any("at ready" in x and "> 160" in x for x in r["reasons"]) for r in b1), b1[0]["reasons"]
+

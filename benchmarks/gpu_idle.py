@@ -17,8 +17,10 @@ silently changes latency. read_shared_usage reads the Windows performance counte
 Usage' and '...\\Shared Usage' through powershell.exe from inside WSL (20 s timeout) and keeps the adapter with the
 largest dedicated usage (the NVIDIA card; LUIDs change across Windows boots, so every reading decides afresh).
 SpillGuard holds one boot's readings: pre-boot (after the idle window passed), after the server is ready, after each
-bench. A reading SPILL_TOL_MIB or more above the pre-boot one is a spill (031 「64 MiB 以上」: 以上 includes 64); a
-reading that cannot be taken (timeout, non-zero exit, unparsable output, another adapter than the pre-boot one) raises
+bench. 031 amendment (user, 2026-10-16): a normal boot adds a fixed +80 MiB of shared usage by ready, so the ready
+reading spills when it is more than READY_TOL_MIB (160) above pre-boot, and each bench reading when it is
+SPILL_TOL_MIB (64) or more (以上 includes 64) above the ready reading; record_spilled is that one rule, for the runners
+and capacity_report alike, on deltas rounded to the readings' 0.1 MiB. A reading that cannot be taken (timeout, non-zero exit, unparsable output, another adapter than the pre-boot one) raises
 SharedUsageError, which the research runners treat as lost telemetry (fail closed).
 
 Stdlib only, Python 3.10 compatible.
@@ -41,7 +43,11 @@ F_PEAK_MIB = 15157
 MARGIN_MIB = 128            # 031: headroom left on top of the measured peak
 UTIL_MAX = 5                # 031: utilization.gpu <= 5 % in every sample (no compute load)
 RANGE_MAX_MIB = 64          # 031: max - min memory.used over the window <= 64 MiB (a stable baseline)
-SPILL_TOL_MIB = 64          # 031: a shared-usage reading 64 MiB or more above the boot's pre-boot one is a spill
+SPILL_TOL_MIB = 64          # 031 (amended): a bench reading 64 MiB or more above the boot's ready reading is a spill
+# 031 amendment (user, 2026-10-16): every normal vLLM boot adds exactly +80 MiB of Windows shared usage by ready while
+# dedicated usage stays ~1 GB below V_total (3 research boots + 1 product boot), so the ready reading may be up to
+# 2 x 80 = 160 MiB above pre-boot; bench readings are then measured from the ready reading with SPILL_TOL_MIB.
+READY_TOL_MIB = 160
 WINDOWS = 3                 # 031: at most 3 windows (about 90 s), then "gpu_not_idle"
 WINDOW_SAMPLES = 30         # 031: 30 samples at 1 Hz
 WINDOW_INTERVAL_S = 1.0
@@ -255,10 +261,29 @@ def read_shared_usage(*, run: Callable | None = None, timeout_s: float = SHARED_
     return parse_shared_usage(proc.stdout or "")
 
 
-def spill(pre_mib: float, reading_mib: float, tol_mib: float = SPILL_TOL_MIB) -> bool:
-    """031 「比 boot 前多出 64 MiB 以上即為 spill」: a reading tol_mib or more above the boot's pre-boot one (以上
-    includes the bound) is a spill."""
-    return reading_mib >= pre_mib + tol_mib
+def _delta(base_mib: float, reading_mib: float) -> float:
+    """reading - base at the readings' 0.1 MiB resolution, so a boundary is never decided by float error."""
+    return round(reading_mib - base_mib, 1)
+
+
+def ready_spill(pre_mib: float, ready_mib: float, tol_mib: float = READY_TOL_MIB) -> bool:
+    """031 amendment: the ready reading spilled when it is more than tol_mib (超過) above the pre-boot one."""
+    return _delta(pre_mib, ready_mib) > tol_mib
+
+
+def record_spilled(pre_mib: float, readings_mib: list, *, tol_mib: float = SPILL_TOL_MIB,
+                   ready_tol_mib: float = READY_TOL_MIB) -> bool:
+    """The one rule a boot's readings are judged by (the runners and capacity_report alike): readings_mib[0] is the
+    ready reading (ready_spill against pre_mib), every later one a bench reading (spill against the ready one)."""
+    ready = readings_mib[0]
+    return (ready_spill(pre_mib, ready, ready_tol_mib)
+            or any(spill(ready, x, tol_mib) for x in readings_mib[1:]))
+
+
+def spill(base_mib: float, reading_mib: float, tol_mib: float = SPILL_TOL_MIB) -> bool:
+    """031 (amended): a bench reading tol_mib or more (以上 includes the bound) above its base, the boot's ready
+    reading, is a spill."""
+    return _delta(base_mib, reading_mib) >= tol_mib
 
 
 class SpillGuard:
@@ -266,9 +291,10 @@ class SpillGuard:
     tag) and says whether it spilled. A reading that cannot be taken, or one of another adapter than the pre-boot
     reading's, raises SharedUsageError (fail closed) and is recorded with its error."""
 
-    def __init__(self, read: Callable = read_shared_usage, *, tol_mib: float = SPILL_TOL_MIB):
-        self.read, self.tol_mib = read, tol_mib
-        self.pre, self.readings, self.error = None, [], None
+    def __init__(self, read: Callable = read_shared_usage, *, tol_mib: float = SPILL_TOL_MIB,
+                 ready_tol_mib: float = READY_TOL_MIB):
+        self.read, self.tol_mib, self.ready_tol_mib = read, tol_mib, ready_tol_mib
+        self.pre, self.ready, self.readings, self.error = None, None, [], None
 
     def _read(self, when: str) -> dict:
         try:
@@ -287,11 +313,20 @@ class SpillGuard:
         return self.pre
 
     def check(self, when: str) -> dict:
+        """when = "ready" (judged against pre-boot with ready_tol_mib) or a bench tag (judged against the ready
+        reading with tol_mib; 031 amendment). A bench reading before the ready one raises (fail closed)."""
         if self.pre is None:
             raise SharedUsageError(f"no pre-boot shared usage reading before {when}")
+        if when != "ready" and self.ready is None:
+            raise SharedUsageError(f"no ready shared usage reading before {when} (031: benches are measured from it)")
         got = self._read(when)
-        entry = {"when": when, **got, "delta_mib": round(got["shared_mib"] - self.pre["shared_mib"], 1),
-                 "spilled": spill(self.pre["shared_mib"], got["shared_mib"], self.tol_mib)}
+        entry = {"when": when, **got, "delta_mib": round(got["shared_mib"] - self.pre["shared_mib"], 1)}
+        if when == "ready":
+            self.ready = got
+            entry["spilled"] = ready_spill(self.pre["shared_mib"], got["shared_mib"], self.ready_tol_mib)
+        else:
+            entry["delta_ready_mib"] = round(got["shared_mib"] - self.ready["shared_mib"], 1)
+            entry["spilled"] = spill(self.ready["shared_mib"], got["shared_mib"], self.tol_mib)
         self.readings.append(entry)
         return entry
 
@@ -300,12 +335,13 @@ class SpillGuard:
 
     def record(self) -> dict:
         """The boot's readings for session.json."""
-        return {"tol_mib": self.tol_mib, "pre": self.pre, "readings": list(self.readings),
-                "spilled": self.spilled_at(), "error": self.error}
+        return {"tol_mib": self.tol_mib, "ready_tol_mib": self.ready_tol_mib, "pre": self.pre,
+                "readings": list(self.readings), "spilled": self.spilled_at(), "error": self.error}
 
     def row_record(self) -> dict:
         """What a bench row carries (030 8.6 (g)): the pre-boot value and every later reading of its boot so far."""
         values = [e["shared_mib"] for e in self.readings]
-        return {"pre_mib": self.pre["shared_mib"], "readings_mib": values,
-                "spilled": any(spill(self.pre["shared_mib"], v, self.tol_mib) for v in values),
-                "tol_mib": self.tol_mib}
+        return {"pre_mib": self.pre["shared_mib"], "ready_mib": None if self.ready is None else self.ready["shared_mib"],
+                "readings_mib": values, "spilled": bool(values) and record_spilled(
+                    self.pre["shared_mib"], values, tol_mib=self.tol_mib, ready_tol_mib=self.ready_tol_mib),
+                "tol_mib": self.tol_mib, "ready_tol_mib": self.ready_tol_mib}

@@ -181,7 +181,7 @@ Mac 只負責 ssh，不影響 RTX 的量測；但我在 Mac 上跑完整測試�
   產品端的 shared usage 讀數因同樣的原因失敗，但只作描述，不影響結果。
 
 
-## 執行紀錄三與 spill 規則的校準（2026-10-16 22:35–22:42；修正案為 DRAFT，待使用者確認）
+## 執行紀錄三與 spill 規則的校準（2026-10-16 22:35–22:42；修正案已由使用者確認）
 
 第二次批次（部署 `f30d17c`，閒置 616 MiB，Windows CPU 0.7%）：
 - 透過 `/init` 已能讀到 shared usage。
@@ -201,9 +201,14 @@ Mac 只負責 ssh，不影響 RTX 的量測；但我在 Mac 上跑完整測試�
 - 所以「以 boot 前為基準、容許 64 MiB」的規則，會把每一次正常 boot 判為 spill。64 MiB 是我在沒有實測的情況下提出的，校準錯了。
 - 依 031，讀數失敗或 spill 時一律停止，所以這兩次批次都沒有產生任何研究數據。
 
-**修正案（DRAFT，使用者確認之前研究不執行）**：spill 偵測改為兩段，以實測校準
+**修正案（使用者 2026-10-16 確認採用「兩段式」）**：spill 偵測改為兩段，以實測校準
 1. **就緒時**：shared(就緒) − shared(boot 前) ≤ 160 MiB（實測的正常 boot 配置 80 MiB 的 2 倍）。超過即為 spill，該 boot 不跑 bench。
 2. **每個 bench 之後**：shared(bench 後) − shared(就緒) < 64 MiB。達到 64 MiB 即為 spill，該 bench 無效並停止該 boot；容許值仍為 64 MiB，但基準改為就緒時的讀數。
 3. 每次讀數都同時記錄 Windows 的 NVIDIA dedicated usage，只作描述，用來判讀 spill 是否和 VRAM 接近滿載同時發生。
 
 其他規則（閒置判定、讀數失敗時 fail closed、產品只作描述）都不變。
+- 實作（`gpu_idle.READY_TOL_MIB = 160`、`ready_spill`、`record_spilled`、`SpillGuard`）：
+  - row 記錄 `pre_mib`、`ready_mib`、`readings_mib`（第一個是就緒時的讀數）、`tol_mib`、`ready_tol_mib`；
+  - `capacity_report` 以同一個 `record_spilled` 重算；
+  - 測試涵蓋 +80 MiB 的正常 boot、160 / 160.1 的邊界，以及就緒後 +63.9 / +64.0 的邊界。
+
