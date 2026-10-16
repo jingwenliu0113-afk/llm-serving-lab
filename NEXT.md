@@ -135,7 +135,11 @@
    包括 C_PROD 一律把 MARGINAL 當 FAIL，以及凍結必須附上的證據（兩次通過的 smoke 與 C0 的 decision log）。
    smoke 通過、C0 分支 A、凍結證據已填入 `configs/capacity.toml`（decision 032，`f35fe85`）。
    **已凍結**：`freeze.capacity = true` 單獨一個 commit（profile 產生器以它為凍結 commit）；`tests/test_stage_c_frozen.py` 以 sha256 固定五個 Stage C 模組與 capacity.toml。
-   下一步：部署凍結 commit → 確認 GPU 空閒（031）與 Mac / Windows 負載 → GPU lock 下跑正式 session `formal-YYYYMMDD-c1`（約 7–9 h）→ `capacity_report` → `profile_gen` → 報告。
+   凍結 commit `b3c9109`（profile 產生器的 `freeze_commit_problems` 已確認它是合格的凍結 commit）。
+   - **正式 session 執行中**：`formal-20261017-c1`，部署 `b3c9109`（manifest 216 個檔案相符），2026-10-17 02:51 起，GPU lock 下，單一 ssh 前景指令（030 8.4）。
+     開始前 Windows CPU 0.4%、可用 RAM 23.9 GB；Mac 只維持 ssh（`caffeinate -i`）。遠端 log：`/tmp/llmsl-c1.log`、`/tmp/llmsl-c1-plan.log`。
+   - session 期間不部署、不跑產品測試。
+   - 完成後：取回（不含 raw/）→ `capacity_report`（Mac）→ C1 結果的 decision log → `profile_gen --freeze-commit b3c91096f40ddc8a6d5294cea64fa1afa737ec50` → README / NEXT。
 
 ### Engineering
 1. 架構：decision 029。
@@ -146,7 +150,8 @@
    審查 11 項（2 項重複）全部修正，見 029 的 M1 實作補記；完整測試 2006 passed。
    - **RTX 整合測試 IT-0 至 IT-6 全部通過**（2026-10-16，兩次：`pt-20261016T142720Z-itest`、`pt-20261016T143958Z`，release `635b954` / `f30d17c`），
      依 031 的產品規格（基線判定；> 2,048 MiB 拒絕）。只是產品測試，不是容量。
-4. **M2**：§8 凍結並有有效的 C1 analysis 之後，才有 verified profile 與正式的產品上限。
+4. **M2 已實作**（`b91a9bf`）：產生器、載入時的 provenance 驗證、verified 0 與 unavailable class。
+   還沒有任何 verified profile：等 `formal-20261017-c1` 的 analysis 之後產生、commit，再以 verified profile 在 RTX 上跑 IT（不在研究 session 期間）。
 
 ### Phase 1 收尾（2026-10-11，已完成）
 
