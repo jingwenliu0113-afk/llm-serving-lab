@@ -1,0 +1,94 @@
+# 031 — RTX 閒置基線的調查，與新的 GPU 閒置判定方式（DRAFT，待使用者確認）
+
+- 狀態：**DRAFT**。使用者確認之前，C0、Stage C 與產品的 RTX 測試都不執行，現有的門檻也不改。
+- 日期：2026-10-16
+- 對應：MACHINE_POLICY「GPU Hard Lock」、decision 027 §5、028 停止規則 2、030 8.6、029 的 deploy preflight
+- 時點：C0 第一次嘗試（10-16 01:10）依停止規則 2 在任何 boot 之前停止之後。使用者要求確認閒置基線，並在必要時提出新的判定方式。
+- 範圍：只影響 Phase 2 尚未產生數據的工作（C0、C1、產品測試）。Phase 1 的程式、結果與門檻都不改（`run_core_b.IDLE_MIB` 與 `run_adv.IDLE_MIB` 是凍結的程式，維持 1,000）。
+
+## 調查（2026-10-16 16:30 左右，全部唯讀）
+
+**WSL**
+- WSL 剛被 ssh 喚醒，沒有任何其他專案的程序（沒有 ollama、vLLM、torch 或其他 python 工作），load 0.00，RAM 空閒 30 GB。
+- GPU lock 沒有人持有。
+- `nvidia-smi` 1 Hz 取樣 30 s：memory.used 固定 1,385 MiB，utilization.gpu 0%，P8，4.8–8.9 W，38 °C；看不到任何 compute process。
+
+**Windows 主機**（效能計數器）
+- GPU 引擎：5 次取樣中，沒有任何程序的使用率超過 0.5%。
+- CPU 1.6–2.1%，RAM 空閒 21.8 GB（共 31.9 GB）。Windows 已運行 1 天 7 小時。
+- **NVIDIA RTX 5070 Ti 在驅動 4K（3840×2160）螢幕**；AMD 內顯沒有接螢幕。所以桌面合成與所有桌面程式都在 NVIDIA 卡上。
+- NVIDIA 卡的 dedicated usage 為 1,396 MiB，**shared usage 32.7 MiB**。
+- 依程序分（NVIDIA 卡，MiB）：
+
+  | 程序 | MiB | 類型 |
+  |---|---|---|
+  | dwm | 598.6 | Windows 系統 |
+  | explorer | 314.9 | Windows 系統 |
+  | ChatGPT | 222.0 | 使用者應用程式 |
+  | msedgewebview2（兩個） | 205.8 | 應用程式內嵌的 Edge |
+  | BingWallpaper | 134.0 | 使用者應用程式 |
+  | RadeonSoftware | 105.1 | AMD 驅動的控制介面 |
+  | 其他（csrss、TextInputHost、StartMenu、LockApp、Settings、codex-computer-use 等） | 每個 11–38 | 多為系統 |
+
+**Phase 1 的閒置基線**（已 commit 的 env 擷取）：
+- 各 session 的閒置 memory.used 在 154–810 MiB 之間，中位數 186–617 MiB。
+- 現在的 1,385–1,396 MiB 比 Phase 1 任何一個 session 都高。差別來自桌面上開著的應用程式，不是計算負載。
+
+**結論：約 1.39 GB 是穩定的閒置占用**：沒有計算負載，也沒有其他專案的程序。它不是異常負載，但比 Phase 1 多出約 700–1,200 MiB 的 VRAM。
+
+## 為什麼不能只看基線偏移與使用率
+
+vLLM 在 Core B 設定（K = 4 GiB、U 0.91）下的實測記憶體（Advanced 的 K4 boot，memory.used 減去該 boot 之前的閒置值）：
+
+- 就緒時：+14,635 MiB；
+- bench 跑完後：**最多 +15,157 MiB**（K3 為 +14,182）。
+
+在現在的閒置值下：1,385 + 15,157 = **16,542 MiB，超過整張卡的 16,303 MiB 約 240 MiB**。
+- WDDM 不夠時不會報錯，而是把某些配置移到系統記憶體（Stage B 的超量測試已確認是 spill，不是 OOM）。
+- 這會悄悄改變延遲，而且和 Phase 1 不可比。
+- 要讓峰值放得下，閒置用量最多只能是 16,303 − 15,157 = 1,146 MiB，而且這是沒有任何餘裕的情況。
+- 所以 Phase 1 的 1,000 MiB 實際上就是「VRAM 餘裕」的限制，不是隨意的數字。只看使用率與基線偏移（例如「比基線多不超過 X」）會放行會 spill 的情況。
+
+## 提議的判定方式
+
+### 研究（C0、C1）：綜合判定，以實測的 vLLM 峰值推導餘裕
+
+每次 boot 前，以 1 Hz 取樣 30 s，下列全部成立才開始：
+
+1. **共享 GPU lock**：本 process 確實持有（驗證 fd），和現在一樣。
+2. **沒有計算負載**：每個樣本的 `utilization.gpu` ≤ 5%，WSL 看不到 compute process。
+3. **基線穩定**：30 s 內 memory.used 的最大值減最小值 ≤ 64 MiB，代表沒有程式正在載入或釋放 VRAM。
+4. **VRAM 餘裕**（取代固定的 1,000 MiB）：閒置 memory.used ≤ V_total − F_peak − margin。
+   - V_total = 16,303 MiB；
+   - F_peak = 15,157 MiB（Phase 1 實測，Core B argv、K 4 GiB，bench 後的最大增量）；
+   - margin = 128 MiB。
+   - 目前推得的上限為 **1,018 MiB**。數值和舊門檻幾乎相同，但改由實測推導，日後 argv 或 K 改變時要重新推導。
+5. **新增：直接偵測 spill**（boot 期間）：
+   - 在 boot 前與每個 bench 後，讀 Windows 的 NVIDIA adapter shared usage（目前閒置為 32.7 MiB）。
+   - 比 boot 前增加超過 64 MiB 時，該 bench 與之後的 bench 都無效（研究），並停止該 boot。
+   - 這是門檻 4 的直接驗證：門檻 4 預測不會 spill，這一步確認實際上沒有 spill。
+
+另外，執行前先看主機負載（只決定何時開始，不是有效性規則）：Windows 的 CPU 10 s 平均 ≤ 20%，RAM 空閒 ≥ 8 GiB。
+Mac 只負責 ssh，不影響 RTX 的量測；但我在 Mac 上跑完整測試等較重的工作之前，也會先看 Mac 的負載（使用者 2026-10-16 提醒：Mac 上有其他工作在跑，但不使用 lock）。
+
+### 產品測試（capserve 的 IT 與 loadtest）：可以採用基線偏移
+
+產品的整合測試驗證的是功能（串流、斷線、超載時回 429、drain），不是延遲；它的輸出也不是容量。因此：
+
+- 判定改為：lock、沒有計算負載（同上 2）、基線穩定（同上 3）。
+- 不要求餘裕 4；若餘裕不足，記錄為警告，並描述性地記錄 shared usage 的變化。
+- IT-5 的「GPU 記憶體回到閒置」改為「回到 boot 前的基線 + 64 MiB 以內」，不再用固定的 1,000 MiB。
+
+## 解除研究阻塞的選項（需要使用者決定）
+
+| 選項 | 內容 | 評估 |
+|---|---|---|
+| A（建議） | 執行研究的期間，由使用者關閉不需要的**使用者應用程式**：ChatGPT、使用內嵌 Edge 的 app、BingWallpaper、Radeon Software、設定、codex-computer-use | 合計約 700 MiB，預期閒置約 690 MiB，和 Phase 1 相當。不碰 Windows 系統程序（dwm、explorer、csrss 等） |
+| B | 把螢幕改接主機板（AMD 內顯），讓 NVIDIA 卡不負責桌面 | 最穩定，閒置可能接近 Phase 1 的低值；但要改變硬體接線 |
+| C（不建議） | 在現在的閒置值下先跑一次約 20 分鐘的診斷，同時用 spill 偵測，看 WDDM 會不會改把桌面的配置移出 | 依上面的算術預期一定會有東西被移出；即使只移出桌面的配置，adapter 的 shared usage 也會上升，研究的 run 仍會判無效 |
+
+## 不變的部分
+
+- Phase 1 的所有程式、結果與門檻不變。
+- 028 停止規則 2 與 030 8.6 的「≤ 1,000 MiB」只有在使用者確認後才改寫為上面的綜合判定；改寫時保留舊文字並標註。
+- 不關閉任何 Windows 系統程序，不搶占其他專案的 GPU。
