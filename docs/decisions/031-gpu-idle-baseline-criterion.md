@@ -135,3 +135,13 @@ Mac 只負責 ssh，不影響 RTX 的量測；但我在 Mac 上跑完整測試�
 - teardown 與 IT-5：GPU 記憶體在 60 s 內回到「boot 前基線 + 64 MiB」以內，取代固定的 IDLE_MIB。
 - 產品的輸出仍只寫到 `runs/`，不是容量量測。
 
+
+## 執行紀錄
+
+- **2026-10-16 22:10**：使用者結束了 ChatGPT 與 BingWallpaper，閒置值降為 1,043 MiB（穩定、0%），仍高於上限 1,018 MiB。
+  其餘非系統程式：Radeon Software 105 MiB、工作管理員 19 MiB、Chrome 遠端桌面 44 MiB。
+- **2026-10-16 22:1x**：依使用者指示（「你去關」）結束系統匣的 Radeon Software。
+  - 它拒絕一般的結束要求（taskkill 回報「只能強制終止」），所以改以 `taskkill /F` 強制結束；工作管理員已經不在執行。
+  - Chrome 遠端桌面不關，因為使用者可能正透過它連線；AMD 的服務與 Windows 系統程序都不碰。
+  - Radeon Software 下次登入時會自動啟動；開機自動啟動的設定沒有改。
+- 之後的閒置值：**901 MiB**，30 s 內最大減最小為 0 MiB，使用率 0%，沒有 compute process，符合研究的綜合判定（≤ 1,018 MiB）。
