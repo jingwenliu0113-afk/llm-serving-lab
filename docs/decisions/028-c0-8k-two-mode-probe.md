@@ -91,7 +91,7 @@
 2. 每次 boot 前，下列條件都要成立，否則停止：
    - `run_adv.held_gpu_lock()` 為真；
    - GPU 上沒有其他 compute process；
-   - 60 s 內 memory.used ≤ 1,000 MiB。
+   - 60 s 內 memory.used ≤ 1,000 MiB。〔2026-10-16 起由 decision 031 的綜合判定取代：lock、使用率 ≤ 5%、基線穩定、由實測 vLLM 峰值推導的 VRAM 餘裕（目前 1,018 MiB），並在 boot 期間以 Windows 的 shared usage 偵測 spill。使用者確認，任何 C0 數據之前。〕
 3. 已用時間加 30 分鐘會超過上限時，不再開始新的 boot。
 4. bench 達到 720 s 逾時（pins `[advanced].timeouts_s.uniform_8192`）就終止，關閉 server，該 bench 無效。
 5. **無效的 bench**：exit code ≠ 0 或逾時、completed ≠ 200 或 failed > 0、bench 後 server 不健康、block 數 ≠ 248、non-default args ≠ {MNBT 2048, K}。

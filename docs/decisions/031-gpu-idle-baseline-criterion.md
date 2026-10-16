@@ -1,6 +1,6 @@
 # 031 — RTX 閒置基線的調查，與新的 GPU 閒置判定方式（DRAFT，待使用者確認）
 
-- 狀態：**DRAFT**。使用者確認之前，C0、Stage C 與產品的 RTX 測試都不執行，現有的門檻也不改。
+- 狀態：**Accepted**（使用者 2026-10-16 確認；見文末「使用者決定與最終規格」）。原本的草稿內容保留如下。
 - 日期：2026-10-16
 - 對應：MACHINE_POLICY「GPU Hard Lock」、decision 027 §5、028 停止規則 2、030 8.6、029 的 deploy preflight
 - 時點：C0 第一次嘗試（10-16 01:10）依停止規則 2 在任何 boot 之前停止之後。使用者要求確認閒置基線，並在必要時提出新的判定方式。
@@ -92,3 +92,46 @@ Mac 只負責 ssh，不影響 RTX 的量測；但我在 Mac 上跑完整測試�
 - Phase 1 的所有程式、結果與門檻不變。
 - 028 停止規則 2 與 030 8.6 的「≤ 1,000 MiB」只有在使用者確認後才改寫為上面的綜合判定；改寫時保留舊文字並標註。
 - 不關閉任何 Windows 系統程序，不搶占其他專案的 GPU。
+
+## 使用者決定與最終規格（2026-10-16）
+
+**使用者決定**
+1. 研究（C0、Stage C）採用綜合判定。
+2. 解除方式：使用者表示桌機上已經沒有開任何應用程式。唯讀查詢顯示，占用 NVIDIA VRAM 的程序都沒有視窗，是登入時自動啟動的背景或系統匣程式：
+   - ChatGPT（10-15 09:18 起，共 15 個程序，含子程序 codex-computer-use）；
+   - BingWallpaper 與它的內嵌 Edge；
+   - Radeon Software；
+   - 背景暫停的「設定」。
+   另一組內嵌 Edge 屬於 Windows 搜尋（SearchHost），算系統元件，不動。我不會關閉任何程序；是否從系統匣結束這些常駐程式，由使用者決定。
+   在閒置值降到餘裕上限以下之前，研究維持 blocked。
+3. 產品的整合測試改用基線判定，現在就在目前的閒置值下執行。
+
+**研究的最終規格**（取代 028 停止規則 2 與 030 8.6 的「memory.used ≤ 1,000 MiB」）
+
+每次 boot 前取 30 個 1 Hz 樣本，下列全部成立才開始；最多試 3 次（約 90 s），都不成立就以 `gpu_not_idle` 停止，語意和舊的 `gpu_busy` 相同：
+- 本 process 確實持有共享 GPU lock；
+- 每個樣本的 utilization.gpu ≤ 5%，WSL 看不到 compute process；
+- 30 個樣本的 memory.used 最大值減最小值 ≤ 64 MiB；
+- 閒置 memory.used ≤ V_total − F_peak − margin。
+  - V_total 讀 pins `[stage_b].v_total_mib`（16,303）；
+  - F_peak = 15,157 MiB（Phase 1 實測，有出處）；
+  - margin = 128 MiB；
+  - 上限由程式計算，目前是 1,018 MiB。
+
+**spill 偵測（boot 期間）**
+- 讀取方式：從 WSL 呼叫 `powershell.exe`，讀 `\GPU Adapter Memory(*)\Shared Usage`，取 dedicated usage 最大的 adapter（NVIDIA 卡；LUID 每次開機可能不同，所以每次都重新判斷）。
+- 讀取時機：boot 前（閒置判定通過之後）、server 就緒後，以及每個 bench 之後。
+- 任何一次讀數比 boot 前多出 64 MiB 以上即為 spill。這時該 bench 無效，停止該 boot，之後計畫中的 bench 也記為無效（不補跑）。
+- 讀取失敗或逾時（20 s）時，比照遙測中斷，fail closed：停止。
+- WSL 執行中時，閒置的 shared usage 約 64 MiB（WSL 關閉時約 33 MiB），所以一律以同一次 boot 開始前的讀數為基準。
+
+**主機負載**：只決定何時開始，不是有效性規則，在 runner 之外檢查。Windows 的 CPU 10 s 平均 ≤ 20%、RAM 空閒 ≥ 8 GiB 時才開始；Mac 的負載只供參考。
+
+**產品的最終規格**（capserve 的 deploy、itest、loadtest）
+- preflight：本 process 確實持有 lock；30 s 內 utilization.gpu 每個樣本都 ≤ 5%；memory.used 的最大值減最小值 ≤ 64 MiB。
+  - 記錄閒置基線。
+  - 餘裕不足（閒置 > 推得的上限）時記為警告，不拒絕。
+- shared usage 在 boot 前、就緒後與測試後都記錄，只作描述。
+- teardown 與 IT-5：GPU 記憶體在 60 s 內回到「boot 前基線 + 64 MiB」以內，取代固定的 IDLE_MIB。
+- 產品的輸出仍只寫到 `runs/`，不是容量量測。
+

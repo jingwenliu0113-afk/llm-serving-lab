@@ -331,7 +331,7 @@ harness 依本文以 TDD 實作：
 **session 有效**的條件：
 - formal，而且 `freeze.capacity = true`；
 - session 開始時與每次 boot 前，`held_gpu_lock` 都為真；
-- 每次 boot 前 memory.used ≤ 1,000 MiB；
+- 每次 boot 前 memory.used ≤ 1,000 MiB；〔2026-10-16 起由 decision 031 的綜合判定取代（lock、使用率 ≤ 5%、基線穩定、推導的 VRAM 餘裕），並新增 run 的有效性條件：boot 期間 Windows 的 shared usage 沒有比 boot 前多出 64 MiB 以上（沒有 spill）。使用者確認，凍結與任何 C1 數據之前。〕
 - 每次 boot 前後的 env 擷取都乾淨：power limit 為預設、commit 單一且乾淨並等於 DEPLOYED_COMMIT；
 - vLLM 0.30.0；
 - `stage_b_problems` 為空；
