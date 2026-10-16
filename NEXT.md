@@ -121,7 +121,8 @@
 1. **C0**（decision 028）：
    - harness 已 commit（`e4c23c9`），審查 6 項已處理。
    - **步驟 0 完成**（`ac29c54`）。事先寫定的重現檢查沒有重現；每次滑移都是錯過一個 2048-token prefill step（約 349 ms）；Core r2 的滑移較多，可能有 boot 層級的成分。
-   - **GPU 探針等待中**（部署 `eb78a35`；C0 的程式和 `ac29c54` 相同）：
+   - **閒置判定改為 decision 031 的綜合判定**（使用者 2026-10-16 確認）：lock、使用率 ≤ 5%、基線穩定、由實測 vLLM 峰值推導的餘裕（≤ 1,018 MiB），加上 Windows shared usage 的 spill 偵測。實作 workflow 進行中，完成後重新部署。
+   - **GPU 探針等待中**（之前部署 `eb78a35`；自動等待已停止，等 031 實作完成並由使用者確認後再執行）：
      - 第一次嘗試（10-16 01:10）在 boot 之前依規則停止：Windows 桌面應用程式占用 GPU 記憶體，閒置 1,362 MiB > 1,000 MiB（Phase 1 為 688 MiB）。不放寬門檻。
      - 背景自動等待（每 5 分鐘唯讀檢查，最多 24 h）：lock 空著且閒置 ≤ 950 MiB 時，**同一次 lock** 依序跑 C0 探針（≤ 3.0 h）、Stage C 的 mini smoke 與 FS-order smoke。
      - 遠端 log：`/tmp/llmsl-c0-probe.log`、`/tmp/llmsl-cap-mini.log`、`/tmp/llmsl-cap-fs.log`。
@@ -172,9 +173,11 @@
 
 ## Blocked / 需要使用者
 
-- **RTX 的 Windows 桌面占用 GPU 記憶體**（2026-10-16）：閒置用量 1,362 MiB，超過研究規定的 1,000 MiB 上限，C0、C1 與產品的 RTX 測試都不能開始。
-  - 需要使用者在 Windows 端關閉使用 GPU 的桌面應用程式，例如 ChatGPT、設定、Edge WebView2 類的 app、BingWallpaper、codex-computer-use；或登出桌面工作階段。
-  - 自動等待已在背景執行，用量降到 950 MiB 以下就會自動開始。
+- **研究的 RTX 工作（C0、Stage C 的 smoke 與正式 run）**：閒置 VRAM 1,385 MiB 超過 decision 031 推導的餘裕上限 1,018 MiB。
+  - 依 Phase 1 實測，vLLM 峰值 +15,157 MiB，以目前的閒置值會超過整張卡約 240 MiB 而 spill。
+  - 占用者是沒有視窗的開機常駐程式：ChatGPT（含 codex-computer-use）、BingWallpaper、Radeon Software、背景的「設定」。RTX 5070 Ti 同時在驅動 4K 桌面。
+  - 我不關閉任何程序。是否從系統匣結束這些常駐程式，或改把螢幕接到主機板的內顯，由使用者決定。
+- 產品的整合測試已獲准在目前的閒置值下執行（031 的產品規格），不受此限。
 
 ## 建議（非 blocker）
 
