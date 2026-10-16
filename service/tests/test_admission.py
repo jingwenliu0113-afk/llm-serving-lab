@@ -226,11 +226,28 @@ async def test_wait_idle_wakes_when_the_last_permit_is_released():
     assert await idle is True
 
 
-@pytest.mark.parametrize("kw", [{"max_concurrency": 0}, {"max_queue": -1}, {"max_queue_wait_s": 0}])
+@pytest.mark.parametrize("kw", [{"max_concurrency": -1}, {"max_concurrency": 0, "max_queue": 1}, {"max_queue": -1},
+                                {"max_queue_wait_s": 0}])
 def test_bad_limits_are_refused(kw):
     args = {"max_concurrency": 1, "max_queue": 0, "max_queue_wait_s": 1.0, "retry_after_s": RETRY, **kw}
     with pytest.raises(ValueError):
         AdmissionController(**args)
+
+
+async def test_a_closed_controller_admits_and_queues_nothing():
+    """max_concurrency 0 (with max_queue 0) is a verified refuse class (030 8.7): every acquire is a 503
+    class_not_serviceable at once, without a Retry-After (retrying cannot help), and nothing ever waits."""
+    c = ctrl(n=0, q=0)
+    for _ in range(3):
+        with pytest.raises(Rejection) as exc:
+            await c.acquire(deadline=FAR)
+        assert (exc.value.reason, exc.value.status, exc.value.retry_after_s) == ("class_not_serviceable", 503, None)
+    assert (c.in_flight, c.queued) == (0, 0)
+    c.set_draining()
+    with pytest.raises(Rejection) as exc:
+        await c.acquire(deadline=FAR)
+    assert exc.value.reason == "class_not_serviceable"
+    assert await c.wait_idle(0.01) is True
 
 
 async def test_zero_queue_rejects_immediately():

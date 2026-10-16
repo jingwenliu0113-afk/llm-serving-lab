@@ -10,9 +10,10 @@ up: a foreground supervisor (WSL kills detached jobs), run from a release direct
         [--loadtest smoke|steady|burst|overload]
  1. the release: DEPLOYED_COMMIT names its directory releases/<sha> under service_root (never the research
     checkout) and every file matches DEPLOY_MANIFEST.json; pins with measured Stage B values; the profile, read once
-    (a provisional one only when allowed; a verified one only as a release file listed in DEPLOY_MANIFEST.json with
-    those bytes, i.e. committed, so the Mac test that regenerates every committed verified profile covers it, until
-    M2 checks the provenance at run time; 027 §4);
+    (a provisional one only when allowed; a verified one checked by the loader against the release's frozen configs
+    (capserve.profile: [freeze] capacity, the capacity / pins sha256, the SLO, the session ids, the Stage C classes)
+    and served only as the release's service/profiles/<name>.json listed in DEPLOY_MANIFEST.json with those bytes,
+    i.e. committed, so the Mac test that regenerates every committed verified profile covers its numbers; 027 §4);
  2. preflight, every problem reported and nothing started (when this process holds the lock, state.json says phase
     preflight meanwhile, so stop finds it during the 30 s idle window, and refused afterwards; without the lock it
     never writes state.json, a running supervisor's stays): this process holds the shared GPU lock
@@ -24,7 +25,8 @@ up: a foreground supervisor (WSL kills detached jobs), run from a release direct
     meta.json and on stderr: product tests check function, not latency (031 「產品的最終規格」);
     core_b_plan.toolchain_problems empty; ports 8100 and 8080 free; the run dir allowed by runs.py; the profile's
     fingerprint and KV geometry (if it states them; a verified profile always does) equal to this server's; the
-    active class in the profile;
+    active class in the profile, servable and serviceable (030 8.7: never an unavailable class, nor a verified 0,
+    whose gateway would answer every request 503 class_not_serviceable and never be ready);
  3. the pre-boot shared usage (below); runs/pt-<UTC>[-<scenario>]/meta.json (purpose product-test, formal false,
     research_valid false, the preflight's idle window and baseline, its warnings), the profile bytes preflight
     checked as runs/<id>/profile.json (the gateway serves that copy, never the mutable path) and
@@ -93,7 +95,7 @@ import run_adv
 import run_core_b
 from capserve import loadtest, procs, runs
 from capserve.config import API_KEY_ENV, Settings, allow_provisional
-from capserve.profile import ProfileError, parse_profile, server_fingerprint
+from capserve.profile import FrozenConfigs, ProfileError, parse_profile, server_fingerprint
 
 RESEARCH_PORT = run_core_b.PORT
 RELEASE_ROOT = runs.REPO_ROOT          # the release this module runs from: releases/<sha>/ on WSL
@@ -123,6 +125,9 @@ MAX_DRAIN_S = 300             # a drain longer than the gateway's default reques
 PROFILE_COPY = "profile.json"
 SERVED_LIMITS = ("max_concurrency", "max_queue", "max_prompt_tokens", "max_output_tokens")
 _SHA = re.compile(r"[0-9a-f]{40}")
+# the only place a served verified profile lives in a release: a visible file at the top level of service/profiles
+# with a lowercase .json suffix (the Mac regeneration test reads it, with every other tracked verified document; 029)
+VERIFIED_PROFILE_PATH = re.compile(r"service/profiles/[^/.][^/]*\.json")
 
 
 class DeployError(ValueError):
@@ -308,9 +313,10 @@ def release_problems(release_root, cfg: DeployConfig) -> tuple:
 
 
 def verified_profile_problems(profile_path, data: bytes, release_root) -> list:
-    """027 §4: a verified profile comes only from the generator. Until M2 verifies the provenance at run time, deploy
-    serves one only as a file of this release listed in DEPLOY_MANIFEST.json with exactly these bytes: a committed
-    file, which the Mac test that regenerates every committed verified profile covers (029 M0 note)."""
+    """027 §4: a verified profile comes only from the generator. Besides the loader's run-time checks (the frozen
+    configs, the session ids and the Stage C classes; capserve.profile), deploy serves one only as this release's
+    service/profiles/<name>.json (top level, lowercase .json) listed in DEPLOY_MANIFEST.json with exactly these
+    bytes: a committed file, whose numbers the Mac test that regenerates every committed verified profile covers."""
     root = Path(release_root).resolve()
     path = Path(profile_path).resolve()
     why = "a verified profile is served only as a committed release file listed in DEPLOY_MANIFEST.json (027 §4)"
@@ -321,6 +327,8 @@ def verified_profile_problems(profile_path, data: bytes, release_root) -> list:
     except (OSError, ValueError, AttributeError) as exc:
         return [f"DEPLOY_MANIFEST.json is unreadable ({exc}): {why}"]
     rel = path.relative_to(root).as_posix()
+    if not VERIFIED_PROFILE_PATH.fullmatch(rel):
+        return [f"{rel} is not service/profiles/<name>.json: {why}"]
     want = files.get(rel) if isinstance(files, dict) else None
     if want is None:
         return [f"{rel} is not in DEPLOY_MANIFEST.json: {why}"]
@@ -453,7 +461,11 @@ def preflight(cfg: DeployConfig, prof, *, pins: dict, env: dict, fingerprint: st
     if prof is not None:
         problems += profile_server_problems(prof, pins=pins, fingerprint=fingerprint)
         try:
-            prof.workload_class(cfg.gateway.get("active_class", ""))
+            cls = prof.serving_class(cfg.gateway.get("active_class", ""))   # an unavailable class: refused (030 8.7)
+            if not cls.serviceable:
+                problems.append(f"active class {cls.name} of profile {prof.profile_id} is a verified 0 (refuse this "
+                                "class, 030 8.7): its gateway answers every request 503 class_not_serviceable and "
+                                "is never ready, so there is nothing to boot vLLM for")
         except ProfileError as exc:
             problems.append(str(exc))
     return problems, facts
@@ -601,7 +613,7 @@ def _best_effort(fn: Callable[[], object], what: str) -> list:
 
 def up(cfg: DeployConfig, profile_path, *, allow_provisional: bool, loadtest: str | None = None,
        workload: Callable | None = None, fx: Effects | None = None, pins: dict | None = None,
-       release_root=RELEASE_ROOT, err=None) -> int:
+       frozen: FrozenConfigs | None = None, release_root=RELEASE_ROOT, err=None) -> int:
     fx = fx or Effects()
     err = err or sys.stderr
     pins = bp.load_pins() if pins is None else pins
@@ -623,7 +635,8 @@ def up(cfg: DeployConfig, profile_path, *, allow_provisional: bool, loadtest: st
     prof = profile_bytes = None
     try:   # read once: these bytes are checked, recorded and served (runs/<id>/profile.json)
         profile_bytes = Path(profile_path).read_bytes()
-        prof = parse_profile(profile_bytes, source=profile_path, allow_provisional=allow_provisional, pins=pins)
+        prof = parse_profile(profile_bytes, source=profile_path, allow_provisional=allow_provisional, pins=pins,
+                             frozen=frozen)
     except OSError as exc:
         problems.append(f"{profile_path}: cannot read the profile: {exc}")
     except ProfileError as exc:

@@ -24,6 +24,8 @@ import run_core_b
 from capserve import deploy, procs, runs
 from capserve.config import Settings
 from capserve.profile import content_sha256, stage_b_fingerprint
+from fakes import profiles as fake_profiles
+from fakes.profiles import FROZEN, frozen_capacity, frozen_configs, verified_class
 
 PINS = bp.load_pins()
 SB = PINS["stage_b"]
@@ -42,19 +44,16 @@ SHARED = {"luid": LUID, "dedicated_mib": 1396.0, "shared_mib": 64.4}
 
 # ------------------------------------------------------------------ fixtures --
 
-def profile_doc(*, status="provisional", fingerprint=None, blocks=None, block_size=None, name="test"):
-    doc = {"schema_version": 1, "profile_id": f"{status}-test", "status": status,
-           "provisional_reason": "tests only; not a capacity" if status == "provisional" else None,
-           "slo": None if status == "provisional" else {"id": "S2", "terms": {"ttft_2k_s": 2}},
+def profile_doc(*, fingerprint=None, blocks=None, block_size=None, name="test"):
+    """A provisional profile (verified ones: verified_doc)."""
+    doc = {"schema_version": 1, "profile_id": "provisional-test", "status": "provisional",
+           "provisional_reason": "tests only; not a capacity", "slo": None,
            "server": {"vllm_version": PINS["vllm"]["version"], "model_repo": PINS["core_b"]["repo"],
                       "model_revision": PINS["core_b"]["revision"], "fingerprint_sha256": fingerprint,
                       "num_gpu_blocks": blocks, "block_size": block_size},
            "classes": [{"name": name, "max_prompt_tokens": 1920, "max_output_tokens": 128, "max_concurrency": 4,
                         "max_queue": 4, "source": "test"}],
-           "provenance": None if status == "provisional" else {
-               "source_session": "formal-20261101-c1", "analysis_path": "results/capacity/x/analysis.json",
-               "analysis_sha256": "b" * 64, "prereg_section": "§8", "freeze_commit": "c" * 40,
-               "generator_commit": "d" * 40}}
+           "provenance": None}
     doc["content_sha256"] = content_sha256(doc)
     return doc
 
@@ -86,10 +85,12 @@ def add_to_release(root: Path, rel: str, data: bytes) -> Path:
     return root / rel
 
 
+VERIFIED_ACTIVE = {"gateway": {"active_class": "uniform-2k"}}   # the verified class verified_doc serves
+
+
 def verified_doc(**kw):
-    """A verified profile for exactly this server (Stage B fingerprint and KV geometry)."""
-    return profile_doc(status="verified", fingerprint=stage_b_fingerprint(PINS), blocks=SB["num_gpu_blocks"],
-                       block_size=SB["block_size"], **kw)
+    """A verified profile for exactly this server (Stage B fingerprint and KV geometry), class uniform-2k."""
+    return fake_profiles.verified_doc(PINS, **kw)
 
 
 class FakeProc:
@@ -238,6 +239,7 @@ def prof(tmp_path):
 def up(world, prof, **kw):
     kw.setdefault("allow_provisional", True)
     kw.setdefault("pins", PINS)
+    kw.setdefault("frozen", FROZEN)
     fx = kw.pop("fx", None) or world.fx()
     cfg = kw.pop("cfg", None) or world.cfg()
     return deploy.up(cfg, prof, fx=fx, release_root=world.release, **kw)
@@ -549,22 +551,33 @@ def test_an_unknown_active_class_is_refused_before_any_boot(world, prof, capsys)
 
 
 def test_a_verified_profile_with_another_fingerprint_is_refused(world, capsys):
-    doc = profile_doc(status="verified", fingerprint="e" * 64, blocks=248, block_size=528)
+    doc = verified_doc(fingerprint="e" * 64)
     path = add_to_release(world.release, "service/profiles/v.json", json.dumps(doc).encode())
-    assert up(world, path, allow_provisional=False) == 2
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(**VERIFIED_ACTIVE)) == 2
     err = capsys.readouterr().err
     assert world.started == [] and "fingerprint" in err and "DEPLOY_MANIFEST.json" not in err
+
+
+def test_a_verified_profile_is_checked_against_the_frozen_configs(world, capsys):
+    """029 M2: the loader checks a verified profile's provenance at run time; deploy passes its frozen configs on."""
+    path = add_to_release(world.release, "service/profiles/v.json", json.dumps(verified_doc()).encode())
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(**VERIFIED_ACTIVE),
+              frozen=frozen_configs(frozen_capacity(capacity=False))) == 2
+    assert world.started == [] and "[freeze] capacity" in capsys.readouterr().err
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(**VERIFIED_ACTIVE),
+              frozen=frozen_configs(pins_sha256="00" * 32)) == 2
+    assert world.started == [] and "pins_sha256" in capsys.readouterr().err
 
 
 # ------------------------------------------------------------------ verified profiles (027 §4) --
 
 def test_a_handmade_verified_profile_outside_the_release_is_refused(world, tmp_path, capsys):
-    """027 §4: verified only from the generator. Until M2 checks the provenance at run time, deploy serves a verified
-    profile only as a committed release file (listed in DEPLOY_MANIFEST.json), which the Mac test that regenerates
-    every committed verified profile covers; a hand-written one anywhere else is refused before anything starts."""
+    """027 §4: verified only from the generator. Deploy serves a verified profile only as a committed release file
+    (service/profiles/<name>.json listed in DEPLOY_MANIFEST.json), which the Mac test that regenerates every committed
+    verified profile covers; a hand-written one anywhere else is refused before anything starts."""
     (tmp_path / "anywhere").mkdir()
     path = write_json(tmp_path / "anywhere" / "handmade.json", verified_doc())
-    assert up(world, path, allow_provisional=False) == 2
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(**VERIFIED_ACTIVE)) == 2
     assert world.started == [] and not (world.svc / "runs").exists()
     assert "DEPLOY_MANIFEST.json" in capsys.readouterr().err
 
@@ -573,16 +586,42 @@ def test_a_verified_profile_in_the_release_but_not_in_its_manifest_is_refused(wo
     path = world.release / "service" / "profiles" / "uncommitted.json"
     path.parent.mkdir(parents=True)
     write_json(path, verified_doc())
-    assert up(world, path, allow_provisional=False) == 2
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(**VERIFIED_ACTIVE)) == 2
     assert world.started == [] and "DEPLOY_MANIFEST.json" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("rel", ["service/profiles/verified/forged.json", "service/deploy/forged.json",
+                                 "service/profiles/forged.JSON", "forged.json", "service/profiles/.json"])
+def test_a_committed_verified_profile_elsewhere_than_service_profiles_is_refused(world, capsys, rel):
+    """Review finding: a verified profile is served only from service/profiles/<name>.json (top level, lowercase
+    .json), never from any other committed path of the release."""
+    path = add_to_release(world.release, rel, json.dumps(verified_doc()).encode())
+    assert deploy.verified_profile_problems(path, path.read_bytes(), world.release) != []
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(**VERIFIED_ACTIVE)) == 2
+    assert world.started == [] and "service/profiles/<name>.json" in capsys.readouterr().err
 
 
 def test_a_committed_verified_profile_is_served_as_verified(world):
     path = add_to_release(world.release, "service/profiles/verified-test.json", json.dumps(verified_doc()).encode())
-    assert up(world, path, allow_provisional=False) == 0
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(**VERIFIED_ACTIVE)) == 0
     (gw,) = [s for s in world.started if s["name"] == "gateway"]
     assert "--allow-provisional" not in gw["argv"]
     assert runs.read_meta(world.run_dir())["profile"]["status"] == "verified"
+
+
+@pytest.mark.parametrize("cls, match", [
+    (verified_class(workload="U8K", status="UNSTABLE"), "unavailable"),
+    (verified_class(workload="U8K", status="NT"), "unavailable"),
+    (verified_class(workload="M8K", status="INFEASIBLE", value=0), "class_not_serviceable"),
+])
+def test_an_active_class_without_a_verified_limit_is_refused_before_any_boot(world, capsys, cls, match):
+    """030 8.7: an unavailable class is never served, and a verified 0 has nothing to serve (its gateway answers 503
+    class_not_serviceable and is never ready), so neither boots vLLM; no flag overrides it."""
+    doc = verified_doc(classes=[cls])
+    path = add_to_release(world.release, "service/profiles/v.json", json.dumps(doc).encode())
+    assert up(world, path, allow_provisional=True, cfg=world.cfg(gateway={"active_class": cls["name"]})) == 2
+    assert world.started == [] and not (world.svc / "runs").exists()
+    assert match in capsys.readouterr().err
 
 
 def test_profile_server_geometry_must_equal_the_pins(world, tmp_path, capsys):

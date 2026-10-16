@@ -1,7 +1,8 @@
 """Integration tests for capserve/app.py against the fake vLLM backend, both on real uvicorn (h11 / asyncio) in the
 test's event loop (decision 029 "整合測試（假後端）"): non-stream and stream pass-through, disconnects cancel the
 upstream request and free the slot, overload never exceeds the limit, readiness, auth, /tokenize only under a permit,
-and OpenAI-shaped errors everywhere."""
+OpenAI-shaped errors everywhere, and the class statuses of a verified profile (decision 030 8.7: a verified 0 answers
+503 class_not_serviceable, an unavailable class is never served)."""
 
 import asyncio
 import contextlib
@@ -13,8 +14,10 @@ import httpx
 import pytest
 
 from capserve.app import create_app
+from capserve.profile import CapacityProfile, ProfileError
 from capserve.proxy import ClientDisconnected
 from fakes.fake_vllm import MODEL, FakeConfig
+from fakes.profiles import verified_class, verified_doc
 from fakes.servers import gateway_settings, make_profile, stack
 
 pytestmark = pytest.mark.anyio
@@ -43,6 +46,11 @@ def error(resp):
 
 def sse_events(text):
     return [e for e in text.split("\n\n") if e]
+
+
+def verified_profile(**cls_kw) -> CapacityProfile:
+    """A verified profile whose one class "test" (the stack's active class) comes from the given C_PROD."""
+    return CapacityProfile.model_validate(verified_doc(classes=[verified_class("test", **cls_kw)]))
 
 
 def metric(gw, name, **labels):
@@ -270,8 +278,61 @@ async def test_ready_body_reports_profile_backend_and_limits():
         body = r.json()
         assert r.status_code == 200 and body["ready"] is True
         assert body["profile"] == {"id": "provisional-test", "status": "provisional", "provisional": True}
+        assert (body["serviceable"], body["class_status"], body["bound"]) == (True, None, None)
         assert body["limits"]["max_concurrency"] == 4 and body["limits"]["max_pending"] == 4 + 4 + 16
         assert (await c.get("/healthz")).json() == {"status": "ok"}
+
+
+async def test_a_verified_class_is_ready_and_reports_its_status_and_bound():
+    async with stack(profile=verified_profile(status="LOWER", value=4)) as st, st.client() as c:
+        body = (await c.get("/readyz")).json()
+        assert body["ready"] is True and body["profile"]["status"] == "verified"
+        assert (body["serviceable"], body["class_status"], body["bound"]) == (True, "verified", "lower")
+        assert body["limits"]["max_concurrency"] == 4 and body["limits"]["max_queue"] == 4
+        r = await c.post("/v1/completions", json=COMP)
+        assert r.status_code == 200
+        assert r.headers["x-capserve-profile"] == "verified-formal-20261101-c1; status=verified"
+
+
+async def test_a_verified_0_class_answers_every_completion_503_class_not_serviceable():
+    """030 8.7: INFEASIBLE -> verified 0, refuse the class. The gateway starts, but every completion request gets 503
+    class_not_serviceable before its body is read: never queued, never sent upstream, no Retry-After and
+    x-should-retry false (retrying cannot help). /readyz says why it is not ready."""
+    prof = verified_profile(workload="M8K", status="INFEASIBLE", value=0, max_prompt_tokens=32640)
+    async with stack(profile=prof) as st, st.client() as c:
+        for path, body in (("/v1/completions", COMP), ("/v1/chat/completions", {**CHAT, "stream": True}),
+                           ("/v1/completions", {"model": "other", "prompt": "x", "tools": []})):
+            r = await c.post(path, json=body)
+            assert r.status_code == 503, r.text
+            assert error(r)["code"] == "class_not_serviceable" and error(r)["type"] == "server_error"
+            assert "retry-after" not in r.headers and "retry-after-ms" not in r.headers
+            assert r.headers["x-should-retry"] == "false"
+        assert st.fake.seen == [] and (st.gateway.ctrl.in_flight, st.gateway.ctrl.queued) == (0, 0)
+        assert metric(st.gateway, "capserve_rejections_total", reason="class_not_serviceable") == 3
+        assert metric(st.gateway, "capserve_concurrency_limit") == 0
+        r = await c.get("/readyz")
+        body = r.json()
+        assert r.status_code == 503 and body["ready"] is False and body["backend"]["ready"] is True
+        assert (body["serviceable"], body["class_status"], body["bound"]) == (False, "verified", "exact")
+        assert body["not_ready_reason"] == "class_not_serviceable"
+        assert body["limits"]["max_concurrency"] == 0 and body["limits"]["max_queue"] == 0
+        assert (await c.get("/healthz")).status_code == 200 and (await c.get("/v1/models")).status_code == 200
+
+
+async def test_a_verified_0_class_still_checks_the_key_first():
+    prof = verified_profile(workload="M8K", status="INFEASIBLE", value=0, max_prompt_tokens=32640)
+    async with stack(profile=prof, api_key=b"k") as st, st.client() as c:
+        assert (await c.post("/v1/completions", json=COMP)).status_code == 401
+        r = await c.post("/v1/completions", json=COMP, headers={"Authorization": "Bearer k"})
+        assert r.status_code == 503 and error(r)["code"] == "class_not_serviceable"
+
+
+@pytest.mark.parametrize("status", ["UNSTABLE", "NT"])
+def test_an_unavailable_active_class_never_builds_a_gateway(status):
+    """030 8.7: no verified number, so no gateway serves it (no flag exists that could override this)."""
+    prof = verified_profile(workload="U8K", status=status, max_prompt_tokens=8064)
+    with pytest.raises(ProfileError, match="unavailable"):
+        create_app(gateway_settings("http://127.0.0.1:9"), prof)
 
 
 async def test_backend_down_is_503_with_retry_after():

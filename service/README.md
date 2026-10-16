@@ -1,4 +1,4 @@
-# capserve：Capacity-Aware Serving Service（MVP，M0）
+# capserve：Capacity-Aware Serving Service（MVP）
 
 capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027 §3–§5、029）。
 它不寫 engine 或 scheduler，也不修改 vLLM；推論一律由 vLLM 執行。
@@ -16,8 +16,53 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
   它**不是容量**，不得當成產品限制引用，也不是 Core 的 C_knee。
 - provisional profile 只有在 `--allow-provisional` 或 `CAPSERVE_ALLOW_PROVISIONAL=1` 時才能載入；
   這時啟動訊息、`/readyz`、`/metrics`（`capserve_profile_verified 0`）與每個 response 的 `x-capserve-profile` header 都標示 provisional。
-- `python -m capserve.profile_gen` 在 `configs/capacity.toml` 的 `[freeze] capacity` 為 true 之前一律 exit 2；
-  真正的產生器是 M2 的工作。
+- `python -m capserve.profile_gen` 在 `configs/capacity.toml` 的 `[freeze] capacity` 為 true 之前一律 exit 2（見下一節）。
+
+## Verified profile（M2 的產生器；目前還沒有任何 verified profile）
+
+```bash
+PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
+    --session results/capacity/formal-YYYYMMDD-c1 --freeze-commit <設定 freeze.capacity 的 commit，40 hex> \
+    --out service/profiles/verified-formal-YYYYMMDD-c1.json
+```
+
+- 沒有任何覆寫參數。`--freeze-commit` 會以 git 驗證：
+  - 該 commit 的 `capacity.toml` 已凍結，它的上一個 commit、以及它之前任何一個 commit 都沒有凍結過（先解凍、修改、再凍結不算 030 的凍結）；
+  - 它是 session DEPLOYED_COMMIT 的祖先；
+  - 凍結的位元組就是實際執行的位元組：該 commit 的 `capacity.toml` 的 sha256 等於 session 記錄、產生器讀到的值；
+    Stage C 模組（`capacity_plan`、`capacity_analysis`、`run_capacity`、`capacity_report`、`gpu_idle`）在該 commit、在 session 的 DEPLOYED_COMMIT、
+    以及產生器實際 import 的檔案三者相同。
+- 拒絕（exit 2、不寫任何檔案）的情況：沒有凍結或凍結證據不全；session 不是 `results/capacity/formal-…`、不是 formal / env 有效 / C1，或 `capacity_report` 會拒絕它；
+  以凍結的 Stage C 模組重跑 `capacity_report` 無法逐位元組重現 `analysis.json`；SLO 不是 `capacity.toml` 的；session 的 server 不是產品的 server；
+  工作目錄有未 commit 的變更（generator_commit 必須是產生它的程式）；`--out` 已存在或位於 `results/` 之下。
+- 輸出是決定性的（沒有時間戳記）；每個 commit 過的 verified profile 都由 Mac 測試重新產生並比對（忽略 generator_commit）。
+  這個測試掃描所有 tracked 檔案（`results/` 之外），任何路徑、任何副檔名中 `status` 為 `verified` 的 JSON 都要能重新產生。
+- **載入時的檢查**（`capserve serve` 與 `deploy up` 都一樣）：`configs/capacity.toml` 必須已凍結；provenance 的
+  `capacity_sha256`、`pins_sha256` 必須等於這個 checkout（release）的 `configs/capacity.toml`、`configs/pins.toml`；
+  `slo` 必須逐字等於 `capacity.toml` 的 `[slo]`；`profile_id` 必須是 `verified-<source_session>`，`analysis_path` 必須是
+  `results/capacity/<source_session>/analysis.json`；每個 class 的名稱與 token 上限必須是它的 Stage C workload 的（下表），每個 workload 至多一個 class。
+- **只服務 `service/profiles/<name>.json`**：`deploy up` 只接受 release 中 `service/profiles/` 最上層、小寫 `.json`、列在 `DEPLOY_MANIFEST.json` 的檔案；
+  `capserve serve` 只接受位元組等於這個 checkout 的某個 `service/profiles/*.json` 的 verified profile（deploy 傳給它的 `runs/<id>/profile.json` 是這種複本）。
+  數字本身不在執行期重算，而是由上面的 Mac 重新產生測試保證。
+- 每個 Stage C workload 對應一個 class（輸出上限 128 token）：
+
+  | class | workload | max_prompt_tokens |
+  |---|---|---|
+  | `uniform-2k` | U2K | 1,920 |
+  | `uniform-8k` | U8K | 8,064 |
+  | `mixed-2k` | M2K | 32,640（007 的 mix：90% 1,920、10% 32,640） |
+  | `mixed-8k` | M8K | 32,640（007 的 mix：90% 8,064、10% 32,640） |
+
+- class 的狀態依 C_PROD（030 8.7）：
+
+  | C_PROD | class | gateway |
+  |---|---|---|
+  | EXACT / LOWER / CENSORED | `verified`，max_concurrency = max_queue = C_PROD，`bound` 為 exact / lower / censored | 正常服務 |
+  | INFEASIBLE | `verified`，0（拒絕這個 class），bound exact | 啟動，但每個 completion request 都回 503 `class_not_serviceable`（不排隊、沒有 `Retry-After`、`x-should-retry: false`）；`/readyz` 為 503，`not_ready_reason` 為 `class_not_serviceable`；`deploy up` 在 preflight 拒絕（沒有可服務的東西，不啟動 vLLM） |
+  | UNSTABLE / NT | `unavailable`，附原因，沒有任何數字 | 拒絕啟動（exit 2），任何旗標都不能覆寫；也不退回其他數字 |
+
+- 每個 class 另附 Stage C 的證據（只作描述，不是上限）：適用範圍、C_PROD、C_SLO、C_KV、C_cap、旗標（例如 ABOVE_CKV）、先失守的項目、C_PROD 的餘裕與開場湧入。
+  `/readyz` 另外列出 `class_status`、`bound`、`serviceable`。
 
 ## 與 vLLM 預設不同之處
 

@@ -11,6 +11,9 @@
   call it.
 - reject_waiters (backend down) and set_draining reject the queue with 503; while draining no newcomer is admitted.
   Requests already running finish (or are cancelled by the server's graceful-shutdown timeout).
+- max_concurrency 0 (only with max_queue 0) is a closed controller: a verified refuse class (decision 030 8.7,
+  C_PROD INFEASIBLE). Every acquire is a 503 class_not_serviceable at once, with no Retry-After (retrying cannot
+  help), and nothing ever waits.
 - deadline and queued_s use the injected clock (time.monotonic by default); the waits themselves run on the event
   loop's timer.
 """
@@ -24,14 +27,17 @@ from typing import Callable, Mapping
 
 import anyio
 
-STATUS = {"queue_full": 429, "queue_timeout": 429, "backend_unavailable": 503, "draining": 503}
+STATUS = {"queue_full": 429, "queue_timeout": 429, "backend_unavailable": 503, "draining": 503,
+          "class_not_serviceable": 503}
+NOT_SERVICEABLE = "class_not_serviceable"   # a verified 0: never retried, so no Retry-After
 _GRANTED = "granted"   # a waiter's future result: the slot, or the reason it was rejected
 
 
 class Rejection(Exception):
-    """429 (healthy, at the configured capacity) or 503 (cannot serve now), with a fixed Retry-After per reason."""
+    """429 (healthy, at the configured capacity) or 503 (cannot serve now), with a fixed Retry-After per reason (None
+    for class_not_serviceable)."""
 
-    def __init__(self, reason: str, retry_after_s: int):
+    def __init__(self, reason: str, retry_after_s: int | None):
         super().__init__(reason)
         self.reason = reason
         self.status = STATUS[reason]
@@ -54,8 +60,9 @@ class Permit:
 class AdmissionController:
     def __init__(self, *, max_concurrency: int, max_queue: int, max_queue_wait_s: float,
                  retry_after_s: Mapping[str, int], clock: Callable[[], float] = time.monotonic):
-        if max_concurrency < 1 or max_queue < 0 or max_queue_wait_s <= 0:
-            raise ValueError("max_concurrency >= 1, max_queue >= 0 and max_queue_wait_s > 0 are required")
+        if max_concurrency < 0 or max_queue < 0 or max_queue_wait_s <= 0 or (max_concurrency == 0 and max_queue):
+            raise ValueError("max_concurrency >= 0 (0 only with max_queue 0: a closed controller), max_queue >= 0 and "
+                             "max_queue_wait_s > 0 are required")
         self.max_concurrency = max_concurrency
         self.max_queue = max_queue
         self.max_queue_wait_s = max_queue_wait_s
@@ -76,7 +83,7 @@ class AdmissionController:
         return sum(1 for f in self._waiters if not f.done())
 
     def _rejection(self, reason: str) -> Rejection:
-        return Rejection(reason, self._retry_after_s[reason])
+        return Rejection(reason, None if reason == NOT_SERVICEABLE else self._retry_after_s[reason])
 
     def _take(self) -> None:
         self._in_flight += 1
@@ -94,6 +101,8 @@ class AdmissionController:
 
     async def acquire(self, *, deadline: float) -> Permit:
         """A permit, or Rejection. Cancellation-safe: a cancelled caller never holds or loses a slot."""
+        if self.max_concurrency == 0:
+            raise self._rejection(NOT_SERVICEABLE)
         if self.draining:
             raise self._rejection("draining")
         queued = self.queued

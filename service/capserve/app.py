@@ -4,9 +4,16 @@ FastAPI (no /docs or /openapi.json, no {"detail": ...} errors: 404 / 405 / 500 a
 Routes: POST /v1/chat/completions, POST /v1/completions, GET /v1/models (the served id only), /healthz, /readyz,
 /metrics. There is no catch-all passthrough, so vLLM's /tokenize and admin endpoints are never exposed.
 
+The active class must be servable (profile.serving_class): an unavailable class of a verified profile (Stage C
+C_PROD UNSTABLE / NT, decision 030 8.7) never builds a gateway (ProfileError), whatever flag is given. A verified 0
+(C_PROD INFEASIBLE: refuse the class) builds one with a closed admission controller: every completion request gets
+503 class_not_serviceable right after auth (no Retry-After, x-should-retry false: retrying cannot help), /readyz is
+503 with not_ready_reason class_not_serviceable, and /v1/models, /healthz and /metrics work as usual.
+
 A completion request, after the guard (request id, pending cap):
  2. auth: optional bearer key, compared as bytes with hmac.compare_digest (401);
- 3. gate: draining or backend not ready -> 503 with Retry-After, before the body is read and never queued;
+ 3. gate: a verified 0 class -> 503 class_not_serviceable; draining or backend not ready -> 503 with Retry-After;
+    all before the body is read and never queued;
  4. body: at most max_body_bytes (413) within body_read_timeout_s (408);
  5. validation (openai_api): allowlist, served model, exactly one prompt, max_tokens injected / bounded;
  6. byte fast path (tokens): whether /tokenize is needed at all;
@@ -37,7 +44,7 @@ from starlette.requests import ClientDisconnect, Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from capserve.admission import STATUS, AdmissionController, Rejection
+from capserve.admission import NOT_SERVICEABLE, STATUS, AdmissionController, Rejection
 from capserve.config import Settings
 from capserve.guard import RECORD_KEY, Guard, on_cleanup
 from capserve.metrics import Metrics
@@ -54,6 +61,8 @@ REJECTION_MESSAGES = {
     "queue_timeout": "the request waited too long for capacity; retry later",
     "backend_unavailable": "the model server is not available; retry later",
     "draining": "the server is shutting down; retry later",
+    "class_not_serviceable": "this deployment's workload class has a verified capacity of 0 under its SLO (Stage C "
+                             "INFEASIBLE): every request is refused; do not retry",
 }
 
 
@@ -73,7 +82,7 @@ class Gateway:
                  clock: Callable[[], float] = time.monotonic):
         self.settings = settings
         self.profile = profile
-        self.cls = profile.workload_class(settings.active_class)
+        self.cls = profile.serving_class(settings.active_class)   # ProfileError for an unavailable class (030 8.7)
         self.served_model = profile.server.model_repo
         self.api_key = api_key
         self.clock = clock
@@ -131,6 +140,8 @@ class Gateway:
         """The 503 reason, if any. Checked at the gate and again right before admission: the backend can go down
         (and on_down reject the queue) while a body is still arriving, and nothing awaits between this check and
         acquire, so a request is never queued or sent upstream after the backend was declared down."""
+        if not self.cls.serviceable:
+            return "class_not_serviceable"
         if self.draining:
             return "draining"
         if not self.monitor.ready:
@@ -142,6 +153,10 @@ class Gateway:
     def _reject(self, rec, reason: str) -> Response:
         rec.outcome, rec.reason = "rejected", reason
         type_ = "rate_limit_error" if STATUS[reason] == 429 else "server_error"
+        if reason == NOT_SERVICEABLE:   # permanent: no Retry-After, and OpenAI clients must not retry
+            resp = openai_error(STATUS[reason], type_, reason, REJECTION_MESSAGES[reason])
+            resp.headers["x-should-retry"] = "false"
+            return resp
         return openai_error(STATUS[reason], type_, reason, REJECTION_MESSAGES[reason],
                             retry_after_s=getattr(self.settings.retry_after_s, reason))
 
@@ -198,9 +213,10 @@ class Gateway:
 
     def readiness(self) -> dict:
         p, c = self.profile, self.cls
-        return {"ready": self.monitor.ready and not self.draining,
+        return {"ready": c.serviceable and self.monitor.ready and not self.draining,
+                "not_ready_reason": self._unavailable(),
                 "profile": {"id": p.profile_id, "status": p.status, "provisional": not p.verified},
-                "active_class": c.name,
+                "active_class": c.name, "class_status": c.status, "bound": c.bound, "serviceable": c.serviceable,
                 "backend": {"ready": self.monitor.ready, "reason": self.monitor.reason},
                 "draining": self.draining, "in_flight": self.ctrl.in_flight, "queued": self.ctrl.queued,
                 "pending": self.guard.pending,

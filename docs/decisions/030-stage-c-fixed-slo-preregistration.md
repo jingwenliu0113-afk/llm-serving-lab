@@ -397,7 +397,7 @@ harness 依本文以 TDD 實作：
 - 任何 sha256 不符；
 - SLO 和 pins 不同。
 
-**產生器**：029 的 `capserve.profile_gen`，對每個 workload：
+**產生器**：029 的 `capserve.profile_gen`（M2 實作見 029 的 M2 補記：class 名稱、CENSORED 的 bound 為 `censored`、`--freeze-commit` 的 git 驗證），對每個 workload：
 
 | 結果 | profile 的內容 |
 |---|---|

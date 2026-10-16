@@ -390,3 +390,52 @@ M1（`procs`、`runs`、`deploy`、`loadtest`、`itest`、`service/deploy/rtx.to
 - **state.json 的 phase 順序**：preflight → starting → ready → stopping → stopped；preflight 被拒絕時為 refused。
   只有確實持有 lock 時才在 preflight 前寫入，所以 preflight 期間也能 `stop`。
 
+
+## 實作補記（M2，2026-10-17；尚未有任何 verified profile）
+
+M2（verified profile 的產生器與 class 狀態處理）依本文與 030 8.7 以 TDD 實作，經一輪審查：4 項發現全部屬實，3 項在程式中修正並附回歸測試，1 項是本補記。
+
+**產生器**（`python -m capserve.profile_gen --session … --freeze-commit … --out …`）
+- 拒絕時 exit 2，不寫任何檔案。
+- 新增必填的 `--freeze-commit`：session.json 沒有記錄凍結 commit，所以由外部傳入，並以 git 驗證：
+  - 它是第一次凍結（解凍後再凍結一律拒絕；日後若依 030 8.9 獲准，要另寫 decision 修改產生器）；
+  - 該 commit 的 `configs/capacity.toml` 位元組等於 session 記錄的 sha256；
+  - 5 個 Stage C 模組（capacity_plan、run_capacity、capacity_analysis、capacity_report、gpu_idle）在凍結 commit、DEPLOYED_COMMIT 與產生器實際 import 的檔案三者之間逐位元相同。
+  本文原寫「沒有任何覆寫參數」；`--freeze-commit` 不是覆寫，而是被驗證的輸入。
+- 其他拒絕條件：
+  - 工作樹有未 commit 的變更；
+  - `--out` 已存在或位於 `results/` 之下；
+  - session 的 server fingerprint 不是產品 server 的；
+  - session 或 analysis.json 格式損壞。
+- class 名稱：`uniform-2k`、`uniform-8k`、`mixed-2k`、`mixed-8k`；`source` 為 `stage_c:<workload>:c_prod:<status>`。
+- 對應：
+  - EXACT / LOWER / CENSORED → verified，max_concurrency = max_queue = C_PROD，bound 為 exact / lower / censored；
+  - INFEASIBLE → verified 0（bound exact，代表拒絕這個 class）；
+  - UNSTABLE / NT → unavailable，附原因，數字欄位為 null。
+  每個 class 另附 scope、C_PROD、C_SLO、C_KV、C_cap、flags、binding、margins、開場湧入。
+- 輸出沒有時間戳記，可以重新產生並逐位元比較。
+
+**Profile 的 schema**（schema_version 仍為 1，向下相容；兩個 provisional profile 不用改）
+- class 新增 `status`、`bound`、`unavailable_reason`、`evidence`。
+- verified 的 `max_concurrency` 可以是 0（INFEASIBLE）；unavailable 的數字欄位為 null。本文 loader 規則「1 ≤ max_concurrency」以此為例外。
+- provenance 新增 `deployed_commit`、`capacity_sha256`、`pins_sha256`、`gpu`、`gpu_driver`；三個 commit 欄位必須是完整 40 hex。
+- SLO 的 terms 允許一層巢狀，才能原樣複製 S2。
+
+**載入時的 provenance 驗證**（M0 補記延到 M2 的項目）
+- verified profile 必須同時符合：
+  - `configs/capacity.toml` 已凍結；
+  - `capacity_sha256` 與 `pins_sha256` 等於這份 checkout 的檔案；
+  - SLO 等於 capacity.toml 的 `[slo]`；
+  - `profile_id` 為 `verified-<source_session>`，`analysis_path` 為 `results/capacity/<sid>/analysis.json`；
+  - class 的名稱與 token 上限符合它的 workload，每個 workload 最多一個 class。
+- `capserve serve` 與 deploy 都只接受 `service/profiles/<name>.json` 中、位元組相符的 verified 檔案（deploy 傳給 gateway 的 `runs/<id>/profile.json` 複本仍可使用）。
+- Mac 的「重新產生」測試掃描所有追蹤中的檔案（`git ls-files`），任何 status 為 verified 的 JSON 都要能由產生器重新產生。
+- **沒有做**：執行期不重新計算數字，也不比對 RTX 上 analysis.json 的 sha256（該檔是否存在不確定，缺檔時就通過的檢查沒有意義）。數字的可信度依靠「只服務 commit 過的 `service/profiles` 檔案」加上重新產生測試。
+
+**Gateway**
+- active class 為 unavailable：`serve` 與 `deploy up` 都拒絕啟動，任何旗標都不能覆寫。
+- active class 為 verified 0：
+  - `capserve serve` 會啟動，但每個 completion request 在讀 body 之前就回 503 `class_not_serviceable`：不排隊、不帶 Retry-After、`x-should-retry: false`。本文「503 都帶 Retry-After」以此為例外。
+  - `/readyz` 回 503，並附 `class_status`、`bound`、`serviceable`、`not_ready_reason`。
+  - `deploy up` 在 preflight 就拒絕，因為 gateway 永遠不會就緒，啟動 vLLM 只是浪費。
+- `AdmissionController` 新增關閉模式（0 / 0 代表一律拒絕）；M0 原本「0 會報錯」的測試已改寫。
