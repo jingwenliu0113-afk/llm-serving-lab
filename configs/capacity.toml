@@ -1,4 +1,4 @@
-# Stage C (C1) settings: decision 030, PREREGISTRATION §8 (DRAFT). Machine-readable; benchmarks/capacity_plan.py
+# Stage C (C1) settings: decision 030, PREREGISTRATION §8 (FROZEN 2026-10-17). Machine-readable; benchmarks/capacity_plan.py
 # checks every value against the 030 rules (capacity_problems) and refuses a plan otherwise.
 # 030 implementation note: every Stage C setting lives here, never in configs/pins.toml, which stays byte-identical to
 # the Advanced freeze (the frozen adv_report refuses a pins sha256 different from its session's). Core B / Stage B
@@ -11,7 +11,7 @@ schema_version = 1
 # pins freeze.mac / nvidia / advanced are all true, and the evidence below is set (030 implementation note): the passed
 # FS-order and mini smoke sessions (results/capacity/<id>/session.json, formal false, smoke.ok true) and C0's result
 # decision log (docs/decisions/<NNN>-*.md); freeze_evidence_problems reads them.
-capacity = false
+capacity = true
 fs_order_smoke = "smoke-fs-order-202610161531"           # session id of the passed --smoke-fs-order run (030 8.6)
 mini_smoke = "smoke-mini-202610161531"                   # session id of the passed --mini run (030 8.6)
 c0_decision = "032"                                      # number of C0's result decision log (028): 032, branch A

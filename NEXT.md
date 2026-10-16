@@ -6,7 +6,7 @@
 - Phase 1（Core + Advanced，026 的 milestone）結果保留，不重新分析；凍結程式由 `test_core_untouched`、`test_frozen_untouched` 保護。
 - **Research Stage C**：
   - C0：8K 延遲雙模式的有限度排查（探索性）。
-  - C1：Fixed-SLO 最大並發（正式）。正式數據之前先凍結 PREREGISTRATION §8；SLO 的數值由使用者選定。
+  - C1：Fixed-SLO 最大並發（正式）。PREREGISTRATION §8 已凍結（2026-10-17）；SLO 由使用者選定（S2）。
 - **Engineering**：Capacity-Aware Serving Service MVP（`service/`），建在 vLLM 之上。只有 Stage C 驗證過的容量能成為正式限制。
 - 任何在 RTX 上啟動 vLLM 的工作都要取得 GPU lock；產品測試的輸出不進 `results/`；正式研究 session 進行中不部署任何東西。
 
@@ -21,7 +21,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–032（030 為 DRAFT）。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–032（030 於 2026-10-17 凍結）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -128,13 +128,14 @@
    - **C0 完成**（部署 `f0eee6a`，2026-10-16 23:31 – 10-17 01:59，GPU lock 下）：`explore-c0-20261016` 24 / 24 個 bench 有效。
      滑移段 5 段，D = 3.40 < 11.07 → **Rrun → 分支 A**（decision 032）。起始組集中在 idx 89 等現象只報告，列入 Future Work。
    - 同一次 lock 的 Stage C smoke 都通過：mini `smoke-mini-202610161531`、FS-order `smoke-fs-order-202610161531`。
-2. **§8**（decision 030，DRAFT）：
+2. **§8**（decision 030，**FROZEN 2026-10-17**）：
    - 使用者已決定（2026-10-15）：SLO S2（TTFT 2 / 6 / 20 s，TPOT 100 ms）、mixed 長 request 為 budget、穩態時間窗、GPU 空著就跑。O-32K、O-T 不做。
    - 設定檔放在 `configs/capacity.toml`；`pins.toml` 維持 Advanced 凍結時的位元組（030 實作補記）。
 3. **Stage C harness 完成**（`eb78a35`，仍為 DRAFT、未凍結）：審查 21 項已處理；030 實作補記二記錄了所有實作時的決定，
    包括 C_PROD 一律把 MARGINAL 當 FAIL，以及凍結必須附上的證據（兩次通過的 smoke 與 C0 的 decision log）。
-   smoke 通過、C0 分支 A、凍結證據已填入 `configs/capacity.toml`（decision 032）。
-   之後：凍結（`freeze.capacity = true` 單獨一個 commit，profile 產生器以它為凍結 commit）→ 部署 → 正式 run（`formal-YYYYMMDD-c1`，約 7–9 h）→ 報告。
+   smoke 通過、C0 分支 A、凍結證據已填入 `configs/capacity.toml`（decision 032，`f35fe85`）。
+   **已凍結**：`freeze.capacity = true` 單獨一個 commit（profile 產生器以它為凍結 commit）；`tests/test_stage_c_frozen.py` 以 sha256 固定五個 Stage C 模組與 capacity.toml。
+   下一步：部署凍結 commit → 確認 GPU 空閒（031）與 Mac / Windows 負載 → GPU lock 下跑正式 session `formal-YYYYMMDD-c1`（約 7–9 h）→ `capacity_report` → `profile_gen` → 報告。
 
 ### Engineering
 1. 架構：decision 029。

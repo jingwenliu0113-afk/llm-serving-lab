@@ -5,12 +5,13 @@
 這是一個事先登記（pre-registered）的實驗：hypothesis、門檻、metric 與 protocol 都在看到正式數據之前寫定並凍結，
 之後的任何變更都有 decision log。結論只來自有效的正式 session，失敗、OOM、not testable 的單位照實報告。
 
-> **狀態（2026-10-15）：Phase 2 進行中**（使用者決定，decision 027）。
+> **狀態（2026-10-17）：Phase 2 進行中**（使用者決定，decision 027）。
 > - **Phase 1 已完成**，結果保留、不重新分析：
 >   - Core：A（macos-metal、wsl2-cuda）、B（uniform、mixed）、quality、deployment decision table。
 >   - Advanced：隔離 H-B4 的成因（事先登記與凍結見 024，結果見 025）。
 > - **Phase 2** 分成兩條受控並行的線：
->   - Research Stage C：Fixed-SLO 下的最大並發容量。正式數據之前會先預註冊並凍結（PREREGISTRATION §8）。
+>   - Research Stage C：Fixed-SLO 下的最大並發容量。事先登記已凍結（PREREGISTRATION §8、decision 030，2026-10-17）；
+>     C0 的有限度排查為分支 A（decision 032）。正式 session 尚未執行，還沒有任何容量結論。
 >   - Engineering：建在 vLLM 之上的 Capacity-Aware Serving Service（`service/`）。
 >   - 尚未經 Stage C 驗證的容量都標為 provisional，不是產品限制。
 

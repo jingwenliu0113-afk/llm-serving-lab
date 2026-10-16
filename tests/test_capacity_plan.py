@@ -40,6 +40,18 @@ def cfg(cfg_bytes):
 
 
 @pytest.fixture(scope="module")
+def draft(cfg):
+    """The repo's capacity.toml as it was before the freeze (030 DRAFT): every value the same, freeze.capacity false."""
+    return edited(cfg, "freeze.capacity", False)
+
+
+@pytest.fixture(scope="module")
+def draft_bytes(cfg_bytes):
+    assert cfg_bytes.count(b"\ncapacity = true\n") == 1
+    return cfg_bytes.replace(b"\ncapacity = true\n", b"\ncapacity = false\n")
+
+
+@pytest.fixture(scope="module")
 def pins():
     return tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
 
@@ -85,7 +97,7 @@ def test_repo_capacity_toml_follows_030(cfg, pins):
     assert cp.capacity_problems(cfg, pins) == []
     c = cfg["capacity"]
     assert cfg["schema_version"] == 1
-    assert cfg["freeze"]["capacity"] is False          # DRAFT until harness, smoke and C0 are done (030)
+    assert cfg["freeze"]["capacity"] is True           # frozen 2026-10-17 after the harness, smokes and C0 (030, 032)
     assert c["c0_branch"] == "A"                         # C0's result decision log 032: Rrun (028)
     assert (c["seed"], c["derived_from"]) == (20261008, "formal-20261009-coreb-uniform")
     assert c["workloads"] == ["U2K", "U8K", "M2K", "M8K"]
@@ -158,18 +170,18 @@ def test_branch_c_limits_seven_restarts_to_uniform_8k(cfg, pins):
 
 
 @pytest.mark.parametrize("branch,ok", [("A", True), ("B", True), ("C", True), ("D", False), ("", False)])
-def test_freeze_needs_a_c0_branch_a_b_or_c(cfg, pins, branch, ok):
+def test_freeze_needs_a_c0_branch_a_b_or_c(cfg, draft, pins, branch, ok):
     """028 / 030: D (a harness defect) or a missing branch keeps §8 unfrozen."""
     assert (cp.capacity_problems(frozen(cfg, branch), pins) == []) is ok
-    assert cp.capacity_problems(edited(cfg, "capacity.c0_branch", branch), pins) == []  # any branch in DRAFT
+    assert cp.capacity_problems(edited(draft, "capacity.c0_branch", branch), pins) == []  # any branch in DRAFT
 
 
 def test_freeze_table_records_the_evidence(cfg):
     """030 implementation note: the freeze records the passed FS-order and mini smokes and C0's result decision log
     (032); the committed sessions and the log satisfy freeze_evidence_problems."""
-    assert cfg["freeze"] == {"capacity": False, "fs_order_smoke": "smoke-fs-order-202610161531",
+    assert cfg["freeze"] == {"capacity": True, "fs_order_smoke": "smoke-fs-order-202610161531",
                              "mini_smoke": "smoke-mini-202610161531", "c0_decision": "032"}
-    assert cp.freeze_evidence_problems(edited(cfg, "freeze.capacity", True), ROOT) == []
+    assert cp.freeze_evidence_problems(cfg, ROOT) == []
 
 
 @pytest.mark.parametrize("key,value", [("fs_order_smoke", ""), ("mini_smoke", ""), ("c0_decision", ""),
@@ -187,9 +199,9 @@ def _smoke_session(root, sid, mode, ok=True, formal=False):
                                                 "smoke": {"ok": ok}}))
 
 
-def test_freeze_evidence_reads_the_smoke_sessions_and_the_c0_log(cfg, tmp_path):
+def test_freeze_evidence_reads_the_smoke_sessions_and_the_c0_log(cfg, draft, tmp_path):
     f = frozen(cfg)
-    assert cp.freeze_evidence_problems(cfg, tmp_path) == []          # nothing to check before the freeze
+    assert cp.freeze_evidence_problems(draft, tmp_path) == []        # nothing to check before the freeze
     assert len(cp.freeze_evidence_problems(f, tmp_path)) == 3        # two missing sessions, a missing decision log
     _smoke_session(tmp_path, EVIDENCE["fs_order_smoke"], "fs-order")
     _smoke_session(tmp_path, EVIDENCE["mini_smoke"], "mini")
@@ -213,11 +225,12 @@ def test_the_repo_freeze_evidence_holds_once_frozen(cfg):
 
 
 @pytest.mark.parametrize("stage", ["mac", "nvidia", "advanced"])
-def test_freeze_needs_every_earlier_stage_frozen(cfg, pins, stage):
+def test_freeze_needs_every_earlier_stage_frozen(cfg, draft, pins, stage):
     p = copy.deepcopy(pins)
     p["freeze"][stage] = False
     assert len(cp.capacity_problems(frozen(cfg), p)) == 1
-    assert cp.capacity_problems(cfg, p) == []
+    assert len(cp.capacity_problems(cfg, p)) == 1
+    assert cp.capacity_problems(draft, p) == []
 
 
 def test_n_near_per_workload_and_branch(cfg):
@@ -586,10 +599,11 @@ def test_plan_refuses_a_config_that_breaks_030(cfg, pins, core_session):
         build(edited(cfg, "capacity.guard_band", 0.1), pins, core_session)
 
 
-def test_formal_plan_needs_the_freeze(cfg, pins, core_session):
+def test_formal_plan_needs_the_freeze(cfg, draft, pins, core_session):
     with pytest.raises(cp.PlanError, match="freeze"):
-        build(cfg, pins, core_session, formal=True)
+        build(draft, pins, core_session, formal=True)
     assert build(frozen(cfg), pins, core_session, formal=True)["c0_branch"] == "A"
+    assert build(cfg, pins, core_session, formal=True)["c0_branch"] == "A"     # the repo's frozen capacity.toml
 
 
 # ------------------------------------------------------------------ CLI
@@ -606,8 +620,8 @@ def test_cli_writes_the_plan_with_both_sha256(tmp_path, cfg_bytes, monkeypatch, 
     assert plan["workloads"]["U2K"]["c_cap"] == 70
 
 
-def test_cli_refuses_a_formal_plan_before_the_freeze_and_writes_nothing(tmp_path, cfg_bytes, monkeypatch):
-    monkeypatch.setattr(cp, "load_capacity_bytes", lambda: cfg_bytes)
+def test_cli_refuses_a_formal_plan_before_the_freeze_and_writes_nothing(tmp_path, draft_bytes, monkeypatch):
+    monkeypatch.setattr(cp, "load_capacity_bytes", lambda: draft_bytes)
     with pytest.raises(SystemExit):
         cp.main(["--uniform-session", str(UNIFORM_SESSION), "--out", str(tmp_path / "plan.json"), "--formal"])
     assert not (tmp_path / "plan.json").exists()

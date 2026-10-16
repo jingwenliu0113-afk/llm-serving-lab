@@ -295,8 +295,10 @@ def test_load_session_reads_every_file(setup):
 # ------------------------------------------------------------------ CLI
 
 def test_main_refuses_with_exit_2_and_writes_nothing(setup, monkeypatch, capsys):
-    """The repo's capacity.toml is not frozen yet, so the real CLI refuses every session today."""
+    """A capacity.toml that is not frozen (030 DRAFT) makes the CLI refuse every session."""
     monkeypatch.setattr(cr, "ROOT", setup["tmp"] / "repo")
+    draft = {**setup["cfg"], "freeze": {**setup["cfg"]["freeze"], "capacity": False}}
+    monkeypatch.setattr(cr, "load_configs", lambda: (draft, setup["pins"], CAP_SHA, PINS_SHA))
     out = setup["out"] / "analysis.json"
     assert cr.main(["--session", str(setup["out"]), "--uniform-session", str(CORE_UNIFORM), "--out", str(out)]) == 2
     err = capsys.readouterr().err

@@ -1,6 +1,8 @@
-# 030 — Stage C（C1）事先登記：Fixed-SLO 下的最大並發容量（DRAFT）
+# 030 — Stage C（C1）事先登記：Fixed-SLO 下的最大並發容量（FROZEN）
 
-- 狀態：**DRAFT**（未凍結）。使用者已於 2026-10-15 選定研究決策（見下方「使用者決定」）；harness、smoke 與 C0 完成後才凍結。C0 的結果為分支 A（decision 032，2026-10-17）。
+- 狀態：**FROZEN（2026-10-17）**。使用者已於 2026-10-15 選定研究決策（見下方「使用者決定」）。
+  harness、兩次 smoke 與 C0 都完成後凍結：C0 的結果為分支 A（decision 032）。
+  凍結 commit 是設定 `configs/capacity.toml` 的 `[freeze] capacity = true` 的那個 commit（見文末「凍結紀錄」）。
 - 日期：2026-10-15
 - 對應：decision 027 §2、028（C0）、PREREGISTRATION §8（DRAFT）
 - 時點：任何 C1 數據之前。設計經過三份獨立設計（validity、product、efficiency 三個角度）與一位評審綜合（評審重新核對了所有引用的數字）。
@@ -223,6 +225,11 @@ harness 依本文以 TDD 實作：
 - 默讀約 238 wpm（Brysbaert 2019），約每秒 5 個 token。所以 TPOT 200 ms 約等於閱讀速度，100 ms 約為 2 倍，50 ms 約為 4 倍。
 - MLPerf（p99）：Llama-2-70B conversational 2 s / 200 ms，interactive 450 ms / 40 ms；Llama-3.1-405B long-context 6 s / 175 ms。
   這些來自二手來源，凍結前要以 MLCommons 的規則核對。
+  〔2026-10-17 凍結前核對 MLCommons `inference_policies` 的 `inference_rules.adoc`：
+  - Llama-2-70B：conversational 2,000 ms / 200 ms，interactive 450 ms / 40 ms，與上文相同。
+  - Llama-3.1-405B：6,000 ms / 175 ms，與上文相同；規則中的類別名稱是 Server，不是上文寫的 long-context。另有 interactive 4,500 ms / 80 ms。
+  - 百分位數：規則的情境表中 Server 的 tail latency 為 99%；LLM 的列本身沒有另寫百分位數。
+  - 這些數字只是依據，不影響已選定的門檻。〕
 - 輸入越長，TTFT 的門檻越寬，因為提交越多內容的使用者會預期等更久。8K 的門檻取 2K 與 32K 的幾何中點（2K 門檻的 √10 倍）。
 
 | id | TTFT 2K / 8K / 32K | TPOT | 情境 |
@@ -446,3 +453,19 @@ harness 依本文以 TDD 實作：
 - n_near = 5，C0 落在分支 B 或 C 時改為 7；
 - C_cap = 2·C_KV；
 - 開場湧入的事實只在 §8 揭露，不另外為 Phase 1 寫說明，也不重新分析 Phase 1。
+
+## 凍結紀錄（2026-10-17）
+
+- **凍結證據**（`configs/capacity.toml` 的 `[freeze]`）：
+  - FS-order smoke `smoke-fs-order-202610161531`；
+  - mini smoke `smoke-mini-202610161531`；
+  - C0 的結果 decision 032：分支 A。
+  - 三者都已 commit（`f35fe85`），`freeze_evidence_problems` 為空。
+- **凍結的程式**：`capacity_plan`、`capacity_analysis`、`run_capacity`、`capacity_report`、`gpu_idle`。
+  它們和兩次 smoke 所部署的 `f0eee6a` 位元組相同。
+- **新增 `tests/test_stage_c_frozen.py`**：以 sha256 固定這五個模組與凍結後的 `configs/capacity.toml`。
+  - 用途：在花 7–9 h 跑正式 session 之前，就抓到凍結後的任何修改。
+  - 凍結後要改任何規則，都需要新的 decision log 與新的 session（8.9）。
+  - capserve 的 profile 產生器也會用 git 再核對一次。
+- **測試的調整**：原本以「repo 的設定尚未凍結」為前提的測試，改為在測試中明確建立未凍結的設定（`draft`）。只改測試，沒有改任何規則或程式。
+- 下一步：部署凍結 commit，確認 GPU 空閒與主機負載後，在 GPU lock 下執行正式 session `formal-YYYYMMDD-c1`。
