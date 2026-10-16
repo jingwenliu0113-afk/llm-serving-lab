@@ -57,6 +57,11 @@ def loaded(setup):
     return copy.deepcopy(cr.load_session(setup["out"]))
 
 
+def benched(cap):
+    """A valid run that ran a bench (its row has an argv and a 031 spill record)."""
+    return next(r for r in cap["rows"] if r.get("valid") and "argv" in r)
+
+
 # ------------------------------------------------------------------ the accepted session
 
 def test_a_formal_session_is_accepted_and_analysed(setup):
@@ -142,12 +147,52 @@ def test_cross_session_shift_uses_the_committed_references(setup):
     (lambda c: c["session"].update(research_valid=False), "product-test"),
     (lambda c: c["session"]["server_env"]["OTEL"].update(OTEL_SERVICE_NAME="x"), "session's server env"),
     (lambda c: c["session"]["runs"].pop(c["session"]["boots"][1]["tag"]), "no server record"),
+    # 030 8.6 (g) / 031: the spill record of every benched run is recomputed
+    (lambda c: benched(c)["spill"]["readings_mib"].append(500.0), "spill"),
+    (lambda c: benched(c)["spill"].update(spilled=True), "spill"),
+    (lambda c: benched(c).pop("spill"), "spill readings"),
+    (lambda c: benched(c)["spill"].update(pre_mib=None), "spill readings"),
+    (lambda c: benched(c)["spill"].update(readings_mib=[]), "spill readings"),
 ])
 def test_every_refusal(setup, mutate, match):
     cap = loaded(setup)
     mutate(cap)
     msg = refused(setup, cap)
     assert match in msg, msg
+
+
+def test_spill_problems_recompute_validity_condition_g():
+    """031: a benched run needs its readings; the recorded flag must be the recomputed one; a spilled run is never
+    valid. Runs without a bench (not run after a spill or a server exit) carry no readings and are invalid anyway."""
+    ok = {"tag": "x", "valid": True, "argv": ["vllm"],
+          "spill": {"pre_mib": 64.4, "readings_mib": [64.4, 128.3], "spilled": False, "tol_mib": 64}}
+    assert cr.spill_problems([ok]) == []
+    spilled = copy.deepcopy(ok)
+    spilled["spill"].update(readings_mib=[64.4, 128.4], spilled=True)          # + 64.0: 「64 MiB 以上」 (031)
+    assert any("marked valid" in p for p in cr.spill_problems([spilled]))
+    spilled["valid"] = False
+    assert cr.spill_problems([spilled]) == []
+    assert cr.spill_problems([{"tag": "y", "valid": False, "reasons": ["not run: spill"]}]) == []
+    for bad in ({"pre_mib": "64"}, {"readings_mib": None}, {"readings_mib": [64.4, True]}, {"spilled": None}):
+        row = copy.deepcopy(ok)
+        row["spill"].update(bad)
+        assert cr.spill_problems([row]), bad
+
+
+def test_an_invalid_spilled_run_is_accepted_as_an_invalid_run(tmp_path):
+    """A spill makes a run invalid (8.6 (g)); the session stays reportable, the run is simply no evidence."""
+    import tomllib
+
+    cfg = tomllib.loads((ROOT / "configs" / "capacity.toml").read_text())
+    pins = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
+    ds, sha = datasets(tmp_path)
+    c, p = frozen(cfg, pins, sha)
+    plan = make_plan(c, p, formal=True)
+    out, summary, rows = run(World(tmp_path, spill_at={"bench:C-U8K-c8-r1"}), plan, c, p, mixed_datasets=ds)
+    setup = {"tmp": tmp_path, "out": out, "cfg": c, "pins": p, "plan": plan, "ds": ds, "uniform": uniform_session()}
+    a = rep(setup)
+    run8 = [x for x in a["runs"] if x["tag"] == "C-U8K-c8-r1"][0]
+    assert run8["valid"] is False and any("spill" in x for x in run8["reasons"])
 
 
 @pytest.mark.parametrize("kw, match", [

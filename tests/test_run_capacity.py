@@ -14,6 +14,7 @@ import pytest
 import capacity_analysis as ca
 import capacity_plan as cp
 import core_b_plan as bp
+import gpu_idle as gi
 import run_adv as ra
 import run_capacity as rc
 from run_core_a import sha256_json
@@ -24,6 +25,7 @@ PINS_SHA, CAP_SHA = "ab" * 32, "cd" * 32
 EPOCH = 1_760_000_000.0
 COMMIT = "97a948c911940249b3d04bff38727a1fcb8b1d64"
 BASE_ENV = {"PATH": "/usr/bin", "HOME": "/home/u"}
+SHARED_IDLE, SPILL = 64.4, 200.0          # Windows shared usage with WSL running (031); a spill adds 200 MiB
 DERIVED_KEYS = {"idx", "cls", "ttft_ms", "latency_ms", "out"}
 
 
@@ -205,13 +207,18 @@ class World:
     the boot checks read /metrics). bench[run tag]: "timeout", "exit", "failed", "short_arrays", "no_long_in_w",
     "timeout_with_result", "garbage" (an unreadable result file); a bench whose timeout is below its 10 s also times
     out. lock: a bool or {lock check number: bool}. arrivals(C, N, prefix) -> {idx: offset s} for the FS-order spans
-    (default: dispatch order). thr_scale[run tag] scales that run's output throughput."""
+    (default: dispatch order). thr_scale[run tag] scales that run's output throughput. mem / util: memory.used /
+    utilization.gpu of every 031 idle-window sample. Windows shared usage (031 spill guard) is SHARED_IDLE MiB; a
+    reading whose point ("pre:<boot number from 1>", "ready:<label>", "bench:<run tag>") is in spill_at returns it +
+    SPILL, one in shared_fail raises as an unreachable powershell.exe does."""
 
-    def __init__(self, tmp_path, *, truth=scenario, boots=None, bench=None, mem=400, apps=(), lock=True,
-                 arrivals=None, thr_scale=None):
+    def __init__(self, tmp_path, *, truth=scenario, boots=None, bench=None, mem=400, util=0, apps=(), lock=True,
+                 arrivals=None, thr_scale=None, spill_at=(), shared_fail=()):
         self.tmp_path, self.truth, self.boots, self.bench = Path(tmp_path), truth, boots or {}, bench or {}
         self.thr_scale = thr_scale or {}
         self.mem, self.apps, self.lock, self.arrivals = mem, list(apps), lock, arrivals
+        self.util, self.spill_at, self.shared_fail = util, set(spill_at), set(shared_fail)
+        self.point, self.shared_points, self.samples = "pre:1", [], 0
         self.t, self.events, self.labels, self.benches, self.bench_argvs, self.bench_timeouts = 0.0, [], [], [], [], {}
         self.server_argvs, self.server_envs, self.receivers, self.lock_calls = [], [], [], 0
         self.proc = self.how = None
@@ -235,9 +242,18 @@ class World:
             return self.lock.get(self.lock_calls, True)
         return self.lock
 
-    def gpu_mem_used(self):
+    def gpu_sample(self):
         self.events.append("mem")
-        return self.mem
+        self.samples += 1
+        return {"mem_used_mib": self.mem, "util_pct": self.util, "pstate": "P8"}
+
+    def shared_usage(self):
+        self.events.append("shared")
+        self.shared_points.append(self.point)
+        if self.point in self.shared_fail:
+            raise gi.SharedUsageError("powershell.exe failed: TimeoutExpired: timed out after 20 seconds")
+        return {"luid": "luid_0x00000000_0x000103ae_phys_0", "dedicated_mib": 1396.0,
+                "shared_mib": SHARED_IDLE + (SPILL if self.point in self.spill_at else 0.0)}
 
     def compute_apps(self):
         self.events.append("apps")
@@ -257,6 +273,7 @@ class World:
                                        "confirm_plan": json.loads((out / "confirm_plan.json").read_text())}
         self.events.append(f"popen:{label}")
         self.labels.append(label)
+        self.point = f"ready:{label}"
         self.server_argvs.append(argv)
         self.server_envs.append(env)
         how = self.how = self.boots.get(label)
@@ -279,6 +296,7 @@ class World:
 
     def signal_group(self, proc, sig):
         self.events.append(f"signal:{int(sig)}")
+        self.point = f"pre:{len(self.labels) + 1}"
         proc.returncode = 0
 
     def group_alive(self, proc):
@@ -306,6 +324,7 @@ class World:
     def run_bench(self, argv, log_path, env, timeout_s):
         a = dict(zip(argv, argv[1:]))
         tag = a["--result-filename"].removesuffix(".bench.json")
+        self.point = f"bench:{tag}"
         self.events.append(f"bench:{tag}")
         self.benches.append(tag)
         self.bench_argvs.append(argv)
@@ -379,8 +398,8 @@ def run(world, plan, cfg, pins, *, out=None, mode="formal", evidence=True, **kw)
     summary = rc.run_session(plan, cfg=cfg, pins=pins, pins_sha256=PINS_SHA, capacity_sha256=CAP_SHA, out_dir=out,
                              session_id=out.name, mode=mode, popen=world.popen, signal_group=world.signal_group,
                              group_alive=world.group_alive, http_get=world.http_get, run_bench=world.run_bench,
-                             gpu_mem_used=world.gpu_mem_used, compute_apps=world.compute_apps, now=world.now,
-                             sleep=world.sleep, **kw)
+                             gpu_sample=world.gpu_sample, compute_apps=world.compute_apps,
+                             shared_usage=world.shared_usage, now=world.now, sleep=world.sleep, **kw)
     return out, summary, read_rows(out)
 
 
@@ -667,8 +686,11 @@ def test_every_boot_runs_the_preflight_in_order(formal_run):
         last_apps = max(j for j, e in enumerate(before) if e == "apps")
         last_mem = max(j for j, e in enumerate(before) if e == "mem")
         last_lock = max(j for j, e in enumerate(before) if e == "lock")
-        assert last_lock < last_mem < last_apps < last_env < i
+        last_shared = max(j for j, e in enumerate(before) if e == "shared")       # 031: the pre-boot reading
+        assert last_lock < last_mem < last_apps < last_shared < last_env < i
+        assert before[last_lock + 1:last_apps] == ["mem"] * 30                    # one 30-sample idle window
     n = len(pops)
+    assert formal_run["world"].samples == 30 * n
     assert sum(e.startswith("env:") and e.endswith(".after.json") for e in ev) == n
     assert formal_run["world"].lock_calls == n + 1          # session start + before every boot
 
@@ -766,15 +788,37 @@ def test_the_lock_is_verified_again_before_every_boot(tmp_path, cfg, pins):
     assert all(e != "popen:S-U8K-a1" for e in w.events)
 
 
-@pytest.mark.parametrize("kw, match", [({"mem": 4000}, "memory.used"), ({"apps": ["123, python, 9000"]}, "compute")])
-def test_a_busy_gpu_before_a_boot_stops_the_session(tmp_path, cfg, pins, kw, match):
+@pytest.mark.parametrize("kw, match", [({"mem": 4000}, "memory.used 4000 MiB > the headroom bound 1018"),
+                                       ({"mem": 1385}, "memory.used 1385 MiB > the headroom bound 1018"),
+                                       ({"util": 6}, "utilization.gpu"),
+                                       ({"apps": ["123, python, 9000"]}, "compute")])
+def test_a_gpu_that_is_not_idle_before_a_boot_stops_the_session(tmp_path, cfg, pins, kw, match):
+    """031: up to 3 idle windows of 30 samples, then gpu_not_idle stops the session (030 8.6, as the old 1000 MiB)."""
     c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
     w = World(tmp_path, **kw)
     with pytest.raises(rc.RunError, match=match):
         run(w, plan, c, p, mixed_datasets=ds)
-    assert w.labels == []
+    assert w.labels == [] and w.samples == 90 and w.events.count("apps") == 3 and "shared" not in w.events
     s = json.loads((tmp_path / "repo" / "results" / "capacity" / "s1" / "session.json").read_text())
-    assert match in s["aborted"]
+    assert match in s["aborted"] and "gpu_not_idle" in s["aborted"]
+    assert s["gpu_not_idle"]["attempt"] == 3 and s["gpu_not_idle"]["boot"] == "b000-sentinel-start-U2K"
+
+
+def test_the_031_idle_bound_is_inclusive(tmp_path, cfg, pins):
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    out, s, rows = run(World(tmp_path, mem=1018, util=5), plan, c, p, mixed_datasets=ds)
+    assert "aborted" not in s and s["gpu_idle"] == gi.criterion(16303)
+
+
+def test_the_031_bound_is_computed_from_the_pins_v_total(tmp_path, cfg, pins, plan):
+    """031: the headroom bound comes from pins [stage_b].v_total_mib, never a typed 1018."""
+    other = copy.deepcopy(pins)
+    other["stage_b"]["v_total_mib"] = 16500                    # bound 16500 - 15157 - 128 = 1215 MiB
+    w, out, s, rows = fs_run(tmp_path, cfg, other, plan, mem=1100)   # above 1018, below 1215
+    assert w.labels == ["fs-U2K"] and "aborted" not in s
+    assert s["gpu_idle"] == gi.criterion(16500) and s["gpu_idle"]["bound_mib"] == 1215
+    idle = s["runs"]["b000-fs-U2K"]["idle"]
+    assert idle["ok"] and idle["bound_mib"] == 1215 and idle["idle_mib"] == 1100
 
 
 def test_an_invalid_start_sentinel_stops_the_session(tmp_path, cfg, pins):
@@ -946,6 +990,146 @@ def test_a_boot_with_no_active_point_is_skipped(tmp_path, cfg, pins):
     assert sorted(m2) == [(1, 1), (1, 2), (2, 1), (3, 1), (4, 1), (5, 1)]
     cap, requests = load(out)
     assert replay(cap, requests) == []
+
+
+# ------------------------------------------------------------------ 031 spill guard: run validity (g) --
+
+def test_every_benched_run_carries_its_spill_readings_and_every_boot_its_031_record(formal_run):
+    s, rows, w = formal_run["summary"], formal_run["rows"], formal_run["world"]
+    benched = [r for r in rows if "argv" in r]
+    assert benched and all(r["valid"] for r in benched)
+    for r in benched:
+        sp = r["spill"]
+        assert (sp["pre_mib"], sp["spilled"], sp["tol_mib"]) == (SHARED_IDLE, False, 64)
+        assert len(sp["readings_mib"]) >= 2 and set(sp["readings_mib"]) == {SHARED_IDLE}      # ready + benches so far
+    for b in s["boots"]:
+        rec = s["runs"][b["tag"]]
+        assert rec["idle"]["ok"] and rec["idle"]["bound_mib"] == 1018 and len(rec["idle"]["mem_used_mib"]) == 30
+        assert rec["spill"]["pre"]["shared_mib"] == SHARED_IDLE and rec["spill"]["spilled"] is None
+        assert rec["spill"]["readings"][0]["when"] == "ready"
+    assert s["gpu_idle"] == gi.criterion(16303)
+    assert len(w.shared_points) == 2 * len(s["boots"]) + len(benched)       # pre-boot, ready, after every bench
+
+
+def u8k_c_block1(rows):
+    return [r for r in rows if r["phase"] == "C" and r["workload"] == "U8K" and r["block"] == 1]
+
+
+def test_a_spill_after_a_phase_c_bench_invalidates_it_and_ends_its_boot(tmp_path, cfg, pins):
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    w = World(tmp_path, spill_at={"bench:C-U8K-c8-r1"})
+    out, s, rows = run(w, plan, c, p, mixed_datasets=ds)
+    boot = u8k_c_block1(rows)
+    i = [r["tag"] for r in boot].index("C-U8K-c8-r1")
+    bad = boot[i]
+    assert bad["valid"] is False and bad["outcome"] == "invalid" and bad["spill"]["spilled"] is True
+    assert bad["spill"]["readings_mib"][-1] == SHARED_IDLE + SPILL
+    assert any(x.startswith("spill") and "(g)" in x for x in bad["reasons"]), bad["reasons"]
+    assert all(not r["valid"] and "spill" in r["reasons"][0] and "argv" not in r for r in boot[i + 1:])
+    assert [t for t in w.benches if t.startswith("C-U8K") and t.endswith("-r1")] == [r["tag"] for r in boot[:i + 1]]
+    tag = [b["tag"] for b in s["boots"] if b["phase"] == "C" and b["workload"] == "U8K" and b["block"] == 1][0]
+    assert s["runs"][tag]["spill"]["spilled"] == "C-U8K-c8-r1"
+    later = {r["C"] for r in rows if r["phase"] == "C" and r["workload"] == "U8K" and r["block"] >= 2}
+    assert not later & {8, 9}                 # like any invalid run: its point and every higher one leave (013)
+    cap, requests = load(out)
+    assert replay(cap, requests) == [] and "aborted" not in s
+
+
+def test_a_spill_in_a_phase_s_run_fails_it_and_the_rest_of_its_search_runs_no_bench(tmp_path, cfg, pins):
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    w = World(tmp_path, spill_at={"bench:S-U2K-c16"})
+    out, s, rows = run(w, plan, c, p, mixed_datasets=ds)
+    u2 = [r for r in rows if r["phase"] == "S" and r["workload"] == "U2K"]
+    i = [r["C"] for r in u2].index(16)
+    assert u2[i]["valid"] is False and u2[i]["search_pass"] is False and u2[i]["spill"]["spilled"] is True
+    rest = u2[i + 1:]
+    assert rest and all(not r["valid"] and r["search_pass"] is False and "argv" not in r for r in rest)
+    assert all("spill" in r["reasons"][0] for r in rest)
+    assert not any(t.startswith("S-U2K") for t in w.benches[w.benches.index("S-U2K-c16") + 1:])
+    cap, requests = load(out)
+    assert replay(cap, requests) == [] and cap["confirm_plan"]["workloads"]["U2K"]["c_hat"] == 8
+
+
+def test_a_spill_once_a_phase_s_server_is_ready_fails_the_boot_before_its_first_bench(tmp_path, cfg, pins):
+    """030 8.4: a Phase S boot failing before its first bench has no row and is retried once at the end."""
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    w = World(tmp_path, spill_at={"ready:S-U8K-a1"})
+    out, s, rows = run(w, plan, c, p, mixed_datasets=ds)
+    boot = [b for b in s["boots"] if rc.boot_label(b) == "S-U8K-a1"][0]
+    assert boot["reached_first_bench"] is False and any(x.startswith("spill") for x in boot["problems"])
+    assert not any(r["boot"] == boot["boot"] for r in rows) and "S-U8K-a2" in w.labels
+    assert not any(t.startswith("S-U8K") for t in w.benches[:w.labels.index("S-U8K-a2")])
+    cap, requests = load(out)
+    assert replay(cap, requests) == [] and cap["confirm_plan"]["workloads"]["U8K"]["c_hat"] == 8
+
+
+def test_a_spill_once_a_phase_c_server_is_ready_records_its_planned_runs_as_invalid(tmp_path, cfg, pins):
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    w = World(tmp_path, spill_at={"ready:C-M2K-r1"})
+    out, s, rows = run(w, plan, c, p, mixed_datasets=ds)
+    m2 = [r for r in rows if r["workload"] == "M2K" and r["phase"] == "C"]
+    assert {r["block"] for r in m2} == {1} and len(m2) == 2
+    assert all(not r["valid"] and any(x.startswith("spill") for x in r["reasons"]) for r in m2)
+    assert not any(t.startswith("C-M2K") for t in w.benches)
+    cap, requests = load(out)
+    assert replay(cap, requests) == []
+
+
+def test_a_spill_in_the_start_sentinel_stops_the_session(tmp_path, cfg, pins):
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    w = World(tmp_path, spill_at={"bench:sentinel-start-U2K-c25"})
+    with pytest.raises(rc.RunError, match="start sentinel"):
+        run(w, plan, c, p, mixed_datasets=ds)
+    rows = read_rows(tmp_path / "repo" / "results" / "capacity" / "s1")
+    assert len(rows) == 1 and rows[0]["valid"] is False and rows[0]["spill"]["spilled"] is True
+
+
+@pytest.mark.parametrize("point, labels", [
+    ("pre:1", []),
+    ("pre:3", ["sentinel-start-U2K", "S-U2K-a1"]),
+    ("ready:S-U2K-a1", ["sentinel-start-U2K", "S-U2K-a1"]),
+    ("bench:S-U2K-c4", ["sentinel-start-U2K", "S-U2K-a1"]),
+])
+def test_an_unreadable_shared_usage_aborts_the_session(tmp_path, cfg, pins, point, labels):
+    """031: the spill guard fails closed (like lost telemetry): the session stops as aborted, the server torn down."""
+    c, p, plan, ds = formal_setup(tmp_path, cfg, pins)
+    w = World(tmp_path, shared_fail={point})
+    with pytest.raises(rc.RunError, match="spill_unreadable"):
+        run(w, plan, c, p, mixed_datasets=ds)
+    out = tmp_path / "repo" / "results" / "capacity" / "s1"
+    s = json.loads((out / "session.json").read_text())
+    assert "spill_unreadable" in s["aborted"] and "TimeoutExpired" in s["aborted"] and w.labels == labels
+    assert w.proc is None or w.proc.returncode == 0                          # never a server left running
+    if point.startswith("pre:"):
+        assert "TimeoutExpired" in s["spill_unreadable"]["error"]
+    else:
+        assert "TimeoutExpired" in s["runs"]["b001-S-U2K-a1"]["spill"]["error"]
+    if point.startswith("bench:"):
+        assert point[6:] not in [r["tag"] for r in read_rows(out)]           # a harness failure writes no row
+
+
+def test_fs_order_applies_the_spill_guard(tmp_path, cfg, pins, plan):
+    w, out, s, rows = fs_run(tmp_path, cfg, pins, plan, spill_at={"bench:fs-U2K-c2"})
+    assert s["smoke"]["ok"] is False and s["smoke"]["benches"][0]["bench_ok"] is False
+    assert any(x.startswith("spill") for x in s["smoke"]["benches"][0]["reasons"])
+    assert w.shared_points == ["pre:1", "ready:fs-U2K", "bench:fs-U2K-c2"] and w.benches == ["fs-U2K-c2"]
+    c70 = s["smoke"]["benches"][1]                       # the boot stopped: C 70 is not run (031)
+    assert c70["C"] == 70 and c70["ok"] is False and "spill" in c70["reasons"][0] and c70["spans"] == 0
+    assert [r["valid"] for r in rows] == [False, False] and s["runs"]["b000-fs-U2K"]["spill"]["spilled"] == "fs-U2K-c2"
+
+
+def test_fs_order_runs_no_bench_after_a_spill_once_its_server_is_ready(tmp_path, cfg, pins, plan):
+    """031, as a Stage C boot: a spill at the ready reading fails the FS-order boot before its first bench."""
+    w, out, s, rows = fs_run(tmp_path, cfg, pins, plan, spill_at={"ready:fs-U2K"})
+    assert w.benches == [] and rows == [] and s["smoke"]["ok"] is False and s["smoke"]["benches"] == []
+    assert any(x.startswith("spill") and "no bench" in x for x in s["smoke"]["boot_problems"]), s["smoke"]
+    assert w.shared_points == ["pre:1", "ready:fs-U2K"] and s["runs"]["b000-fs-U2K"]["spill"]["spilled"] == "ready"
+    assert w.proc.returncode == 0                        # torn down
+
+
+def test_a_smoke_keeps_its_spill_readings_after_masking(mini_run):
+    rows = mini_run["rows"]
+    assert all(r["spill"]["spilled"] is False for r in rows if r.get("valid"))
 
 
 # ------------------------------------------------------------------ mini smoke (030 8.6, before the freeze) --
@@ -1138,7 +1322,8 @@ def test_main_needs_exactly_one_mode_and_the_lock_flag(tmp_path, monkeypatch, ca
     kw = calls[-1]
     assert kw["mode"] == "mini" and kw["gpu_lock_held"] is True and kw["mixed_datasets"] == {2048: "a.jsonl"}
     assert kw["lock_held_check"] is ra.held_gpu_lock and kw["popen"] is ra.start_server
-    assert kw["run_bench"] is ra.default_run_bench and kw["gpu_mem_used"] is ra.nvidia_mem_used_bounded
+    assert kw["run_bench"] is ra.default_run_bench and kw["gpu_sample"] is gi.nvidia_sample
+    assert kw["shared_usage"] is gi.read_shared_usage and "gpu_mem_used" not in kw
     assert kw["compute_apps"] is rc.compute_apps_bounded and kw["sample_interval"] == 1.0
     assert kw["capacity_sha256"] == hashlib.sha256((ROOT / "configs" / "capacity.toml").read_bytes()).hexdigest()
     assert kw["pins_sha256"] == hashlib.sha256((ROOT / "configs" / "pins.toml").read_bytes()).hexdigest()
@@ -1182,7 +1367,7 @@ def test_compute_apps_bounded_lists_processes_and_bounds_nvidia_smi(monkeypatch)
         return Done(outs.pop(0))
 
     outs = ["No running processes found\n", "123, python, 9000\n\n456, vllm, 100\n"]
-    monkeypatch.setattr(rc.subprocess, "run", fake_run)
+    monkeypatch.setattr(gi.subprocess, "run", fake_run)          # gpu_idle runs nvidia-smi for run_capacity
     assert rc.compute_apps_bounded() == []
     assert rc.compute_apps_bounded(timeout_s=3) == ["123, python, 9000", "456, vllm, 100"]
     assert calls[0][0][1] == "--query-compute-apps=pid,process_name,used_memory"

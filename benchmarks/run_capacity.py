@@ -38,22 +38,31 @@ Session (030 8.4):
    A Phase C or sentinel boot that fails its checks records each planned run as an invalid row.
 5. sentinel end.
 
-Per boot (030 8.6; run_adv's order): lock held (held_gpu_lock), memory.used <= 1000 MiB within 60 s, no compute
-process on the GPU (any of the three stops the session), env capture before; the Core B server
+Per boot (030 8.6; run_adv's order; the idle check is decision 031's since 2026-10-16): lock held (held_gpu_lock),
+the 031 idle window (gpu_idle.wait_idle: up to 3 windows of 30 nvidia-smi samples at 1 Hz with utilization.gpu <= 5 %,
+no compute process, memory.used range <= 64 MiB and idle <= pins [stage_b].v_total_mib - F_peak 15157 - margin 128 =
+1018 MiB; else "gpu_not_idle"), the spill guard's pre-boot Windows shared usage (gpu_idle.SpillGuard; unreadable:
+"spill_unreadable"); any of these stops the session; env capture before; the Core B server
 (capacity_plan.server_argv_for: the Stage B values, no observation flag) through run_adv.start_server in its own
 process group; /health within server_ready_timeout_s (1800 s); checks (b) ready and FLASH_ATTN, (c)
 run_adv.parse_nondefault holds max_num_batched_tokens 2048 and kv_cache_memory_bytes K and no observation, T or G
-key, (d) /metrics num_gpu_blocks / block_size = 248 / 528; then the runs; teardown (run_adv.shutdown_group under
-run_adv.DeferredSignals: SIGINT -> SIGTERM -> SIGKILL on the whole group, interrupts deferred until it is down, the
-log reader joined); env capture after. A server log that cannot be written aborts the session (a harness failure,
-not a result).
+key, (d) /metrics num_gpu_blocks / block_size = 248 / 528, then (031) the shared usage once ready: 64 MiB or more
+above the pre-boot reading fails the boot before its first bench like a failed check; then the runs; teardown
+(run_adv.shutdown_group under run_adv.DeferredSignals: SIGINT -> SIGTERM -> SIGKILL on the whole group, interrupts
+deferred until it is down, the log reader joined); env capture after. A server log that cannot be written aborts the
+session (a harness failure, not a result).
 Per run: a server that already exited makes the run invalid without a bench; else capacity_plan.bench_argv_for
 (Core's bench_argv, no request-id prefix) through run_bench with the plan's timeout (run_adv.default_run_bench: the
 client's process group is killed at the timeout), run_core_b.MetricsSampler at 1 Hz (descriptive: KV peak,
 preemptions, running + waiting peak), then (a) run_core_b.summarize_result ok, (e) ttfts / latencies / input_lens /
 output_lens of length N and capacity_analysis.derived_problems (mixed: a long request in W), (f) no timeout (a result
-file never rescues a timed-out or failed bench). derived/<tag>-requests.jsonl (idx, cls, ttft_ms, latency_ms, out; no
-prompt text) comes from the --save-detailed result, its sha256 goes into session.json.
+file never rescues a timed-out or failed bench), (g) no spill (031): the shared usage read after the bench is less
+than 64 MiB above the boot's pre-boot reading; the row carries spill {pre_mib, readings_mib (ready and every bench of
+the boot so far), spilled, tol_mib} and capacity_report recomputes it. A spill also ends the boot: its remaining runs
+(the rest of a Phase S search, the planned points of a sentinel / Phase C boot) are invalid rows without a bench, as
+after a server exit. A shared usage that cannot be read aborts the session (fail closed; no row for that bench).
+derived/<tag>-requests.jsonl (idx, cls, ttft_ms, latency_ms, out; no prompt text) comes from the --save-detailed
+result, its sha256 goes into session.json.
 
 Modes (exactly one):
 - --formal: the C1 session; session.json formal = true (it needs freeze.capacity = true), stage "C1".
@@ -73,8 +82,9 @@ Modes (exactly one):
   results discarded.
 
 Outputs: results/capacity/<session>/ only: session.json (with the sha256 of the confirm plan, of every derived file
-and of rows.jsonl), plan.json, confirm_plan.json, rows.jsonl, env/, raw/ (git-ignored: server logs, bench results and
-logs) with raw_manifest.json, derived/, smoke.json (smokes).
+and of rows.jsonl, the 031 criterion and every boot's idle window and spill readings), plan.json, confirm_plan.json,
+rows.jsonl, env/, raw/ (git-ignored: server logs, bench results and logs) with raw_manifest.json, derived/, smoke.json
+(smokes).
 
 Usage (WSL, ~/llm-serving-lab, the plan from benchmarks/capacity_plan.py; from the Mac as one ssh-foreground command,
 ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "cd ~/llm-serving-lab && <the command below>"'):
@@ -100,7 +110,6 @@ import os
 import re
 import shutil
 import signal
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -112,13 +121,13 @@ import capacity_analysis as ca
 import capacity_plan as cp
 import core_b_plan as bp
 import coreb_smoke as smoke
+import gpu_idle as gi
 import run_adv as ra
 from run_core_a import env_problems, provenance_problems, sha256_json, write_raw_manifest
 
 SCHEMA_VERSION = 1
 MODES = ("formal", "mini", "fs-order")
 PORT = cp.PORT
-IDLE_MIB, IDLE_WAIT_S = ra.IDLE_MIB, ra.IDLE_WAIT_S
 SPAN_WAIT_S = ra.SPAN_WAIT_S
 PLATFORM = "wsl2-cuda"
 ROOT = cp.ROOT
@@ -143,7 +152,7 @@ FS_WORKLOAD, FS_COND, FS_C, FS_LAST_MAX = "U2K", "B0", (2, 70), 3
 FS_PREFIX = "capfs-c{C}-"
 # what a smoke keeps of a row (counts and flags; 030 8.6: smoke latencies are discarded)
 MASK_ROW_KEYS = ("phase", "workload", "L", "mix", "C", "N", "block", "position", "boot", "tag", "valid", "reasons",
-                 "timeout", "timeout_s", "search_pass", "within_band", "outcome", "derived")
+                 "timeout", "timeout_s", "search_pass", "within_band", "outcome", "derived", "spill")
 MASK_DERIVED_KEYS = ("idx", "cls", "out")
 
 
@@ -287,7 +296,7 @@ def fs_server_checks(log_text: str, metrics_text: str, *, ready: bool, plan: dic
     return {"log_facts": facts, "nondefault": nondefault, "cache_config": cfg}, problems
 
 
-# ---------------------------------------------------------------- per run (030 8.6 (a) (e) (f); 8.7)
+# ---------------------------------------------------------------- per run (030 8.6 (a) (e) (f) (g); 8.7)
 
 def array_problems(res: dict, *, N: int) -> list:
     """8.6 (e): ttfts, latencies, input_lens and output_lens each hold N values."""
@@ -339,10 +348,14 @@ def boot_tag(boot: dict) -> str:
 
 def compute_apps_bounded(timeout_s: float = ra.NVIDIA_SMI_TIMEOUT_S) -> list:
     """The GPU's compute processes; an nvidia-smi that fails or hangs raises (the session stops before the boot)."""
-    out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory",
-                          "--format=csv,noheader,nounits"], capture_output=True, text=True, check=True,
-                         timeout=timeout_s).stdout
-    return [x.strip() for x in out.splitlines() if x.strip() and not x.strip().startswith("No running")]
+    return gi.nvidia_compute_apps(timeout_s=timeout_s)
+
+
+def spill_reason(entry: dict, guard: gi.SpillGuard) -> str:
+    """030 8.6 (g) / 031: why a reading is a spill."""
+    return (f"spill: Windows shared usage {entry['shared_mib']} MiB at {entry['when']} is {entry['delta_mib']} MiB "
+            f"above the pre-boot {guard.pre['shared_mib']} MiB (>= {guard.tol_mib}; 031, 030 8.6 (g)): VRAM spilled to "
+            "system memory")
 
 
 # ---------------------------------------------------------------- smokes (030 8.6, before the freeze)
@@ -474,18 +487,21 @@ class _Harness:
     """The per-boot and per-run steps of 030 8.6 for one session (state machine and FS-order smoke alike)."""
 
     def __init__(self, *, plan, pins, out, session, formal, pre, rows_fh, popen, signal_group, group_alive, http_get,
-                 run_bench, gpu_mem_used, compute_apps, lock_held_check, capture_env, base_env, vllm_bin,
-                 mixed_datasets, sample_interval, now, sleep, clock, idle_wait_s):
+                 run_bench, gpu_sample, compute_apps, shared_usage, lock_held_check, capture_env, base_env, vllm_bin,
+                 mixed_datasets, sample_interval, now, sleep, clock):
         self.plan, self.pins, self.out, self.session, self.formal, self.pre = plan, pins, out, session, formal, pre
         self.raw, self.derived, self.rows_fh = out / "raw", out / "derived", rows_fh
         self.popen, self.signal_group, self.group_alive, self.http_get = popen, signal_group, group_alive, http_get
-        self.run_bench, self.gpu_mem_used, self.compute_apps = run_bench, gpu_mem_used, compute_apps
+        self.run_bench, self.gpu_sample, self.compute_apps = run_bench, gpu_sample, compute_apps
+        self.shared_usage = shared_usage
         self.lock_held_check, self.capture_env, self.base_env, self.vllm_bin = lock_held_check, capture_env, base_env, \
             vllm_bin
         self.mixed_datasets, self.sample_interval = mixed_datasets or {}, sample_interval
-        self.now, self.sleep, self.clock, self.idle_wait_s = now, sleep, clock, idle_wait_s
+        self.now, self.sleep, self.clock = now, sleep, clock
+        self.idle_bound = session["gpu_idle"]["bound_mib"]
         self.base = f"http://127.0.0.1:{PORT}"
         self.rows, self.requests, self.env_flags = [], {}, []
+        self.guard, self.spilled_in = None, None          # the current boot's spill guard; the run that spilled
 
     # ---------------------------------------------------------- bookkeeping
     def emit(self, row: dict) -> dict:
@@ -509,22 +525,34 @@ class _Harness:
                 self.env_flags.extend({"env": name, "reason": why} for why in provenance_problems(rec, self.pre))
 
     # ---------------------------------------------------------- boot
-    def pre_boot(self, tag: str) -> None:
-        """Hard checks before a boot (030 8.6): the lock still held by this process, memory.used <= 1000 MiB within
-        60 s, no compute process on the GPU; any failure stops the session."""
+    def pre_boot(self, tag: str) -> dict:
+        """Hard checks before a boot (030 8.6 with 031): the lock still held by this process, the 031 idle window
+        (gpu_not_idle), the spill guard's pre-boot reading (spill_unreadable); any failure stops the session. Sets
+        self.guard and returns the idle window's report."""
         if not self.lock_held_check():
             raise RunError(f"--gpu-lock-held, but this process does not hold {smoke.GPU_LOCK} any more; stopping "
                            f"before {tag} (MACHINE_POLICY)")
-        t, mem = self.now(), self.gpu_mem_used()
-        while mem > IDLE_MIB and self.now() - t < self.idle_wait_s:
-            self.sleep(2)
-            mem = self.gpu_mem_used()
-        if mem > IDLE_MIB:
-            raise RunError(f"GPU busy before {tag}: memory.used {mem} MiB > {IDLE_MIB} after {self.idle_wait_s} s "
-                           "(030 8.6; MACHINE_POLICY)")
-        apps = self.compute_apps()
-        if apps:
-            raise RunError(f"other compute process(es) on the GPU before {tag}: {apps} (030 8.6; MACHINE_POLICY)")
+        ok, report = gi.wait_idle(self.gpu_sample, self.compute_apps, bound_mib=self.idle_bound, now=self.now,
+                                  sleep=self.sleep)
+        if not ok:
+            self.session["gpu_not_idle"] = {"boot": tag, **report}
+            raise RunError(f"gpu_not_idle before {tag}: not idle in {report['attempt']} windows of "
+                           f"{report['n']} samples: {'; '.join(report['problems'])} (031; 030 8.6; MACHINE_POLICY)")
+        self.guard, self.spilled_in = gi.SpillGuard(self.shared_usage), None
+        try:
+            self.guard.start()
+        except gi.SharedUsageError as exc:
+            self.session["spill_unreadable"] = {"boot": tag, **self.guard.record()}
+            raise RunError(f"spill_unreadable before {tag}: {exc} (031: the spill guard fails closed)") from exc
+        return report
+
+    def spill_check(self, when: str, tag: str) -> dict:
+        """One 031 reading of the current boot; an unreadable one aborts the session (fail closed)."""
+        try:
+            return self.guard.check(when)
+        except gi.SharedUsageError as exc:
+            raise RunError(f"spill_unreadable in {tag} at {when}: {exc} (031: the spill guard fails closed; a "
+                           "harness failure, not a result)") from exc
 
     def wait_ready(self, proc, record: dict) -> tuple:
         t0, ready, limit = self.now(), False, self.plan["server_ready_timeout_s"]
@@ -574,10 +602,10 @@ class _Harness:
         """One server boot running next_point(rows so far) -> C | None; the rows, or None for a Phase S boot that
         failed before its first bench (it has no row). A failed sentinel / Phase C boot records `planned` as invalid."""
         tag = boot["tag"]
-        self.pre_boot(tag)
+        idle = self.pre_boot(tag)
         self.snap(f"{tag}.before.json")
         argv, env = cp.server_argv_for(self.pins, port=PORT, vllm_bin=self.vllm_bin, base_env=self.base_env)
-        record = self.session["runs"][tag] = {"argv": argv, "env": ra.recorded_server_env(env)}
+        record = self.session["runs"][tag] = {"argv": argv, "env": ra.recorded_server_env(env), "idle": idle}
         proc, rows = None, []
         try:
             proc = self.popen(argv, env, self.raw / f"{tag}.server.log")
@@ -589,6 +617,10 @@ class _Harness:
             self.check_log(proc, "during the server start")
             if not problems and proc.poll() is not None:     # gone between its checks and its first bench (8.4 step 4)
                 problems = [f"server exited (code {proc.poll()!r}) before its first bench (030 8.4)"]
+            if not problems:                                 # 031: a spill already once the server is ready
+                entry = self.spill_check("ready", tag)
+                if entry["spilled"]:
+                    problems = [spill_reason(entry, self.guard) + "; no bench runs on this boot"]
             boot["problems"], boot["reached_first_bench"] = problems, not problems
             if problems:
                 for C in planned or []:
@@ -597,6 +629,7 @@ class _Harness:
                 while (C := next_point(rows)) is not None:
                     rows.append(self.run_point(boot, proc, C))
         finally:
+            record["spill"] = self.guard.record()
             self.teardown(tag, proc, record)
         self.check_log(proc, "at teardown")
         self.snap(f"{tag}.after.json")
@@ -634,6 +667,15 @@ class _Harness:
         row["reasons"] = list(reasons)
         return self.decide(row, None)
 
+    def spill_row(self, row: dict) -> list:
+        """030 8.6 (g) after a bench: the row's spill record and, for a spill, its reason (the boot then stops)."""
+        entry = self.spill_check(row["tag"], row["tag"])
+        row["spill"] = self.guard.row_record()
+        if not entry["spilled"]:
+            return []
+        self.spilled_in = row["tag"]
+        return [spill_reason(entry, self.guard)]
+
     def bench(self, row: dict, argv: list) -> tuple:
         """Run one bench with its timeout and the 1 Hz sampler; (result or None, reasons) with (a) (e) (f)."""
         tag, L, mix, C, N = row["tag"], row["L"], row["mix"], row["C"], row["N"]
@@ -669,6 +711,9 @@ class _Harness:
 
     def run_point(self, boot: dict, proc, C: int) -> dict:
         row = self._row(boot, C)
+        if self.spilled_in is not None:
+            row["reasons"] = [f"not run: the boot stopped after a spill in {self.spilled_in} (031; 030 8.6 (g))"]
+            return self.decide(row, None)
         if proc.poll() is not None:
             row["reasons"] = [f"server exited (code {proc.poll()!r}) before this bench; not run (030 8.6 (b))"]
             return self.decide(row, None)
@@ -679,6 +724,7 @@ class _Harness:
                                  vllm_bin=self.vllm_bin)
         res, reasons = self.bench(row, argv)
         self.check_log(proc, "during the bench")
+        reasons += self.spill_row(row)
         reqs = derived_requests(res, L=L) if res is not None else None
         if reqs is not None:
             path = self.derived / f"{row['tag']}-requests.jsonl"
@@ -742,12 +788,12 @@ def _fs_order(h: _Harness, receiver_factory: Callable, span_wait_s: float) -> di
     pins, plan, sb = h.pins, h.plan, h.pins["stage_b"]
     boot = h.new_boot("fs-order", FS_WORKLOAD)
     tag = boot["tag"]
-    h.pre_boot(tag)
+    idle = h.pre_boot(tag)
     h.snap(f"{tag}.before.json")
     argv, env = ap.server_argv_for(FS_COND, pins, gdn_prefill_backend=sb["gdn_prefill_backend"],
                                    gpu_memory_utilization=sb["gpu_memory_utilization"], port=PORT,
                                    vllm_bin=h.vllm_bin, base_env=h.base_env)
-    record = h.session["runs"][tag] = {"argv": argv, "env": ra.recorded_server_env(env)}
+    record = h.session["runs"][tag] = {"argv": argv, "env": ra.recorded_server_env(env), "idle": idle}
     receiver = receiver_factory(h.raw / f"{tag}.otlp", h.raw / f"{tag}.spans.jsonl", "capfs-")
     receiver.start()
     proc, benches, problems = None, [], []
@@ -758,11 +804,16 @@ def _fs_order(h: _Harness, receiver_factory: Callable, span_wait_s: float) -> di
                                            plan=plan, pins=pins, detail=detail)
         record.update(facts)
         h.check_log(proc, "during the server start")
+        if not problems:                                     # 031, as a Stage C boot
+            entry = h.spill_check("ready", tag)
+            if entry["spilled"]:
+                problems = [spill_reason(entry, h.guard) + "; no bench runs on this boot"]
         boot["problems"], boot["reached_first_bench"] = problems, not problems
         if not problems:
             for C in FS_C:
                 benches.append(_fs_bench(h, boot, proc, receiver, C, span_wait_s))
     finally:
+        record["spill"] = h.guard.record()
         h.teardown(tag, proc, record, receiver)
     h.check_log(proc, "at teardown")
     receiver.raise_if_failed()
@@ -778,10 +829,15 @@ def _fs_bench(h: _Harness, boot: dict, proc, receiver, C: int, span_wait_s: floa
     row = {"phase": "fs-order", "workload": FS_WORKLOAD, "L": wl["L"], "mix": wl["mix"], "C": C, "N": N,
            "block": None, "position": None, "boot": boot["boot"], "tag": f"fs-{FS_WORKLOAD}-c{C}", "valid": False,
            "reasons": [], "timeout": False, "timeout_s": wl["timeouts_s"][str(C)]}
+    if h.spilled_in is not None:                         # 031: the boot stopped after a spill, no bench
+        row["reasons"] = [f"not run: the boot stopped after a spill in {h.spilled_in} (031; 030 8.6 (g))"]
+        h.emit(row)
+        return {**fs_order_check({}, C=C, N=N), "bench_ok": False, "spans": 0, "reasons": row["reasons"], "ok": False}
     argv = cp.bench_argv_for(h.pins, workload=FS_WORKLOAD, C=C, result_dir=str(h.raw),
                              result_filename=f"{row['tag']}.bench.json", port=PORT, vllm_bin=h.vllm_bin)
     res, reasons = h.bench(row, argv + ["--request-id-prefix", prefix])
     h.check_log(proc, "during the bench")
+    reasons += h.spill_row(row)
     spans = wait_for_prefix_spans(receiver, prefix, N, now=h.now, sleep=h.sleep, limit_s=span_wait_s) \
         if res is not None else 0
     receiver.raise_if_failed()
@@ -799,15 +855,17 @@ def _fs_bench(h: _Harness, boot: dict, proc, receiver, C: int, span_wait_s: floa
 
 def run_session(plan: dict, *, cfg: dict, pins: dict, pins_sha256: str, capacity_sha256: str, out_dir, session_id: str,
                 mode: str = "formal", popen: Callable, signal_group: Callable, group_alive: Callable,
-                http_get: Callable, run_bench: Callable, gpu_mem_used: Callable, compute_apps: Callable,
-                lock_held_check: Callable | None = None, gpu_lock_held: bool = False,
+                http_get: Callable, run_bench: Callable, gpu_sample: Callable, compute_apps: Callable,
+                shared_usage: Callable, lock_held_check: Callable | None = None, gpu_lock_held: bool = False,
                 vllm_bin: str = ".venv/bin/vllm", mixed_datasets: dict | None = None,
                 sample_interval: float | None = 1.0, toolchain_check: Callable = bp.toolchain_problems,
                 capture_env: Callable | None = None, base_env=None, receiver_factory: Callable | None = None,
                 now: Callable = time.monotonic, sleep: Callable = time.sleep,
                 clock: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(), repo_root=ROOT,
-                idle_wait_s: float = IDLE_WAIT_S, span_wait_s: float = SPAN_WAIT_S) -> dict:
-    """One Stage C session in `mode` ("formal", "mini" or "fs-order"); the session record (also session.json)."""
+                span_wait_s: float = SPAN_WAIT_S) -> dict:
+    """One Stage C session in `mode` ("formal", "mini" or "fs-order"); the session record (also session.json).
+    gpu_sample / compute_apps: the 031 idle window's nvidia-smi sample and compute-process listing; shared_usage: the
+    spill guard's Windows shared-usage reading (gpu_idle.read_shared_usage)."""
     if mode not in MODES:
         raise RunError(f"unknown mode {mode!r}; run_capacity runs {MODES}")
     base_env = dict(os.environ if base_env is None else base_env)
@@ -818,12 +876,12 @@ def run_session(plan: dict, *, cfg: dict, pins: dict, pins_sha256: str, capacity
     with mini_num_prompts() if mode == "mini" else contextlib.nullcontext():
         return _run_session(plan, cfg=cfg, pins=pins, pins_sha256=pins_sha256, capacity_sha256=capacity_sha256,
                             out_dir=out_dir, session_id=session_id, mode=mode, popen=popen, signal_group=signal_group,
-                            group_alive=group_alive, http_get=http_get, run_bench=run_bench,
-                            gpu_mem_used=gpu_mem_used, compute_apps=compute_apps, lock_held_check=lock_held_check,
+                            group_alive=group_alive, http_get=http_get, run_bench=run_bench, gpu_sample=gpu_sample,
+                            compute_apps=compute_apps, shared_usage=shared_usage, lock_held_check=lock_held_check,
                             gpu_lock_held=gpu_lock_held, vllm_bin=vllm_bin, mixed_datasets=mixed_datasets,
                             sample_interval=sample_interval, toolchain_check=toolchain_check, capture_env=capture_env,
                             base_env=base_env, receiver_factory=receiver_factory, now=now, sleep=sleep, clock=clock,
-                            idle_wait_s=idle_wait_s, span_wait_s=span_wait_s)
+                            span_wait_s=span_wait_s)
 
 
 def _refusals(plan, *, cfg, pins, pins_sha256, capacity_sha256, out_dir, mode, lock_held_check, gpu_lock_held,
@@ -858,9 +916,9 @@ def _refusals(plan, *, cfg, pins, pins_sha256, capacity_sha256, out_dir, mode, l
 
 
 def _run_session(plan, *, cfg, pins, pins_sha256, capacity_sha256, out_dir, session_id, mode, popen, signal_group,
-                 group_alive, http_get, run_bench, gpu_mem_used, compute_apps, lock_held_check, gpu_lock_held,
-                 vllm_bin, mixed_datasets, sample_interval, toolchain_check, capture_env, base_env, receiver_factory,
-                 now, sleep, clock, idle_wait_s, span_wait_s) -> dict:
+                 group_alive, http_get, run_bench, gpu_sample, compute_apps, shared_usage, lock_held_check,
+                 gpu_lock_held, vllm_bin, mixed_datasets, sample_interval, toolchain_check, capture_env, base_env,
+                 receiver_factory, now, sleep, clock, span_wait_s) -> dict:
     formal = mode == "formal"
     session_plan = build_mini_plan(plan) if mode == "mini" else plan
     mixed_sha = {}
@@ -921,14 +979,14 @@ def _run_session(plan, *, cfg, pins, pins_sha256, capacity_sha256, out_dir, sess
                "result_dir": str(out / "raw"),
                "mixed_datasets": {str(L): str(p) for L, p in (mixed_datasets or {}).items()},
                "mixed_dataset_sha256": mixed_sha, "server_env": ra.recorded_server_env(server_env),
-               "inherited_unlisted": bp.inherited_unlisted(base_env), "boots": [], "runs": {}, "derived_sha256": {}}
+               "inherited_unlisted": bp.inherited_unlisted(base_env), "gpu_idle": gi.criterion(sb["v_total_mib"]),
+               "boots": [], "runs": {}, "derived_sha256": {}}
     fh = open(out / "rows.jsonl", "w")
     h = _Harness(plan=session_plan, pins=pins, out=out, session=session, formal=formal, pre=pre, rows_fh=fh,
                  popen=popen, signal_group=signal_group, group_alive=group_alive, http_get=http_get,
-                 run_bench=run_bench, gpu_mem_used=gpu_mem_used, compute_apps=compute_apps,
+                 run_bench=run_bench, gpu_sample=gpu_sample, compute_apps=compute_apps, shared_usage=shared_usage,
                  lock_held_check=lock_held_check, capture_env=capture_env, base_env=base_env, vllm_bin=vllm_bin,
-                 mixed_datasets=mixed_datasets, sample_interval=sample_interval, now=now, sleep=sleep, clock=clock,
-                 idle_wait_s=idle_wait_s)
+                 mixed_datasets=mixed_datasets, sample_interval=sample_interval, now=now, sleep=sleep, clock=clock)
 
     def write_session() -> None:
         _write_json(out / "session.json", session)
@@ -991,8 +1049,9 @@ def main(argv: list | None = None) -> int:
             pins=tomllib.loads(pins_raw.decode()), pins_sha256=hashlib.sha256(pins_raw).hexdigest(),
             capacity_sha256=hashlib.sha256(cap_raw).hexdigest(), out_dir=args.out, session_id=Path(args.out).name,
             mode=args.mode, popen=ra.start_server, signal_group=smoke.signal_group, group_alive=smoke.group_alive,
-            http_get=rb.default_http_get, run_bench=ra.default_run_bench, gpu_mem_used=ra.nvidia_mem_used_bounded,
-            compute_apps=compute_apps_bounded, lock_held_check=ra.held_gpu_lock, gpu_lock_held=args.gpu_lock_held,
+            http_get=rb.default_http_get, run_bench=ra.default_run_bench, gpu_sample=gi.nvidia_sample,
+            compute_apps=compute_apps_bounded, shared_usage=gi.read_shared_usage, lock_held_check=ra.held_gpu_lock,
+            gpu_lock_held=args.gpu_lock_held,
             vllm_bin=args.vllm_bin, capture_env=rb.make_vllm_env_capture(ROOT / "scripts" / "env_capture.py"),
             mixed_datasets={int(k): v for k, v in (x.split("=", 1) for x in args.mixed_dataset)},
             sample_interval=1.0)

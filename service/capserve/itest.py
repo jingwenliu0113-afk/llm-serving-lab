@@ -25,7 +25,8 @@ Each test is a deterministic pass / fail check; the results go to <service_root>
        expose chat_overhead and per_message;
   IT-5 stop under load: limit + queue clients, `capserve.deploy stop` once the gateway is saturated; the running
        requests drain with 200, queued ones get 503 with Retry-After, nothing is cut, the supervisor exits 143 with
-       a clean teardown and GPU memory back <= IDLE_MIB.
+       a clean teardown and GPU memory back <= the supervisor run's pre-boot baseline + 64 MiB within 60 s
+       (decision 031; the supervisor's preflight recorded the baseline from its 30 s idle window).
 - IT-6 (no boot, under the GPU lock: 029 exempts only IT-0, and 027 §5 puts no product test inside a formal research
   session): `find ~/llm-serving-lab ~/.cache/{vllm,flashinfer,huggingface} ~/.triton -newer runs/<id>/meta.json` is
   empty, by default against this itest run's own meta.json (created before IT-0 and the boot), or --since <an
@@ -79,7 +80,7 @@ DECISIVE_FACTOR = 2.0           # the request must have had >= 2 x the window of
 READ_EVENTS = 8                 # content events read before the stream client disconnects
 IT2_TIME_LIMIT_S = 900.0
 SATURATION_WAIT_S = 120.0
-SUPERVISOR_EXTRA_S = 120.0      # readiness wait beyond startup_timeout_s (gateway start, first state write)
+SUPERVISOR_EXTRA_S = 120.0      # readiness wait beyond the supervisor's own (gateway start, first state write)
 IMPORTS = ("capserve.app", "capserve.server", "capserve.deploy", "capserve.loadtest", "capserve.procs",
            "capserve.runs", "core_b_plan", "coreb_smoke", "run_adv", "run_core_b")
 CHAT_CASES = (
@@ -486,8 +487,11 @@ def evaluate_it5(records: list, stopped: dict, *, saturated: bool, in_flight_at_
     c.add("the supervisor exited 0 or 143 (SIGTERM)", stopped.get("supervisor_exit") in (0, 128 + signal.SIGTERM),
           stopped.get("supervisor_exit"))
     c.add("teardown had no problems", teardown.get("problems") == [], teardown.get("problems"))
-    gpu = teardown.get("gpu_mem_after_mib")
-    c.add(f"GPU memory back <= {deploy.IDLE_MIB} MiB", gpu is not None and gpu <= deploy.IDLE_MIB, gpu)
+    gpu, baseline = teardown.get("gpu_mem_after_mib"), teardown.get("gpu_baseline_mib")
+    limit = None if baseline is None else baseline + deploy.IDLE_RETURN_TOL_MIB   # 031, not the fixed 1,000 MiB
+    c.add(f"GPU memory back <= the pre-boot baseline + {deploy.IDLE_RETURN_TOL_MIB} MiB (031)",
+          gpu is not None and limit is not None and gpu <= limit,
+          {"after_mib": gpu, "baseline_mib": baseline, "limit_mib": limit})
     drained = [r for r in records if r["ended_after_stop"] and r["status"] == 200]
     c.add("requests running at the stop completed with 200 (drain)",
           in_flight_at_stop >= 1 and len(drained) >= in_flight_at_stop,
@@ -623,7 +627,7 @@ def _supervisor_outcome(state: dict) -> dict | None:
 
 def _wait_ready(cfg, sup, fx: Effects) -> tuple:
     """(state, None) once state.json says this supervisor is ready; (None, why) otherwise."""
-    limit = cfg.startup_timeout_s + deploy.GATEWAY_READY_TIMEOUT_S + SUPERVISOR_EXTRA_S
+    limit = cfg.startup_timeout_s + deploy.GATEWAY_READY_TIMEOUT_S + deploy.READY_OVERHEAD_S + SUPERVISOR_EXTRA_S
     t = fx.now()
     while True:
         state = deploy.read_state(cfg)

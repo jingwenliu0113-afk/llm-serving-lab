@@ -8,7 +8,8 @@ Inputs: the session {"session", "plan", "confirm_plan", "rows"} (run_capacity) a
   (Phase C r, else None), "attempt" (Phase S 1 | 2, else None), "position" (sentinel "start" | "end", else None),
   "reached_first_bench"}]; session["confirm_plan_sha256"], recorded before Phase C.
 - a row per bench: {"phase", "workload", "L", "mix", "C", "N", "block", "position", "boot", "tag"
-  (capacity_plan.run_tag), "valid" (the runner's 8.6 (a)-(f)), "reasons", "timeout_s", "output_throughput",
+  (capacity_plan.run_tag), "valid" (the runner's 8.6 (a)-(g); (g) no spill, 031, which capacity_report recomputes
+  from the row's "spill" record), "reasons", "timeout_s", "output_throughput",
   "metrics" (run_core_b.MetricsSampler), "search_pass" (Phase S, search_bits) | "outcome" (Phase C,
   phase_c_outcome)}: the runner decides with the same functions the replay re-runs. A Phase S boot that fails
   before its first bench has no row (it is retried once at the end of Phase S); a failed sentinel or Phase C boot

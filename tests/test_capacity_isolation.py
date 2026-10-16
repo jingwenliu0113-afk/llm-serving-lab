@@ -14,7 +14,9 @@ import capacity_report as cr
 from test_run_capacity import CORE_UNIFORM, World, formal_setup, run, write_evidence
 
 ROOT = Path(__file__).resolve().parent.parent
-CAPACITY_MODULES = ("capacity_plan", "capacity_analysis", "run_capacity", "capacity_report")
+# gpu_idle (decision 031: the GPU idle criterion and the spill guard of run validity (g)) is imported by run_capacity
+# and capacity_report, so it is a Stage C module frozen with them (030 凍結), not a Phase 1 one
+CAPACITY_MODULES = ("capacity_plan", "capacity_analysis", "run_capacity", "capacity_report", "gpu_idle")
 # 030 8.6 凍結: the frozen Stage C modules only import Core and Advanced code (guarded by test_core_untouched /
 # test_frozen_untouched), and one another
 RESEARCH = {"core_b_plan", "core_b_analysis", "run_core_a", "run_core_b", "coreb_smoke", "adv_plan", "adv_decomp",

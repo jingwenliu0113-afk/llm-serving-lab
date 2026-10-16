@@ -10,9 +10,12 @@ Subcommands:
 - run [--smoke-first]: the smoke, then the probe into results/capacity/explore-c0-<YYYYMMDD>/ only if the smoke passed
   (no stop, its bench valid, and its sampler reported temperatures without a problem: smoke_problems).
 
-Per boot (028 「每次 boot 都相同的量測」 and 「停止規則」):
-1. before it: no new boot when elapsed + 30 min > cap (stop "cap"); run_adv.held_gpu_lock() (else stop "lock");
-   memory.used <= 1000 MiB within 60 s, then no compute process on the GPU (else stop "gpu_busy"); env capture;
+Per boot (028 「每次 boot 都相同的量測」 and 「停止規則」; rule 2's idle check is decision 031's since 2026-10-16):
+1. before it: no new boot when elapsed + 30 min > cap (stop "cap"); run_adv.held_gpu_lock() (else stop "lock"); the
+   031 idle window, up to 3 windows of 30 nvidia-smi samples at 1 Hz (gpu_idle.wait_idle: utilization.gpu <= 5 %, no
+   compute process, memory.used range <= 64 MiB, idle <= pins [stage_b].v_total_mib - F_peak 15157 - margin 128 =
+   1018 MiB; else stop "gpu_not_idle"; an nvidia-smi that fails stops "gpu_check"); the spill guard's pre-boot Windows
+   shared usage (gpu_idle.SpillGuard; unreadable: stop "spill_unreadable"); env capture;
 2. one nvidia-smi process at 1 Hz (pstate, clocks.sm, clocks.mem, power.draw, temperature.gpu, utilization.gpu,
    memory.used, clocks_event_reasons.active) whose lines run_adv.LogReader stamps with the epoch ms into
    raw/<boot>.smi.csv; a sample >= 88 C sets the stop flag, and so does losing that telemetry (the sampler did not
@@ -30,7 +33,13 @@ Per boot (028 「每次 boot 都相同的量測」 and 「停止規則」):
    before, the bench window (wall clock) and position, derived/<boot>-n<j>-requests.jsonl (idx, lengths, TTFT, latency).
    A bench is invalid on exit != 0 or a timeout, completed != N or failed > 0, an unhealthy server after it, blocks
    != 248, or non-default args (the start's check); it is excluded and never replaced. A timeout or an unhealthy
-   server ends the boot (the server is torn down); its remaining benches are rows with not_run = true;
+   server ends the boot (the server is torn down); its remaining benches are rows with not_run = true.
+   Spill guard (031): the shared usage is read once the server is ready and after every bench (not after an 88 C or
+   lost-telemetry stop, which tears down at once: that bench has no reading and is invalid, fail closed); every other
+   benched row carries spill {pre_mib, readings_mib, spilled, tol_mib}. A reading 64 MiB or more above the pre-boot
+   one makes that bench invalid ("spill") and ends the boot
+   (after the ready reading: no bench runs); the remaining benches are not_run rows. A reading that cannot be taken
+   makes the bench invalid and stops the session ("spill_unreadable", like lost telemetry);
 5. teardown (run_adv.shutdown_group under run_adv.DeferredSignals, log reader joined), the sampler stopped and its
    samples written to derived/<boot>-smi.jsonl, env capture after. A boot failed when its server did not start or
    >= 2 of its benches are invalid; the 2nd failed boot stops the session ("failed_boots"); 88 C stops it at once
@@ -43,7 +52,9 @@ plan's, a toolchain problem (core_b_plan.toolchain_problems), an output director
 (results/{core_a,core_b,advanced,quality,stage_b,decision_table,artifacts}; run checks both before the smoke) or an
 existing output directory. session.json holds {formal: false, stage: "C0", purpose: "exploratory", decision: "028"},
 the server argv and env, the driver / vLLM / torch versions against Phase 1 (recorded, never a stop: 028 rule 9),
-every boot and the stop rule that ended the session; plus plan.json, rows.jsonl, derived/, env/ and raw_manifest.json
+every boot (with its 031 idle window and spill readings), the 031 criterion (gpu_idle.criterion) and the stop rule
+that ended the session (a gpu_not_idle / spill_unreadable stop keeps its detail); plus plan.json, rows.jsonl, derived/,
+env/ and raw_manifest.json
 (raw/ stays git-ignored). The cap (3.0 h of holding the lock, smoke included) counts from this process's start: flock
 starts it once it holds the lock.
 Harness failures (an exception, a server log that could not be written) tear down first, record "aborted" and raise.
@@ -73,6 +84,7 @@ from typing import Callable
 
 import core_b_plan as bp
 import coreb_smoke as smoke
+import gpu_idle as gi
 import run_adv as ra
 from run_core_a import env_problems, sha256_json, write_raw_manifest
 
@@ -87,7 +99,6 @@ CAP_HOURS = 3.0
 BOOT_MARGIN_S = 1800        # no new boot once elapsed + 30 min > cap
 TEMP_STOP_C = 88
 MAX_FAILED_BOOTS = 2
-IDLE_MIB, IDLE_WAIT_S = ra.IDLE_MIB, ra.IDLE_WAIT_S
 STARTUP_TIMEOUT_S = ra.STARTUP_TIMEOUT_S
 SMI_INTERVAL_MS = 1000
 SMI_STALE_S = 30            # no temperature sample for this long: the telemetry 028 rule 6 needs is lost
@@ -108,11 +119,12 @@ class RunError(RuntimeError):
 
 
 class Stop(Exception):
-    """A 028 stop rule: the session ends cleanly (teardown done) and session.json records the rule."""
+    """A 028 stop rule: the session ends cleanly (teardown done) and session.json records the rule (and the detail of
+    a 031 check that stopped it)."""
 
-    def __init__(self, rule: str, reason: str):
+    def __init__(self, rule: str, reason: str, detail: dict | None = None):
         super().__init__(reason)
-        self.rule, self.reason = rule, reason
+        self.rule, self.reason, self.detail = rule, reason, detail
 
 
 def _rb():
@@ -401,11 +413,9 @@ def smi_summary(samples: list) -> dict:
 
 
 def compute_apps_bounded(timeout_s: float = ra.NVIDIA_SMI_TIMEOUT_S) -> list:
-    """The GPU's compute processes (028 rule 2); an nvidia-smi that fails or hangs raises (a stop before the boot)."""
-    out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory",
-                          "--format=csv,noheader,nounits"], capture_output=True, text=True, check=True,
-                         timeout=timeout_s).stdout
-    return [x.strip() for x in out.splitlines() if x.strip() and not x.strip().startswith("No running")]
+    """The GPU's compute processes (028 rule 2, 031); an nvidia-smi that fails or hangs raises (a stop before the
+    boot)."""
+    return gi.nvidia_compute_apps(timeout_s=timeout_s)
 
 
 # ---------------------------------------------------------------- bench
@@ -485,14 +495,16 @@ def _not_run(b: int, j: int, N: int, reason: str) -> dict:
 
 def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id: str, is_smoke: bool, popen: Callable,
                 signal_group: Callable, group_alive: Callable, http_get: Callable, run_bench: Callable,
-                gpu_mem_used: Callable, compute_apps: Callable, start_smi: Callable, lock_held_check: Callable,
-                t_start: float, gpu_lock_held: bool = False, cap_hours: float = CAP_HOURS,
+                gpu_sample: Callable, compute_apps: Callable, shared_usage: Callable, start_smi: Callable,
+                lock_held_check: Callable, t_start: float, gpu_lock_held: bool = False, cap_hours: float = CAP_HOURS,
                 toolchain_check: Callable = bp.toolchain_problems, capture_env: Callable | None = None,
                 base_env=None, vllm_bin: str = ".venv/bin/vllm", sample_interval: float | None = 1.0,
                 now: Callable = time.monotonic, sleep: Callable = time.sleep, wall: Callable = time.time,
                 clock: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(),
-                startup_timeout_s: float = STARTUP_TIMEOUT_S, idle_wait_s: float = IDLE_WAIT_S) -> dict:
-    """One C0 session (the smoke when is_smoke). t_start: now() when this process started (the cap's origin)."""
+                startup_timeout_s: float = STARTUP_TIMEOUT_S) -> dict:
+    """One C0 session (the smoke when is_smoke). t_start: now() when this process started (the cap's origin).
+    gpu_sample / compute_apps: the 031 idle window's nvidia-smi sample and compute-process listing; shared_usage: the
+    spill guard's Windows shared-usage reading (gpu_idle.read_shared_usage)."""
     base_env = dict(os.environ if base_env is None else base_env)
     if not gpu_lock_held:
         raise RunError("C0 must hold the GPU lock: flock -n /tmp/ai-portfolio-gpu.lock ... --gpu-lock-held "
@@ -523,6 +535,7 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
     shape = plan["smoke"] if is_smoke else {"boots": plan["boots"], "benches": plan["benches_per_boot"], "N": plan["N"]}
     n_boots, n_benches, N = shape["boots"], shape["benches"], shape["N"]
     cap_s = cap_hours * 3600
+    idle_rule = gi.criterion(pins["stage_b"]["v_total_mib"])      # 031: the bound comes from pins, never typed
     raw, derived = out / "raw", out / "derived"
     raw.mkdir(parents=True)
     (out / "env").mkdir()
@@ -547,7 +560,7 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
                           "kv_cache_memory_bytes": plan["kv_cache_memory_bytes"]},
                "inherited_unlisted": bp.inherited_unlisted(base_env),
                "inherited_otel": sorted(k for k in base_env if k.startswith("OTEL_")),
-               "boots": {}, "failed_boots": 0, "stopped": None}
+               "gpu_idle": idle_rule, "boots": {}, "failed_boots": 0, "stopped": None}
     rows = []
     base = f"http://127.0.0.1:{PORT}"
     fh = open(out / "rows.jsonl", "w")
@@ -576,27 +589,35 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
         return Stop("telemetry", f"nvidia-smi telemetry lost {where} ({smi.lost_reason}): the 88 C stop (028 stop "
                                  "rule 6) cannot be applied; torn down and stopped")
 
-    def pre_boot(b: int) -> None:
+    def pre_boot(b: int) -> tuple:
+        """028 rules 2 / 3 with 031's idle window, then the spill guard's pre-boot reading: (idle report, guard)."""
         tag = boot_tag(b)
         if elapsed() + plan["boot_margin_s"] > cap_s:
             raise Stop("cap", f"elapsed {elapsed():.0f} s + {plan['boot_margin_s']} s > cap {cap_s:.0f} s: no new "
                               f"boot (028 stop rule 3)")
         if not lock_held_check():
             raise Stop("lock", f"this process does not hold {smoke.GPU_LOCK} any more; stopping before {tag} (028)")
-        t0 = now()
         try:
-            mem = gpu_mem_used()
-            while mem > IDLE_MIB and now() - t0 < idle_wait_s:
-                sleep(2)
-                mem = gpu_mem_used()
-            apps = compute_apps() if mem <= IDLE_MIB else []
+            ok, report = gi.wait_idle(gpu_sample, compute_apps, bound_mib=idle_rule["bound_mib"], now=now,
+                                      sleep=sleep)
         except Exception as exc:  # noqa: BLE001 - nvidia-smi failed or hung: the GPU state is unknown
             raise Stop("gpu_check", f"nvidia-smi failed before {tag}: {type(exc).__name__}: {exc}") from exc
-        if mem > IDLE_MIB:
-            raise Stop("gpu_busy", f"memory.used {mem} MiB > {IDLE_MIB} after {idle_wait_s} s before {tag} "
-                                   "(028 rule 2)")
-        if apps:
-            raise Stop("gpu_busy", f"other compute process(es) on the GPU before {tag}: {apps} (028 rule 2)")
+        if not ok:
+            raise Stop("gpu_not_idle", f"the GPU was not idle in {report['attempt']} windows of "
+                                       f"{idle_rule['window_samples']} samples before {tag}: "
+                                       f"{'; '.join(report['problems'])} (031; 028 stop rule 2)", {"idle": report})
+        guard = gi.SpillGuard(shared_usage)
+        try:
+            guard.start()
+        except gi.SharedUsageError as exc:
+            raise Stop("spill_unreadable", f"the pre-boot shared usage before {tag} is unreadable ({exc}): the 031 "
+                                           "spill guard cannot be applied; stopped", {"spill": guard.record()}) from exc
+        return report, guard
+
+    def spill_reason(entry: dict, guard) -> str:
+        return (f"spill: Windows shared usage {entry['shared_mib']} MiB at {entry['when']} is "
+                f"{entry['delta_mib']} MiB above the pre-boot {guard.pre['shared_mib']} MiB (>= {guard.tol_mib}; 031): "
+                "VRAM spilled to system memory")
 
     def checked_start(b: int, proc, rec: dict, smi) -> None:
         """The wait for /health, bounded by the startup timeout and by what is left of the cap (028 hard cap)."""
@@ -708,11 +729,27 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
                     rec["teardown_problems"] = problems
                     session.setdefault("teardown_problems", []).append({"boot": tag, "reasons": problems})
 
-    def boot_once(b: int) -> Stop | None:
+    def guarded(row: dict, guard) -> Stop | None:
+        """031 after a bench: its spill record and verdict; an unreadable reading invalidates it and stops."""
+        tag = row["tag"]
+        try:
+            entry = guard.check(tag)
+        except gi.SharedUsageError as exc:
+            row["ok"] = False
+            row["reasons"].append(f"spill guard unreadable after the bench ({exc}; 031: fail closed)")
+            return Stop("spill_unreadable", f"the shared usage after {tag} is unreadable ({exc}): the 031 spill guard "
+                                            "cannot be applied; torn down and stopped")
+        row["spill"] = guard.row_record()
+        if entry["spilled"]:
+            row["ok"] = False
+            row["reasons"].append(spill_reason(entry, guard))
+        return None
+
+    def boot_once(b: int, idle: dict, guard) -> Stop | None:
         tag = boot_tag(b)
         snap(f"{tag}.before.json")
         rec = session["boots"][tag] = {"argv": argv, "t_start": wall(), "elapsed_at_start_s": round(elapsed(), 1),
-                                       "startup_ok": False, "reasons": []}
+                                       "startup_ok": False, "reasons": [], "idle": idle}
         smi = start_smi(raw / f"{tag}.smi.csv")
         proc, stop, done, why = None, None, 0, None
         try:
@@ -726,21 +763,44 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
             elif not rec["startup_ok"]:
                 why = "the server start failed: " + "; ".join(rec["reasons"])
             else:
+                try:
+                    ready = guard.check("ready")
+                except gi.SharedUsageError as exc:
+                    stop = Stop("spill_unreadable", f"the shared usage after {tag} became ready is unreadable ({exc}): "
+                                                    "the 031 spill guard cannot be applied; no bench, stopped")
+                else:
+                    if ready["spilled"]:
+                        why = f"the boot stopped before its first bench: {spill_reason(ready, guard)}"
                 for j in range(1, n_benches + 1):
+                    if stop is not None or why is not None:
+                        break
                     if elapsed() + plan["timeout_s"] > cap_s:
                         stop = Stop("cap", f"elapsed {elapsed():.0f} s + the {plan['timeout_s']} s bench timeout > "
                                            f"cap {cap_s:.0f} s: no new bench (028 hard cap)")
                         break
                     row, end = bench_once(b, j, proc, smi)
+                    if not smi.halt.is_set():
+                        stop = guarded(row, guard)
+                    else:                              # 88 C / lost telemetry: tear down at once, no reading, so
+                        row["ok"] = False              # nothing shows the bench did not spill (031: fail closed)
+                        cause = f"the {plan['temp_stop_c']} C stop" if smi.hot.is_set() else "lost telemetry"
+                        row["reasons"].append(f"no 031 spill reading after the bench: {cause} tore the server down "
+                                              "at once (031: fail closed)")
                     emit(row)
                     done = j
                     if smi.halt.is_set():
                         stop = halted(smi, f"in {row['tag']}")
                         break
+                    if stop is not None:
+                        break
+                    if (row.get("spill") or {}).get("spilled"):
+                        why = f"the boot stopped after a spill in {row['tag']} (031)"
+                        break
                     if end:
                         why = f"the boot ended after {row['tag']} ({'; '.join(row['reasons'])})"
                         break
         finally:
+            rec["spill"] = guard.record()
             teardown(tag, proc, rec, smi)
         for j in range(done + 1, n_benches + 1):
             emit(_not_run(b, j, N, stop.reason if stop else why))
@@ -755,8 +815,7 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
     b = 0
     try:
         for b in range(1, n_boots + 1):
-            pre_boot(b)
-            stop = boot_once(b)
+            stop = boot_once(b, *pre_boot(b))
             if stop is not None:
                 raise stop
             if session["boots"][boot_tag(b)]["failed"]:
@@ -765,6 +824,8 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
                     raise Stop("failed_boots", f"{session['failed_boots']} failed boots (028 stop rule 5)")
     except Stop as s:
         session["stopped"] = {"rule": s.rule, "reason": s.reason, "boot": b}
+        if s.detail:
+            session["stopped"]["detail"] = s.detail
     except BaseException as exc:
         session["aborted"] = f"{type(exc).__name__}: {exc}"
         session["stopped"] = {"rule": "aborted", "reason": session["aborted"], "boot": b}
@@ -853,7 +914,7 @@ def main(argv: list | None = None) -> int:
     date, capacity, rb = dt.datetime.now().strftime("%Y%m%d"), root / "results" / "capacity", _rb()
     kw = dict(pins=pins, pins_sha256=pins_sha, popen=ra.start_server, signal_group=smoke.signal_group,
               group_alive=smoke.group_alive, http_get=rb.default_http_get, run_bench=run_bench_watched,
-              gpu_mem_used=ra.nvidia_mem_used_bounded, compute_apps=compute_apps_bounded,
+              gpu_sample=gi.nvidia_sample, compute_apps=compute_apps_bounded, shared_usage=gi.read_shared_usage,
               start_smi=lambda path: SmiSampler(path).start(), lock_held_check=ra.held_gpu_lock,
               gpu_lock_held=args.gpu_lock_held, cap_hours=args.cap_hours, t_start=t_start, vllm_bin=args.vllm_bin,
               capture_env=rb.make_vllm_env_capture(root / "scripts" / "env_capture.py"))

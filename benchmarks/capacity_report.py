@@ -21,6 +21,9 @@ and configs/pins.toml. It refuses (exit 2) and writes nothing when (030 8.7, wit
 - plan.json is not capacity_plan.build_plan of the uniform session and these capacity.toml / pins bytes;
 - a recorded server argv / env is not the Core B one with the Stage B values (capacity_plan.server_argv_for), or a
   bench argv is not core_b_plan.bench_argv (capacity_plan.bench_argv_for);
+- run validity (g) (031, spill_problems): a run that ran a bench (or is valid) without its spill readings, a recorded
+  spilled flag that is not the one recomputed with gpu_idle.spill from pre_mib / readings_mib, or a valid run that
+  spilled;
 - after capacity_analysis.analyze: a replay mismatch (every search decision, K, n, skip and order recomputed from the
   rows) or a failed sentinel gate (drift > 3 % in output throughput or W-mean TTFT, or a sentinel invalid).
 Otherwise analysis.json (schema_version 1) is capacity_analysis.analyze's body plus provenance (session, the
@@ -47,6 +50,7 @@ from pathlib import Path
 import capacity_analysis as ca
 import capacity_plan as cp
 import core_b_plan as bp
+import gpu_idle as gi
 import run_adv as ra
 import run_capacity as rc
 from run_core_a import sha256_json
@@ -272,13 +276,42 @@ def _argv_problems(cap: dict, pins: dict) -> list:
     return problems
 
 
+def _num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def spill_problems(rows: list) -> list:
+    """030 8.6 (g) / 031 recomputed from the rows: every run that ran a bench (it has an argv) or is valid carries its
+    spill record (pre_mib, readings_mib: numbers), its recorded spilled flag is the recomputed one (gpu_idle.spill: a
+    reading SPILL_TOL_MIB or more above pre_mib), and no valid run spilled. Runs without a bench (not run after a
+    spill or a server exit, or on a failed boot) carry no readings and are invalid anyway."""
+    problems = []
+    for r in rows:
+        tag, sp = r.get("tag"), r.get("spill")
+        if sp is None and "argv" not in r and r.get("valid") is not True:
+            continue
+        pre, readings = (sp or {}).get("pre_mib"), (sp or {}).get("readings_mib")
+        if not (isinstance(sp, dict) and _num(pre) and isinstance(readings, list) and readings
+                and all(_num(x) for x in readings)):
+            problems.append(f"{tag}: no spill readings (pre_mib, readings_mib) for a run that ran a bench "
+                            "(031; 030 8.6 (g))")
+            continue
+        spilled = any(gi.spill(pre, x) for x in readings)
+        if sp.get("spilled") is not spilled:
+            problems.append(f"{tag}: recorded spill {sp.get('spilled')!r} != {spilled} recomputed from its readings "
+                            "(031)")
+        if spilled and r.get("valid") is True:
+            problems.append(f"{tag}: a run whose shared usage spilled is marked valid (031; 030 8.6 (g))")
+    return problems
+
+
 def refusal_problems(cap: dict, *, cfg: dict, pins: dict, capacity_sha256: str, pins_sha256: str, uniform: dict,
                      repo_root=ROOT) -> list:
     """Every refusal decidable before the analysis; [] when capacity_analysis.analyze may run."""
     return (_location_problems(cap, repo_root) + _session_problems(cap, pins) + _config_problems(cap, cfg, pins, repo_root)
             + _sha_problems(cap, cfg, capacity_sha256=capacity_sha256, pins_sha256=pins_sha256)
             + _plan_problems(cap, cfg, pins, uniform, capacity_sha256=capacity_sha256, pins_sha256=pins_sha256)
-            + _argv_problems(cap, pins))
+            + _argv_problems(cap, pins) + spill_problems(cap["rows"]))
 
 
 # ---------------------------------------------------------------- analysis.json

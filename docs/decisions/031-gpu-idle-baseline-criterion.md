@@ -145,3 +145,28 @@ Mac 只負責 ssh，不影響 RTX 的量測；但我在 Mac 上跑完整測試�
   - Chrome 遠端桌面不關，因為使用者可能正透過它連線；AMD 的服務與 Windows 系統程序都不碰。
   - Radeon Software 下次登入時會自動啟動；開機自動啟動的設定沒有改。
 - 之後的閒置值：**901 MiB**，30 s 內最大減最小為 0 MiB，使用率 0%，沒有 compute process，符合研究的綜合判定（≤ 1,018 MiB）。
+
+## 實作補記（2026-10-16）
+
+依「使用者決定與最終規格」以 TDD 實作：`benchmarks/gpu_idle.py`、C0 與 Stage C 的 runner、`capacity_report`、capserve 的 deploy 與 itest。
+審查有 8 項發現，6 項修正，2 項依下文決定。
+
+- **spill 的邊界包含 64 MiB**：「多出 64 MiB 以上」中的「以上」包含本數，程式為 reading ≥ pre + 64。草稿中「增加超過 64 MiB」的寫法以此為準。
+- **研究**：
+  - 樣本缺少 utilization 或 memory 時，該窗不通過；
+  - 同一次 boot 中 adapter 的 LUID 改變時，視為讀不到；
+  - C0 與 Stage C 的細節見 028 與 030 的對應補記。
+- **Stage C 階段 S 的 boot 在就緒時就 spill**：沿用 030 8.4 的重試（理由見 030 的實作補記三）。這是凍結前、沒有任何數據時的實作對應，由我決定並記錄。
+- **產品**：
+  - 一次 30 s 的窗；
+  - 也拒絕有 compute process 的情況（草稿中的「沒有計算負載（同上 2）」）；
+  - 缺少 `v_total_mib` 的 pins 拒絕；
+  - `max_hold_s` 包含 preflight 的窗；
+  - shared usage 的三次讀數記在 meta.json，只作描述。
+- **補充：產品的閒置上限 2,048 MiB**（審查發現，我依「不影響其他專案」加上，可由使用者撤回）：
+  - 原本的產品規格只有警告，沒有上限。這樣若其他專案的模型以 0% 使用率常駐在 VRAM（WSL 不一定列得出它的程序），產品測試仍會啟動 vLLM 並擠到對方。
+  - 閒置用量 > 2,048 MiB 時拒絕。這約比今天最重的桌面基線（1,396 MiB）高 650 MiB，任何常駐的模型都會超過它。
+  - 在研究的餘裕上限與 2,048 MiB 之間仍只發警告。
+- **執行時間**：每次 boot 至少多約 30 s（最多約 90 s）的閒置窗；Stage C 約 40 次 boot，合計多約 20 分鐘。
+- **尚未在 RTX 上驗證**：從 WSL 呼叫 `powershell.exe` 的 `read_shared_usage`。執行前會先在 WSL 上唯讀跑一次。
+

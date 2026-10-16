@@ -375,4 +375,18 @@ M1（`procs`、`runs`、`deploy`、`loadtest`、`itest`、`service/deploy/rtx.to
   - abort 之後 vLLM 的 running / waiting gauge 是否會更新（IT-3 另外看生成的 token 數）；
   - ssh / WSL 的引號處理與 vLLM 的 log 格式；
   - IT-6 沒有檢查 `/tmp/torchinductor_<user>`（本文的清單沒有列）。
-- RTX 上的執行同樣受 1,000 MiB 的閒置上限限制，目前因 Windows 桌面應用程式占用 GPU 記憶體而 blocked。
+- RTX 上的執行同樣受 1,000 MiB 的閒置上限限制，目前因 Windows 桌面應用程式占用 GPU 記憶體而 blocked。〔2026-10-16 起依 decision 031 的產品規格，見下方「031 的產品判定」。〕
+
+## 031 的產品判定（2026-10-16，使用者確認）
+
+本文 preflight、teardown 與 IT-5 中的「GPU memory ≤ IDLE_MIB（1,000 MiB）」由 decision 031 的產品規格取代，原文保留：
+
+- **preflight**：本 process 確實持有 lock；取一個 30 個樣本的 1 Hz 窗，每個樣本 utilization.gpu ≤ 5%、沒有 compute process、memory.used 的範圍 ≤ 64 MiB。
+  - 閒置基線取窗內的最大值。
+  - 高於研究的餘裕上限（1,018 MiB）只發警告。
+  - **高於 2,048 MiB 則拒絕**（031 的補充）：那已經不是桌面的用量，很可能是其他專案常駐的模型。
+- **shared usage**：在 boot 前、vLLM 就緒後、工作結束後各記錄一次，只作描述，讀取失敗也不停止。
+- **teardown 與 IT-5**：GPU 記憶體要在 60 s 內回到「boot 前基線 + 64 MiB」以內。
+- **state.json 的 phase 順序**：preflight → starting → ready → stopping → stopped；preflight 被拒絕時為 refused。
+  只有確實持有 lock 時才在 preflight 前寫入，所以 preflight 期間也能 `stop`。
+

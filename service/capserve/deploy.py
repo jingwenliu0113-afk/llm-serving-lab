@@ -13,14 +13,23 @@ up: a foreground supervisor (WSL kills detached jobs), run from a release direct
     (a provisional one only when allowed; a verified one only as a release file listed in DEPLOY_MANIFEST.json with
     those bytes, i.e. committed, so the Mac test that regenerates every committed verified profile covers it, until
     M2 checks the provenance at run time; 027 §4);
- 2. preflight, every problem reported and nothing started: this process holds the shared GPU lock
+ 2. preflight, every problem reported and nothing started (when this process holds the lock, state.json says phase
+    preflight meanwhile, so stop finds it during the 30 s idle window, and refused afterwards; without the lock it
+    never writes state.json, a running supervisor's stays): this process holds the shared GPU lock
     (run_adv.held_gpu_lock verifies the descriptor, it does not trust a flag) through a descriptor it can pass on;
-    GPU memory.used <= run_core_b.IDLE_MIB (run_adv.nvidia_mem_used_bounded); core_b_plan.toolchain_problems
-    empty; ports 8100 and 8080 free; the run dir allowed by runs.py; the profile's fingerprint and KV geometry (if
-    it states them; a verified profile always does) equal to this server's; the active class in the profile;
- 3. runs/pt-<UTC>[-<scenario>]/meta.json (purpose product-test, formal false, research_valid false), the profile
-    bytes preflight checked as runs/<id>/profile.json (the gateway serves that copy, never the mutable path) and
-    <service_root>/state.json (phase starting -> ready -> stopping -> stopped; status and stop read it);
+    the GPU idle by decision 031's product rule (the research's helpers, benchmarks/gpu_idle.py, read-only): one
+    window of 30 nvidia-smi samples at 1 Hz with utilization.gpu <= 5 % in every sample, no compute process and a
+    memory.used range <= 64 MiB; its idle value (the largest memory.used) is the run's baseline. A baseline above
+    the headroom bound (pins [stage_b].v_total_mib - F_peak 15157 - margin 128 = 1018 MiB) is only a warning in
+    meta.json and on stderr: product tests check function, not latency (031 「產品的最終規格」);
+    core_b_plan.toolchain_problems empty; ports 8100 and 8080 free; the run dir allowed by runs.py; the profile's
+    fingerprint and KV geometry (if it states them; a verified profile always does) equal to this server's; the
+    active class in the profile;
+ 3. the pre-boot shared usage (below); runs/pt-<UTC>[-<scenario>]/meta.json (purpose product-test, formal false,
+    research_valid false, the preflight's idle window and baseline, its warnings), the profile bytes preflight
+    checked as runs/<id>/profile.json (the gateway serves that copy, never the mutable path) and
+    <service_root>/state.json (phase preflight -> starting -> ready -> stopping -> stopped; status and stop read
+    it; a stop before vLLM starts ends the supervisor with phase stopped and nothing started);
  4. vLLM: procs.start_group with keep_fds=(lock fd,) and PDEATHSIG, env procs.vllm_env, log runs/<id>/vllm.log;
     wait for /health (startup_timeout_s, cut to what is left of max_hold_s); then the server must be the Core B
     server, else teardown and exit 2:
@@ -32,14 +41,20 @@ up: a foreground supervisor (WSL kills detached jobs), run from a release direct
     status, active class and limits preflight checked, else teardown and exit 2;
  6. the workload: the capserve.loadtest scenario (a fixed module, never an arbitrary command), or hold until a
     signal, max_hold_s after the start or the exit of either child. max_hold_s (finite, <= 1 h: 029 allows no
-    resident daemon) bounds how long the shared lock is held before the teardown starts, the boot included; the
-    teardown then adds at most drain_timeout_s (<= MAX_DRAIN_S) plus the kill and idle waits;
+    resident daemon) bounds how long the shared lock is held before the teardown starts, the preflight's idle
+    window and the boot included; the teardown then adds at most drain_timeout_s (<= MAX_DRAIN_S) plus the kill
+    waits, the after-workload reading and the idle wait;
  7. teardown, in a finally under run_adv.DeferredSignals (a second Ctrl-C cannot orphan a GPU process group), and
     always: state.json / meta.json writes and stderr around it are best effort (a full disk or a permission error
     becomes a problem, never a skipped teardown or a replaced interrupt). SIGTERM the gateway group (it drains),
-    SIGKILL after drain_timeout_s + 10 s; run_adv.shutdown_group on the vLLM group (SIGINT, SIGTERM, SIGKILL); GPU
-    memory.used back <= IDLE_MIB within 60 s; problems and the outcome go into meta.json (its start mtime kept for
-    IT-6), then an interrupt goes on.
+    SIGKILL after drain_timeout_s + 10 s; the after-workload shared usage; run_adv.shutdown_group on the vLLM group
+    (SIGINT, SIGTERM, SIGKILL); GPU memory.used back <= the run's pre-boot baseline + 64 MiB within 60 s (031; the
+    fixed run_core_b.IDLE_MIB of Phase 1 is not the product's rule any more); problems and the outcome go into
+    meta.json (its start mtime kept for IT-6), then an interrupt goes on.
+Shared usage (031, descriptive only: no spill verdict for product tests): the Windows shared usage of the NVIDIA
+adapter (gpu_idle.read_shared_usage, through powershell.exe, <= 20 s) before vLLM starts, once vLLM is the verified
+Core B server, and after the workload (the gateway stopped, vLLM still holding its memory), each with its change
+since the pre-boot reading, in meta.json shared_usage; a reading that fails is recorded with its error, never fatal.
 Exit status: 0 ok, 1 a problem after the start (workload, readiness, teardown, bookkeeping), 2 refused, not the
 Core B server or a gateway serving another profile than preflight checked, 128 + signal when stopped by SIGTERM /
 SIGHUP (coreb_smoke._exit_on_signal).
@@ -73,13 +88,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import core_b_plan as bp
 import coreb_smoke as smoke
+import gpu_idle as gi
 import run_adv
 import run_core_b
 from capserve import loadtest, procs, runs
 from capserve.config import API_KEY_ENV, Settings, allow_provisional
 from capserve.profile import ProfileError, parse_profile, server_fingerprint
 
-IDLE_MIB = run_core_b.IDLE_MIB
 RESEARCH_PORT = run_core_b.PORT
 RELEASE_ROOT = runs.REPO_ROOT          # the release this module runs from: releases/<sha>/ on WSL
 DEFAULT_CONFIG = RELEASE_ROOT / "service" / "deploy" / "rtx.toml"
@@ -92,8 +107,17 @@ GATEWAY_READY_TIMEOUT_S = 120.0
 HOLD_POLL_S = 1.0
 GATEWAY_KILL_EXTRA_S = 10.0   # 029: SIGKILL the gateway drain_timeout_s + 10 s after SIGTERM
 KILL_WAIT_S = 10.0
-IDLE_RETURN_S = 60.0          # 029: GPU memory back <= IDLE_MIB within 60 s
+IDLE_RETURN_S = 60.0          # 029 / 031: GPU memory back within 60 s
+IDLE_RETURN_TOL_MIB = 64      # 031: ... to <= the run's pre-boot baseline + 64 MiB (replaces run_core_b.IDLE_MIB)
+# 031 addendum: above this idle value the resident memory is not the desktop (the heaviest desktop baseline seen was
+# 1,396 MiB, 2026-10-16) but likely another project's model kept in VRAM at 0 % utilization, which WSL may not list as
+# a compute process: a product boot never starts on top of it (不影響其他專案). Between the 031 headroom bound and this
+# cap a product test only warns.
+PRODUCT_IDLE_CAP_MIB = 2048
 IDLE_POLL_S = 2.0
+IDLE_WINDOW_S = gi.WINDOW_SAMPLES * gi.WINDOW_INTERVAL_S   # 031: the preflight's idle window (30 s)
+# 031: what up() spends before it is ready besides its boot waits: the idle window, the pre-boot and ready readings
+READY_OVERHEAD_S = IDLE_WINDOW_S + 2 * gi.SHARED_USAGE_TIMEOUT_S
 MAX_HOLD_S = 3600.0           # 029: product tests at most 1 h per session; longer is a resident daemon (user decision)
 MAX_DRAIN_S = 300             # a drain longer than the gateway's default request_deadline_s (300 s) only holds the lock
 PROFILE_COPY = "profile.json"
@@ -330,7 +354,10 @@ class Effects:
     sleep: Callable = time.sleep
     held_gpu_lock: Callable = run_adv.held_gpu_lock
     lock_fd: Callable = procs.lock_fd
-    gpu_mem_used: Callable = run_adv.nvidia_mem_used_bounded
+    gpu_mem_used: Callable = run_adv.nvidia_mem_used_bounded      # the teardown's return to the baseline
+    gpu_sample: Callable = gi.nvidia_sample                       # 031: the idle window's samples
+    compute_apps: Callable = gi.nvidia_compute_apps
+    shared_usage: Callable = gi.read_shared_usage                 # 031: descriptive for product tests
     toolchain_problems: Callable = bp.toolchain_problems
     port_free: Callable = procs.port_free
     signal_group: Callable = smoke.signal_group
@@ -375,6 +402,24 @@ def profile_server_problems(prof, *, pins: dict, fingerprint: str) -> list:
     return problems
 
 
+def idle_record(samples: list, compute_apps: list, *, bound_mib: int | None) -> dict:
+    """031's product rule on one idle window, for meta.json. Its "problems" (a refusal) are gpu_idle's: a compute
+    load (utilization.gpu > 5 % or not reported in a sample, a compute process) or an unstable baseline (memory.used
+    range > 64 MiB). The baseline is the window's idle value (its largest memory.used), which the teardown and IT-5
+    return to. A baseline above the headroom bound is only a warning: product tests check function, not latency
+    (preflight refuses a baseline above PRODUCT_IDLE_CAP_MIB, the 031 addendum)."""
+    window = gi.window_report(samples, compute_apps, bound_mib=sys.maxsize, attempt=1)   # the headroom: see below
+    baseline = window["idle_mib"]
+    warnings = []
+    if bound_mib is not None and baseline is not None and baseline > bound_mib:
+        warnings.append(f"idle memory.used {baseline} MiB > the 031 headroom bound {bound_mib} MiB (V_total - F_peak "
+                        f"{gi.F_PEAK_MIB} - margin {gi.MARGIN_MIB}): the vLLM peak may not fit in VRAM; a product "
+                        "test still runs (031), with its shared usage recorded")
+    return {"decision": gi.DECISION, "baseline_mib": baseline, "bound_mib": bound_mib,
+            "return_limit_mib": None if baseline is None else baseline + IDLE_RETURN_TOL_MIB, "warnings": warnings,
+            "window": {**window, "bound_mib": bound_mib}}
+
+
 def preflight(cfg: DeployConfig, prof, *, pins: dict, env: dict, fingerprint: str, run_id: str,
               fx: Effects) -> tuple:
     """(problems, facts) before anything starts; every problem is reported, not only the first."""
@@ -386,9 +431,18 @@ def preflight(cfg: DeployConfig, prof, *, pins: dict, env: dict, fingerprint: st
     if fd is None:
         problems.append("no descriptor holding the GPU lock to pass to vLLM and the gateway (029: pass_fds)")
     try:
-        facts["gpu_mem_used_mib"] = used = fx.gpu_mem_used()
-        if used > IDLE_MIB:
-            problems.append(f"GPU memory.used {used} MiB > {IDLE_MIB} MiB: the GPU is not idle")
+        bound = gi.headroom_bound(pins["stage_b"].get("v_total_mib"))
+    except ValueError as exc:
+        bound = None
+        problems.append(f"pins stage_b.v_total_mib: {exc} (031 headroom bound)")
+    try:
+        samples = gi.idle_window(fx.gpu_sample, now=fx.now, sleep=fx.sleep)
+        facts["gpu_idle"] = idle = idle_record(samples, fx.compute_apps(), bound_mib=bound)
+        problems += [f"the GPU is not idle: {p}" for p in idle["window"]["problems"]]
+        if idle["baseline_mib"] is not None and idle["baseline_mib"] > PRODUCT_IDLE_CAP_MIB:
+            problems.append(f"idle memory.used {idle['baseline_mib']} MiB > {PRODUCT_IDLE_CAP_MIB} MiB: resident memory "
+                            "that is not the desktop, likely another project's model; never boot on top of other "
+                            "tenants (031 addendum)")
     except Exception as exc:  # noqa: BLE001 - nvidia-smi missing, failing, hung or unparsable: refuse, never guess
         problems.append(f"nvidia-smi failed: {type(exc).__name__}: {exc}")
     problems += [f"toolchain: {p}" for p in fx.toolchain_problems(env)]
@@ -403,6 +457,19 @@ def preflight(cfg: DeployConfig, prof, *, pins: dict, env: dict, fingerprint: st
         except ProfileError as exc:
             problems.append(str(exc))
     return problems, facts
+
+
+def shared_reading(fx: Effects, when: str, pre: dict | None = None) -> dict:
+    """031, descriptive only for product tests: the NVIDIA adapter's Windows shared usage at `when`
+    (gpu_idle.read_shared_usage), with delta_mib since the pre-boot reading when both were read on the same adapter.
+    A reading that fails is recorded with its error, never fatal."""
+    try:
+        entry = {"when": when, **fx.shared_usage(), "error": None}
+    except Exception as exc:  # noqa: BLE001 - no interop, a timeout, unparsable output: recorded, never fatal
+        return {"when": when, "error": f"{type(exc).__name__}: {exc}"}
+    if pre is not None and pre.get("error") is None and pre.get("luid") == entry.get("luid"):
+        entry["delta_mib"] = round(entry["shared_mib"] - pre["shared_mib"], 1)
+    return entry
 
 
 def server_problems(metrics_text: str, log_text: str, *, pins: dict) -> tuple:
@@ -566,35 +633,59 @@ def up(cfg: DeployConfig, profile_path, *, allow_provisional: bool, loadtest: st
     argv, env = render_vllm(pins, cfg, fx.base_env)
     fp = fingerprint(argv, env)
     run_id = runs.new_run_id(fx.wall(), loadtest)
-    pre_problems, pre = preflight(cfg, prof, pins=pins, env=env, fingerprint=fp, run_id=run_id, fx=fx)
-    problems += pre_problems
-    if problems:
-        say("refused; nothing was started:")
-        for p in problems:
-            say(f"  - {p}")
-        return 2
+    # 031 made the preflight last 30 s or more (the idle window, then the pre-boot shared usage): state.json names this
+    # supervisor as soon as it holds the lock, so `stop` (and `status`) find it meanwhile. Only the lock holder writes
+    # state.json: a refused `up` without the lock never replaces a running supervisor's.
+    early = {"supervisor_pid": fx.pid(), "run_id": run_id, "mode": mode}
+    owns_state = fx.held_gpu_lock()
+    state: dict = {}
 
-    # 3. run dir and state
-    profile_meta = {"id": prof.profile_id, "status": prof.status, "content_sha256": prof.content_sha256,
-                    "path": str(Path(profile_path).resolve())}
-    run_dir = runs.create_run(service_root=cfg.service_root, research_dir=cfg.research_dir, run_id=run_id,
-                              kind="deploy", release=sha, profile=profile_meta, now_utc=fx.wall(),
-                              extra={"mode": mode, "supervisor_pid": fx.pid(), "vllm_argv": argv,
-                                     "recorded_env": bp.recorded_env(env), "fingerprint": fp, "preflight": pre,
-                                     "deploy_config": cfg.model_dump()})
-    with open(run_dir / PROFILE_COPY, "xb") as f:
-        f.write(profile_bytes)
-    state = {"supervisor_pid": fx.pid(), "run_id": run_id, "run_dir": str(run_dir), "release": sha, "mode": mode,
-             "profile": profile_meta, "vllm_url": cfg.vllm_url, "gateway_url": cfg.gateway_url, "vllm_pid": None,
-             "gateway_pid": None}
+    def early_phase(phase: str, **fields) -> list:
+        """A state.json write before vLLM can start: [] once written (or not ours to write), else the problem."""
+        if not owns_state:
+            return []
+        return _best_effort(lambda: write_state(cfg, {**early, **state, **fields, "phase": phase}, wall=fx.wall),
+                            f"state.json write (phase {phase})")
 
     def set_phase(phase: str, **fields) -> None:
         state.update(fields)
         write_state(cfg, {**state, "phase": phase}, wall=fx.wall)
 
-    set_phase("starting")
+    try:
+        problems += early_phase("preflight")
+        pre_problems, pre = preflight(cfg, prof, pins=pins, env=env, fingerprint=fp, run_id=run_id, fx=fx)
+        problems += pre_problems
+        if problems:
+            problems += early_phase("refused", problems=list(problems))
+            say("refused; nothing was started:")
+            for p in problems:
+                say(f"  - {p}")
+            return 2
+        warnings = pre["gpu_idle"]["warnings"]
+        for w in warnings:
+            say(f"warning: {w}")
+        shared = [shared_reading(fx, "pre-boot")]   # 031: after the idle window passed, before vLLM starts
+
+        # 3. run dir and state
+        profile_meta = {"id": prof.profile_id, "status": prof.status, "content_sha256": prof.content_sha256,
+                        "path": str(Path(profile_path).resolve())}
+        run_dir = runs.create_run(service_root=cfg.service_root, research_dir=cfg.research_dir, run_id=run_id,
+                                  kind="deploy", release=sha, profile=profile_meta, now_utc=fx.wall(),
+                                  extra={"mode": mode, "supervisor_pid": fx.pid(), "vllm_argv": argv,
+                                         "recorded_env": bp.recorded_env(env), "fingerprint": fp, "preflight": pre,
+                                         "warnings": warnings, "shared_usage": list(shared),
+                                         "deploy_config": cfg.model_dump()})
+        with open(run_dir / PROFILE_COPY, "xb") as f:
+            f.write(profile_bytes)
+        state.update({"supervisor_pid": fx.pid(), "run_id": run_id, "run_dir": str(run_dir), "release": sha,
+                      "mode": mode, "profile": profile_meta, "vllm_url": cfg.vllm_url, "gateway_url": cfg.gateway_url,
+                      "vllm_pid": None, "gateway_pid": None})
+        set_phase("starting")
+    except BaseException as exc:   # a `stop` meanwhile (SIGTERM -> SystemExit), or a failure: nothing was started
+        early_phase("stopped", exit=None, interrupted=f"{type(exc).__name__}({exc})")
+        raise
     say(f"run {run_dir}")
-    started, info, problems = {}, {"timeline": {}}, []
+    started, info, problems = {}, {"timeline": {}, "shared_usage": shared}, []
     code, interrupted = 1, None
     try:
         code = _serve(cfg, prof, argv=argv, env=env, run_dir=run_dir,
@@ -609,7 +700,7 @@ def up(cfg: DeployConfig, profile_path, *, allow_provisional: bool, loadtest: st
             # the teardown always runs: every write around it is best effort and only becomes a problem
             failed = _best_effort(lambda: set_phase("stopping"), "state.json write (phase stopping)")
             info["timeline"]["teardown_start_s"] = fx.now() - t0
-            td = teardown(started, cfg, deferred, fx)
+            td = teardown(started, cfg, deferred, fx, baseline_mib=pre["gpu_idle"]["baseline_mib"], shared=shared)
             if (td["problems"] or failed) and code == 0:
                 code = 1
             stopped = _best_effort(lambda: set_phase("stopped", exit=code if interrupted is None else None,
@@ -622,7 +713,8 @@ def up(cfg: DeployConfig, profile_path, *, allow_provisional: bool, loadtest: st
                        "interrupted": interrupted, "problems": problems, "server": info.get("server"),
                        "workload": info.get("workload"), "teardown": td, "timeline": info["timeline"],
                        "ended_utc": fx.wall().astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-            meta_failed = _best_effort(lambda: runs.update_meta(run_dir, outcome=outcome), "meta.json outcome write")
+            meta_failed = _best_effort(lambda: runs.update_meta(run_dir, outcome=outcome, shared_usage=shared),
+                                       "meta.json outcome write")
             if meta_failed and code == 0:
                 code = 1
             say(f"stopped: exit {code if interrupted is None else None}, "
@@ -665,6 +757,8 @@ def _serve(cfg, prof, *, argv, env, run_dir: Path, allow_provisional, workload, 
     if server_bad:
         problems.extend(server_bad)
         return 2
+    shared = info["shared_usage"]
+    shared.append(shared_reading(fx, "ready", shared[0]))   # 031: vLLM holds its memory now
 
     # 5. gateway
     gw_toml = run_dir / "gateway.toml"
@@ -742,24 +836,28 @@ def stop_gateway(proc, *, grace_s: float, fx: Effects) -> list:
     return reasons
 
 
-def wait_gpu_idle(fx: Effects, limit_s: float = IDLE_RETURN_S) -> tuple:
+def wait_gpu_idle(fx: Effects, baseline_mib: int, limit_s: float = IDLE_RETURN_S) -> tuple:
+    """031: GPU memory.used back <= the run's pre-boot baseline + IDLE_RETURN_TOL_MIB within limit_s."""
+    limit_mib = baseline_mib + IDLE_RETURN_TOL_MIB
     t = fx.now()
     while True:
         try:
             used, error = fx.gpu_mem_used(), None
         except Exception as exc:  # noqa: BLE001 - recorded as a teardown problem
             used, error = None, f"{type(exc).__name__}: {exc}"
-        if used is not None and used <= IDLE_MIB:
+        if used is not None and used <= limit_mib:
             return used, []
         if fx.now() - t >= limit_s:
             if error:
                 return None, [f"nvidia-smi failed after teardown: {error}"]
-            return used, [f"GPU memory.used {used} MiB > {IDLE_MIB} MiB {limit_s:g} s after teardown"]
+            return used, [f"GPU memory.used {used} MiB > {limit_mib} MiB (the pre-boot baseline {baseline_mib} + "
+                          f"{IDLE_RETURN_TOL_MIB}; 031) {limit_s:g} s after teardown"]
         fx.sleep(IDLE_POLL_S)
 
 
-def teardown(started: dict, cfg: DeployConfig, deferred, fx: Effects) -> dict:
-    """The gateway first (it drains), then the vLLM group, then the GPU memory check."""
+def teardown(started: dict, cfg: DeployConfig, deferred, fx: Effects, *, baseline_mib: int, shared: list) -> dict:
+    """The gateway first (it drains), then the after-workload shared usage (031, only once vLLM was ready: it still
+    holds its memory), then the vLLM group, then GPU memory back to the pre-boot baseline + 64 MiB."""
     out = {"problems": []}
     gw = started.get("gateway")
     if gw is not None:
@@ -769,11 +867,15 @@ def teardown(started: dict, cfg: DeployConfig, deferred, fx: Effects) -> dict:
         out["problems"] += reasons
     vllm = started.get("vllm")
     if vllm is not None:
+        if any(r["when"] == "ready" for r in shared):
+            shared.append(shared_reading(fx, "after", shared[0]))
         reasons = run_adv.shutdown_group(vllm, deferred, signal_group=fx.signal_group, group_alive=fx.group_alive,
                                          now=fx.now, sleep=fx.sleep)
         out["vllm"] = {"returncode": vllm.poll(), "shutdown_reasons": reasons}
         out["problems"] += reasons
-        out["gpu_mem_after_mib"], idle_problems = wait_gpu_idle(fx)
+        out["gpu_baseline_mib"] = baseline_mib
+        out["gpu_return_limit_mib"] = baseline_mib + IDLE_RETURN_TOL_MIB
+        out["gpu_mem_after_mib"], idle_problems = wait_gpu_idle(fx, baseline_mib)
         out["problems"] += idle_problems
     return out
 
@@ -808,8 +910,10 @@ def status(cfg: DeployConfig, *, proc_root: str = "/proc", http_get: Callable = 
 
 
 def default_stop_wait_s(cfg: DeployConfig) -> float:
-    """Long enough for the whole teardown: gateway drain + kill, vLLM SIGINT / SIGTERM / SIGKILL, the idle check."""
-    return cfg.drain_timeout_s + GATEWAY_KILL_EXTRA_S + KILL_WAIT_S + 2 * 30 + KILL_WAIT_S + IDLE_RETURN_S + 30
+    """Long enough for the whole teardown: gateway drain + kill, the after-workload shared-usage reading, vLLM
+    SIGINT / SIGTERM / SIGKILL, the idle check."""
+    return (cfg.drain_timeout_s + GATEWAY_KILL_EXTRA_S + KILL_WAIT_S + 2 * 30 + KILL_WAIT_S
+            + gi.SHARED_USAGE_TIMEOUT_S + IDLE_RETURN_S + 30)
 
 
 def stop(cfg: DeployConfig, *, proc_root: str = "/proc", kill: Callable = os.kill, now: Callable = time.monotonic,

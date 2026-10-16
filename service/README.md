@@ -47,4 +47,4 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve serve --config /tmp/g
   - `python -m capserve.loadtest`：產品負載測試（smoke / steady / burst / overload），輸出到 `runs/`，**不是容量量測**。
   - `python -m capserve.itest IT-0 … IT-6`：RTX 整合測試；除了 IT-0 都需要 GPU lock。
   - `tools/rtx/deploy_service.sh`：把 release 部署到 WSL 的 `~/llm-serving-service/releases/<sha>`，不寫入研究目錄。
-  - RTX 上尚未執行：要等 GPU 閒置用量回到 1,000 MiB 以下。
+  - RTX 上的閒置判定依 decision 031 的產品規格：GPU lock、使用率 ≤ 5%、基線穩定；閒置用量高於研究的餘裕上限只發警告，高於 2,048 MiB 則拒絕（保護其他專案）。

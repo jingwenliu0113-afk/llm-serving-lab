@@ -18,6 +18,7 @@ import pytest
 
 import c0_analysis as ca
 import core_b_plan as bp
+import gpu_idle as gi
 import run_c0_probe as rp
 
 # ------------------------------------------------------------------ startup-line extractor --
@@ -103,6 +104,7 @@ def test_startup_facts_hold_the_structured_values():
 ROOT = Path(__file__).resolve().parent.parent
 EPOCH = 1_791_700_000.0
 SMI_EXITED = "the nvidia-smi sampler exited (code 2)"
+SHARED_IDLE, SPILL = 64.4, 200.0          # Windows shared usage with WSL running (031); a spill adds 200 MiB
 PINS_SHA = "cd" * 32
 OBSERVATION_FLAGS = ("--otlp-traces-endpoint", "--enable-logging-iteration-details", "--collect-detailed-traces",
                      "--long-prefill-token-threshold", "--no-scheduler-reserve-full-isl", "--request-id-prefix")
@@ -193,17 +195,23 @@ class FakeEnv:
 
 class World:
     """Fake WSL for one probe session. behave[(boot, bench)] in {"ok", "timeout", "exit", "fail", "hot",
-    "hot_after", "lost", "unhealthy", "raise"}; slips[(boot, bench)] = slipped groups of that bench; blocks /
-    nondefault edit the server; mem: memory.used values (the last one repeats); apps: compute processes; lock: lock
-    checks in order (the last one repeats); hot_at_start / lost_at_start: boots whose GPU reaches 88 C / whose
-    nvidia-smi sampler dies during the startup; halt_at_teardown[boot] in {"hot", "lost"}: the same during its
-    teardown; smi: "ok", "none" (the sampler never reports) or "no_temp" (it never reports a temperature)."""
+    "hot_after", "lost", "lost_after", "unhealthy", "raise"}; slips[(boot, bench)] = slipped groups of that bench;
+    blocks / nondefault edit the server; mem / util: memory.used / utilization.gpu of the idle-window samples in order (the
+    last one repeats); apps: compute processes; lock: lock checks in order (the last one repeats); hot_at_start /
+    lost_at_start: boots whose GPU reaches 88 C / whose nvidia-smi sampler dies during the startup;
+    halt_at_teardown[boot] in {"hot", "lost"}: the same during its teardown; smi: "ok", "none" (the sampler never
+    reports) or "no_temp" (it never reports a temperature). Windows shared usage (031 spill guard) is SHARED_IDLE MiB;
+    a reading whose point ("pre:<boot>", "ready:<boot>", "bench:<boot>-<bench>") is in spill_at returns it + SPILL,
+    one in shared_fail raises as an unreachable powershell.exe does."""
 
-    def __init__(self, tmp_path, *, behave=None, slips=None, blocks=248, nondefault=None, mem=(400,), apps=(),
-                 lock=(True,), hot_at_start=(), lost_at_start=(), halt_at_teardown=None, smi="ok", startup_s=32.0,
-                 bench_s=330.0, never_ready=False, health_s=0.0):
+    def __init__(self, tmp_path, *, behave=None, slips=None, blocks=248, nondefault=None, mem=(400,), util=(0,),
+                 apps=(), lock=(True,), hot_at_start=(), lost_at_start=(), halt_at_teardown=None, smi="ok",
+                 startup_s=32.0, bench_s=330.0, never_ready=False, health_s=0.0, spill_at=(), shared_fail=(),
+                 sample_raises=False):
         self.tmp_path, self.behave, self.slips = tmp_path, behave or {}, slips or {}
         self.blocks, self.nondefault, self.mem, self.apps = blocks, nondefault, list(mem), list(apps)
+        self.util, self.spill_at, self.shared_fail = list(util), set(spill_at), set(shared_fail)
+        self.sample_raises, self.point, self.shared_points = sample_raises, "pre:1", []
         self.lock, self.hot_at_start, self.never_ready = list(lock), set(hot_at_start), never_ready
         self.lost_at_start, self.halt_at_teardown, self.smi_mode = set(lost_at_start), halt_at_teardown or {}, smi
         self.startup_s, self.bench_s, self.health_s = startup_s, bench_s, health_s
@@ -228,9 +236,21 @@ class World:
         self.lock_calls += 1
         return self.lock[min(self.lock_calls, len(self.lock)) - 1]
 
-    def gpu_mem_used(self):
+    def gpu_sample(self):
+        if self.sample_raises:
+            raise TimeoutError("nvidia-smi hung")
         self.mem_calls += 1
-        return self.mem[min(self.mem_calls, len(self.mem)) - 1]
+        i = self.mem_calls - 1
+        return {"mem_used_mib": self.mem[min(i, len(self.mem) - 1)], "util_pct": self.util[min(i, len(self.util) - 1)],
+                "pstate": "P8"}
+
+    def shared_usage(self):
+        self.events.append("shared")
+        self.shared_points.append(self.point)
+        if self.point in self.shared_fail:
+            raise gi.SharedUsageError("powershell.exe failed: TimeoutExpired: timed out after 20 seconds")
+        return {"luid": "luid_0x00000000_0x000103ae_phys_0", "dedicated_mib": 1396.0,
+                "shared_mib": SHARED_IDLE + (SPILL if self.point in self.spill_at else 0.0)}
 
     def compute_apps(self):
         self.events.append("apps")
@@ -243,6 +263,7 @@ class World:
     def popen(self, argv, env, log_path):
         self.boot += 1
         self.bench, self.unhealthy, self.boot_t = 0, False, self.t
+        self.point = f"ready:{self.boot}"
         self.events.append(f"popen:{self.boot}")
         self.started.append((argv, env))
         a = dict(zip(argv, argv[1:]))
@@ -265,6 +286,7 @@ class World:
 
     def signal_group(self, proc, sig):
         self.events.append(f"signal:{int(sig)}")
+        self.point = f"pre:{self.boot + 1}"
         kind = self.halt_at_teardown.get(self.boot)
         if kind == "hot":
             self.smi.flag_hot()
@@ -304,6 +326,7 @@ class World:
     def run_bench(self, argv, log_path, env, timeout_s, stop):
         self.bench += 1
         key = (self.boot, self.bench)
+        self.point = f"bench:{self.boot}-{self.bench}"
         self.events.append(f"bench:{self.boot}-{self.bench}")
         self.bench_argvs.append(argv)
         self.bench_timeouts.append(timeout_s)
@@ -348,6 +371,8 @@ class World:
             self.unhealthy = True
         if how == "hot_after":
             self.smi.flag_hot()
+        if how == "lost_after":
+            self.smi.lose(SMI_EXITED)
         return 0, False, False
 
 
@@ -362,8 +387,9 @@ def run(world, plan, pins, out=None, smoke=False, t_start=0.0, **kw):
     session = rp.run_session(plan, pins=pins, pins_sha256=PINS_SHA, out_dir=out, session_id=out.name,
                              is_smoke=smoke,
                              popen=world.popen, signal_group=world.signal_group, group_alive=world.group_alive,
-                             http_get=world.http_get, run_bench=world.run_bench, gpu_mem_used=world.gpu_mem_used,
-                             compute_apps=world.compute_apps, start_smi=world.start_smi,
+                             http_get=world.http_get, run_bench=world.run_bench, gpu_sample=world.gpu_sample,
+                             compute_apps=world.compute_apps, shared_usage=world.shared_usage,
+                             start_smi=world.start_smi,
                              lock_held_check=world.lock_held, t_start=t_start, now=world.now, sleep=world.sleep,
                              wall=world.wall, **kw)
     rows = [json.loads(x) for x in (out / "rows.jsonl").read_text().splitlines()]
@@ -462,11 +488,15 @@ def test_boot_order_of_checks_and_teardown(tmp_path, pins, plan):
     run(world, plan, pins)
     ev = world.events
     first = ev.index("popen:1")
-    assert ev[:first] == ["env:preflight.json", "apps", "env:b1.before.json", "smi:start"]
+    # 031: the idle window (30 samples, then the compute processes), then the pre-boot shared usage
+    assert ev[:first] == ["env:preflight.json", "apps", "shared", "env:b1.before.json", "smi:start"]
     b1 = ev[first:ev.index("popen:2")]
-    assert [e for e in b1 if e.startswith("bench")] == ["bench:1-1", "bench:1-2", "bench:1-3", "bench:1-4"]
+    assert [e for e in b1 if e.startswith(("bench", "shared"))] == [
+        "shared", "bench:1-1", "shared", "bench:1-2", "shared", "bench:1-3", "shared", "bench:1-4", "shared", "shared"]
     assert b1.index("signal:2") > b1.index("bench:1-4") and b1.index("smi:stop") > b1.index("signal:2")
-    assert b1[-4:] == ["env:b1.after.json", "apps", "env:b2.before.json", "smi:start"]
+    assert b1[-5:] == ["env:b1.after.json", "apps", "shared", "env:b2.before.json", "smi:start"]
+    assert world.shared_points[:7] == ["pre:1", "ready:1", "bench:1-1", "bench:1-2", "bench:1-3", "bench:1-4", "pre:2"]
+    assert world.mem_calls == 6 * 30
 
 
 # ------------------------------------------------------------------ refusals --
@@ -526,18 +556,62 @@ def test_lock_lost_before_a_boot_stops_the_session(tmp_path, pins, plan):
 def test_another_compute_process_stops_before_the_boot(tmp_path, pins, plan):
     world = World(tmp_path, apps=("123, python, 900",))
     out, session, rows = run(world, plan, pins)
-    assert session["stopped"]["rule"] == "gpu_busy" and rows == [] and world.started == []
+    assert session["stopped"]["rule"] == "gpu_not_idle" and rows == [] and world.started == []
+    assert "compute process" in session["stopped"]["reason"] and world.events.count("apps") == 3
 
 
-def test_memory_must_be_idle_within_60_s(tmp_path, pins, plan):
-    world = World(tmp_path, mem=(3000, 3000, 400))
+def test_the_gpu_must_pass_a_031_idle_window_within_3_windows(tmp_path, pins, plan):
+    """031 replaces 028 rule 2's 1000 MiB: 30 samples at 1 Hz, up to 3 windows; the bound is computed (1018 MiB)."""
+    world = World(tmp_path, mem=(3000,) * 30 + (400,))          # busy in the first window, idle in the second
     out, session, rows = run(world, plan, pins)
     assert session["stopped"] is None and len(rows) == 24
-    world = World(tmp_path / "busy", mem=(3000,))
+    idle = session["boots"]["b1"]["idle"]
+    assert idle["ok"] and idle["attempt"] == 2 and any("headroom" in p for p in idle["earlier"][0])
+    assert idle["bound_mib"] == 1018 and len(idle["mem_used_mib"]) == 30
+    assert session["gpu_idle"] == gi.criterion(16303)
     (tmp_path / "busy").mkdir()
+    world = World(tmp_path / "busy", mem=(3000,))
     out, session, rows = run(world, plan, pins)
-    assert session["stopped"]["rule"] == "gpu_busy" and "memory.used 3000" in session["stopped"]["reason"]
-    assert world.t >= rp.IDLE_WAIT_S and world.started == []
+    assert session["stopped"]["rule"] == "gpu_not_idle" and "3000 MiB > the headroom bound 1018" in \
+        session["stopped"]["reason"]
+    assert session["stopped"]["detail"]["idle"]["attempt"] == 3 and world.mem_calls == 90
+    assert 87 <= world.t < 95 and world.started == [] and rows == []
+
+
+@pytest.mark.parametrize("kw, ok, match", [
+    ({"mem": (1018,), "util": (5,)}, True, None),                      # at the bound, 5 %: idle
+    ({"mem": (1019,)}, False, "headroom"),
+    ({"mem": (1385,)}, False, "1385 MiB > the headroom bound 1018"),   # the 2026-10-16 idle value is refused
+    ({"util": ((0,) * 29 + (6,)) * 3}, False, "utilization.gpu"),      # one sample above 5 % in every window
+    ({"mem": ((400,) * 29 + (465,)) * 3}, False, "range"),             # a baseline still moving in every window
+])
+def test_each_031_condition_decides_the_boot(tmp_path, pins, plan, kw, ok, match):
+    world = World(tmp_path, **kw)
+    out, session, rows = run(world, plan, pins, smoke=True)
+    if ok:
+        assert session["stopped"] is None and len(world.started) == 1
+    else:
+        assert session["stopped"]["rule"] == "gpu_not_idle" and match in session["stopped"]["reason"]
+        assert world.started == []
+
+
+def test_the_031_bound_is_computed_from_the_pins_v_total(tmp_path, pins, plan):
+    """031: the headroom bound comes from pins [stage_b].v_total_mib, never a typed 1018."""
+    other = copy.deepcopy(pins)
+    other["stage_b"]["v_total_mib"] = 16500                    # bound 16500 - 15157 - 128 = 1215 MiB
+    world = World(tmp_path, mem=(1100,))                        # above 1018, below 1215
+    out, session, rows = run(world, plan, other, smoke=True)
+    assert session["stopped"] is None and len(world.started) == 1
+    assert session["gpu_idle"] == gi.criterion(16500) and session["gpu_idle"]["bound_mib"] == 1215
+    idle = session["boots"]["b1"]["idle"]
+    assert idle["ok"] and idle["bound_mib"] == 1215 and idle["idle_mib"] == 1100
+
+
+def test_an_nvidia_smi_that_fails_during_the_window_stops_with_gpu_check(tmp_path, pins, plan):
+    world = World(tmp_path, sample_raises=True)
+    out, session, rows = run(world, plan, pins)
+    assert session["stopped"]["rule"] == "gpu_check" and "hung" in session["stopped"]["reason"]
+    assert world.started == []
 
 
 def test_no_new_boot_once_elapsed_plus_30_min_exceeds_the_cap(tmp_path, pins, plan):
@@ -561,7 +635,7 @@ def test_no_bench_that_could_run_past_the_cap(tmp_path, pins, plan):
 def test_the_server_start_cannot_run_past_the_cap(tmp_path, pins, plan, health_s):
     """028 hard cap: a start that never gets ready is cut at the cap, the idle wait before it included (a /health
     request in flight at the cap still ends; its own duration is the only overrun)."""
-    world = World(tmp_path, never_ready=True, mem=(3000,) * 29 + (400,), health_s=health_s)
+    world = World(tmp_path, never_ready=True, mem=(3000,) * 30 + (400,), health_s=health_s)
     out, session, rows = run(world, plan, pins, t_start=-(3.0 * 3600 - 1801))
     assert session["stopped"]["rule"] == "cap" and session["stopped"]["boot"] == 1
     assert session["elapsed_s"] <= 3.0 * 3600 + health_s and world.bench_argvs == []
@@ -637,14 +711,23 @@ def test_temperature_88_c_stops_immediately(tmp_path, pins, plan):
     assert session["stopped"]["rule"] == "temperature" and len(world.started) == 2 and len(rows) == 8
     ev = world.events
     assert ev.index("signal:2", ev.index("bench:2-3")) < ev.index("smi:stop", ev.index("bench:2-3"))
-    world = World(tmp_path / "after", behave={(1, 2): "hot_after"})
-    (tmp_path / "after").mkdir()
-    out, session, rows = run(world, plan, pins)
-    assert [x["ok"] for x in rows] == [True, True, False, False] and session["stopped"]["rule"] == "temperature"
     world = World(tmp_path / "start", hot_at_start=(1,))
     (tmp_path / "start").mkdir()
     out, session, rows = run(world, plan, pins)
     assert session["stopped"]["rule"] == "temperature" and world.bench_argvs == []
+
+
+@pytest.mark.parametrize("how, rule", [("hot_after", "temperature"), ("lost_after", "telemetry")])
+def test_a_stop_flag_set_right_after_a_clean_bench_invalidates_it(tmp_path, pins, plan, how, rule):
+    """88 C / lost telemetry right after a bench returned cleanly: the server goes down at once, so the bench gets no
+    031 spill reading, and a bench without its reading is invalid (031: the guard fails closed)."""
+    world = World(tmp_path, behave={(1, 2): how})
+    out, session, rows = run(world, plan, pins)
+    assert [x["ok"] for x in rows] == [True, False, False, False] and session["stopped"]["rule"] == rule
+    r = {x["tag"]: x for x in rows}
+    assert "spill" not in r["b1-n2"] and world.shared_points[-1] == "bench:1-1"     # no reading after b1-n2
+    assert any("no 031 spill reading" in x for x in r["b1-n2"]["reasons"]), r["b1-n2"]["reasons"]
+    assert [x["valid"] for x in ca.analyse_session(out)["benches"]] == [True, False, False, False]
 
 
 def test_lost_telemetry_stops_like_the_88_c_rule(tmp_path, pins, plan):
@@ -694,6 +777,102 @@ def test_no_data_driven_stop(tmp_path, pins, plan):
         out, session, rows = run(World(tmp_path / name, slips=slips), plan, pins)
         assert len(rows) == 24 and session["stopped"] is None
     assert "c0_analysis" not in imported_modules()
+
+
+# ------------------------------------------------------------------ 031 spill guard --
+
+def test_every_benched_row_carries_its_spill_readings(tmp_path, pins, plan):
+    world = World(tmp_path)
+    out, session, rows = run(world, plan, pins)
+    assert all(r["spill"] == {"pre_mib": SHARED_IDLE, "readings_mib": [SHARED_IDLE] * (r["bench"] + 1),
+                              "spilled": False, "tol_mib": 64} for r in rows)
+    rec = session["boots"]["b1"]["spill"]
+    assert rec["pre"]["shared_mib"] == SHARED_IDLE and rec["spilled"] is None and rec["error"] is None
+    assert [x["when"] for x in rec["readings"]] == ["ready", "b1-n1", "b1-n2", "b1-n3", "b1-n4"]
+
+
+def test_a_spill_after_a_bench_invalidates_it_and_ends_the_boot(tmp_path, pins, plan):
+    """031: the bench is invalid, the boot stops, its remaining benches are not run (never replaced); the session goes
+    on under 028's failed-boot rule."""
+    world = World(tmp_path, spill_at={"bench:2-2"})
+    out, session, rows = run(world, plan, pins)
+    r = {x["tag"]: x for x in rows}
+    assert r["b2-n1"]["ok"] and not r["b2-n2"]["ok"] and r["b2-n2"]["spill"]["spilled"] is True
+    assert r["b2-n2"]["spill"]["readings_mib"] == [SHARED_IDLE, SHARED_IDLE, SHARED_IDLE + SPILL]
+    assert any(x.startswith("spill") and "031" in x for x in r["b2-n2"]["reasons"]), r["b2-n2"]["reasons"]
+    assert r["b2-n3"]["not_run"] and r["b2-n4"]["not_run"] and "spill" in r["b2-n3"]["reasons"][0]
+    ev = world.events
+    assert "bench:2-3" not in ev and ev.index("signal:2", ev.index("bench:2-2")) < ev.index("popen:3")
+    assert session["boots"]["b2"]["failed"] is True and session["boots"]["b2"]["spill"]["spilled"] == "b2-n2"
+    assert session["stopped"] is None and len(rows) == 24 and session["failed_boots"] == 1
+    # c0_analysis reads it with the existing rules: the bench is excluded and the boot failed (028 rule 5)
+    a = ca.analyse_session(out)
+    assert a["boots"][1]["n_valid"] == 1 and a["boots"][1]["failed"] is True
+    assert [x["valid"] for x in a["benches"] if x["boot"] == 2] == [True, False, False, False]
+    assert a["session"]["valid_benches"] == 21
+
+
+def test_a_spill_at_the_last_bench_invalidates_only_that_bench(tmp_path, pins, plan):
+    world = World(tmp_path, spill_at={"bench:3-4"})
+    out, session, rows = run(world, plan, pins)
+    assert [x["ok"] for x in rows if x["boot"] == 3] == [True, True, True, False]
+    assert session["boots"]["b3"]["failed"] is False and session["failed_boots"] == 0 and session["stopped"] is None
+
+
+def test_a_spill_once_the_server_is_ready_runs_no_bench(tmp_path, pins, plan):
+    world = World(tmp_path, spill_at={"ready:1"})
+    out, session, rows = run(world, plan, pins)
+    b1 = [x for x in rows if x["boot"] == 1]
+    assert len(b1) == 4 and all(x["not_run"] and "spill" in x["reasons"][0] for x in b1)
+    assert "bench:1-1" not in world.events and world.events.index("signal:2") < world.events.index("popen:2")
+    rec = session["boots"]["b1"]
+    assert rec["startup_ok"] is True and rec["failed"] is True and rec["spill"]["spilled"] == "ready"
+    assert session["stopped"] is None and len(world.started) == 6 and session["failed_boots"] == 1
+
+
+def test_two_boots_with_a_spill_stop_the_session_as_failed_boots(tmp_path, pins, plan):
+    world = World(tmp_path, spill_at={"ready:1", "bench:2-1"})
+    out, session, rows = run(world, plan, pins)
+    assert session["stopped"]["rule"] == "failed_boots" and len(world.started) == 2 and len(rows) == 8
+
+
+@pytest.mark.parametrize("boot", [1, 3])
+def test_an_unreadable_pre_boot_reading_stops_before_the_boot(tmp_path, pins, plan, boot):
+    """031: no spill guard, no boot (fail closed, like lost telemetry)."""
+    world = World(tmp_path, shared_fail={f"pre:{boot}"})
+    out, session, rows = run(world, plan, pins)
+    assert session["stopped"]["rule"] == "spill_unreadable" and session["stopped"]["boot"] == boot
+    assert "TimeoutExpired" in session["stopped"]["reason"]
+    assert "TimeoutExpired" in session["stopped"]["detail"]["spill"]["error"]
+    assert len(world.started) == boot - 1 and len(rows) == 4 * (boot - 1)
+
+
+def test_an_unreadable_reading_after_a_bench_invalidates_it_and_stops(tmp_path, pins, plan):
+    world = World(tmp_path, shared_fail={"bench:2-3"})
+    out, session, rows = run(world, plan, pins)
+    r = {x["tag"]: x for x in rows}
+    assert session["stopped"]["rule"] == "spill_unreadable" and session["stopped"]["boot"] == 2
+    assert not r["b2-n3"]["ok"] and any("unreadable" in x for x in r["b2-n3"]["reasons"]), r["b2-n3"]["reasons"]
+    assert r["b2-n4"]["not_run"] and "bench:2-4" not in world.events and len(world.started) == 2 and len(rows) == 8
+    assert world.proc.returncode == 0 and "TimeoutExpired" in session["boots"]["b2"]["spill"]["error"]
+    assert ca.analyse_session(out)["session"]["outcome"] == "indeterminate"
+
+
+def test_an_unreadable_reading_once_the_server_is_ready_stops_without_a_bench(tmp_path, pins, plan):
+    world = World(tmp_path, shared_fail={"ready:1"})
+    out, session, rows = run(world, plan, pins)
+    assert session["stopped"]["rule"] == "spill_unreadable" and session["stopped"]["boot"] == 1
+    assert world.bench_argvs == [] and len(rows) == 4 and all(x["not_run"] for x in rows)
+    assert "signal:2" in world.events and world.smi.stopped
+
+
+def test_a_smoke_with_a_spill_never_starts_the_probe(tmp_path, pins, plan):
+    world = World(tmp_path, spill_at={"bench:1-1"})
+    common = probe_kwargs(world, pins)
+    smoke_out, out = tmp_path / "smoke-c0-20261016", tmp_path / "explore-c0-20261016"
+    with pytest.raises(rp.RunError, match="smoke"):
+        rp.run_probe(plan, smoke_first=True, smoke_out=smoke_out, out=out, **common)
+    assert not out.exists() and len(world.started) == 1
 
 
 # ------------------------------------------------------------------ smoke --
@@ -746,10 +925,20 @@ def test_a_smoke_without_temperature_samples_never_starts_the_probe(tmp_path, pi
 def probe_kwargs(world, pins):
     return dict(pins=pins, pins_sha256=PINS_SHA, popen=world.popen, signal_group=world.signal_group,
                 group_alive=world.group_alive, http_get=world.http_get, run_bench=world.run_bench,
-                gpu_mem_used=world.gpu_mem_used, compute_apps=world.compute_apps, start_smi=world.start_smi,
+                gpu_sample=world.gpu_sample, compute_apps=world.compute_apps, shared_usage=world.shared_usage,
+                start_smi=world.start_smi,
                 lock_held_check=world.lock_held, gpu_lock_held=True, toolchain_check=lambda env: [],
                 capture_env=FakeEnv(world), base_env=BASE_ENV, cap_hours=3.0, sample_interval=None, t_start=0.0,
                 now=world.now, sleep=world.sleep, wall=world.wall)
+
+
+def test_main_wires_the_031_idle_window_and_spill_guard(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(rp, "run_probe", lambda plan, **kw: calls.append(kw) or [])
+    assert rp.main(["run", "--gpu-lock-held", "--out", str(tmp_path / "x"), "--smoke-out", str(tmp_path / "s")]) == 0
+    kw = calls[0]
+    assert kw["gpu_sample"] is gi.nvidia_sample and kw["shared_usage"] is gi.read_shared_usage
+    assert kw["compute_apps"] is rp.compute_apps_bounded and "gpu_mem_used" not in kw
 
 
 def test_main_plan_and_refusal_without_the_lock(tmp_path, capsys):
@@ -781,7 +970,7 @@ def imported_modules():
 
 def test_imports_only_stdlib_and_the_frozen_modules():
     project = imported_modules() - set(sys.stdlib_module_names)
-    assert project <= {"core_b_plan", "run_adv", "run_core_b", "run_core_a", "coreb_smoke"}
+    assert project <= {"core_b_plan", "run_adv", "run_core_b", "run_core_a", "coreb_smoke", "gpu_idle"}
 
 
 def test_parse_smi_line_handles_units_na_and_hex():

@@ -1,12 +1,15 @@
 """Tests for capserve/deploy.py (decision 029 "部署管理"): render on the Mac, and the foreground supervisor `up` with
-every OS / HTTP / process effect faked (fake start_group / processes / clock / nvidia-smi / lock descriptor):
-release manifest, preflight refusals (nothing started, no run dir), vLLM with the lock fd, server checks, gateway,
-state.json, hold / workload, and the teardown order and checks in every exit path; status and stop."""
+every OS / HTTP / process effect faked (fake start_group / processes / clock / nvidia-smi / powershell shared usage /
+lock descriptor): release manifest, preflight refusals (nothing started, no run dir), the 031 idle window and its
+baseline (a headroom shortfall only warns), vLLM with the lock fd, server checks, gateway, state.json, hold /
+workload, the descriptive shared-usage readings, and the teardown order and checks (GPU memory back to the pre-boot
+baseline + 64 MiB) in every exit path; status and stop."""
 
 import datetime as dt
 import hashlib
 import inspect
 import json
+import shutil
 import signal
 import tomllib
 from pathlib import Path
@@ -15,6 +18,7 @@ import pytest
 
 import core_b_plan as bp
 import coreb_smoke as smoke
+import gpu_idle as gi
 import run_adv
 import run_core_b
 from capserve import deploy, procs, runs
@@ -32,6 +36,8 @@ LOG_OK = ("INFO non-default args: {'model': 'RedHatAI/Qwen3.5-9B-quantized.w4a16
           "INFO Using Triton/FLA GDN prefill kernel\n")
 METRICS_OK = 'vllm:cache_config_info{block_size="528",num_gpu_blocks="248"} 1.0\n'
 ROOT = Path(__file__).resolve().parents[2]
+LUID = "luid_0x00000000_0x000103ae_phys_0"
+SHARED = {"luid": LUID, "dedicated_mib": 1396.0, "shared_mib": 64.4}
 
 
 # ------------------------------------------------------------------ fixtures --
@@ -112,7 +118,12 @@ class World:
         self.health_calls = 0
         self.vllm_log, self.metrics, self.readyz = LOG_OK, METRICS_OK, 200
         self.readyz_body = None        # None: what the gateway was started with (served())
-        self.gpu = [500]               # nvidia-smi answers in order; the last one repeats
+        self.idle = [(500, 0)]         # the 031 window's (memory.used, utilization.gpu) samples; the last one repeats
+        self.idle_times = []           # when each window sample was taken
+        self.apps = []                 # nvidia-smi compute processes
+        self.gpu = [500]               # the teardown's memory.used answers in order; the last one repeats
+        self.shared = [dict(SHARED)]   # powershell shared-usage readings in order; the last one repeats
+        self.shared_reads = []         # len(events) at each shared-usage reading: where it fell in the boot
         self.lock_held, self.fd = True, 9
         self.toolchain, self.busy_ports = [], set()
         self.on_sleep = None
@@ -165,11 +176,24 @@ class World:
                 "profile": {"id": doc["profile_id"], "status": doc["status"],
                             "provisional": doc["status"] != "verified"}}
 
-    def gpu_mem(self):
-        value = self.gpu.pop(0) if len(self.gpu) > 1 else self.gpu[0]
+    @staticmethod
+    def _next(answers):
+        value = answers.pop(0) if len(answers) > 1 else answers[0]
         if isinstance(value, Exception):
             raise value
         return value
+
+    def gpu_mem(self):
+        return self._next(self.gpu)
+
+    def gpu_sample(self):
+        self.idle_times.append(self.t)
+        mem, util = self._next(self.idle)
+        return {"mem_used_mib": mem, "util_pct": util, "pstate": "P8"}
+
+    def shared_usage(self):
+        self.shared_reads.append(len(self.events))
+        return dict(self._next(self.shared))
 
     def signal_group(self, proc, sig):
         self.events.append(("signal", proc.name, sig))
@@ -183,7 +207,8 @@ class World:
         kw = dict(base_env={"PATH": "/usr/bin", "PYTHONPATH": "/old", "CAPSERVE_API_KEY": "k", "HOME": "/home/u"},
                   start_group=self.start_group, http_get=self.http_get, now=self.now, wall=lambda: NOW,
                   sleep=self.sleep, held_gpu_lock=lambda: self.lock_held, lock_fd=lambda: self.fd,
-                  gpu_mem_used=self.gpu_mem, toolchain_problems=lambda env: list(self.toolchain),
+                  gpu_mem_used=self.gpu_mem, gpu_sample=self.gpu_sample, compute_apps=lambda: list(self.apps),
+                  shared_usage=self.shared_usage, toolchain_problems=lambda env: list(self.toolchain),
                   port_free=lambda port: port not in self.busy_ports, signal_group=self.signal_group,
                   group_alive=self.group_alive, pid=lambda: 4321, python="/venv/bin/python")
         kw.update(over)
@@ -212,9 +237,10 @@ def prof(tmp_path):
 
 def up(world, prof, **kw):
     kw.setdefault("allow_provisional", True)
+    kw.setdefault("pins", PINS)
     fx = kw.pop("fx", None) or world.fx()
     cfg = kw.pop("cfg", None) or world.cfg()
-    return deploy.up(cfg, prof, fx=fx, pins=PINS, release_root=world.release, **kw)
+    return deploy.up(cfg, prof, fx=fx, release_root=world.release, **kw)
 
 
 # ------------------------------------------------------------------ helpers used from research --
@@ -232,8 +258,19 @@ def test_the_research_helpers_capserve_uses_exist_with_these_signatures():
     assert list(inspect.signature(smoke._shutdown).parameters) == [
         "proc", "signal_group", "group_alive", "now", "sleep", "grace_s", "kill_wait_s"]
     assert callable(run_adv.parse_nondefault) and callable(smoke.parse_server_log)
-    assert run_core_b.IDLE_MIB == run_adv.IDLE_MIB == 1000 and deploy.IDLE_MIB == 1000
+    assert run_core_b.IDLE_MIB == run_adv.IDLE_MIB == 1000           # Phase 1's frozen rule stays as it was
+    assert not hasattr(deploy, "IDLE_MIB")                            # 031: the product no longer uses it
     assert smoke.GDN_KERNEL_NAMES[SB["gdn_prefill_backend"]] == "Triton/FLA"
+
+
+def test_the_product_reads_the_gpu_with_the_031_helpers():
+    """031: the product's idle window and shared-usage readings are gpu_idle's (read-only), the research's own."""
+    fx = deploy.Effects()
+    assert fx.gpu_sample is gi.nvidia_sample and fx.compute_apps is gi.nvidia_compute_apps
+    assert fx.shared_usage is gi.read_shared_usage and fx.gpu_mem_used is run_adv.nvidia_mem_used_bounded
+    assert list(inspect.signature(gi.idle_window).parameters) == ["sample", "n", "interval_s", "now", "sleep"]
+    assert list(inspect.signature(gi.window_report).parameters) == ["samples", "compute_apps", "bound_mib", "attempt"]
+    assert deploy.IDLE_RETURN_TOL_MIB == 64 and deploy.IDLE_RETURN_S == 60
 
 
 # ------------------------------------------------------------------ config --
@@ -378,8 +415,12 @@ def test_a_release_without_manifest_is_refused(world):
 @pytest.mark.parametrize("setup, match", [
     (lambda w: setattr(w, "lock_held", False), "GPU lock"),
     (lambda w: setattr(w, "fd", None), "descriptor"),
-    (lambda w: setattr(w, "gpu", [1362]), "1362"),
-    (lambda w: setattr(w, "gpu", [RuntimeError("nvidia-smi hung")]), "nvidia-smi"),
+    (lambda w: setattr(w, "idle", [(500, 0)] * 12 + [(500, 37), (500, 0)]), "utilization.gpu up to 37 %"),
+    (lambda w: setattr(w, "idle", [(500, 0)] * 12 + [(600, 0)]), "memory.used range 100 MiB"),
+    (lambda w: setattr(w, "apps", ["4242, ollama, 900"]), "compute process"),
+    (lambda w: setattr(w, "idle", [(2049, 0)]), "2048 MiB"),           # 031 addendum: another tenant's memory
+    (lambda w: setattr(w, "idle", [(15900, 0)]), "2048 MiB"),
+    (lambda w: setattr(w, "idle", [(500, 0)] * 3 + [RuntimeError("nvidia-smi hung")]), "nvidia-smi"),
     (lambda w: setattr(w, "toolchain", ["no ninja on PATH"]), "ninja"),
     (lambda w: w.busy_ports.add(8100), "8100"),
     (lambda w: w.busy_ports.add(8080), "8080"),
@@ -388,8 +429,113 @@ def test_a_release_without_manifest_is_refused(world):
 def test_preflight_refusals_start_nothing_and_create_no_run(world, prof, capsys, setup, match):
     setup(world)
     assert up(world, prof) == 2
-    assert world.started == [] and not (world.svc / "runs").exists() and not (world.svc / "state.json").exists()
+    assert world.started == [] and not (world.svc / "runs").exists()
+    state = deploy.read_state(world.cfg())
+    if world.lock_held:                                # the lock holder named itself in state.json for the preflight
+        assert state["phase"] == "refused" and state["supervisor_pid"] == 4321 and state["run_id"] == RUN_ID
+        assert any(match in p for p in state["problems"])
+    else:
+        assert state is None
+    assert world.shared_reads == []                    # the pre-boot reading is taken only for a boot
     assert match in capsys.readouterr().err
+
+
+def test_stop_during_the_031_preflight_stops_the_supervisor_before_anything_starts(world, prof, tmp_path):
+    """The 031 idle window makes the preflight last 30 s or more: state.json names the supervisor as soon as it holds
+    the lock, so a `stop` meanwhile signals it (SIGTERM -> SystemExit, main()'s handler) and nothing starts."""
+    cfg = world.cfg()
+    proc_root = tmp_path / "proc"
+    write_cmdline(proc_root, 4321, SUPERVISOR)
+    seen, kills = {}, []
+
+    def kill(pid, sig):
+        kills.append((pid, sig))
+        shutil.rmtree(proc_root / str(pid))            # the supervisor exits on it (below)
+
+    def sample():
+        if len(world.idle_times) == 10:                # 10 s into the window
+            seen["phase"] = (deploy.read_state(cfg) or {}).get("phase")
+            seen["stop"] = deploy.stop(cfg, proc_root=str(proc_root), kill=kill, now=world.now, sleep=world.sleep)
+            if kills:
+                raise SystemExit(128 + signal.SIGTERM)   # coreb_smoke._exit_on_signal, as main() installs it
+        return world.gpu_sample()
+
+    with pytest.raises(SystemExit) as info:
+        up(world, prof, cfg=cfg, fx=world.fx(gpu_sample=sample))
+    assert info.value.code == 143
+    assert seen == {"phase": "preflight", "stop": 0} and kills == [(4321, signal.SIGTERM)]
+    assert world.started == [] and world.shared_reads == [] and not (world.svc / "runs").exists()
+    state = world.state()
+    assert state["phase"] == "stopped" and state["supervisor_pid"] == 4321 and state["run_id"] == RUN_ID
+    assert state["interrupted"] == "SystemExit(143)"
+
+
+def test_a_stop_during_the_pre_boot_shared_usage_reading_starts_nothing(world, prof):
+    def interrupted():
+        raise SystemExit(128 + signal.SIGTERM)
+
+    with pytest.raises(SystemExit):
+        up(world, prof, fx=world.fx(shared_usage=interrupted))
+    assert world.started == [] and world.state()["phase"] == "stopped"
+
+
+def test_an_up_without_the_lock_never_touches_a_running_supervisors_state(world, prof):
+    """Only the lock holder writes state.json: a refused `up` without the lock leaves the running supervisor's."""
+    cfg = world.cfg()
+    deploy.write_state(cfg, {"phase": "ready", "supervisor_pid": 555}, wall=lambda: NOW)
+    world.lock_held = False
+    assert up(world, prof) == 2
+    assert world.state()["phase"] == "ready" and world.state()["supervisor_pid"] == 555
+
+
+def test_a_failing_preflight_state_write_refuses(world, prof, monkeypatch, capsys):
+    """Without state.json naming it, `stop` could not find the supervisor: refused, nothing started."""
+    failing_state_write(monkeypatch, lambda st: st["phase"] == "preflight")
+    assert up(world, prof) == 2
+    assert world.started == [] and "No space left" in capsys.readouterr().err
+
+
+def test_preflight_samples_a_30s_window_at_1hz_and_records_the_baseline(world, prof):
+    """031 product preflight: 30 nvidia-smi samples at 1 Hz before anything starts; the idle baseline (the window's
+    largest memory.used) is recorded and is what the teardown returns to."""
+    world.idle = [(480, 0), (512, 3), (500, 5)]
+    assert up(world, prof) == 0
+    assert world.idle_times == [float(i) for i in range(30)]
+    idle = runs.read_meta(world.run_dir())["preflight"]["gpu_idle"]
+    assert idle["decision"] == "031" and idle["baseline_mib"] == 512 and idle["warnings"] == []
+    assert idle["bound_mib"] == SB["v_total_mib"] - gi.F_PEAK_MIB - gi.MARGIN_MIB == 1018
+    assert idle["return_limit_mib"] == 512 + 64
+    window = idle["window"]
+    assert window["n"] == 30 and window["mem_range_mib"] == 32 and window["util_max_pct"] == 5
+    assert window["ok"] is True and window["problems"] == [] and window["compute_apps"] == []
+
+
+def test_an_idle_value_at_the_product_cap_still_boots_with_a_warning(world, prof):
+    """031 addendum: up to 2,048 MiB idle (above the 1,018 MiB headroom bound) a product test boots with a warning."""
+    world.idle, world.gpu = [(2048, 0)], [2048 + 64]
+    assert up(world, prof) == 0
+    assert any("1018" in w for w in runs.read_meta(world.run_dir())["warnings"])
+
+
+def test_an_idle_value_above_the_headroom_bound_only_warns(world, prof, capsys):
+    """031: product tests check function, not latency, so a headroom shortfall (idle 1,385 MiB > 1,018) is a warning
+    in meta.json and on stderr, never a refusal; the teardown returns to that baseline + 64 MiB, not to 1,000."""
+    world.idle, world.gpu = [(1385, 0)], [1449]
+    assert up(world, prof) == 0
+    meta = runs.read_meta(world.run_dir())
+    (warning,) = meta["warnings"]
+    assert "1385" in warning and "1018" in warning and meta["preflight"]["gpu_idle"]["warnings"] == [warning]
+    assert meta["preflight"]["gpu_idle"]["baseline_mib"] == 1385
+    td = meta["outcome"]["teardown"]
+    assert (td["gpu_baseline_mib"], td["gpu_return_limit_mib"], td["gpu_mem_after_mib"]) == (1385, 1449, 1449)
+    assert meta["outcome"]["problems"] == [] and td["problems"] == []
+    assert "warning" in capsys.readouterr().err
+
+
+def test_pins_without_v_total_are_refused(world, prof, capsys):
+    pins = {**PINS, "stage_b": {k: v for k, v in SB.items() if k != "v_total_mib"}}
+    assert up(world, prof, pins=pins) == 2
+    assert world.started == [] and "v_total_mib" in capsys.readouterr().err
 
 
 def test_a_provisional_profile_needs_the_flag(world, prof, capsys):
@@ -476,6 +622,8 @@ def test_up_holds_until_max_hold_then_tears_down_in_order(world, prof):
     assert out["server"]["cache_config"] == {"num_gpu_blocks": 248, "block_size": 528}
     assert out["server"]["nondefault"]["max_num_batched_tokens"] == 2048
     assert out["teardown"]["gpu_mem_after_mib"] == 500 and out["teardown"]["gateway"]["returncode"] == -15
+    assert (out["teardown"]["gpu_baseline_mib"], out["teardown"]["gpu_return_limit_mib"]) == (500, 564)
+    assert meta["warnings"] == []
     state = world.state()
     assert state["phase"] == "stopped" and state["supervisor_pid"] == 4321 and state["run_id"] == RUN_ID
     assert state["vllm_pid"] == 1000 and state["gateway_pid"] == 1001
@@ -492,6 +640,50 @@ def test_state_is_ready_while_the_workload_runs(world, prof):
     assert up(world, prof, workload=workload) == 0
     assert seen["state"]["phase"] == "ready" and seen["state"]["gateway_url"] == "http://127.0.0.1:8080"
     assert seen["urls"] == ("http://127.0.0.1:8080", "http://127.0.0.1:8100", world.run_dir())
+
+
+def test_shared_usage_is_read_before_the_boot_once_vllm_is_ready_and_after_the_workload(world, prof):
+    """031 (descriptive for product tests): the Windows shared usage before vLLM starts, once vLLM is ready (before
+    the gateway starts) and after the workload (the gateway drained, vLLM still holding its memory), with the change
+    since the pre-boot reading; meta.json has the pre-boot reading from the start and all three at the end."""
+    world.shared = [dict(SHARED), {**SHARED, "shared_mib": 70.1}, {**SHARED, "shared_mib": 180.9}]
+    seen = {}
+
+    def workload(run):
+        seen["meta"] = runs.read_meta(run.run_dir)
+        return {"ok": True, "problems": [], "ended_by": "workload"}
+
+    assert up(world, prof, workload=workload) == 0
+    assert world.events == [("start", "vllm"), ("start", "gateway"), ("signal", "gateway", signal.SIGTERM),
+                            ("signal", "vllm", signal.SIGINT)]
+    assert world.shared_reads == [0, 1, 3]       # before vLLM; before the gateway; after the gateway, before vLLM
+    assert seen["meta"]["shared_usage"] == [{"when": "pre-boot", **SHARED, "error": None}]
+    meta = runs.read_meta(world.run_dir())
+    assert [(r["when"], r["shared_mib"], r.get("delta_mib")) for r in meta["shared_usage"]] == [
+        ("pre-boot", 64.4, None), ("ready", 70.1, 5.7), ("after", 180.9, 116.5)]
+    assert meta["outcome"]["ok"] is True and meta["outcome"]["problems"] == []   # descriptive: never a verdict
+
+
+def test_a_failed_shared_usage_reading_is_recorded_not_fatal(world, prof):
+    world.shared = [gi.SharedUsageError("powershell.exe exited 1"), dict(SHARED), TimeoutError("20 s")]
+    assert up(world, prof) == 0
+    readings = runs.read_meta(world.run_dir())["shared_usage"]
+    assert [r["when"] for r in readings] == ["pre-boot", "ready", "after"]
+    assert "powershell.exe exited 1" in readings[0]["error"] and "TimeoutError" in readings[2]["error"]
+    assert readings[1]["error"] is None and "delta_mib" not in readings[1]   # nothing to compare with
+
+
+def test_a_shared_usage_reading_of_another_adapter_has_no_delta(world, prof):
+    world.shared = [dict(SHARED), {**SHARED, "luid": "luid_0x0_0x2_phys_0", "shared_mib": 900.0}]
+    assert up(world, prof) == 0
+    ready = runs.read_meta(world.run_dir())["shared_usage"][1]
+    assert ready["luid"] == "luid_0x0_0x2_phys_0" and "delta_mib" not in ready
+
+
+def test_no_after_reading_when_vllm_never_got_ready(world, prof):
+    world.health_after = 10 ** 9
+    assert up(world, prof, cfg=world.cfg(startup_timeout_s=30.0)) == 1
+    assert [r["when"] for r in runs.read_meta(world.run_dir())["shared_usage"]] == ["pre-boot"]
 
 
 def test_a_loadtest_names_the_run_and_a_failed_workload_exits_1(world, prof):
@@ -566,10 +758,10 @@ def test_max_hold_s_bounds_a_slow_vllm_boot(world, prof):
 
 
 def test_max_hold_s_bounds_the_gateway_readiness_wait(world, prof):
-    world.readyz = 503                 # never ready: GATEWAY_READY_TIMEOUT_S (120 s) would end the wait at ~126 s
-    assert up(world, prof, cfg=world.cfg(max_hold_s=30.0)) == 1
+    world.readyz = 503                 # never ready: GATEWAY_READY_TIMEOUT_S (120 s) would end the wait at ~156 s
+    assert up(world, prof, cfg=world.cfg(max_hold_s=60.0)) == 1   # the 30 s idle window counts: the lock is held
     out = runs.read_meta(world.run_dir())["outcome"]
-    assert out["timeline"]["teardown_start_s"] <= 30 + deploy.HEALTH_POLL_S
+    assert out["timeline"]["teardown_start_s"] <= 60 + deploy.HEALTH_POLL_S
     assert any("readyz" in p and "max_hold_s" in p for p in out["problems"])
 
 
@@ -586,7 +778,7 @@ def test_vllm_never_healthy_tears_down_and_exits_1(world, prof):
 
 def test_vllm_dying_during_startup_is_reported_at_once(world, prof):
     def die(w):
-        if w.t >= 4:
+        if "vllm" in w.procs and w.procs["vllm"].alive:
             w.procs["vllm"].die(1)
 
     world.health_after, world.on_sleep = 10 ** 9, die
@@ -738,17 +930,34 @@ def test_a_gateway_that_ignores_sigterm_is_killed_after_drain_plus_10s(world, pr
     assert world.t - t_before["t"] >= 60 + 10
 
 
-def test_gpu_memory_not_returning_is_a_problem(world, prof):
-    world.gpu = [500] + [1400] * 1000
+def test_gpu_memory_not_returning_to_the_baseline_is_a_problem(world, prof):
+    """031: back to <= the pre-boot baseline (500) + 64 MiB within 60 s; 900 MiB passed the old 1,000 rule."""
+    world.gpu = [900] * 1000
     assert up(world, prof) == 1
     td = runs.read_meta(world.run_dir())["outcome"]["teardown"]
-    assert td["gpu_mem_after_mib"] == 1400 and any("1400" in p for p in td["problems"])
+    assert td["gpu_mem_after_mib"] == 900 and td["gpu_return_limit_mib"] == 564
+    (problem,) = td["problems"]
+    assert "900" in problem and "564" in problem and "baseline 500" in problem
 
 
 def test_gpu_memory_returning_within_60s_is_fine(world, prof):
-    world.gpu = [500, 9000, 3000, 900]
+    world.gpu = [9000, 3000, 564]
     assert up(world, prof) == 0
-    assert runs.read_meta(world.run_dir())["outcome"]["teardown"]["gpu_mem_after_mib"] == 900
+    assert runs.read_meta(world.run_dir())["outcome"]["teardown"]["gpu_mem_after_mib"] == 564
+
+
+def test_a_failing_nvidia_smi_after_teardown_is_a_problem(world, prof):
+    world.gpu = [RuntimeError("nvidia-smi hung")]
+    assert up(world, prof) == 1
+    td = runs.read_meta(world.run_dir())["outcome"]["teardown"]
+    assert td["gpu_mem_after_mib"] is None and any("nvidia-smi failed" in p for p in td["problems"])
+
+
+def test_the_stop_wait_covers_the_after_reading():
+    cfg = deploy.DeployConfig.model_validate({"gateway": {"active_class": "x"}})
+    assert deploy.default_stop_wait_s(cfg) == (cfg.drain_timeout_s + deploy.GATEWAY_KILL_EXTRA_S + deploy.KILL_WAIT_S
+                                               + 2 * 30 + deploy.KILL_WAIT_S + gi.SHARED_USAGE_TIMEOUT_S
+                                               + deploy.IDLE_RETURN_S + 30)
 
 
 def test_a_vllm_group_needing_sigkill_is_a_problem(world, prof):

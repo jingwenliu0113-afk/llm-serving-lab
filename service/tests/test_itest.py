@@ -1,7 +1,8 @@
 """Tests for capserve/itest.py, the driver of decision 029's RTX integration tests IT-0..IT-6 (product tests only).
 On the Mac: IT-0 against a fake vLLM source tree, IT-1..IT-5 against the fake vLLM behind the real gateway, IT-6
 with a fake `find` and a real one in a temporary tree, and the orchestration (one supervisor boot, stop, results)
-with every process effect faked."""
+with every process effect faked. IT-5's GPU check is decision 031's: back to the supervisor run's pre-boot baseline
++ 64 MiB."""
 
 import asyncio
 import dataclasses
@@ -17,6 +18,7 @@ import pytest
 
 import core_b_plan as bp
 import coreb_smoke as smoke
+import gpu_idle as gi
 from capserve import deploy, itest, runs
 from capserve.config import Settings
 from fakes.fake_vllm import FakeConfig
@@ -291,6 +293,7 @@ async def test_it5_stop_under_load_drains(tmp_path):
             return {"stop_exit": 0, "supervisor_exit": 143,
                     "outcome": {"teardown": {"problems": [], "gateway": {"returncode": -15, "reasons": []},
                                              "vllm": {"returncode": -2, "shutdown_reasons": []},
+                                             "gpu_baseline_mib": 600, "gpu_return_limit_mib": 664,
                                              "gpu_mem_after_mib": 640}}}
 
         loop = asyncio.get_running_loop()
@@ -310,16 +313,49 @@ def test_it5_evaluation_flags_a_dirty_teardown_and_cut_requests():
                {"ended_after_stop": True, "status": None, "error": "RemoteProtocolError", "retry_after": None},
                {"ended_after_stop": True, "status": 503, "error": None, "retry_after": None}]
     stopped = {"stop_exit": 0, "supervisor_exit": 1,
-               "outcome": {"teardown": {"problems": ["gateway had to be killed"], "gpu_mem_after_mib": 1400,
+               "outcome": {"teardown": {"problems": ["gateway had to be killed"], "gpu_mem_after_mib": 1500,
+                                        "gpu_baseline_mib": 1385, "gpu_return_limit_mib": 1449,
                                         "gateway": {"returncode": -9}, "vllm": {"shutdown_reasons": []}}}}
     checks = {c["name"]: c["ok"] for c in itest.evaluate_it5(records, stopped, saturated=True,
                                                                in_flight_at_stop=2)}
     assert checks["teardown had no problems"] is False
-    assert checks[f"GPU memory back <= {deploy.IDLE_MIB} MiB"] is False
+    assert checks[IT5_GPU] is False
     assert checks["the supervisor exited 0 or 143 (SIGTERM)"] is False
     assert checks["no request was cut (no transport error)"] is False
     assert checks["every 429 / 503 carries Retry-After"] is False
     assert checks["requests running at the stop completed with 200 (drain)"] is False
+
+
+IT5_GPU = "GPU memory back <= the pre-boot baseline + 64 MiB (031)"
+
+
+def _clean_stop(teardown: dict) -> dict:
+    return {"stop_exit": 0, "supervisor_exit": 143, "outcome": {"teardown": {"problems": [], **teardown}}}
+
+
+def _it5_gpu(stopped: dict) -> dict:
+    records = [{"ended_after_stop": True, "status": 200, "error": None, "retry_after": None}]
+    (item,) = [c for c in itest.evaluate_it5(records, stopped, saturated=True, in_flight_at_stop=1)
+               if c["name"] == IT5_GPU]
+    return item
+
+
+def test_it5_gpu_check_is_the_runs_baseline_plus_64():
+    """031: IT-5 needs GPU memory back <= the supervisor run's pre-boot baseline + 64 MiB (its teardown waited up to
+    60 s), not the fixed 1,000 MiB: 1,440 MiB passes on a 1,385 MiB desktop baseline, 1,450 does not."""
+    ok = _it5_gpu(_clean_stop({"gpu_baseline_mib": 1385, "gpu_return_limit_mib": 1449, "gpu_mem_after_mib": 1440}))
+    assert ok["ok"] is True and ok["detail"] == {"after_mib": 1440, "baseline_mib": 1385, "limit_mib": 1449}
+    over = _it5_gpu(_clean_stop({"gpu_baseline_mib": 1385, "gpu_return_limit_mib": 1449, "gpu_mem_after_mib": 1450}))
+    assert over["ok"] is False
+
+
+@pytest.mark.parametrize("teardown", [
+    {"gpu_mem_after_mib": 600},                                                       # no 031 baseline recorded
+    {"gpu_baseline_mib": 500, "gpu_return_limit_mib": 564, "gpu_mem_after_mib": None},  # nvidia-smi failed
+    {"gpu_baseline_mib": 500, "gpu_return_limit_mib": 9999, "gpu_mem_after_mib": 900},  # IT-5 adds the 64 itself
+])
+def test_it5_gpu_check_fails_without_a_consistent_baseline_limit(teardown):
+    assert _it5_gpu(_clean_stop(teardown))["ok"] is False
 
 
 # ------------------------------------------------------------------ IT-6 --
@@ -386,22 +422,26 @@ class Orchestra:
         self.sup = Sup()
         self.lock_held = True
         self.ready = True
+        self.ready_at = None       # the supervisor's state.json says ready at this fake time (None: at once)
         self.t = 0.0
         self.installed = []
+
+    def _become_ready(self):
+        sup_run = self.svc / "runs" / "pt-20261016T030406Z"
+        sup_run.mkdir(parents=True)
+        (sup_run / "meta.json").write_text(json.dumps({"purpose": "product-test"}))
+        (sup_run / "gateway.toml").write_text('active_class = "rtx-it"\nport = 8080\n')
+        deploy.write_state(self.cfg, {"phase": "ready", "supervisor_pid": self.sup.pid, "vllm_pid": 1,
+                                      "gateway_pid": 2, "run_id": sup_run.name, "run_dir": str(sup_run)},
+                           wall=lambda: NOW)
 
     def start_group(self, argv, env, log_path, *, cwd, keep_fds=()):
         self.started.append({"argv": argv, "env": env, "keep_fds": tuple(keep_fds), "cwd": cwd})
         Path(log_path).write_text("")
-        if self.ready:
-            sup_run = self.svc / "runs" / "pt-20261016T030406Z"
-            sup_run.mkdir(parents=True)
-            (sup_run / "meta.json").write_text(json.dumps({"purpose": "product-test"}))
-            (sup_run / "gateway.toml").write_text('active_class = "rtx-it"\nport = 8080\n')
-            deploy.write_state(self.cfg, {"phase": "ready", "supervisor_pid": self.sup.pid, "vllm_pid": 1,
-                                          "gateway_pid": 2, "run_id": sup_run.name, "run_dir": str(sup_run)},
-                               wall=lambda: NOW)
-        else:
+        if not self.ready:
             self.sup.returncode = 2
+        elif self.ready_at is None:
+            self._become_ready()
         return self.sup
 
     def stop(self, cfg):
@@ -436,6 +476,8 @@ class Orchestra:
 
     def sleep(self, s):
         self.t += s
+        if self.ready_at is not None and self.t >= self.ready_at and deploy.read_state(self.cfg) is None:
+            self._become_ready()
 
 
 def test_one_boot_runs_every_booted_test_in_order_then_stops(tmp_path, capsys):
@@ -500,6 +542,17 @@ def test_it6_since_another_run(tmp_path):
     assert out["tests"]["IT-6"]["data"]["reference"] == str(earlier / "meta.json")
     assert itest.main(["IT-6", "--since", "formal-20261009-coreb-uniform", "--config", str(o.cfg_path)],
                       fx=o.fx()) == 2
+
+
+def test_the_readiness_wait_covers_the_031_preflight(tmp_path):
+    """The supervisor spends the 031 idle window (30 s) and two shared-usage readings (<= 20 s each) before it is
+    ready, on top of its boot waits: itest waits for them too instead of failing a slow but healthy boot."""
+    o = Orchestra(tmp_path)
+    assert deploy.READY_OVERHEAD_S == 30 + 2 * gi.SHARED_USAGE_TIMEOUT_S
+    o.ready_at = (o.cfg.startup_timeout_s + deploy.GATEWAY_READY_TIMEOUT_S + itest.SUPERVISOR_EXTRA_S
+                  + deploy.READY_OVERHEAD_S - 5)
+    assert itest.main(["IT-1", "--config", str(o.cfg_path), "--allow-provisional"], fx=o.fx()) == 0
+    assert [r[0] for r in o.ran] == ["IT-1"]
 
 
 def test_a_supervisor_that_never_gets_ready_fails_every_booted_test(tmp_path):

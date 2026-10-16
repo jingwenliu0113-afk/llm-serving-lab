@@ -6,7 +6,7 @@
 schema_version = 1
 
 [freeze]
-# 030 凍結: commit and push §8, 030, this file, capacity_plan / run_capacity / capacity_analysis / capacity_report and
+# 030 凍結: commit and push §8, 030, this file, capacity_plan / run_capacity / capacity_analysis / capacity_report / gpu_idle (031) and
 # their tests together, then set true, then collect C1 data. capacity_plan refuses true unless c0_branch is A / B / C,
 # pins freeze.mac / nvidia / advanced are all true, and the evidence below is set (030 implementation note): the passed
 # FS-order and mini smoke sessions (results/capacity/<id>/session.json, formal false, smoke.ok true) and C0's result

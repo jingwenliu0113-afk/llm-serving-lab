@@ -266,3 +266,13 @@ raw 檔已從 WSL 唯讀取回（Core 18 個、Advanced 27 個，sha256 全部�
   - **不放寬門檻**：Phase 1 中 vLLM 就緒時整張卡用到約 14.2–15.3 GB。閒置用量增加後剩下的空間只有幾百 MiB，WDDM 不夠時會 spill 到系統記憶體而不是報錯，會悄悄改變延遲。
   - 遠端保留 `results/capacity/smoke-c0-20261016`（stage "C0-smoke"，記錄了停止原因），不分析。
   - 之後改為自動等待：每 5 分鐘唯讀檢查一次，lock 空著而且閒置用量 ≤ 950 MiB 時才開始（新的 smoke 目錄名稱），最多等 24 h。
+
+## 031 的實作（2026-10-16，任何 C0 數據之前）
+
+- 停止規則 2 改為 decision 031 的綜合判定（`benchmarks/gpu_idle.py`）：最多試 3 個 30 s 的窗，都不通過時以 `gpu_not_idle` 停止（取代舊的 `gpu_busy`）。
+- **spill 偵測**：在 boot 前、server 就緒後與每個 bench 之後讀 Windows 的 shared usage。
+  - 比 boot 前多出 64 MiB 以上：該 bench 無效（原因 `spill`），結束該 boot，之後的 bench 記為 not_run。
+  - 讀不到：該 bench 無效，以 `spill_unreadable` 停止 session。
+- **88 °C 或遙測中斷**：在乾淨的 bench 之後才觸發時，為了立即 teardown 不再讀 shared usage，該 bench 因缺少讀數而記為無效（fail closed）。
+- 這些停止與無效都依既有規則由 `c0_analysis` 處理：無效的 bench 排除，新的停止規則歸為「無法判定」，即分支 C。
+

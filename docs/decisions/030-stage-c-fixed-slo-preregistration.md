@@ -85,6 +85,20 @@ harness 依本文以 TDD 實作：
 - 凍結的 `run_adv.start_server` 不會把 lock 的 fd 傳給 vLLM。runner 若被 SIGKILL，lock 會釋放，但 vLLM 可能還在執行。這是 Phase 1 helper 的既有行為，沿用不改。
 - 正式 session 命名為 `formal-YYYYMMDD-c1`，因為 029 的產生器只接受 `formal-` 開頭的 session。
 
+## 實作補記三：decision 031 的閒置判定與 spill 偵測（2026-10-16，凍結前；沒有任何 C1 數據）
+
+- 每次 boot 前改用 031 的綜合判定（`benchmarks/gpu_idle.py`，最多 3 個 30 s 的窗），不通過時中止 session，和舊規則一樣。
+- **新增 run 的有效條件 (g)「沒有 spill」**：
+  - Windows 的 shared usage 在 boot 前、server 就緒後與每個 bench 之後各讀一次。任何讀數比 boot 前多出 64 MiB 以上（含 64）即為 spill。
+  - spill 的 run 無效。同一 boot 中之後計畫的 run 記為無效 row，不跑 bench，處理方式和 server 結束相同。
+  - 讀不到時中止 session（fail closed）。
+  - `capacity_report` 由 row 的讀數重算 (g)，不一致時拒絕產生報告。
+- **階段 S 的 boot 在 server 就緒時就 spill**：
+  - 視為 8.4 第 4 步的「第一個 bench 之前失敗」，在階段 S 結束時重試一次。
+  - 理由：階段 S 只用來選點，它的數據不進入估計量；031 的「不補跑」針對的是正式量測的無效 run。階段 C 與 sentinel 的 run 仍一律不補跑。
+- **階段 S 的 bench spill 之後**，同一 workload 剩下的搜尋步驟都算失敗，不跑 bench。這會讓 Ĉ 偏低，是保守的方向。
+- 凍結的內容加入 `benchmarks/gpu_idle.py` 與 `tests/test_gpu_idle.py`；它也列入 Stage C 依賴模組的位元組保護。
+
 ## 8.0 揭露（只用已 commit 的資料，沒有新的 GPU run）
 
 設計者看過所有 Core 與 Advanced 的結果。Core 的曲線只用在下列四處，SLO 的數值不取自 Core：逾時、預算、8.5 的事前預測、8.2 的「條件說明」。
