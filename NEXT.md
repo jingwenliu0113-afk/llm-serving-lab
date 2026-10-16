@@ -121,11 +121,12 @@
 1. **C0**（decision 028）：
    - harness 已 commit（`e4c23c9`），審查 6 項已處理。
    - **步驟 0 完成**（`ac29c54`）。事先寫定的重現檢查沒有重現；每次滑移都是錯過一個 2048-token prefill step（約 349 ms）；Core r2 的滑移較多，可能有 boot 層級的成分。
-   - **閒置判定改為 decision 031 的綜合判定**（使用者 2026-10-16 確認）：lock、使用率 ≤ 5%、基線穩定、由實測 vLLM 峰值推導的餘裕（≤ 1,018 MiB），加上 Windows shared usage 的 spill 偵測。實作 workflow 進行中，完成後重新部署。
-   - **GPU 探針等待中**（之前部署 `eb78a35`；自動等待已停止，等 031 實作完成並由使用者確認後再執行）：
-     - 第一次嘗試（10-16 01:10）在 boot 之前依規則停止：Windows 桌面應用程式占用 GPU 記憶體，閒置 1,362 MiB > 1,000 MiB（Phase 1 為 688 MiB）。不放寬門檻。
-     - 背景自動等待（每 5 分鐘唯讀檢查，最多 24 h）：lock 空著且閒置 ≤ 950 MiB 時，**同一次 lock** 依序跑 C0 探針（≤ 3.0 h）、Stage C 的 mini smoke 與 FS-order smoke。
-     - 遠端 log：`/tmp/llmsl-c0-probe.log`、`/tmp/llmsl-cap-mini.log`、`/tmp/llmsl-cap-fs.log`。
+   - **閒置判定改為 decision 031 的綜合判定**（使用者 2026-10-16 確認），並依實測校準 spill 偵測（031 修正案，使用者確認）：
+     就緒時比 boot 前多出 ≤ 160 MiB（正常 boot 固定 +80 MiB），之後每個 bench 相對就緒時 < 64 MiB。
+   - 使用者結束了 ChatGPT、BingWallpaper；依使用者指示我結束了 Radeon Software。閒置 VRAM 降到 616–960 MiB。
+   - WSL 的 interop binfmt 會在開機後消失，`read_shared_usage` 改為遇到 ENOEXEC 時經由 `/init` 呼叫（不改系統設定）。
+   - **GPU 探針執行中**（部署 `f0eee6a`，2026-10-16 23:31 起，GPU lock 下）：C0 smoke 通過，`explore-c0-20261016` 進行中；
+     之後同一次 lock 跑 Stage C 的 mini 與 FS-order smoke。遠端 log：`/tmp/llmsl-c0-probe.log`、`/tmp/llmsl-cap-mini.log`、`/tmp/llmsl-cap-fs.log`。
    - 探針完成後：取回 → `c0_analysis` → 寫 C0 結果的 decision log（下一個編號）→ `configs/capacity.toml` 的 `c0_branch`。
 2. **§8**（decision 030，DRAFT）：
    - 使用者已決定（2026-10-15）：SLO S2（TTFT 2 / 6 / 20 s，TPOT 100 ms）、mixed 長 request 為 budget、穩態時間窗、GPU 空著就跑。O-32K、O-T 不做。
@@ -141,8 +142,8 @@
    - 刪除 uvicorn 的 `limit_concurrency`，因為它數的是連線，到上限時會讓所有 request 都拿到 503。
 3. **M1 完成（Mac 端）**（`343155f`）：deploy、procs、runs、loadtest、itest（IT-0 至 IT-6）、`tools/rtx/deploy_service.sh`。
    審查 11 項（2 項重複）全部修正，見 029 的 M1 實作補記；完整測試 2006 passed。
-   - **RTX 上尚未執行**：同樣受 GPU 閒置上限限制。等研究的 GPU batch 結束、GPU 閒置後，在研究 session 之間執行：
-     `tools/rtx/deploy_service.sh` → GPU lock 下 `python -m capserve.itest IT-0 … IT-6 --allow-provisional`。
+   - **RTX 整合測試 IT-0 至 IT-6 全部通過**（2026-10-16，兩次：`pt-20261016T142720Z-itest`、`pt-20261016T143958Z`，release `635b954` / `f30d17c`），
+     依 031 的產品規格（基線判定；> 2,048 MiB 拒絕）。只是產品測試，不是容量。
 4. **M2**：§8 凍結並有有效的 C1 analysis 之後，才有 verified profile 與正式的產品上限。
 
 ### Phase 1 收尾（2026-10-11，已完成）
@@ -173,11 +174,7 @@
 
 ## Blocked / 需要使用者
 
-- **研究的 RTX 工作（C0、Stage C 的 smoke 與正式 run）**：閒置 VRAM 1,385 MiB 超過 decision 031 推導的餘裕上限 1,018 MiB。
-  - 依 Phase 1 實測，vLLM 峰值 +15,157 MiB，以目前的閒置值會超過整張卡約 240 MiB 而 spill。
-  - 占用者是沒有視窗的開機常駐程式：ChatGPT（含 codex-computer-use）、BingWallpaper、Radeon Software、背景的「設定」。RTX 5070 Ti 同時在驅動 4K 桌面。
-  - 我不關閉任何程序。是否從系統匣結束這些常駐程式，或改把螢幕接到主機板的內顯，由使用者決定。
-- 產品的整合測試已獲准在目前的閒置值下執行（031 的產品規格），不受此限。
+目前沒有。研究的閒置判定已滿足（使用者結束了背景程式）。若之後閒置 VRAM 又超過 1,018 MiB，研究會依 031 自動不開始。
 
 ## 建議（非 blocker）
 
