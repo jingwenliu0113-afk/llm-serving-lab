@@ -12,12 +12,12 @@ schema_version = 1
 # FS-order and mini smoke sessions (results/capacity/<id>/session.json, formal false, smoke.ok true) and C0's result
 # decision log (docs/decisions/<NNN>-*.md); freeze_evidence_problems reads them.
 capacity = false
-fs_order_smoke = ""                                      # session id of the passed --smoke-fs-order run (030 8.6)
-mini_smoke = ""                                          # session id of the passed --mini run (030 8.6)
-c0_decision = ""                                         # number of C0's result decision log (028), e.g. "031"
+fs_order_smoke = "smoke-fs-order-202610161531"           # session id of the passed --smoke-fs-order run (030 8.6)
+mini_smoke = "smoke-mini-202610161531"                   # session id of the passed --mini run (030 8.6)
+c0_decision = "032"                                      # number of C0's result decision log (028): 032, branch A
 
 [capacity]
-c0_branch = ""                                           # 028: C0's result decision log sets "A" | "B" | "C"; "D" (harness defect) or "" refuses the freeze
+c0_branch = "A"                                          # 028: C0's result decision log sets "A" | "B" | "C"; "D" (harness defect) or "" refuses the freeze
 seed = 20261008                                          # Core B seed; 030 8.4 orders: sha256("20261008:capacity:block:r"), "20261008:capacity:{w}:{r}"
 derived_from = "formal-20261009-coreb-uniform"           # C_KV recomputed by capacity_plan with core_b_plan.c_kv from this session's pool (35 / 13), never typed here
 workloads = ["U2K", "U8K", "M2K", "M8K"]                 # 030 8.3 default; O-32K and O-T not chosen (使用者決定)

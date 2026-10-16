@@ -276,3 +276,9 @@ raw 檔已從 WSL 唯讀取回（Core 18 個、Advanced 27 個，sha256 全部�
 - **88 °C 或遙測中斷**：在乾淨的 bench 之後才觸發時，為了立即 teardown 不再讀 shared usage，該 bench 因缺少讀數而記為無效（fail closed）。
 - 這些停止與無效都依既有規則由 `c0_analysis` 處理：無效的 bench 排除，新的停止規則歸為「無法判定」，即分支 C。
 
+
+## 結果（2026-10-17）
+
+- 探針 `explore-c0-20261016`（部署 `f0eee6a`）：6 次 boot × 4 個 bench 全部有效，沒有停止，2.47 h。
+- 滑移段共 5 段，D = 3.40 < 11.07，判定 **Rrun → 分支 A**（預設協定，n_near 5）。
+- 完整結果、只報告的項目（起始組集中在 idx 89 等）與凍結證據見 **decision 032**。

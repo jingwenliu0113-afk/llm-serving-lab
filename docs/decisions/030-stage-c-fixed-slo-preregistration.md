@@ -1,6 +1,6 @@
 # 030 — Stage C（C1）事先登記：Fixed-SLO 下的最大並發容量（DRAFT）
 
-- 狀態：**DRAFT**（未凍結）。使用者已於 2026-10-15 選定研究決策（見下方「使用者決定」）；harness、smoke 與 C0 完成後才凍結。
+- 狀態：**DRAFT**（未凍結）。使用者已於 2026-10-15 選定研究決策（見下方「使用者決定」）；harness、smoke 與 C0 完成後才凍結。C0 的結果為分支 A（decision 032，2026-10-17）。
 - 日期：2026-10-15
 - 對應：decision 027 §2、028（C0）、PREREGISTRATION §8（DRAFT）
 - 時點：任何 C1 數據之前。設計經過三份獨立設計（validity、product、efficiency 三個角度）與一位評審綜合（評審重新核對了所有引用的數字）。

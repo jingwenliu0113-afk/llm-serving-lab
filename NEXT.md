@@ -21,7 +21,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–030（030 為 DRAFT）。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–032（030 為 DRAFT）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -125,15 +125,16 @@
      就緒時比 boot 前多出 ≤ 160 MiB（正常 boot 固定 +80 MiB），之後每個 bench 相對就緒時 < 64 MiB。
    - 使用者結束了 ChatGPT、BingWallpaper；依使用者指示我結束了 Radeon Software。閒置 VRAM 降到 616–960 MiB。
    - WSL 的 interop binfmt 會在開機後消失，`read_shared_usage` 改為遇到 ENOEXEC 時經由 `/init` 呼叫（不改系統設定）。
-   - **GPU 探針執行中**（部署 `f0eee6a`，2026-10-16 23:31 起，GPU lock 下）：C0 smoke 通過，`explore-c0-20261016` 進行中；
-     之後同一次 lock 跑 Stage C 的 mini 與 FS-order smoke。遠端 log：`/tmp/llmsl-c0-probe.log`、`/tmp/llmsl-cap-mini.log`、`/tmp/llmsl-cap-fs.log`。
-   - 探針完成後：取回 → `c0_analysis` → 寫 C0 結果的 decision log（下一個編號）→ `configs/capacity.toml` 的 `c0_branch`。
+   - **C0 完成**（部署 `f0eee6a`，2026-10-16 23:31 – 10-17 01:59，GPU lock 下）：`explore-c0-20261016` 24 / 24 個 bench 有效。
+     滑移段 5 段，D = 3.40 < 11.07 → **Rrun → 分支 A**（decision 032）。起始組集中在 idx 89 等現象只報告，列入 Future Work。
+   - 同一次 lock 的 Stage C smoke 都通過：mini `smoke-mini-202610161531`、FS-order `smoke-fs-order-202610161531`。
 2. **§8**（decision 030，DRAFT）：
    - 使用者已決定（2026-10-15）：SLO S2（TTFT 2 / 6 / 20 s，TPOT 100 ms）、mixed 長 request 為 budget、穩態時間窗、GPU 空著就跑。O-32K、O-T 不做。
    - 設定檔放在 `configs/capacity.toml`；`pins.toml` 維持 Advanced 凍結時的位元組（030 實作補記）。
 3. **Stage C harness 完成**（`eb78a35`，仍為 DRAFT、未凍結）：審查 21 項已處理；030 實作補記二記錄了所有實作時的決定，
    包括 C_PROD 一律把 MARGINAL 當 FAIL，以及凍結必須附上的證據（兩次通過的 smoke 與 C0 的 decision log）。
-   之後：smoke 通過 → C0 分支 → 填入凍結證據 → 凍結 → 正式 run（`formal-YYYYMMDD-c1`，約 7–9 h）→ 報告。
+   smoke 通過、C0 分支 A、凍結證據已填入 `configs/capacity.toml`（decision 032）。
+   之後：凍結（`freeze.capacity = true` 單獨一個 commit，profile 產生器以它為凍結 commit）→ 部署 → 正式 run（`formal-YYYYMMDD-c1`，約 7–9 h）→ 報告。
 
 ### Engineering
 1. 架構：decision 029。

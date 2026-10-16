@@ -1,0 +1,9 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/b000-fs-U2K.server.log": {
+   "sha256": "f432fcb4a8d8d82fd907a4773c6597637514325328dd1139969c8cd3a6b690b3",
+   "size_bytes": 4047101
+  }
+ }
+}

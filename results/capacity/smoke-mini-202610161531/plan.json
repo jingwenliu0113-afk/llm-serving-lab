@@ -1,0 +1,91 @@
+{
+ "schema_version": 1,
+ "stage": "C1-mini",
+ "seed": 20261008,
+ "derived_from": "formal-20261009-coreb-uniform",
+ "c0_branch": "",
+ "slo": {
+  "id": "MINI",
+  "ttft_p95_ms": {
+   "2048": 1000000000,
+   "8192": 1000000000,
+   "32768": 1000000000
+  },
+  "tpot_p95_ms": 1000000000,
+  "mixed_long": "budget"
+ },
+ "secondary_slo": {},
+ "window": "steady",
+ "guard_band": 0.05,
+ "n_low": 1,
+ "workloads": {
+  "U2K": {
+   "L": 2048,
+   "mix": "uniform",
+   "c_kv": 35,
+   "c_cap": 6,
+   "n_near": 2,
+   "c0_covariate": false,
+   "bracket": [
+    1,
+    2,
+    4,
+    6
+   ],
+   "timeouts_s": {
+    "1": 180,
+    "2": 180,
+    "3": 180,
+    "4": 180,
+    "5": 180,
+    "6": 5
+   }
+  },
+  "M2K": {
+   "L": 2048,
+   "mix": "mixed",
+   "c_kv": 35,
+   "c_cap": 2,
+   "n_near": 2,
+   "c0_covariate": false,
+   "bracket": [
+    1,
+    2
+   ],
+   "timeouts_s": {
+    "1": 180,
+    "2": 180
+   }
+  }
+ },
+ "sentinel": {
+  "workload": "U2K",
+  "L": 2048,
+  "mix": "uniform",
+  "C": 2,
+  "N": 20,
+  "tolerance": 0.03,
+  "timeout_s": 180
+ },
+ "server_ready_timeout_s": 1800,
+ "expected_blocks": 248,
+ "block_size": 528,
+ "gpu_memory_utilization": "0.91",
+ "kv_cache_memory_bytes": 4294967296,
+ "mix_dataset_sha256": {
+  "2048": "3fc75fcadaa5d457ade882598ba129402469ff2393f32a8dd24753f3fe69f2f8",
+  "8192": "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2"
+ },
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "capacity_sha256": "8e962e60fc9575b7ff14251e4456df37dcd85fa6689170efdc0a93ac0ed184db",
+ "mini": {
+  "base_plan_sha256": "1a455df6419b719fecb396db5933b367d905f0c5e082d8bf78bfae4f79105660",
+  "n_prompts": 20,
+  "forced_timeouts_s": {
+   "U2K": {
+    "6": 5
+   }
+  },
+  "note": "030 8.6 mini smoke: non-formal, dummy SLO, latencies discarded"
+ }
+}

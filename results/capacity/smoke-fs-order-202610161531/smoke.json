@@ -1,0 +1,29 @@
+{
+ "ok": true,
+ "boot_problems": [],
+ "benches": [
+  {
+   "C": 2,
+   "N": 200,
+   "missing": 0,
+   "first_c_equal": true,
+   "last_c_diff": 0,
+   "ok": true,
+   "bench_ok": true,
+   "spans": 200,
+   "reasons": []
+  },
+  {
+   "C": 70,
+   "N": 700,
+   "missing": 0,
+   "first_c_equal": true,
+   "last_c_diff": 0,
+   "ok": true,
+   "bench_ok": true,
+   "spans": 700,
+   "reasons": []
+  }
+ ],
+ "rule": "first C span orders = idx 0..C-1 exactly; at most 3 of the last C outside idx N-C..N-1 (030 8.6)"
+}

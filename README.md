@@ -282,6 +282,10 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 
 - **8K uniform 的雙模式**：短類 P95 在 boot 之間落在約 2.48 秒或約 2.82 秒，成因未知（025「限制」）。
   它使 8K 的 noise 偏大；事後把模式拉齊重算，8K 的類別與判讀列都不變，也不影響既有的部署結論，所以目前不追查。
+  - Phase 2 的有限度排查（C0，decision 028 / 032）：機制是一組 request 錯過一個 2048-token prefill step（約 349 ms）。
+    6 次 boot 中沒有偵測到 boot 層級的差異（Rrun，檢定力有限），Stage C 採預設協定。
+  - 觸發的時點仍未知，不再追查：5 段滑移中有 4 段從同一個 request（idx 89）開始；每次 boot 的第 1 個 bench 都沒有滑移；
+    偏高比例 21%，低於 Phase 1 的 67%。
 - **2K 的 H-B4 成因**：落在 R6（KV 可能有關，但未確立），分解與操弄不一致。
 - **其他 Advanced 項目**：fixed-SLO 最大並發、其他 chunk threshold 或 KV 劑量、prefix caching、allocator 的操弄。
 - **H-A2 被推翻的原因**：Core 沒有檢驗。

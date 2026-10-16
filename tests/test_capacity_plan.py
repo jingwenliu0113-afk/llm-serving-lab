@@ -86,7 +86,7 @@ def test_repo_capacity_toml_follows_030(cfg, pins):
     c = cfg["capacity"]
     assert cfg["schema_version"] == 1
     assert cfg["freeze"]["capacity"] is False          # DRAFT until harness, smoke and C0 are done (030)
-    assert c["c0_branch"] == ""                          # set by C0's result decision log (028)
+    assert c["c0_branch"] == "A"                         # C0's result decision log 032: Rrun (028)
     assert (c["seed"], c["derived_from"]) == (20261008, "formal-20261009-coreb-uniform")
     assert c["workloads"] == ["U2K", "U8K", "M2K", "M8K"]
     assert (c["window"], c["guard_band"]) == ("steady", 0.05)
@@ -164,9 +164,12 @@ def test_freeze_needs_a_c0_branch_a_b_or_c(cfg, pins, branch, ok):
     assert cp.capacity_problems(edited(cfg, "capacity.c0_branch", branch), pins) == []  # any branch in DRAFT
 
 
-def test_draft_freeze_table_has_empty_evidence(cfg):
-    """030 implementation note: the freeze records the passed FS-order and mini smokes and C0's result decision log."""
-    assert cfg["freeze"] == {"capacity": False, "fs_order_smoke": "", "mini_smoke": "", "c0_decision": ""}
+def test_freeze_table_records_the_evidence(cfg):
+    """030 implementation note: the freeze records the passed FS-order and mini smokes and C0's result decision log
+    (032); the committed sessions and the log satisfy freeze_evidence_problems."""
+    assert cfg["freeze"] == {"capacity": False, "fs_order_smoke": "smoke-fs-order-202610161531",
+                             "mini_smoke": "smoke-mini-202610161531", "c0_decision": "032"}
+    assert cp.freeze_evidence_problems(edited(cfg, "freeze.capacity", True), ROOT) == []
 
 
 @pytest.mark.parametrize("key,value", [("fs_order_smoke", ""), ("mini_smoke", ""), ("c0_decision", ""),
@@ -524,7 +527,7 @@ def test_plan_records_the_workloads_caps_timeouts_and_identities(plan, pins):
     assert (plan["schema_version"], plan["stage"], plan["seed"]) == (1, "C1", 20261008)
     assert plan["derived_from"] == "formal-20261009-coreb-uniform"
     assert (plan["slo"], plan["secondary_slo"]) == (S2, {"S1": S1, "S3": S3})
-    assert (plan["window"], plan["guard_band"], plan["n_low"], plan["c0_branch"]) == ("steady", 0.05, 3, "")
+    assert (plan["window"], plan["guard_band"], plan["n_low"], plan["c0_branch"]) == ("steady", 0.05, 3, "A")
     assert list(plan["workloads"]) == list(cp.WORKLOADS)
     for w, (L, mix) in cp.WORKLOAD_SPEC.items():
         wl = plan["workloads"][w]

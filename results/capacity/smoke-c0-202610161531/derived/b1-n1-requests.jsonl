@@ -1,0 +1,16 @@
+{"idx": 0, "input_len": 8064, "output_len": 128, "ttft_ms": 1424.2873249999946, "latency_ms": 12517.35285699999}
+{"idx": 1, "input_len": 8064, "output_len": 128, "ttft_ms": 2804.425011999996, "latency_ms": 12932.218837999982}
+{"idx": 2, "input_len": 8064, "output_len": 128, "ttft_ms": 4190.05668600002, "latency_ms": 14334.367793000012}
+{"idx": 3, "input_len": 8064, "output_len": 128, "ttft_ms": 5579.346432999983, "latency_ms": 15737.166021999998}
+{"idx": 4, "input_len": 8064, "output_len": 128, "ttft_ms": 8369.044236000007, "latency_ms": 18547.22360599999}
+{"idx": 5, "input_len": 8064, "output_len": 128, "ttft_ms": 6971.071026000004, "latency_ms": 17140.83843200001}
+{"idx": 6, "input_len": 8064, "output_len": 128, "ttft_ms": 9772.192977000002, "latency_ms": 19947.269903000008}
+{"idx": 7, "input_len": 8064, "output_len": 128, "ttft_ms": 11000.021354000011, "latency_ms": 21348.341304}
+{"idx": 8, "input_len": 8064, "output_len": 128, "ttft_ms": 1480.6375969999976, "latency_ms": 12661.454601000003}
+{"idx": 9, "input_len": 8064, "output_len": 128, "ttft_ms": 2468.1177329999855, "latency_ms": 12306.065486999983}
+{"idx": 10, "input_len": 8064, "output_len": 128, "ttft_ms": 2469.5773020000047, "latency_ms": 10962.517368999983}
+{"idx": 11, "input_len": 8064, "output_len": 128, "ttft_ms": 2470.014110999983, "latency_ms": 9618.278970999996}
+{"idx": 12, "input_len": 8064, "output_len": 128, "ttft_ms": 2467.706913000001, "latency_ms": 8270.603141999998}
+{"idx": 13, "input_len": 8064, "output_len": 128, "ttft_ms": 2463.2387529999846, "latency_ms": 6920.619689999995}
+{"idx": 14, "input_len": 8064, "output_len": 128, "ttft_ms": 2464.736964000025, "latency_ms": 5572.537606000025}
+{"idx": 15, "input_len": 8064, "output_len": 128, "ttft_ms": 2311.957280999991, "latency_ms": 4218.803027999997}

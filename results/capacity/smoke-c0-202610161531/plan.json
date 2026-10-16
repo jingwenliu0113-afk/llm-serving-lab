@@ -1,0 +1,152 @@
+{
+ "schema_version": 1,
+ "stage": "C0",
+ "decision": "028",
+ "L": 8192,
+ "mix": "uniform",
+ "C": 8,
+ "N": 200,
+ "warmup": 8,
+ "seed": 20261008,
+ "boots": 6,
+ "benches_per_boot": 4,
+ "smoke": {
+  "boots": 1,
+  "benches": 1,
+  "N": 16,
+  "C": 8
+ },
+ "kv_cache_memory_bytes": 4294967296,
+ "expected_blocks": 248,
+ "block_size": 528,
+ "gpu_memory_utilization": "0.91",
+ "gdn_prefill_backend": "triton",
+ "timeout_s": 720,
+ "cap_hours": 3.0,
+ "boot_margin_s": 1800,
+ "temp_stop_c": 88,
+ "max_failed_boots": 2,
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "order": [
+  {
+   "boot": 1,
+   "bench": 1,
+   "tag": "b1-n1"
+  },
+  {
+   "boot": 1,
+   "bench": 2,
+   "tag": "b1-n2"
+  },
+  {
+   "boot": 1,
+   "bench": 3,
+   "tag": "b1-n3"
+  },
+  {
+   "boot": 1,
+   "bench": 4,
+   "tag": "b1-n4"
+  },
+  {
+   "boot": 2,
+   "bench": 1,
+   "tag": "b2-n1"
+  },
+  {
+   "boot": 2,
+   "bench": 2,
+   "tag": "b2-n2"
+  },
+  {
+   "boot": 2,
+   "bench": 3,
+   "tag": "b2-n3"
+  },
+  {
+   "boot": 2,
+   "bench": 4,
+   "tag": "b2-n4"
+  },
+  {
+   "boot": 3,
+   "bench": 1,
+   "tag": "b3-n1"
+  },
+  {
+   "boot": 3,
+   "bench": 2,
+   "tag": "b3-n2"
+  },
+  {
+   "boot": 3,
+   "bench": 3,
+   "tag": "b3-n3"
+  },
+  {
+   "boot": 3,
+   "bench": 4,
+   "tag": "b3-n4"
+  },
+  {
+   "boot": 4,
+   "bench": 1,
+   "tag": "b4-n1"
+  },
+  {
+   "boot": 4,
+   "bench": 2,
+   "tag": "b4-n2"
+  },
+  {
+   "boot": 4,
+   "bench": 3,
+   "tag": "b4-n3"
+  },
+  {
+   "boot": 4,
+   "bench": 4,
+   "tag": "b4-n4"
+  },
+  {
+   "boot": 5,
+   "bench": 1,
+   "tag": "b5-n1"
+  },
+  {
+   "boot": 5,
+   "bench": 2,
+   "tag": "b5-n2"
+  },
+  {
+   "boot": 5,
+   "bench": 3,
+   "tag": "b5-n3"
+  },
+  {
+   "boot": 5,
+   "bench": 4,
+   "tag": "b5-n4"
+  },
+  {
+   "boot": 6,
+   "bench": 1,
+   "tag": "b6-n1"
+  },
+  {
+   "boot": 6,
+   "bench": 2,
+   "tag": "b6-n2"
+  },
+  {
+   "boot": 6,
+   "bench": 3,
+   "tag": "b6-n3"
+  },
+  {
+   "boot": 6,
+   "bench": 4,
+   "tag": "b6-n4"
+  }
+ ]
+}
