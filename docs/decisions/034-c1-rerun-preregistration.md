@@ -73,3 +73,16 @@
 
 - 第一個 session 的數據與 033 都不改。
 - 新 session 的結果另寫一份 decision log（下一個編號），並依上面的規則決定最終結果與 profile。
+
+## 執行紀錄
+
+- **2026-10-17 10:50 起等待**：lock 由另一個專案（agent-gym）持有，不搶占。
+- **15:31 與 17:22，lock 兩度空出**：
+  - 兩次都依本文結束了 BingWallpaper，它在兩次之間又自行啟動過。
+  - 15:31 之後 30 s 內，lock 又被其他專案取得，沒有開始。
+  - 17:23 時 memory.used 為 567 MiB、Windows CPU 2.4%。但從我確認 lock 空著到實際取得 lock 之間約 45 s，lock 又被取得，`flock -n` 回傳 75。
+  - 兩次都沒有啟動任何 vLLM，也沒有產生任何數據。
+- **改進等待方式**（不涉及任何研究規則）：
+  - Windows 的檢查與結束 BingWallpaper 先做，接著立即在 WSL 取得 lock；
+  - memory.used ≤ 950 MiB 改在持有 lock 時檢查，不符合就以 76 結束並釋放 lock；
+  - 搶不到 lock（75）或不符合（76）時繼續等待，最多 24 h。

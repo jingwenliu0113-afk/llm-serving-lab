@@ -144,6 +144,8 @@
      - 開始前結束 BingWallpaper（使用者同意），並要求 memory.used ≤ 950 MiB、Windows 負載正常。
      - 取捨規則：新 session 有效時，四個 workload 全部以它為準，profile 也改由它產生；無效時 033 維持為最終結果。不合併，也不逐 workload 挑選。
      - 遠端 log：`/tmp/llmsl-c1b.log`。
+     - 15:31、17:22 兩次 lock 空出，但在我取得之前又被其他專案取得，沒有開始、沒有數據。
+       等待方式已改為先做 Windows 的檢查，再立即在 WSL 取得 lock，並在持有 lock 時檢查 VRAM（034 執行紀錄）。
 
 ### Engineering
 1. 架構：decision 029。
