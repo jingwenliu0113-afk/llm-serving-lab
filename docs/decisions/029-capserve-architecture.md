@@ -439,3 +439,17 @@ M2（verified profile 的產生器與 class 狀態處理）依本文與 030 8.7 
   - `/readyz` 回 503，並附 `class_status`、`bound`、`serviceable`、`not_ready_reason`。
   - `deploy up` 在 preflight 就拒絕，因為 gateway 永遠不會就緒，啟動 vLLM 只是浪費。
 - `AdmissionController` 新增關閉模式（0 / 0 代表一律拒絕）；M0 原本「0 會報錯」的測試已改寫。
+
+## 以 verified profile 跑 RTX 整合測試（2026-10-18；release `7513d62`）
+
+- 第一次以 `verified-formal-20261017-c1b.json`（`service/deploy/rtx-verified.toml`，active class uniform-2k）跑 IT-0 至 IT-6，結果 `pt-20261017T184411Z-itest`：只有 IT-3 不通過。
+  - 斷線行為本身正確：stream / non-stream 斷線後 vLLM 的 running + waiting 在 0.06 s / 0.23 s 內回到 0，之後沒有再生成 token，gateway 的 in_flight 也回到 0。
+  - 不通過的是「決定性」這一項：verified profile 的輸出上限是研究的 128 token，斷線時只剩約 1.4 s / 1.0 s 的生成量，少於 IT-3 要求的 4 s。
+    所以這個測試無法區分真正的 abort 和自然結束。這正是 M1 補記中 `provisional-rtx.json` 把輸出上限設為 1,024 token 的原因。
+- **規則**：以 verified profile 跑整合測試時，執行 IT-0、IT-1、IT-2、IT-4、IT-5、IT-6。
+  IT-3 驗證的是 gateway 的程式，和 profile 無關，所以在同一個 release、同一次 lock 中，以 provisional-rtx 跑完整的 IT-0 至 IT-6。
+  - 不修改 IT-3 的門檻：放寬它就無法分辨 abort 和自然結束。
+- **同一個 release、同一次 lock 的結果**（2026-10-18 02:46–02:50）：
+  - verified profile，IT-0、1、2、4、5、6 全部通過：`pt-20261017T184655Z-itest`；
+  - provisional-rtx，IT-0 至 IT-6 全部通過，IT-3 是決定性的：`pt-20261017T184834Z-itest`。
+- 這些都是產品測試，不是容量量測。輸出在 WSL 的 `~/llm-serving-service/runs/`，不在 `results/`。

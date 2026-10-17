@@ -273,7 +273,8 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 **最終結果：`formal-20261017-c1b`**（035）。
 - 凍結 commit `b3c9109`，C0 分支 A；8.33 h，80 / 80 個 run 有效，沒有 spill。
 - SLO 為 S2：TTFT 2 / 6 / 20 s，TPOT 100 ms；穩態時間窗。
-- 關鍵點要 5 次有效的 boot，每次都要在 5% guard band 內才算 PASS。
+- 關鍵點要 5 次有效的 boot，每次的 R（指標 / SLO 門檻）都 ≤ 0.95，才算 PASS，也就是留出 5% 的 guard band。
+  符合 SLO 但落在 guard band 內（0.95 < R ≤ 1）的點是 MARGINAL，不能算進 C_PROD。
 - 有效性檢查都通過：replay、sentinel（漂移 0.19%）、跨 session 的偏移。
 
 | workload | C_PROD（產品上限） | C_SLO | 備註 |
@@ -291,7 +292,7 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
   - uniform-2k 32、uniform-8k 8、mixed-2k 2、mixed-8k 2，四個都是 exact。
   - 範圍只限封閉迴路、128 個 output token、准入之後的延遲（030 8.9）。
 - **第一個 session `formal-20261017-c1`（033）已被取代**：
-  - 原因：BingWallpaper 在 session 中途自行啟動，造成 5 個 spill。結果是 U8K 無法檢定，U2K 只有下界。
+  - 原因：BingWallpaper 在 session 中途自行啟動，造成 2 次 spill，共 5 個 run 無效。結果是 U8K 無法檢定，U2K 只有下界。
   - 使用者決定以相同的凍結協定重跑，並事先寫定「新 session 有效時全部以它為準」（034）。
   - 兩個 session 能比較的部分都一致：階段 S 的選點相同，U2K 的 C_PROD 都是 32，mixed 都是 2。
 

@@ -136,7 +136,7 @@
    smoke 通過、C0 分支 A、凍結證據已填入 `configs/capacity.toml`（decision 032，`f35fe85`）。
    **已凍結**：`freeze.capacity = true` 單獨一個 commit（profile 產生器以它為凍結 commit）；`tests/test_stage_c_frozen.py` 以 sha256 固定五個 Stage C 模組與 capacity.toml。
    凍結 commit `b3c9109`（profile 產生器的 `freeze_commit_problems` 已確認它是合格的凍結 commit）。
-   - **正式 session 完成**：`formal-20261017-c1`（部署 `b3c9109`，2026-10-17 02:51–10:18，7.45 h），69 / 74 個 run 有效，replay、sentinel、跨 session 偏移都通過。
+   - **正式 session 完成**：`formal-20261017-c1`（部署 `b3c9109`，2026-10-17 02:51–10:18，7.44 h），69 / 74 個 run 有效，replay、sentinel、跨 session 偏移都通過。
      結果（decision 033）：U2K C_PROD 32 LOWER、M2K / M8K 2 EXACT、**U8K NT**。
      5 個無效的 run 都是 spill：BingWallpaper 在 08:29 自行重新啟動，在 NVIDIA 卡上用了約 190 MiB。spill 偵測擋下了它們，依規則不補跑。
    - **重跑（使用者決定，decision 034）完成，成為最終結果（decision 035）**：
@@ -158,7 +158,10 @@
 4. **M2 已實作**（`b91a9bf`）：產生器、載入時的 provenance 驗證、verified 0 與 unavailable class。
    **verified profile**：`service/profiles/verified-formal-20261017-c1b.json`（uniform-2k 32、uniform-8k 8、mixed-2k 2、mixed-8k 2，都是 exact）。
    第一份 `verified-formal-20261017-c1.json` 依 034 移除，git 歷史保留。
-   - 下一步：以最終 profile 在 RTX 上跑 IT-0 至 IT-6（`service/deploy/rtx-verified.toml`，active class uniform-2k），lock 空著時才跑。
+   - **以最終 profile 跑 RTX 整合測試**（release `7513d62`，2026-10-18，029 的最新補記）：
+     - verified profile 的 IT-0、1、2、4、5、6 全部通過（`pt-20261017T184655Z-itest`）。
+     - 同一 release、同一次 lock 中，provisional-rtx 的 IT-0 至 IT-6 全部通過，IT-3 是決定性的（`pt-20261017T184834Z-itest`）。
+     - 128 token 的輸出上限讓 IT-3 無法區分 abort 和自然結束，所以 verified profile 不跑 IT-3。
 
 ### Phase 1 收尾（2026-10-11，已完成）
 

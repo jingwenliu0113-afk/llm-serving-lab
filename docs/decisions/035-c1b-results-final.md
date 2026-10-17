@@ -79,7 +79,9 @@
   - uniform-8k 11.04 s；
   - mixed-2k 0.70 s；
   - mixed-8k 2.75 s。
-  - C 個 request 同時到達時，第一波的延遲遠高於穩態的 SLO。profile 的 evidence 有記錄，產品文件也寫明。
+  - C 個 request 同時到達時，uniform 兩類第一波的 TTFT 遠高於穩態的 SLO：uniform-2k 10.35 s 對 2 s，uniform-8k 11.04 s 對 6 s。
+  - mixed 兩類的第一波仍在 SLO 內：mixed-2k 0.70 s 對 2 s，mixed-8k 2.75 s 對 6 s。
+  - profile 的 evidence 有記錄，產品文件也寫明。
 - **和 Core 的 C_knee 比較**：U2K 34 對 25（+9），U8K 8 對 8（0）；M2K 2 對 25，M8K 2 對 8。
 - **SEARCH_MISMATCH**：沒有出現，各 workload 的 |C_SLO − Ĉ| ≤ 1。
 - **次要 SLO**（只作界線）：
@@ -96,7 +98,7 @@
 | 階段 S 的 Ĉ（U2K / U8K / M2K / M8K） | 34 / 8 / 2 / 2 | 34 / 8 / 2 / 2 |
 
 - **兩個 session 能比較的部分都一致**：階段 S 的選點相同，U2K 的 C_PROD 與 mixed 的值相同，各點最差 R 的差異都在 0.04 以內。
-- **差別只來自 033 的 spill**：沒有 spill 的這次，U2K 的 33、34 與 U8K 的各點都湊足了 n 次有效 run。
+- **差別只來自 033 的 spill**：沒有 spill 的這次，U2K 的 33、34 與 U8K 的 4、7、8 都湊足了 n 次有效 run。U8K 9 在兩個 session 都是 1 / 5 FAIL，沒有受到 spill 影響。
 - 依 034 不合併兩個 session 的 run，也不逐 workload 挑選。
 
 ## Verified profile（029 / 8.7）
@@ -114,4 +116,11 @@
 - `service/deploy/rtx-verified.toml` 的 active class 維持 uniform-2k。
 - **適用範圍**（8.9）：封閉迴路、128 個 output token、准入之後的延遲；這台 RTX 5070 Ti（WSL2）、這個模型與 Core B 的 argv。
   開放迴路、其他長度的輸出與開場湧入都不在估計量內。
-- 以最終 profile 跑的 RTX 產品整合測試（IT-0 至 IT-6），在 lock 空著時執行，結果另外記錄。
+- **RTX 產品整合測試**（release `7513d62`，2026-10-18）：
+  - verified profile 的 IT-0、1、2、4、5、6 全部通過；
+  - IT-3 以 provisional-rtx 在同一 release 上通過；
+  - 細節與理由見 029 最後的補記。
+- **獨立核對**（2026-10-18，在 commit 之後、push 之前）：
+  - 另一個 agent 不 import 分析程式，自己從 rows 與逐 request 檔重算：392 項比較，0 項不符。
+  - `capacity_report` 能逐位元組重現 analysis.json；034 的各項條件都符合。
+  - 文件中 5 處措辭或數字的錯誤已修正，都是說明文字，判定與數據不變。

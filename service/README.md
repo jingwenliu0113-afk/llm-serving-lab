@@ -17,6 +17,7 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
   - 範圍只限封閉迴路、128 個 output token、准入之後的延遲。
   - C 個 request 同時到達時，第一波的 TTFT 可能遠高於 SLO（uniform-2k 最高 10.4 s、uniform-8k 11.0 s），這不在驗證範圍內。
   - RTX 上以它部署：`service/deploy/rtx-verified.toml`（active class uniform-2k）。
+  - 整合測試：verified profile 跑 IT-0、1、2、4、5、6，IT-3 以 provisional-rtx 在同一 release 上跑（理由見 decision 029 最後的補記）。
 - `profiles/provisional-dev.json` 的上限（並發 4、佇列 4）是手動設定的開發值，只供開發與假後端的整合測試。
   它**不是容量**，不得當成產品限制引用，也不是 Core 的 C_knee。
 - provisional profile 只有在 `--allow-provisional` 或 `CAPSERVE_ALLOW_PROVISIONAL=1` 時才能載入；
