@@ -86,3 +86,7 @@
   - Windows 的檢查與結束 BingWallpaper 先做，接著立即在 WSL 取得 lock；
   - memory.used ≤ 950 MiB 改在持有 lock 時檢查，不符合就以 76 結束並釋放 lock；
   - 搶不到 lock（75）或不符合（76）時繼續等待，最多 24 h。
+- **10-17 18:20 開始，10-18 02:40 完成**：80 / 80 個 run 有效，沒有 spill。
+  - 18:19 lock 空出時 BingWallpaper 沒有在執行，所以不需要結束它。
+  - 持有 lock 時 memory.used 為 567 MiB。
+  - 依本文的規則成為最終結果，見 decision 035。

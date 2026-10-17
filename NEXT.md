@@ -21,7 +21,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–034（030 於 2026-10-17 凍結；033 是 C1 的結果；034 是重跑的取捨規則）。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–035（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -139,13 +139,12 @@
    - **正式 session 完成**：`formal-20261017-c1`（部署 `b3c9109`，2026-10-17 02:51–10:18，7.45 h），69 / 74 個 run 有效，replay、sentinel、跨 session 偏移都通過。
      結果（decision 033）：U2K C_PROD 32 LOWER、M2K / M8K 2 EXACT、**U8K NT**。
      5 個無效的 run 都是 spill：BingWallpaper 在 08:29 自行重新啟動，在 NVIDIA 卡上用了約 190 MiB。spill 偵測擋下了它們，依規則不補跑。
-   - **重跑（使用者決定，decision 034）**：以相同的凍結協定與同一個部署 `b3c9109` 跑 `formal-<日期>-c1b`。
-     - 背景每 5 分鐘唯讀檢查一次，lock 空著才開始，不搶占；目前 lock 由另一個專案（agent-gym）持有。
-     - 開始前結束 BingWallpaper（使用者同意），並要求 memory.used ≤ 950 MiB、Windows 負載正常。
-     - 取捨規則：新 session 有效時，四個 workload 全部以它為準，profile 也改由它產生；無效時 033 維持為最終結果。不合併，也不逐 workload 挑選。
-     - 遠端 log：`/tmp/llmsl-c1b.log`。
-     - 15:31、17:22 兩次 lock 空出，但在我取得之前又被其他專案取得，沒有開始、沒有數據。
-       等待方式已改為先做 Windows 的檢查，再立即在 WSL 取得 lock，並在持有 lock 時檢查 VRAM（034 執行紀錄）。
+   - **重跑（使用者決定，decision 034）完成，成為最終結果（decision 035）**：
+     - session：`formal-20261017-c1b`，部署 `b3c9109`，10-17 18:20 – 10-18 02:40。
+     - 80 / 80 個 run 有效，沒有 spill；replay、sentinel、跨 session 偏移都通過。
+     - **C_PROD**：U2K 32 EXACT（C_SLO 34，STRICT_COARSE）、U8K 8 EXACT、M2K / M8K 2 EXACT。
+     - **Hypotheses**：H-S1 與 H-S2 在 2K / 8K 都 supported，和預測相同。
+     - 033 改標「已被取代」。兩個 session 能比較的部分都一致，依 034 不合併。
 
 ### Engineering
 1. 架構：decision 029。
@@ -157,8 +156,9 @@
    - **RTX 整合測試 IT-0 至 IT-6 全部通過**（2026-10-16，兩次：`pt-20261016T142720Z-itest`、`pt-20261016T143958Z`，release `635b954` / `f30d17c`），
      依 031 的產品規格（基線判定；> 2,048 MiB 拒絕）。只是產品測試，不是容量。
 4. **M2 已實作**（`b91a9bf`）：產生器、載入時的 provenance 驗證、verified 0 與 unavailable class。
-   **第一份 verified profile**：`service/profiles/verified-formal-20261017-c1.json`（uniform-2k 32、mixed-2k 2、mixed-8k 2、uniform-8k unavailable）。
-   以 verified profile 跑的 IT-0 至 IT-6 延到 034 的取捨確定之後，並使用最終的 profile（`service/deploy/rtx-verified.toml`）。
+   **verified profile**：`service/profiles/verified-formal-20261017-c1b.json`（uniform-2k 32、uniform-8k 8、mixed-2k 2、mixed-8k 2，都是 exact）。
+   第一份 `verified-formal-20261017-c1.json` 依 034 移除，git 歷史保留。
+   - 下一步：以最終 profile 在 RTX 上跑 IT-0 至 IT-6（`service/deploy/rtx-verified.toml`，active class uniform-2k），lock 空著時才跑。
 
 ### Phase 1 收尾（2026-10-11，已完成）
 

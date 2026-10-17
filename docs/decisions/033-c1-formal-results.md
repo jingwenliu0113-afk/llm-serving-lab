@@ -1,11 +1,11 @@
 # 033 — Stage C 正式結果（formal-20261017-c1）：U2K C_PROD 32（下界）、M2K / M8K 2、U8K 無法檢定
 
-- 狀態：**結果已依凍結規則判定**。使用者 2026-10-17 決定以相同的凍結協定重跑一個完整 session，取捨規則見 decision 034。
+- 狀態：**已被取代**。重跑的 `formal-20261017-c1b` 有效，依 034 事先寫定的規則，四個 workload 全部以它為準（decision 035）。本文的數據與判定保留不改。
 - 日期：2026-10-17
 - 對應：030（§8，凍結 commit `b3c9109`）、031（閒置判定與 spill）、032（C0 → 分支 A）、029（verified profile）
 - 輸出：
   - `results/capacity/formal-20261017-c1/analysis.json`：`capacity_report`，在 Mac 上執行，含 Advanced 的參考值；
-  - `service/profiles/verified-formal-20261017-c1.json`：`capserve.profile_gen` 產生。
+  - `service/profiles/verified-formal-20261017-c1.json`：`capserve.profile_gen` 產生。依 034 已從 `service/profiles/` 移除，git 歷史保留。
 
 ## 執行
 

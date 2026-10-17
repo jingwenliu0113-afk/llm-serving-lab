@@ -1,4 +1,4 @@
-# capserve on the RTX (WSL2 Ubuntu-22.04) with the verified profile (decision 033): product only, never research.
+# capserve on the RTX (WSL2 Ubuntu-22.04) with the verified profile (decision 035): product only, never research.
 # Read by `python -m capserve.deploy` and `python -m capserve.loadtest` / `capserve.itest` (capserve/deploy.py).
 
 [deploy]
@@ -13,4 +13,4 @@ drain_timeout_s = 60
 # capserve gateway settings (capserve/config.py). backend_url, host, port and drain_timeout_s are set by the deploy
 # (127.0.0.1 only, so no API key is needed). The limits come from the profile's active class, never from here.
 [gateway]
-active_class = "uniform-2k"                     # verified-formal-20261017-c1: C_PROD 32 (lower bound); uniform-8k is unavailable
+active_class = "uniform-2k"                     # verified-formal-20261017-c1b (decision 035): C_PROD 32, exact

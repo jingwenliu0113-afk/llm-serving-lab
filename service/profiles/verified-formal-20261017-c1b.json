@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "profile_id": "verified-formal-20261017-c1",
+ "profile_id": "verified-formal-20261017-c1b",
  "status": "verified",
  "provisional_reason": null,
  "slo": {
@@ -30,56 +30,56 @@
    "max_output_tokens": 128,
    "max_concurrency": 32,
    "max_queue": 32,
-   "source": "stage_c:U2K:c_prod:LOWER",
+   "source": "stage_c:U2K:c_prod:EXACT",
    "status": "verified",
-   "bound": "lower",
+   "bound": "exact",
    "unavailable_reason": null,
    "evidence": {
     "workload": "U2K",
     "scope": "uniform 1920-token prompts, 128 output tokens (ignore-eos); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7)",
     "c_prod": {
      "value": 32,
-     "status": "LOWER"
+     "status": "EXACT"
     },
     "c_slo": {
-     "value": 32,
-     "status": "LOWER"
+     "value": 34,
+     "status": "EXACT"
     },
     "c_kv": 35,
     "c_cap": 70,
     "flags": [
-     "SEARCH_MISMATCH"
+     "STRICT_COARSE"
     ],
     "binding": [
      "tpot"
     ],
     "margins": {
-     "short": 0.4108568167507656,
-     "tpot": 0.06770057240153149
+     "short": 0.4108437492509438,
+     "tpot": 0.06759904167319919
     },
-    "burst_max_ttft_ms": 10344.995453000593
+    "burst_max_ttft_ms": 10353.163883999514
    }
   },
   {
    "name": "uniform-8k",
    "max_prompt_tokens": 8064,
    "max_output_tokens": 128,
-   "max_concurrency": null,
-   "max_queue": null,
-   "source": "stage_c:U8K:c_prod:NT",
-   "status": "unavailable",
-   "bound": null,
-   "unavailable_reason": "Stage C U8K: C_PROD is NT: its confirmation points are not testable (C 4 NT, C 7 NT, C 8 NT, C 9 FAIL); no admission limit is verified, so the class is never served (030 8.7: never a number, never a fallback)",
+   "max_concurrency": 8,
+   "max_queue": 8,
+   "source": "stage_c:U8K:c_prod:EXACT",
+   "status": "verified",
+   "bound": "exact",
+   "unavailable_reason": null,
    "evidence": {
     "workload": "U8K",
     "scope": "uniform 8064-token prompts, 128 output tokens (ignore-eos); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7)",
     "c_prod": {
-     "value": null,
-     "status": "NT"
+     "value": 8,
+     "status": "EXACT"
     },
     "c_slo": {
-     "value": null,
-     "status": "NT"
+     "value": 8,
+     "status": "EXACT"
     },
     "c_kv": 13,
     "c_cap": 26,
@@ -87,8 +87,11 @@
     "binding": [
      "tpot"
     ],
-    "margins": null,
-    "burst_max_ttft_ms": null
+    "margins": {
+     "short": 0.5868001608249263,
+     "tpot": 0.11648499438185145
+    },
+    "burst_max_ttft_ms": 11044.393299998774
    }
   },
   {
@@ -119,11 +122,11 @@
      "short"
     ],
     "margins": {
-     "short": 0.6808278207499825,
-     "tpot": 0.39674399915349756,
-     "long": 0.6740538952775932
+     "short": 0.6530960804998358,
+     "tpot": 0.35837914078733524,
+     "long": 0.6605323746223621
     },
-    "burst_max_ttft_ms": 645.699724998849
+    "burst_max_ttft_ms": 697.1767570030352
    }
   },
   {
@@ -154,26 +157,26 @@
      "short"
     ],
     "margins": {
-     "short": 0.5909761793332109,
-     "tpot": 0.39210862387795276,
-     "long": 0.6386319042948889
+     "short": 0.5909222248331691,
+     "tpot": 0.39157613622035026,
+     "long": 0.6385801301300627
     },
-    "burst_max_ttft_ms": 2749.2719990004844
+    "burst_max_ttft_ms": 2746.859326998674
    }
   }
  ],
  "provenance": {
-  "source_session": "formal-20261017-c1",
-  "analysis_path": "results/capacity/formal-20261017-c1/analysis.json",
-  "analysis_sha256": "d652ce6be1626dae99a95125e846a1ba31b92dacc3f8f952e5a786b3d4c600eb",
+  "source_session": "formal-20261017-c1b",
+  "analysis_path": "results/capacity/formal-20261017-c1b/analysis.json",
+  "analysis_sha256": "5cd3a62106fcc029cfc2c8b798496d321472e29f950b77c8e0239f0e7d15f58b",
   "prereg_section": "§8",
   "freeze_commit": "b3c91096f40ddc8a6d5294cea64fa1afa737ec50",
-  "generator_commit": "aff881f29a2fb796d1843079d6895a6b0df8a143",
+  "generator_commit": "d4cb7730a484a833aa5009499dcfaa0431ac090b",
   "deployed_commit": "b3c91096f40ddc8a6d5294cea64fa1afa737ec50",
   "capacity_sha256": "b7c4a6c68bdd7b39857b55f2cb6f00feb0e0fc134334263a22bb5284da843e21",
   "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
   "gpu": "NVIDIA GeForce RTX 5070 Ti",
   "gpu_driver": "617.42"
  },
- "content_sha256": "9328b6725878d55c14f808c42b046cadd08aa0ed5018e01e098edcfe28325b9f"
+ "content_sha256": "1863d7e1766bc41b4351981714c85eaf1530d984ca9d8e07866f56dae786c8bc"
 }

@@ -12,9 +12,11 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 ## Provisional 的數值不是產品限制
 
 - 只有由 Stage C 正式、有效、凍結的分析經產生器產生的 `verified` profile，才能成為產品限制（027 §4）。
-  目前唯一的一份是 `profiles/verified-formal-20261017-c1.json`（decision 033）：
-  - uniform-2k 32（下界）、mixed-2k 2、mixed-8k 2；
-  - uniform-8k 為 unavailable，以它為 active class 時 `serve` 與 `deploy up` 都拒絕啟動。
+  目前唯一的一份是 `profiles/verified-formal-20261017-c1b.json`（decision 035）：
+  - uniform-2k 32、uniform-8k 8、mixed-2k 2、mixed-8k 2，都是 exact；
+  - 範圍只限封閉迴路、128 個 output token、准入之後的延遲。
+  - C 個 request 同時到達時，第一波的 TTFT 可能遠高於 SLO（uniform-2k 最高 10.4 s、uniform-8k 11.0 s），這不在驗證範圍內。
+  - RTX 上以它部署：`service/deploy/rtx-verified.toml`（active class uniform-2k）。
 - `profiles/provisional-dev.json` 的上限（並發 4、佇列 4）是手動設定的開發值，只供開發與假後端的整合測試。
   它**不是容量**，不得當成產品限制引用，也不是 Core 的 C_knee。
 - provisional profile 只有在 `--allow-provisional` 或 `CAPSERVE_ALLOW_PROVISIONAL=1` 時才能載入；

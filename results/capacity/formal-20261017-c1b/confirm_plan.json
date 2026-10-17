@@ -1,0 +1,399 @@
+{
+ "schema_version": 1,
+ "seed": 20261008,
+ "blocks": 5,
+ "block_orders": {
+  "1": [
+   "U8K",
+   "M8K",
+   "U2K",
+   "M2K"
+  ],
+  "2": [
+   "U8K",
+   "M8K",
+   "U2K",
+   "M2K"
+  ],
+  "3": [
+   "M8K",
+   "U8K",
+   "U2K",
+   "M2K"
+  ],
+  "4": [
+   "U8K",
+   "U2K",
+   "M2K",
+   "M8K"
+  ],
+  "5": [
+   "M2K",
+   "U8K",
+   "U2K",
+   "M8K"
+  ]
+ },
+ "workloads": {
+  "U2K": {
+   "c_hat": 34,
+   "c_hat_g": 32,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 4,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 8,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 16,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 32,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 64,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 48,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 40,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 36,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 34,
+     "pass": true,
+     "within_band": false
+    },
+    {
+     "C": 35,
+     "pass": false,
+     "within_band": false
+    }
+   ],
+   "points": [
+    {
+     "C": 32,
+     "role": "low",
+     "n": 3
+    },
+    {
+     "C": 33,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 34,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 35,
+     "role": "near",
+     "n": 5
+    }
+   ],
+   "orders": {
+    "1": [
+     33,
+     35,
+     32,
+     34
+    ],
+    "2": [
+     33,
+     34,
+     35,
+     32
+    ],
+    "3": [
+     34,
+     32,
+     33,
+     35
+    ],
+    "4": [
+     32,
+     33,
+     34,
+     35
+    ],
+    "5": [
+     35,
+     34,
+     32,
+     33
+    ]
+   }
+  },
+  "U8K": {
+   "c_hat": 8,
+   "c_hat_g": 8,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 4,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 8,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 16,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 12,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 10,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 9,
+     "pass": false,
+     "within_band": false
+    }
+   ],
+   "points": [
+    {
+     "C": 4,
+     "role": "low",
+     "n": 3
+    },
+    {
+     "C": 7,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 8,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 9,
+     "role": "near",
+     "n": 5
+    }
+   ],
+   "orders": {
+    "1": [
+     9,
+     7,
+     4,
+     8
+    ],
+    "2": [
+     9,
+     4,
+     7,
+     8
+    ],
+    "3": [
+     8,
+     7,
+     9,
+     4
+    ],
+    "4": [
+     9,
+     7,
+     4,
+     8
+    ],
+    "5": [
+     9,
+     8,
+     4,
+     7
+    ]
+   }
+  },
+  "M2K": {
+   "c_hat": 2,
+   "c_hat_g": 2,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 4,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 3,
+     "pass": false,
+     "within_band": false
+    }
+   ],
+   "points": [
+    {
+     "C": 1,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 2,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 3,
+     "role": "near",
+     "n": 5
+    }
+   ],
+   "orders": {
+    "1": [
+     2,
+     1,
+     3
+    ],
+    "2": [
+     1,
+     3,
+     2
+    ],
+    "3": [
+     2,
+     3,
+     1
+    ],
+    "4": [
+     3,
+     1,
+     2
+    ],
+    "5": [
+     2,
+     1,
+     3
+    ]
+   }
+  },
+  "M8K": {
+   "c_hat": 2,
+   "c_hat_g": 2,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 4,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 3,
+     "pass": false,
+     "within_band": false
+    }
+   ],
+   "points": [
+    {
+     "C": 1,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 2,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 3,
+     "role": "near",
+     "n": 5
+    }
+   ],
+   "orders": {
+    "1": [
+     2,
+     1,
+     3
+    ],
+    "2": [
+     2,
+     3,
+     1
+    ],
+    "3": [
+     2,
+     3,
+     1
+    ],
+    "4": [
+     3,
+     1,
+     2
+    ],
+    "5": [
+     1,
+     2,
+     3
+    ]
+   }
+  }
+ }
+}
