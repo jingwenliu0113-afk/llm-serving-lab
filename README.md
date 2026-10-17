@@ -290,7 +290,7 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
   - uniform-2k 32、mixed-2k 2、mixed-8k 2；
   - uniform-8k 為 unavailable，產品不提供。
   - 範圍只限封閉迴路、128 個 output token、准入之後的延遲（030 8.9）。
-- U8K 是否以相同的凍結協定重跑，待使用者決定（033）。
+- 使用者決定以相同的凍結協定重跑一個完整 session（034）。新 session 有效時，四個 workload 全部以它為準；否則上表維持為最終結果。
 
 ### 證據不支持的部分
 
