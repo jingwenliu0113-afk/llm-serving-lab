@@ -153,7 +153,9 @@
      依 031 的產品規格（基線判定；> 2,048 MiB 拒絕）。只是產品測試，不是容量。
 4. **M2 已實作**（`b91a9bf`）：產生器、載入時的 provenance 驗證、verified 0 與 unavailable class。
    **第一份 verified profile**：`service/profiles/verified-formal-20261017-c1.json`（uniform-2k 32、mixed-2k 2、mixed-8k 2、uniform-8k unavailable）。
-   下一步：以 verified profile（active class uniform-2k）在 RTX 上跑 IT，不能和研究 session 重疊。
+   下一步：以 verified profile（`service/deploy/rtx-verified.toml`，active class uniform-2k）在 RTX 上跑 IT-0 至 IT-6，不能和研究 session 重疊。
+   - 10:26 起 GPU lock 由另一個專案（agent-gym 的 ollama）持有，不搶占。
+   - 背景每 5 分鐘唯讀檢查一次，lock 空著時才部署 release 並執行 IT，最多等 12 h。遠端 log：`/tmp/llmsl-itest-verified.log`。
 
 ### Phase 1 收尾（2026-10-11，已完成）
 
