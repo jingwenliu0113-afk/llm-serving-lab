@@ -469,3 +469,4 @@ harness 依本文以 TDD 實作：
   - capserve 的 profile 產生器也會用 git 再核對一次。
 - **測試的調整**：原本以「repo 的設定尚未凍結」為前提的測試，改為在測試中明確建立未凍結的設定（`draft`）。只改測試，沒有改任何規則或程式。
 - 下一步：部署凍結 commit，確認 GPU 空閒與主機負載後，在 GPU lock 下執行正式 session `formal-YYYYMMDD-c1`。
+- **結果**（凍結後註記）：`formal-20261017-c1` 已完成，見 decision 033。凍結的規則沒有改變。

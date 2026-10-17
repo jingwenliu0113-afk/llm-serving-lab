@@ -1,0 +1,3804 @@
+{
+ "schema_version": 1,
+ "stage": "C1",
+ "slo": {
+  "id": "S2",
+  "ttft_p95_ms": {
+   "2048": 2000,
+   "8192": 6000,
+   "32768": 20000
+  },
+  "tpot_p95_ms": 100,
+  "mixed_long": "budget"
+ },
+ "protocol": {
+  "seed": 20261008,
+  "c0_branch": "A",
+  "window": "steady",
+  "guard_band": 0.05,
+  "n_low": 3,
+  "n_near": {
+   "U2K": 5,
+   "U8K": 5,
+   "M2K": 5,
+   "M8K": 5
+  }
+ },
+ "replay": {
+  "ok": true,
+  "problems": []
+ },
+ "sentinel": {
+  "start": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 316.081943991944,
+   "w_mean_ttft_ms": 966.4653953600026,
+   "steady_p95_ttft_ms": 993.871719000002,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "end": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 315.8402016475586,
+   "w_mean_ttft_ms": 966.199766735117,
+   "steady_p95_ttft_ms": 993.4957758498058,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "gate": {
+   "ok": true,
+   "drift": {
+    "output_throughput": 0.0007648090913777335,
+    "w_mean_ttft_ms": 0.0002748454586795243
+   },
+   "tolerance": 0.03,
+   "reasons": []
+  },
+  "cross_session_shift": {
+   "shift": false,
+   "limit": 0.05,
+   "values": [
+    {
+     "output_throughput": 0.0036399960703228373,
+     "steady_p95_ttft_ms": -0.0021597214742913318
+    },
+    {
+     "output_throughput": 0.0028724030768578768,
+     "steady_p95_ttft_ms": -0.0025371657767402356
+    }
+   ],
+   "references": {
+    "core_output_throughput": 314.9355797193607,
+    "advanced_steady_p95_ttft_ms": 996.0228509400622
+   }
+  }
+ },
+ "workloads": {
+  "U2K": {
+   "L": 2048,
+   "mix": "uniform",
+   "c_kv": 35,
+   "c_cap": 70,
+   "n_near": 5,
+   "search": {
+    "c_hat": 34,
+    "c_hat_g": 32,
+    "runs": [
+     {
+      "C": 1,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 327.4824989499848,
+       "tpot": 11.954506088976425,
+       "long": null
+      },
+      "R": {
+       "short": 0.1637412494749924,
+       "tpot": 0.11954506088976424,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 1.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 2,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 639.1927620000217,
+       "tpot": 15.01259981102394,
+       "long": null
+      },
+      "R": {
+       "short": 0.31959638100001087,
+       "tpot": 0.15012599811023938,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 2.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 4,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 962.287188500045,
+       "tpot": 20.16252823543235,
+       "long": null
+      },
+      "R": {
+       "short": 0.4811435942500225,
+       "tpot": 0.2016252823543235,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 4.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 8,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 968.0905887999188,
+       "tpot": 30.19735176614191,
+       "long": null
+      },
+      "R": {
+       "short": 0.4840452943999594,
+       "tpot": 0.3019735176614191,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 8.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 16,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 979.6395987999517,
+       "tpot": 51.379952748424884,
+       "long": null
+      },
+      "R": {
+       "short": 0.4898197993999759,
+       "tpot": 0.5137995274842488,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 16.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 32,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1177.164767000022,
+       "tpot": 93.21190920866096,
+       "long": null
+      },
+      "R": {
+       "short": 0.588582383500011,
+       "tpot": 0.9321190920866096,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 32.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 64,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 12455.592268699991,
+       "tpot": 103.53454283189059,
+       "long": null
+      },
+      "R": {
+       "short": 6.227796134349996,
+       "tpot": 1.0353454283189059,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 64.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 48,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 7054.797781000059,
+       "tpot": 103.50705810590539,
+       "long": null
+      },
+      "R": {
+       "short": 3.5273988905000295,
+       "tpot": 1.035070581059054,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 48.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 40,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 4354.614174650055,
+       "tpot": 103.52428085314935,
+       "long": null
+      },
+      "R": {
+       "short": 2.1773070873250275,
+       "tpot": 1.0352428085314935,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 40.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 36,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1388.0616122998617,
+       "tpot": 103.53531117716646,
+       "long": null
+      },
+      "R": {
+       "short": 0.6940308061499308,
+       "tpot": 1.0353531117716646,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 36.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 34,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1366.624142949945,
+       "tpot": 99.87760447126001,
+       "long": null
+      },
+      "R": {
+       "short": 0.6833120714749725,
+       "tpot": 0.9987760447126002,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 34.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 35,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1375.5723063500682,
+       "tpot": 102.58579975393975,
+       "long": null
+      },
+      "R": {
+       "short": 0.6877861531750341,
+       "tpot": 1.0258579975393975,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 35.0,
+      "inflight_le_c": true
+     }
+    ]
+   },
+   "K": [
+    32,
+    33,
+    34,
+    35
+   ],
+   "points": {
+    "32": {
+     "role": "low",
+     "n": 3,
+     "n_valid": 3,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "FAIL",
+     "met": 3,
+     "worst_R": {
+      "short": 0.5891431832492344,
+      "tpot": 0.9322994275984685,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1273.2888262502402,
+      "Y_tpot": 93.22904082481134,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-U2K-c32-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 326.003594776408,
+       "kv_cache_usage_peak": 0.9068825910931174,
+       "preemptions": 0.0,
+       "waiting_peak": 28.0,
+       "inflight_peak": 32.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1177.867377748953,
+        "tpot": 93.22994275984685,
+        "long": null
+       },
+       "R": {
+        "short": 0.5889336888744765,
+        "tpot": 0.9322994275984685,
+        "long": null
+       },
+       "max_r": 0.9322994275984685,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10344.995453000593,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "full": {
+        "Y_short": 5458.0653396999915,
+        "Y_tpot": 93.20975799487708,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-c32-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 326.0190714594439,
+       "kv_cache_usage_peak": 0.9068825910931174,
+       "preemptions": 0.0,
+       "waiting_peak": 27.0,
+       "inflight_peak": 32.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1176.8637334989762,
+        "tpot": 93.22843951773163,
+        "long": null
+       },
+       "R": {
+        "short": 0.5884318667494881,
+        "tpot": 0.9322843951773163,
+        "long": null
+       },
+       "max_r": 0.9322843951773163,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10341.932521001581,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "full": {
+        "Y_short": 5456.520388299399,
+        "Y_tpot": 93.21573543860664,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-c32-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 326.0277667496277,
+       "kv_cache_usage_peak": 0.9068825910931174,
+       "preemptions": 0.0,
+       "waiting_peak": 27.0,
+       "inflight_peak": 32.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1178.2863664984689,
+        "tpot": 93.21831037008036,
+        "long": null
+       },
+       "R": {
+        "short": 0.5891431832492344,
+        "tpot": 0.9321831037008036,
+        "long": null
+       },
+       "max_r": 0.9321831037008036,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10338.30588100318,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "full": {
+        "Y_short": 5455.79123115131,
+        "Y_tpot": 93.20990008819629,
+        "Y_long": null
+       }
+      }
+     ]
+    },
+    "33": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 3,
+     "class": "NT",
+     "class_late": "NT",
+     "class_full": "FAIL",
+     "met": 3,
+     "worst_R": {
+      "short": 0.660812233826254,
+      "tpot": 0.971101974503933,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1357.1751380004573,
+      "Y_tpot": 97.07421112164762,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-U2K-c33-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 323.76396213310943,
+       "kv_cache_usage_peak": 0.9352226720647774,
+       "preemptions": 0.0,
+       "waiting_peak": 29.0,
+       "inflight_peak": 33.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1317.0446262488426,
+        "tpot": 97.02586561416385,
+        "long": null
+       },
+       "R": {
+        "short": 0.6585223131244213,
+        "tpot": 0.9702586561416385,
+        "long": null
+       },
+       "max_r": 0.9702586561416385,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10650.643516000855,
+       "n": {
+        "short": 264,
+        "long": 0,
+        "all": 264
+       },
+       "full": {
+        "Y_short": 5622.153596050433,
+        "Y_tpot": 96.81002957480398,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-c33-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 323.7010997015514,
+       "kv_cache_usage_peak": 0.9352226720647774,
+       "preemptions": 0.0,
+       "waiting_peak": 29.0,
+       "inflight_peak": 33.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1317.503464248874,
+        "tpot": 97.05687432716496,
+        "long": null
+       },
+       "R": {
+        "short": 0.658751732124437,
+        "tpot": 0.9705687432716497,
+        "long": null
+       },
+       "max_r": 0.9705687432716497,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10648.963011000887,
+       "n": {
+        "short": 264,
+        "long": 0,
+        "all": 264
+       },
+       "full": {
+        "Y_short": 5620.951019450153,
+        "Y_tpot": 96.84582962048822,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-c33-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 323.4208428360029,
+       "kv_cache_usage_peak": 0.9352226720647774,
+       "preemptions": 0.0,
+       "waiting_peak": 29.0,
+       "inflight_peak": 33.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1321.624467652508,
+        "tpot": 97.1101974503933,
+        "long": null
+       },
+       "R": {
+        "short": 0.660812233826254,
+        "tpot": 0.971101974503933,
+        "long": null
+       },
+       "max_r": 0.971101974503933,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10672.186309999233,
+       "n": {
+        "short": 264,
+        "long": 0,
+        "all": 264
+       },
+       "full": {
+        "Y_short": 5629.488119300371,
+        "Y_tpot": 97.0010363913317,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-c33-r4",
+       "block": 4,
+       "valid": false,
+       "reasons": [
+        "runner: spill: Windows shared usage 183.9 MiB at C-U2K-c33-r4 is 99.1 MiB above the ready reading 84.8 MiB (>= 64; 031 amendment, 030 8.6 (g)): VRAM spilled to system memory"
+       ],
+       "output_throughput": 323.6636892686681,
+       "kv_cache_usage_peak": 0.9352226720647774,
+       "preemptions": 0.0,
+       "waiting_peak": 29.0,
+       "inflight_peak": 33.0,
+       "inflight_le_c": true
+      }
+     ]
+    },
+    "34": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 3,
+     "class": "NT",
+     "class_late": "NT",
+     "class_full": "FAIL",
+     "met": 3,
+     "worst_R": {
+      "short": 0.6837851002000661,
+      "tpot": 0.9986899629409132,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1370.8280179989742,
+      "Y_tpot": 99.86318860039434,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-U2K-c34-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 324.52078903991173,
+       "kv_cache_usage_peak": 0.9635627530364372,
+       "preemptions": 0.0,
+       "waiting_peak": 30.0,
+       "inflight_peak": 34.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1367.5702004001323,
+        "tpot": 99.86899629409132,
+        "long": null
+       },
+       "R": {
+        "short": 0.6837851002000661,
+        "tpot": 0.9986899629409132,
+        "long": null
+       },
+       "max_r": 0.9986899629409132,
+       "conclusion": "pass",
+       "attainment": 0.9705882352941176,
+       "burst_max_ttft_ms": 11010.641410999597,
+       "n": {
+        "short": 272,
+        "long": 0,
+        "all": 272
+       },
+       "full": {
+        "Y_short": 5800.893781650397,
+        "Y_tpot": 99.5011496921306,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-c34-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 324.54345473311304,
+       "kv_cache_usage_peak": 0.9635627530364372,
+       "preemptions": 0.0,
+       "waiting_peak": 30.0,
+       "inflight_peak": 34.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1366.4192535499749,
+        "tpot": 99.84749024055289,
+        "long": null
+       },
+       "R": {
+        "short": 0.6832096267749874,
+        "tpot": 0.9984749024055288,
+        "long": null
+       },
+       "max_r": 0.9984749024055288,
+       "conclusion": "pass",
+       "attainment": 0.9705882352941176,
+       "burst_max_ttft_ms": 11008.421810998698,
+       "n": {
+        "short": 272,
+        "long": 0,
+        "all": 272
+       },
+       "full": {
+        "Y_short": 5800.718121147842,
+        "Y_tpot": 99.49474085356697,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-c34-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 324.6550799406479,
+       "kv_cache_usage_peak": 0.9635627530364372,
+       "preemptions": 0.0,
+       "waiting_peak": 30.0,
+       "inflight_peak": 34.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1364.210126448597,
+        "tpot": 99.82156435550327,
+        "long": null
+       },
+       "R": {
+        "short": 0.6821050632242985,
+        "tpot": 0.9982156435550327,
+        "long": null
+       },
+       "max_r": 0.9982156435550327,
+       "conclusion": "pass",
+       "attainment": 0.9705882352941176,
+       "burst_max_ttft_ms": 10990.802567001083,
+       "n": {
+        "short": 272,
+        "long": 0,
+        "all": 272
+       },
+       "full": {
+        "Y_short": 5792.414370397641,
+        "Y_tpot": 99.38002067441072,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-c34-r4",
+       "block": 4,
+       "valid": false,
+       "reasons": [
+        "runner: not run: the boot stopped after a spill in C-U2K-c33-r4 (031; 030 8.6 (g))"
+       ],
+       "output_throughput": null,
+       "kv_cache_usage_peak": null,
+       "preemptions": null,
+       "waiting_peak": null,
+       "inflight_peak": null,
+       "inflight_le_c": null
+      }
+     ]
+    },
+    "35": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "FAIL",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 0.6871816784501336,
+      "tpot": 1.025642184169348,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1374.363356900267,
+      "Y_tpot": 102.56421841693479,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-U2K-c35-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 325.64876297109055,
+       "kv_cache_usage_peak": 0.9919028340080972,
+       "preemptions": 0.0,
+       "waiting_peak": 31.0,
+       "inflight_peak": 35.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1374.363356900267,
+        "tpot": 102.56421841693479,
+        "long": null
+       },
+       "R": {
+        "short": 0.6871816784501336,
+        "tpot": 1.025642184169348,
+        "long": null
+       },
+       "max_r": 1.025642184169348,
+       "conclusion": "fail",
+       "attainment": 0.11428571428571428,
+       "burst_max_ttft_ms": 11330.22800299841,
+       "n": {
+        "short": 280,
+        "long": 0,
+        "all": 280
+       },
+       "full": {
+        "Y_short": 5962.072908699523,
+        "Y_tpot": 102.06319740747114,
+        "Y_long": null
+       }
+      }
+     ]
+    }
+   },
+   "c_slo": {
+    "value": 32,
+    "status": "LOWER"
+   },
+   "c_prod": {
+    "value": 32,
+    "status": "LOWER"
+   },
+   "binding": [
+    "tpot"
+   ],
+   "margins": {
+    "c_slo": {
+     "short": 0.4108568167507656,
+     "tpot": 0.06770057240153149
+    },
+    "c_prod": {
+     "short": 0.4108568167507656,
+     "tpot": 0.06770057240153149
+    }
+   },
+   "flags": [
+    "SEARCH_MISMATCH"
+   ],
+   "descriptive": {
+    "c_full": {
+     "c_slo": {
+      "value": null,
+      "status": "UNSTABLE"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "UNSTABLE"
+     }
+    },
+    "c_late": {
+     "c_slo": {
+      "value": 32,
+      "status": "LOWER"
+     },
+     "c_prod": {
+      "value": 32,
+      "status": "LOWER"
+     }
+    },
+    "knee": {
+     "c_knee": 25,
+     "c_slo": {
+      "value": 32,
+      "status": "LOWER"
+     },
+     "c_slo_minus_knee": 7
+    }
+   }
+  },
+  "U8K": {
+   "L": 8192,
+   "mix": "uniform",
+   "c_kv": 13,
+   "c_cap": 26,
+   "n_near": 5,
+   "search": {
+    "c_hat": 8,
+    "c_hat_g": 8,
+    "runs": [
+     {
+      "C": 1,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1388.3631095500505,
+       "tpot": 12.171475713779099,
+       "long": null
+      },
+      "R": {
+       "short": 0.23139385159167508,
+       "tpot": 0.121714757137791,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 1.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 2,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2702.2052472499354,
+       "tpot": 23.230275850393603,
+       "long": null
+      },
+      "R": {
+       "short": 0.45036754120832256,
+       "tpot": 0.23230275850393603,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 2.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 4,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2451.847653650043,
+       "tpot": 44.88092029055063,
+       "long": null
+      },
+      "R": {
+       "short": 0.4086412756083405,
+       "tpot": 0.44880920290550624,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 4.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 8,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2477.3548955000024,
+       "tpot": 88.32265038622,
+       "long": null
+      },
+      "R": {
+       "short": 0.4128924825833337,
+       "tpot": 0.8832265038622,
+       "long": null
+      },
+      "search_pass": true,
+      "inflight_peak": 8.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 16,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 7463.701772950026,
+       "tpot": 144.91907683858463,
+       "long": null
+      },
+      "R": {
+       "short": 1.243950295491671,
+       "tpot": 1.4491907683858463,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 16.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 12,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2504.9161704998824,
+       "tpot": 133.2725393425231,
+       "long": null
+      },
+      "R": {
+       "short": 0.41748602841664706,
+       "tpot": 1.332725393425231,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 12.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 10,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2490.554568499738,
+       "tpot": 111.440900583858,
+       "long": null
+      },
+      "R": {
+       "short": 0.4150924280832896,
+       "tpot": 1.11440900583858,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 10.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 9,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2483.982495649707,
+       "tpot": 100.5907115956699,
+       "long": null
+      },
+      "R": {
+       "short": 0.4139970826082845,
+       "tpot": 1.005907115956699,
+       "long": null
+      },
+      "search_pass": false,
+      "inflight_peak": 9.0,
+      "inflight_le_c": true
+     }
+    ]
+   },
+   "K": [
+    4,
+    7,
+    8,
+    9
+   ],
+   "points": {
+    "4": {
+     "role": "low",
+     "n": 3,
+     "n_valid": 2,
+     "class": "NT",
+     "class_late": "NT",
+     "class_full": "NT",
+     "met": 2,
+     "worst_R": {
+      "short": 0.4547341734333257,
+      "tpot": 0.4488541670314332,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2684.098141450795,
+      "Y_tpot": 44.88021567677413,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-U8K-c4-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 71.43082096250508,
+       "kv_cache_usage_peak": 0.3076923076923077,
+       "preemptions": 0.0,
+       "waiting_peak": 3.0,
+       "inflight_peak": 4.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2452.30517459986,
+        "tpot": 44.88541670314332,
+        "long": null
+       },
+       "R": {
+        "short": 0.40871752909997666,
+        "tpot": 0.4488541670314332,
+        "long": null
+       },
+       "max_r": 0.4488541670314332,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5480.033709000054,
+       "n": {
+        "short": 192,
+        "long": 0,
+        "all": 192
+       },
+       "full": {
+        "Y_short": 2452.8710736500216,
+        "Y_tpot": 44.886012902745684,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-c4-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 71.45691457009636,
+       "kv_cache_usage_peak": 0.3076923076923077,
+       "preemptions": 0.0,
+       "waiting_peak": 3.0,
+       "inflight_peak": 4.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2728.405040599954,
+        "tpot": 44.875501838185045,
+        "long": null
+       },
+       "R": {
+        "short": 0.4547341734333257,
+        "tpot": 0.44875501838185045,
+        "long": null
+       },
+       "max_r": 0.4547341734333257,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5482.093802000236,
+       "n": {
+        "short": 192,
+        "long": 0,
+        "all": 192
+       },
+       "full": {
+        "Y_short": 2783.2209585503733,
+        "Y_tpot": 44.87617860078011,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-c4-r3",
+       "block": 3,
+       "valid": false,
+       "reasons": [
+        "runner: spill: Windows shared usage 212.8 MiB at ready is 208.0 MiB above the pre-boot 4.8 MiB (> 160; 031 amendment, 030 8.6 (g)): VRAM spilled to system memory; no bench runs on this boot"
+       ],
+       "output_throughput": null,
+       "kv_cache_usage_peak": null,
+       "preemptions": null,
+       "waiting_peak": null,
+       "inflight_peak": null,
+       "inflight_le_c": null
+      }
+     ]
+    },
+    "7": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 2,
+     "class": "NT",
+     "class_late": "NT",
+     "class_full": "NT",
+     "met": 2,
+     "worst_R": {
+      "short": 0.41185974454174357,
+      "tpot": 0.7733001685235965,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2471.120588350641,
+      "Y_tpot": 77.32697575236413,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-U8K-c7-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 79.09512936921539,
+       "kv_cache_usage_peak": 0.5384615384615384,
+       "preemptions": 0.0,
+       "waiting_peak": 5.0,
+       "inflight_peak": 7.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2470.9884700005205,
+        "tpot": 77.32495346259584,
+        "long": null
+       },
+       "R": {
+        "short": 0.4118314116667534,
+        "tpot": 0.7732495346259585,
+        "long": null
+       },
+       "max_r": 0.7732495346259585,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 9633.073270999375,
+       "n": {
+        "short": 186,
+        "long": 0,
+        "all": 186
+       },
+       "full": {
+        "Y_short": 2471.526564150281,
+        "Y_tpot": 77.32441552637705,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-c7-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 79.09258206846488,
+       "kv_cache_usage_peak": 0.5384615384615384,
+       "preemptions": 0.0,
+       "waiting_peak": 6.0,
+       "inflight_peak": 7.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2471.1584672504614,
+        "tpot": 77.33001685235965,
+        "long": null
+       },
+       "R": {
+        "short": 0.41185974454174357,
+        "tpot": 0.7733001685235965,
+        "long": null
+       },
+       "max_r": 0.7733001685235965,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 9627.45975100006,
+       "n": {
+        "short": 186,
+        "long": 0,
+        "all": 186
+       },
+       "full": {
+        "Y_short": 2471.4754590006123,
+        "Y_tpot": 77.32760815236927,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-c7-r3",
+       "block": 3,
+       "valid": false,
+       "reasons": [
+        "runner: spill: Windows shared usage 212.8 MiB at ready is 208.0 MiB above the pre-boot 4.8 MiB (> 160; 031 amendment, 030 8.6 (g)): VRAM spilled to system memory; no bench runs on this boot"
+       ],
+       "output_throughput": null,
+       "kv_cache_usage_peak": null,
+       "preemptions": null,
+       "waiting_peak": null,
+       "inflight_peak": null,
+       "inflight_le_c": null
+      }
+     ]
+    },
+    "8": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 2,
+     "class": "NT",
+     "class_late": "NT",
+     "class_full": "NT",
+     "met": 2,
+     "worst_R": {
+      "short": 0.4131297648085213,
+      "tpot": 0.8832025721180692,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2478.1079487494026,
+      "Y_tpot": 88.31291411810683,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-U8K-c8-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 80.56231671656873,
+       "kv_cache_usage_peak": 0.6153846153846154,
+       "preemptions": 0.0,
+       "waiting_peak": 6.0,
+       "inflight_peak": 8.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2477.498664850282,
+        "tpot": 88.30805518819034,
+        "long": null
+       },
+       "R": {
+        "short": 0.41291644414171363,
+        "tpot": 0.8830805518819034,
+        "long": null
+       },
+       "max_r": 0.8830805518819034,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 11033.076579999033,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "full": {
+        "Y_short": 2478.254003999791,
+        "Y_tpot": 88.30707355670002,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-c8-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 80.55479057826227,
+       "kv_cache_usage_peak": 0.6153846153846154,
+       "preemptions": 0.0,
+       "waiting_peak": 6.0,
+       "inflight_peak": 8.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2478.778588851128,
+        "tpot": 88.32025721180692,
+        "long": null
+       },
+       "R": {
+        "short": 0.4131297648085213,
+        "tpot": 0.8832025721180692,
+        "long": null
+       },
+       "max_r": 0.8832025721180692,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 11028.182787000333,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "full": {
+        "Y_short": 2812.7862249495593,
+        "Y_tpot": 88.31475274567518,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-c8-r3",
+       "block": 3,
+       "valid": false,
+       "reasons": [
+        "runner: spill: Windows shared usage 212.8 MiB at ready is 208.0 MiB above the pre-boot 4.8 MiB (> 160; 031 amendment, 030 8.6 (g)): VRAM spilled to system memory; no bench runs on this boot"
+       ],
+       "output_throughput": null,
+       "kv_cache_usage_peak": null,
+       "preemptions": null,
+       "waiting_peak": null,
+       "inflight_peak": null,
+       "inflight_le_c": null
+      }
+     ]
+    },
+    "9": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "FAIL",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 0.4140450619333327,
+      "tpot": 1.0060448700867022,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2484.270371599996,
+      "Y_tpot": 100.60448700867022,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-U8K-c9-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 80.46537282094374,
+       "kv_cache_usage_peak": 0.6923076923076923,
+       "preemptions": 0.0,
+       "waiting_peak": 8.0,
+       "inflight_peak": 9.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2484.270371599996,
+        "tpot": 100.60448700867022,
+        "long": null
+       },
+       "R": {
+        "short": 0.4140450619333327,
+        "tpot": 1.0060448700867022,
+        "long": null
+       },
+       "max_r": 1.0060448700867022,
+       "conclusion": "fail",
+       "attainment": 0.8846153846153846,
+       "burst_max_ttft_ms": 12403.101410998715,
+       "n": {
+        "short": 182,
+        "long": 0,
+        "all": 182
+       },
+       "full": {
+        "Y_short": 2485.2183629996034,
+        "Y_tpot": 100.6030254795305,
+        "Y_long": null
+       }
+      }
+     ]
+    }
+   },
+   "c_slo": {
+    "value": null,
+    "status": "NT"
+   },
+   "c_prod": {
+    "value": null,
+    "status": "NT"
+   },
+   "binding": [
+    "tpot"
+   ],
+   "margins": {
+    "c_slo": null,
+    "c_prod": null
+   },
+   "flags": [],
+   "descriptive": {
+    "c_full": {
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "NT"
+     }
+    },
+    "c_late": {
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "NT"
+     }
+    },
+    "knee": {
+     "c_knee": 8,
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_slo_minus_knee": null
+    }
+   }
+  },
+  "M2K": {
+   "L": 2048,
+   "mix": "mixed",
+   "c_kv": 35,
+   "c_cap": 70,
+   "n_near": 5,
+   "search": {
+    "c_hat": 2,
+    "c_hat_g": 2,
+    "runs": [
+     {
+      "C": 1,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 326.6933404503561,
+       "tpot": 13.044508346455064,
+       "long": 6261.569313300424
+      },
+      "R": {
+       "short": 0.16334667022517807,
+       "tpot": 0.13044508346455064,
+       "long": 0.31307846566502123
+      },
+      "search_pass": true,
+      "inflight_peak": 1.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 2,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 637.7078422497107,
+       "tpot": 60.31372757873816,
+       "long": 6518.852007399801
+      },
+      "R": {
+       "short": 0.31885392112485533,
+       "tpot": 0.6031372757873816,
+       "long": 0.32594260036999
+      },
+      "search_pass": true,
+      "inflight_peak": 2.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 4,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 6659.066701300117,
+       "tpot": 66.47672214685086,
+       "long": 6840.223949199753
+      },
+      "R": {
+       "short": 3.3295333506500584,
+       "tpot": 0.6647672214685086,
+       "long": 0.34201119745998765
+      },
+      "search_pass": false,
+      "inflight_peak": 4.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 3,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 6618.847233200131,
+       "tpot": 62.543684064563266,
+       "long": 6823.680307200357
+      },
+      "R": {
+       "short": 3.3094236166000655,
+       "tpot": 0.6254368406456327,
+       "long": 0.34118401536001786
+      },
+      "search_pass": false,
+      "inflight_peak": 3.0,
+      "inflight_le_c": true
+     }
+    ]
+   },
+   "K": [
+    1,
+    2,
+    3
+   ],
+   "points": {
+    "1": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "met": 5,
+     "worst_R": {
+      "short": 0.16360801619939594,
+      "tpot": 0.13075152852362643,
+      "long": 0.3131836660974568
+     },
+     "pooled": {
+      "Y_short": 327.0776173003469,
+      "Y_tpot": 13.06064629015391,
+      "Y_long": 6263.673321949136,
+      "R_long": 0.3131836660974568
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-M2K-c1-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 52.34333778544383,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 327.04368744944077,
+        "tpot": 13.050168486617306,
+        "long": 6261.032311349754
+       },
+       "R": {
+        "short": 0.1635218437247204,
+        "tpot": 0.13050168486617306,
+        "long": 0.31305161556748773
+       },
+       "max_r": 0.1635218437247204,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 321.8251230009628,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 327.0254011493307,
+        "Y_tpot": 13.049941359059723,
+        "Y_long": 6261.032311349754
+       }
+      },
+      {
+       "tag": "C-M2K-c1-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 52.354455106271836,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 326.9146784004988,
+        "tpot": 13.050278003143244,
+        "long": 6266.377802000534
+       },
+       "R": {
+        "short": 0.1634573392002494,
+        "tpot": 0.13050278003143245,
+        "long": 0.31331889010002667
+       },
+       "max_r": 0.1634573392002494,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 321.74548900002264,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 326.90937080042204,
+        "Y_tpot": 13.050248494480224,
+        "Y_long": 6266.377802000534
+       }
+      },
+      {
+       "tag": "C-M2K-c1-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 52.29336145751383,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 327.07511090029584,
+        "tpot": 13.068129643300301,
+        "long": 6257.979165601864
+       },
+       "R": {
+        "short": 0.16353755545014792,
+        "tpot": 0.130681296433003,
+        "long": 0.31289895828009323
+       },
+       "max_r": 0.16353755545014792,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 322.8031960024964,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 327.0744843002831,
+        "Y_tpot": 13.06778630629182,
+        "Y_long": 6257.979165601864
+       }
+      },
+      {
+       "tag": "C-M2K-c1-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 52.30617354359396,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 326.8306001506062,
+        "tpot": 13.06357490824824,
+        "long": 6263.784426099119
+       },
+       "R": {
+        "short": 0.16341530007530308,
+        "tpot": 0.1306357490824824,
+        "long": 0.3131892213049559
+       },
+       "max_r": 0.16341530007530308,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 321.5885720019287,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 326.82764805049374,
+        "Y_tpot": 13.063540759426324,
+        "Y_long": 6263.784426099119
+       }
+      },
+      {
+       "tag": "C-M2K-c1-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 52.279935486063266,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 327.21603239879187,
+        "tpot": 13.075152852362644,
+        "long": 6262.63017255078
+       },
+       "R": {
+        "short": 0.16360801619939594,
+        "tpot": 0.13075152852362643,
+        "long": 0.313131508627539
+       },
+       "max_r": 0.16360801619939594,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 322.5060679978924,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 327.2070567985793,
+        "Y_tpot": 13.07512224212537,
+        "Y_long": 6262.63017255078
+       }
+      }
+     ]
+    },
+    "2": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "met": 5,
+     "worst_R": {
+      "short": 0.3191721792500175,
+      "tpot": 0.6032560008465024,
+      "long": 0.32594610472240676
+     },
+     "pooled": {
+      "Y_short": 637.9298005505916,
+      "Y_tpot": 60.31540681181461,
+      "Y_long": 6518.922094448135,
+      "R_long": 0.32594610472240676
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-M2K-c2-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 73.75958505000251,
+       "kv_cache_usage_peak": 0.29554655870445345,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 638.328420750895,
+        "tpot": 60.29837998819027,
+        "long": 6516.215814699353
+       },
+       "R": {
+        "short": 0.3191642103754475,
+        "tpot": 0.6029837998819026,
+        "long": 0.32581079073496766
+       },
+       "max_r": 0.6029837998819026,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 644.91618700049,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 638.3694752001247,
+        "Y_tpot": 60.29816154094608,
+        "Y_long": 6516.215814699353
+       }
+      },
+      {
+       "tag": "C-M2K-c2-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 73.7683493690093,
+       "kv_cache_usage_peak": 0.29554655870445345,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 637.5956384999881,
+        "tpot": 60.29769453150976,
+        "long": 6517.841678399782
+       },
+       "R": {
+        "short": 0.31879781924999406,
+        "tpot": 0.6029769453150976,
+        "long": 0.3258920839199891
+       },
+       "max_r": 0.6029769453150976,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 642.7599359994929,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 637.6143463503468,
+        "Y_tpot": 60.296988607102165,
+        "Y_long": 6517.841678399782
+       }
+      },
+      {
+       "tag": "C-M2K-c2-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 73.68724397972882,
+       "kv_cache_usage_peak": 0.29554655870445345,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 637.662864000049,
+        "tpot": 60.312027866143396,
+        "long": 6514.0338511502705
+       },
+       "R": {
+        "short": 0.3188314320000245,
+        "tpot": 0.6031202786614339,
+        "long": 0.3257016925575135
+       },
+       "max_r": 0.6031202786614339,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 645.3852170016035,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 637.726732748888,
+        "Y_tpot": 60.310783633071054,
+        "Y_long": 6514.0338511502705
+       }
+      },
+      {
+       "tag": "C-M2K-c2-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 73.73223401495314,
+       "kv_cache_usage_peak": 0.29554655870445345,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 637.820520252717,
+        "tpot": 60.32560008465025,
+        "long": 6519.672561801963
+       },
+       "R": {
+        "short": 0.3189102601263585,
+        "tpot": 0.6032560008465024,
+        "long": 0.3259836280900981
+       },
+       "max_r": 0.6032560008465024,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 645.699724998849,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 637.9250483003489,
+        "Y_tpot": 60.32163485157987,
+        "Y_long": 6519.672561801963
+       }
+      },
+      {
+       "tag": "C-M2K-c2-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 73.69182330445265,
+       "kv_cache_usage_peak": 0.29554655870445345,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 638.344358500035,
+        "tpot": 60.31781572046456,
+        "long": 6517.614515199784
+       },
+       "R": {
+        "short": 0.3191721792500175,
+        "tpot": 0.6031781572046456,
+        "long": 0.3258807257599892
+       },
+       "max_r": 0.6031781572046456,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 643.4619890023896,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 638.4007985026983,
+        "Y_tpot": 60.3148053047177,
+        "Y_long": 6517.614515199784
+       }
+      }
+     ]
+    },
+    "3": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "FAIL",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 3.309423998049624,
+      "tpot": 0.6255618030787646,
+      "long": 0.34120344724247387
+     },
+     "pooled": {
+      "Y_short": 6618.847996099248,
+      "Y_tpot": 62.55618030787646,
+      "Y_long": 6824.068944849478,
+      "R_long": 0.34120344724247387
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-M2K-c3-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 86.85433828573653,
+       "kv_cache_usage_peak": 0.3238866396761133,
+       "preemptions": 0.0,
+       "waiting_peak": 2.0,
+       "inflight_peak": 3.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 6618.847996099248,
+        "tpot": 62.55618030787646,
+        "long": 6824.068944849478
+       },
+       "R": {
+        "short": 3.309423998049624,
+        "tpot": 0.6255618030787646,
+        "long": 0.34120344724247387
+       },
+       "max_r": 3.309423998049624,
+       "conclusion": "fail",
+       "attainment": 0.8865979381443299,
+       "burst_max_ttft_ms": 958.2431230010116,
+       "n": {
+        "short": 174,
+        "long": 20,
+        "all": 194
+       },
+       "full": {
+        "Y_short": 6614.4291322989375,
+        "Y_tpot": 62.507070104727504,
+        "Y_long": 6824.068944849478
+       }
+      }
+     ]
+    }
+   },
+   "c_slo": {
+    "value": 2,
+    "status": "EXACT"
+   },
+   "c_prod": {
+    "value": 2,
+    "status": "EXACT"
+   },
+   "binding": [
+    "short"
+   ],
+   "margins": {
+    "c_slo": {
+     "short": 0.6808278207499825,
+     "tpot": 0.39674399915349756,
+     "long": 0.6740538952775932
+    },
+    "c_prod": {
+     "short": 0.6808278207499825,
+     "tpot": 0.39674399915349756,
+     "long": 0.6740538952775932
+    }
+   },
+   "flags": [],
+   "descriptive": {
+    "c_full": {
+     "c_slo": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 2,
+      "status": "EXACT"
+     }
+    },
+    "c_late": {
+     "c_slo": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 2,
+      "status": "EXACT"
+     }
+    },
+    "knee": {
+     "c_knee": 25,
+     "c_slo": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_slo_minus_knee": -23
+    }
+   }
+  },
+  "M8K": {
+   "L": 8192,
+   "mix": "mixed",
+   "c_kv": 13,
+   "c_cap": 26,
+   "n_near": 5,
+   "search": {
+    "c_hat": 2,
+    "c_hat_g": 2,
+    "runs": [
+     {
+      "C": 1,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1387.4214695993032,
+       "tpot": 13.045072412995886,
+       "long": 6266.408271248838
+      },
+      "R": {
+       "short": 0.23123691159988388,
+       "tpot": 0.13045072412995887,
+       "long": 0.3133204135624419
+      },
+      "search_pass": true,
+      "inflight_peak": 1.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 2,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2371.0576635007783,
+       "tpot": 60.735454133851086,
+       "long": 7223.1314845008455
+      },
+      "R": {
+       "short": 0.3951762772501297,
+       "tpot": 0.6073545413385109,
+       "long": 0.36115657422504227
+      },
+      "search_pass": true,
+      "inflight_peak": 2.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 4,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 7704.70412654995,
+       "tpot": 83.35816997479465,
+       "long": 7303.724682149823
+      },
+      "R": {
+       "short": 1.2841173544249918,
+       "tpot": 0.8335816997479465,
+       "long": 0.3651862341074911
+      },
+      "search_pass": false,
+      "inflight_peak": 4.0,
+      "inflight_le_c": true
+     },
+     {
+      "C": 3,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 7655.043437500899,
+       "tpot": 71.2320691055087,
+       "long": 7289.491836500019
+      },
+      "R": {
+       "short": 1.2758405729168165,
+       "tpot": 0.712320691055087,
+       "long": 0.36447459182500097
+      },
+      "search_pass": false,
+      "inflight_peak": 3.0,
+      "inflight_le_c": true
+     }
+    ]
+   },
+   "K": [
+    1,
+    2,
+    3
+   ],
+   "points": {
+    "1": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "met": 5,
+     "worst_R": {
+      "short": 0.23174537725844857,
+      "tpot": 0.13071237637782684,
+      "long": 0.3134633106674846
+     },
+     "pooled": {
+      "Y_short": 1389.6109210494615,
+      "Y_tpot": 13.059531054323733,
+      "Y_long": 6269.266213349692,
+      "R_long": 0.3134633106674846
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-M8K-c1-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 37.349419096497314,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1390.4722635506914,
+        "tpot": 13.053805162992894,
+        "long": 6266.034966750794
+       },
+       "R": {
+        "short": 0.23174537725844857,
+        "tpot": 0.13053805162992893,
+        "long": 0.3133017483375397
+       },
+       "max_r": 0.23174537725844857,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 1373.1283260003693,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 1390.4939120513518,
+        "Y_tpot": 13.053291999212673,
+        "Y_long": 6266.034966750794
+       }
+      },
+      {
+       "tag": "C-M8K-c1-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 37.35653770158272,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1389.3987594974533,
+        "tpot": 13.052742711428666,
+        "long": 6268.499381049514
+       },
+       "R": {
+        "short": 0.23156645991624222,
+        "tpot": 0.13052742711428666,
+        "long": 0.31342496905247574
+       },
+       "max_r": 0.23156645991624222,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 1372.2033480007667,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 1389.3936024969662,
+        "Y_tpot": 13.052735790956007,
+        "Y_long": 6268.499381049514
+       }
+      },
+      {
+       "tag": "C-M8K-c1-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 37.34626954614994,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1390.0392926010682,
+        "tpot": 13.054740167312348,
+        "long": 6269.127326247326
+       },
+       "R": {
+        "short": 0.23167321543351135,
+        "tpot": 0.13054740167312348,
+        "long": 0.3134563663123663
+       },
+       "max_r": 0.23167321543351135,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 1371.5282170014689,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 1390.085358599572,
+        "Y_tpot": 13.054566124002859,
+        "Y_long": 6269.127326247326
+       }
+      },
+      {
+       "tag": "C-M8K-c1-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 37.34074025191275,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1389.206950150583,
+        "tpot": 13.065056896057358,
+        "long": 6269.88431679747
+       },
+       "R": {
+        "short": 0.23153449169176382,
+        "tpot": 0.1306505689605736,
+        "long": 0.3134942158398735
+       },
+       "max_r": 0.23153449169176382,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 1371.0660029973951,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 1389.2065800506316,
+        "Y_tpot": 13.064871374798692,
+        "Y_long": 6269.88431679747
+       }
+      },
+      {
+       "tag": "C-M8K-c1-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 37.33510997539521,
+       "kv_cache_usage_peak": 0.2672064777327935,
+       "preemptions": 0.0,
+       "waiting_peak": 0.0,
+       "inflight_peak": 1.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1388.796825899044,
+        "tpot": 13.071237637782684,
+        "long": 6267.442157697042
+       },
+       "R": {
+        "short": 0.23146613764984067,
+        "tpot": 0.13071237637782684,
+        "long": 0.3133721078848521
+       },
+       "max_r": 0.23146613764984067,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 1371.6094800001883,
+       "n": {
+        "short": 178,
+        "long": 20,
+        "all": 198
+       },
+       "full": {
+        "Y_short": 1388.7707912988844,
+        "Y_tpot": 13.071096629910317,
+        "Y_long": 6267.442157697042
+       }
+      }
+     ]
+    },
+    "2": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "met": 5,
+     "worst_R": {
+      "short": 0.4090238206667891,
+      "tpot": 0.6078913761220472,
+      "long": 0.361368095705111
+     },
+     "pooled": {
+      "Y_short": 2371.912167299888,
+      "Y_tpot": 60.754289049214634,
+      "Y_long": 7227.36191410222,
+      "R_long": 0.361368095705111
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-M8K-c2-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 47.40565790046135,
+       "kv_cache_usage_peak": 0.3441295546558705,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2369.8559829999795,
+        "tpot": 60.73643584251454,
+        "long": 7221.168696300447
+       },
+       "R": {
+        "short": 0.39497599716666326,
+        "tpot": 0.6073643584251454,
+        "long": 0.3610584348150223
+       },
+       "max_r": 0.6073643584251454,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 2747.3910889984836,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 2387.7979847505267,
+        "Y_tpot": 60.7239690015677,
+        "Y_long": 7221.168696300447
+       }
+      },
+      {
+       "tag": "C-M8K-c2-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 47.421665633860485,
+       "kv_cache_usage_peak": 0.3441295546558705,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2369.421116249214,
+        "tpot": 60.73015557874209,
+        "long": 7217.475833647222
+       },
+       "R": {
+        "short": 0.39490351937486895,
+        "tpot": 0.607301555787421,
+        "long": 0.3608737916823611
+       },
+       "max_r": 0.607301555787421,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 2746.6927919995214,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 2387.920552499785,
+        "Y_tpot": 60.72897361023848,
+        "Y_long": 7217.475833647222
+       }
+      },
+      {
+       "tag": "C-M8K-c2-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 47.40372449652638,
+       "kv_cache_usage_peak": 0.3441295546558705,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2368.8455049996264,
+        "tpot": 60.723428173239554,
+        "long": 7217.995580999377
+       },
+       "R": {
+        "short": 0.3948075841666044,
+        "tpot": 0.6072342817323956,
+        "long": 0.36089977904996884
+       },
+       "max_r": 0.6072342817323956,
+       "conclusion": "pass",
+       "attainment": 0.9897959183673469,
+       "burst_max_ttft_ms": 2736.529032998078,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 2387.7277484482,
+        "Y_tpot": 60.71559497638556,
+        "Y_long": 7217.995580999377
+       }
+      },
+      {
+       "tag": "C-M8K-c2-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 47.37138882377306,
+       "kv_cache_usage_peak": 0.3441295546558705,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2373.021994249939,
+        "tpot": 60.789137612204726,
+        "long": 7228.1022135022795
+       },
+       "R": {
+        "short": 0.3955036657083231,
+        "tpot": 0.6078913761220472,
+        "long": 0.361405110675114
+       },
+       "max_r": 0.6078913761220472,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 2742.048669999349,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 2390.2604958497286,
+        "Y_tpot": 60.78877429409608,
+        "Y_long": 7228.1022135022795
+       }
+      },
+      {
+       "tag": "C-M8K-c2-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 47.36807631470595,
+       "kv_cache_usage_peak": 0.3441295546558705,
+       "preemptions": 0.0,
+       "waiting_peak": 1.0,
+       "inflight_peak": 2.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2454.1429240007346,
+        "tpot": 60.78250959644791,
+        "long": 7225.450610799817
+       },
+       "R": {
+        "short": 0.4090238206667891,
+        "tpot": 0.6078250959644791,
+        "long": 0.36127253053999087
+       },
+       "max_r": 0.6078250959644791,
+       "conclusion": "pass",
+       "attainment": 0.9846938775510204,
+       "burst_max_ttft_ms": 2749.2719990004844,
+       "n": {
+        "short": 176,
+        "long": 20,
+        "all": 196
+       },
+       "full": {
+        "Y_short": 2700.7073463008055,
+        "Y_tpot": 60.77798316652668,
+        "Y_long": 7225.450610799817
+       }
+      }
+     ]
+    },
+    "3": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "FAIL",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 1.2759237644083745,
+      "tpot": 0.7124979800511622,
+      "long": 0.37737162857499695
+     },
+     "pooled": {
+      "Y_short": 7655.542586450247,
+      "Y_tpot": 71.24979800511622,
+      "Y_long": 7547.4325714999395,
+      "R_long": 0.37737162857499695
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "inflight_le_c": true,
+     "runs": [
+      {
+       "tag": "C-M8K-c3-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 52.523135308773526,
+       "kv_cache_usage_peak": 0.42105263157894735,
+       "preemptions": 0.0,
+       "waiting_peak": 2.0,
+       "inflight_peak": 3.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 7655.542586450247,
+        "tpot": 71.24979800511622,
+        "long": 7547.4325714999395
+       },
+       "R": {
+        "short": 1.2759237644083745,
+        "tpot": 0.7124979800511622,
+        "long": 0.37737162857499695
+       },
+       "max_r": 1.2759237644083745,
+       "conclusion": "fail",
+       "attainment": 0.9278350515463918,
+       "burst_max_ttft_ms": 4109.817325001131,
+       "n": {
+        "short": 174,
+        "long": 20,
+        "all": 194
+       },
+       "full": {
+        "Y_short": 7650.706614350565,
+        "Y_tpot": 71.0832579917288,
+        "Y_long": 7547.4325714999395
+       }
+      }
+     ]
+    }
+   },
+   "c_slo": {
+    "value": 2,
+    "status": "EXACT"
+   },
+   "c_prod": {
+    "value": 2,
+    "status": "EXACT"
+   },
+   "binding": [
+    "short"
+   ],
+   "margins": {
+    "c_slo": {
+     "short": 0.5909761793332109,
+     "tpot": 0.39210862387795276,
+     "long": 0.6386319042948889
+    },
+    "c_prod": {
+     "short": 0.5909761793332109,
+     "tpot": 0.39210862387795276,
+     "long": 0.6386319042948889
+    }
+   },
+   "flags": [],
+   "descriptive": {
+    "c_full": {
+     "c_slo": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 2,
+      "status": "EXACT"
+     }
+    },
+    "c_late": {
+     "c_slo": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 2,
+      "status": "EXACT"
+     }
+    },
+    "knee": {
+     "c_knee": 8,
+     "c_slo": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_slo_minus_knee": -6
+    }
+   }
+  }
+ },
+ "secondary_slo": {
+  "S1": {
+   "slo": {
+    "id": "S1",
+    "ttft_p95_ms": {
+     "2048": 1000,
+     "8192": 3000,
+     "32768": 10000
+    },
+    "tpot_p95_ms": 50,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "workloads": {
+    "U2K": {
+     "c_slo": {
+      "value": null,
+      "status": "UNSTABLE"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "UNSTABLE"
+     },
+     "binding": [
+      "tpot",
+      "short"
+     ],
+     "flags": []
+    },
+    "U8K": {
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "NT"
+     },
+     "binding": [
+      "tpot"
+     ],
+     "flags": []
+    },
+    "M2K": {
+     "c_slo": {
+      "value": 1,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 1,
+      "status": "EXACT"
+     },
+     "binding": [
+      "tpot"
+     ],
+     "flags": []
+    },
+    "M8K": {
+     "c_slo": {
+      "value": 1,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 1,
+      "status": "EXACT"
+     },
+     "binding": [
+      "tpot"
+     ],
+     "flags": []
+    }
+   },
+   "hypotheses": {
+    "H-S1": {
+     "2048": {
+      "mixed": {
+       "value": 1,
+       "status": "EXACT"
+      },
+      "uniform": {
+       "value": null,
+       "status": "UNSTABLE"
+      },
+      "verdict": "NT"
+     },
+     "8192": {
+      "mixed": {
+       "value": 1,
+       "status": "EXACT"
+      },
+      "uniform": {
+       "value": null,
+       "status": "NT"
+      },
+      "verdict": "NT"
+     }
+    },
+    "H-S2": {
+     "U2K": {
+      "c_slo": {
+       "value": null,
+       "status": "UNSTABLE"
+      },
+      "c_kv": 35,
+      "verdict": "NT"
+     },
+     "U8K": {
+      "c_slo": {
+       "value": null,
+       "status": "NT"
+      },
+      "c_kv": 13,
+      "verdict": "NT"
+     }
+    }
+   }
+  },
+  "S3": {
+   "slo": {
+    "id": "S3",
+    "ttft_p95_ms": {
+     "2048": 2000,
+     "8192": 6000,
+     "32768": 20000
+    },
+    "tpot_p95_ms": 200,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "workloads": {
+    "U2K": {
+     "c_slo": {
+      "value": 32,
+      "status": "LOWER"
+     },
+     "c_prod": {
+      "value": 32,
+      "status": "LOWER"
+     },
+     "binding": null,
+     "flags": [
+      "SEARCH_MISMATCH"
+     ]
+    },
+    "U8K": {
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "NT"
+     },
+     "binding": null,
+     "flags": []
+    },
+    "M2K": {
+     "c_slo": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "binding": [
+      "short"
+     ],
+     "flags": []
+    },
+    "M8K": {
+     "c_slo": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "binding": [
+      "short"
+     ],
+     "flags": []
+    }
+   },
+   "hypotheses": {
+    "H-S1": {
+     "2048": {
+      "mixed": {
+       "value": 2,
+       "status": "EXACT"
+      },
+      "uniform": {
+       "value": 32,
+       "status": "LOWER"
+      },
+      "verdict": "supported"
+     },
+     "8192": {
+      "mixed": {
+       "value": 2,
+       "status": "EXACT"
+      },
+      "uniform": {
+       "value": null,
+       "status": "NT"
+      },
+      "verdict": "NT"
+     }
+    },
+    "H-S2": {
+     "U2K": {
+      "c_slo": {
+       "value": 32,
+       "status": "LOWER"
+      },
+      "c_kv": 35,
+      "verdict": "inconclusive"
+     },
+     "U8K": {
+      "c_slo": {
+       "value": null,
+       "status": "NT"
+      },
+      "c_kv": 13,
+      "verdict": "NT"
+     }
+    }
+   }
+  }
+ },
+ "hypotheses": {
+  "H-S1": {
+   "2048": {
+    "mixed": {
+     "value": 2,
+     "status": "EXACT"
+    },
+    "uniform": {
+     "value": 32,
+     "status": "LOWER"
+    },
+    "verdict": "supported",
+    "prediction": "supported"
+   },
+   "8192": {
+    "mixed": {
+     "value": 2,
+     "status": "EXACT"
+    },
+    "uniform": {
+     "value": null,
+     "status": "NT"
+    },
+    "verdict": "NT",
+    "prediction": "supported"
+   }
+  },
+  "H-S2": {
+   "U2K": {
+    "c_slo": {
+     "value": 32,
+     "status": "LOWER"
+    },
+    "c_kv": 35,
+    "verdict": "inconclusive",
+    "prediction": "supported"
+   },
+   "U8K": {
+    "c_slo": {
+     "value": null,
+     "status": "NT"
+    },
+    "c_kv": 13,
+    "verdict": "NT",
+    "prediction": "supported"
+   }
+  }
+ },
+ "not_supported": [
+  "uniform-32K (option O-32K, not chosen)",
+  "--long-prefill-token-threshold 512 (option O-T, not chosen; a separate argv fingerprint)",
+  "open-loop or variable-length traffic, outputs other than 128 tokens (8.9)",
+  "the start-up burst (idx < C) is outside the estimand; only its maximum is reported (D1)",
+  "queueing before admission (client semaphore wait is excluded from TTFT)"
+ ],
+ "runs": [
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "start",
+   "tag": "sentinel-start-U2K-c25",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 1,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 2,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 4,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 8,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c8",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 16,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c16",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 32,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c32",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 64,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c64",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 48,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c48",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 40,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c40",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 36,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c36",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 34,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c34",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K",
+   "C": 35,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-c35",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K",
+   "C": 1,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-c1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K",
+   "C": 2,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-c2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K",
+   "C": 4,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-c4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K",
+   "C": 8,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-c8",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K",
+   "C": 16,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-c16",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K",
+   "C": 12,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-c12",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K",
+   "C": 10,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-c10",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K",
+   "C": 9,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-c9",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "M2K",
+   "C": 1,
+   "block": null,
+   "position": null,
+   "tag": "S-M2K-c1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "M2K",
+   "C": 2,
+   "block": null,
+   "position": null,
+   "tag": "S-M2K-c2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "M2K",
+   "C": 4,
+   "block": null,
+   "position": null,
+   "tag": "S-M2K-c4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "M2K",
+   "C": 3,
+   "block": null,
+   "position": null,
+   "tag": "S-M2K-c3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "M8K",
+   "C": 1,
+   "block": null,
+   "position": null,
+   "tag": "S-M8K-c1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "M8K",
+   "C": 2,
+   "block": null,
+   "position": null,
+   "tag": "S-M8K-c2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "M8K",
+   "C": 4,
+   "block": null,
+   "position": null,
+   "tag": "S-M8K-c4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "M8K",
+   "C": 3,
+   "block": null,
+   "position": null,
+   "tag": "S-M8K-c3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 9,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-c9-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 7,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-c7-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 4,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-c4-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 8,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-c8-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 2,
+   "block": 1,
+   "position": null,
+   "tag": "C-M8K-c2-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 1,
+   "block": 1,
+   "position": null,
+   "tag": "C-M8K-c1-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 3,
+   "block": 1,
+   "position": null,
+   "tag": "C-M8K-c3-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 33,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-c33-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 35,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-c35-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 32,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-c32-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 34,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-c34-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 2,
+   "block": 1,
+   "position": null,
+   "tag": "C-M2K-c2-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 1,
+   "block": 1,
+   "position": null,
+   "tag": "C-M2K-c1-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 3,
+   "block": 1,
+   "position": null,
+   "tag": "C-M2K-c3-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 4,
+   "block": 2,
+   "position": null,
+   "tag": "C-U8K-c4-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 7,
+   "block": 2,
+   "position": null,
+   "tag": "C-U8K-c7-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 8,
+   "block": 2,
+   "position": null,
+   "tag": "C-U8K-c8-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 2,
+   "block": 2,
+   "position": null,
+   "tag": "C-M8K-c2-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 1,
+   "block": 2,
+   "position": null,
+   "tag": "C-M8K-c1-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 33,
+   "block": 2,
+   "position": null,
+   "tag": "C-U2K-c33-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 34,
+   "block": 2,
+   "position": null,
+   "tag": "C-U2K-c34-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 32,
+   "block": 2,
+   "position": null,
+   "tag": "C-U2K-c32-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 1,
+   "block": 2,
+   "position": null,
+   "tag": "C-M2K-c1-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 2,
+   "block": 2,
+   "position": null,
+   "tag": "C-M2K-c2-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 2,
+   "block": 3,
+   "position": null,
+   "tag": "C-M8K-c2-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 1,
+   "block": 3,
+   "position": null,
+   "tag": "C-M8K-c1-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 8,
+   "block": 3,
+   "position": null,
+   "tag": "C-U8K-c8-r3",
+   "valid": false,
+   "reasons": [
+    "runner: spill: Windows shared usage 212.8 MiB at ready is 208.0 MiB above the pre-boot 4.8 MiB (> 160; 031 amendment, 030 8.6 (g)): VRAM spilled to system memory; no bench runs on this boot"
+   ]
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 7,
+   "block": 3,
+   "position": null,
+   "tag": "C-U8K-c7-r3",
+   "valid": false,
+   "reasons": [
+    "runner: spill: Windows shared usage 212.8 MiB at ready is 208.0 MiB above the pre-boot 4.8 MiB (> 160; 031 amendment, 030 8.6 (g)): VRAM spilled to system memory; no bench runs on this boot"
+   ]
+  },
+  {
+   "phase": "C",
+   "workload": "U8K",
+   "C": 4,
+   "block": 3,
+   "position": null,
+   "tag": "C-U8K-c4-r3",
+   "valid": false,
+   "reasons": [
+    "runner: spill: Windows shared usage 212.8 MiB at ready is 208.0 MiB above the pre-boot 4.8 MiB (> 160; 031 amendment, 030 8.6 (g)): VRAM spilled to system memory; no bench runs on this boot"
+   ]
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 34,
+   "block": 3,
+   "position": null,
+   "tag": "C-U2K-c34-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 32,
+   "block": 3,
+   "position": null,
+   "tag": "C-U2K-c32-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 33,
+   "block": 3,
+   "position": null,
+   "tag": "C-U2K-c33-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 2,
+   "block": 3,
+   "position": null,
+   "tag": "C-M2K-c2-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 1,
+   "block": 3,
+   "position": null,
+   "tag": "C-M2K-c1-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 33,
+   "block": 4,
+   "position": null,
+   "tag": "C-U2K-c33-r4",
+   "valid": false,
+   "reasons": [
+    "runner: spill: Windows shared usage 183.9 MiB at C-U2K-c33-r4 is 99.1 MiB above the ready reading 84.8 MiB (>= 64; 031 amendment, 030 8.6 (g)): VRAM spilled to system memory"
+   ]
+  },
+  {
+   "phase": "C",
+   "workload": "U2K",
+   "C": 34,
+   "block": 4,
+   "position": null,
+   "tag": "C-U2K-c34-r4",
+   "valid": false,
+   "reasons": [
+    "runner: not run: the boot stopped after a spill in C-U2K-c33-r4 (031; 030 8.6 (g))"
+   ]
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 1,
+   "block": 4,
+   "position": null,
+   "tag": "C-M2K-c1-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 2,
+   "block": 4,
+   "position": null,
+   "tag": "C-M2K-c2-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 1,
+   "block": 4,
+   "position": null,
+   "tag": "C-M8K-c1-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 2,
+   "block": 4,
+   "position": null,
+   "tag": "C-M8K-c2-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 2,
+   "block": 5,
+   "position": null,
+   "tag": "C-M2K-c2-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M2K",
+   "C": 1,
+   "block": 5,
+   "position": null,
+   "tag": "C-M2K-c1-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 1,
+   "block": 5,
+   "position": null,
+   "tag": "C-M8K-c1-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "M8K",
+   "C": 2,
+   "block": 5,
+   "position": null,
+   "tag": "C-M8K-c2-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "end",
+   "tag": "sentinel-end-U2K-c25",
+   "valid": true,
+   "reasons": []
+  }
+ ],
+ "provenance": {
+  "session_id": "formal-20261017-c1",
+  "deployed_commit": "b3c91096f40ddc8a6d5294cea64fa1afa737ec50",
+  "capacity_sha256": "b7c4a6c68bdd7b39857b55f2cb6f00feb0e0fc134334263a22bb5284da843e21",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "plan_sha256": "66b5053f9209bfe1fb2abdd059269f12885a113197167ada9c4a854135a3b67f",
+  "confirm_plan_sha256": "bd04879c9e7cb7c77ffe95e229271575e3ca87ab133f2d5d25718f18594ac419",
+  "rows_sha256": "b0f1f0b963b091f65ca11d11af59c7a540191d6999831b3d2fe348f44ea3494e",
+  "c0_branch": "A",
+  "n_near": {
+   "U2K": 5,
+   "U8K": 5,
+   "M2K": 5,
+   "M8K": 5
+  },
+  "derived_from": "formal-20261009-coreb-uniform",
+  "mixed_dataset_sha256": {
+   "2048": "3fc75fcadaa5d457ade882598ba129402469ff2393f32a8dd24753f3fe69f2f8",
+   "8192": "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2"
+  }
+ },
+ "platform": {
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "driver": "617.42",
+  "vllm": "0.30.0",
+  "torch": "2.13.0+cu130",
+  "model": "RedHatAI/Qwen3.5-9B-quantized.w4a16@a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "server_argv_sha256": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+  "env": {
+   "HF_HOME": "/home/wenn0113/.cache/huggingface",
+   "HF_HUB_OFFLINE": "1",
+   "VLLM_GDN_DECODE_KERNEL": "triton",
+   "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+   "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+   "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+   "OTEL": {},
+   "engine_vars": [
+    "CUDA_HOME",
+    "VLLM_GDN_DECODE_KERNEL",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY"
+   ]
+  },
+  "K": 4294967296,
+  "U": "0.91",
+  "num_gpu_blocks": 248,
+  "block_size": 528
+ },
+ "report": {
+  "session_id": "formal-20261017-c1",
+  "uniform_session": "formal-20261009-coreb-uniform",
+  "advanced_references": true,
+  "capacity_sha256": "b7c4a6c68bdd7b39857b55f2cb6f00feb0e0fc134334263a22bb5284da843e21",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b"
+ }
+}

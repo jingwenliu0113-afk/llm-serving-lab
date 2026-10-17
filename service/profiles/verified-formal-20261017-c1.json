@@ -1,0 +1,179 @@
+{
+ "schema_version": 1,
+ "profile_id": "verified-formal-20261017-c1",
+ "status": "verified",
+ "provisional_reason": null,
+ "slo": {
+  "id": "S2",
+  "terms": {
+   "ttft_p95_ms": {
+    "2048": 2000,
+    "8192": 6000,
+    "32768": 20000
+   },
+   "tpot_p95_ms": 100,
+   "mixed_long": "budget"
+  }
+ },
+ "server": {
+  "vllm_version": "0.30.0",
+  "model_repo": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+  "model_revision": "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "fingerprint_sha256": "98b9f41be7b75b6bf431e6c090124156360edfc929ccd6164001468da05b6d4f",
+  "num_gpu_blocks": 248,
+  "block_size": 528
+ },
+ "classes": [
+  {
+   "name": "uniform-2k",
+   "max_prompt_tokens": 1920,
+   "max_output_tokens": 128,
+   "max_concurrency": 32,
+   "max_queue": 32,
+   "source": "stage_c:U2K:c_prod:LOWER",
+   "status": "verified",
+   "bound": "lower",
+   "unavailable_reason": null,
+   "evidence": {
+    "workload": "U2K",
+    "scope": "uniform 1920-token prompts, 128 output tokens (ignore-eos); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7)",
+    "c_prod": {
+     "value": 32,
+     "status": "LOWER"
+    },
+    "c_slo": {
+     "value": 32,
+     "status": "LOWER"
+    },
+    "c_kv": 35,
+    "c_cap": 70,
+    "flags": [
+     "SEARCH_MISMATCH"
+    ],
+    "binding": [
+     "tpot"
+    ],
+    "margins": {
+     "short": 0.4108568167507656,
+     "tpot": 0.06770057240153149
+    },
+    "burst_max_ttft_ms": 10344.995453000593
+   }
+  },
+  {
+   "name": "uniform-8k",
+   "max_prompt_tokens": 8064,
+   "max_output_tokens": 128,
+   "max_concurrency": null,
+   "max_queue": null,
+   "source": "stage_c:U8K:c_prod:NT",
+   "status": "unavailable",
+   "bound": null,
+   "unavailable_reason": "Stage C U8K: C_PROD is NT: its confirmation points are not testable (C 4 NT, C 7 NT, C 8 NT, C 9 FAIL); no admission limit is verified, so the class is never served (030 8.7: never a number, never a fallback)",
+   "evidence": {
+    "workload": "U8K",
+    "scope": "uniform 8064-token prompts, 128 output tokens (ignore-eos); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7)",
+    "c_prod": {
+     "value": null,
+     "status": "NT"
+    },
+    "c_slo": {
+     "value": null,
+     "status": "NT"
+    },
+    "c_kv": 13,
+    "c_cap": 26,
+    "flags": [],
+    "binding": [
+     "tpot"
+    ],
+    "margins": null,
+    "burst_max_ttft_ms": null
+   }
+  },
+  {
+   "name": "mixed-2k",
+   "max_prompt_tokens": 32640,
+   "max_output_tokens": 128,
+   "max_concurrency": 2,
+   "max_queue": 2,
+   "source": "stage_c:M2K:c_prod:EXACT",
+   "status": "verified",
+   "bound": "exact",
+   "unavailable_reason": null,
+   "evidence": {
+    "workload": "M2K",
+    "scope": "the 007 mix of 1920-token (90 %) and 32640-token (10 %) prompts, 128 output tokens (ignore-eos); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7)",
+    "c_prod": {
+     "value": 2,
+     "status": "EXACT"
+    },
+    "c_slo": {
+     "value": 2,
+     "status": "EXACT"
+    },
+    "c_kv": 35,
+    "c_cap": 70,
+    "flags": [],
+    "binding": [
+     "short"
+    ],
+    "margins": {
+     "short": 0.6808278207499825,
+     "tpot": 0.39674399915349756,
+     "long": 0.6740538952775932
+    },
+    "burst_max_ttft_ms": 645.699724998849
+   }
+  },
+  {
+   "name": "mixed-8k",
+   "max_prompt_tokens": 32640,
+   "max_output_tokens": 128,
+   "max_concurrency": 2,
+   "max_queue": 2,
+   "source": "stage_c:M8K:c_prod:EXACT",
+   "status": "verified",
+   "bound": "exact",
+   "unavailable_reason": null,
+   "evidence": {
+    "workload": "M8K",
+    "scope": "the 007 mix of 8064-token (90 %) and 32640-token (10 %) prompts, 128 output tokens (ignore-eos); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7)",
+    "c_prod": {
+     "value": 2,
+     "status": "EXACT"
+    },
+    "c_slo": {
+     "value": 2,
+     "status": "EXACT"
+    },
+    "c_kv": 13,
+    "c_cap": 26,
+    "flags": [],
+    "binding": [
+     "short"
+    ],
+    "margins": {
+     "short": 0.5909761793332109,
+     "tpot": 0.39210862387795276,
+     "long": 0.6386319042948889
+    },
+    "burst_max_ttft_ms": 2749.2719990004844
+   }
+  }
+ ],
+ "provenance": {
+  "source_session": "formal-20261017-c1",
+  "analysis_path": "results/capacity/formal-20261017-c1/analysis.json",
+  "analysis_sha256": "d652ce6be1626dae99a95125e846a1ba31b92dacc3f8f952e5a786b3d4c600eb",
+  "prereg_section": "§8",
+  "freeze_commit": "b3c91096f40ddc8a6d5294cea64fa1afa737ec50",
+  "generator_commit": "aff881f29a2fb796d1843079d6895a6b0df8a143",
+  "deployed_commit": "b3c91096f40ddc8a6d5294cea64fa1afa737ec50",
+  "capacity_sha256": "b7c4a6c68bdd7b39857b55f2cb6f00feb0e0fc134334263a22bb5284da843e21",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "gpu_driver": "617.42"
+ },
+ "content_sha256": "9328b6725878d55c14f808c42b046cadd08aa0ed5018e01e098edcfe28325b9f"
+}

@@ -435,6 +435,7 @@ env-invalid 或 drift 的 session 整個重跑，不先看判定（013）。
 **狀態：FROZEN（2026-10-17）**。使用者已選定 SLO S2、mixed 長 request 為 budget、穩態時間窗，並接受一次連續占用 GPU lock（030「使用者決定」）。
 harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結（`freeze.capacity = true`）。
 〔2026-10-17：C0 的結果為 Rrun → 分支 A（decision 032）；兩次 smoke 都已通過；本節與 `configs/capacity.toml` 凍結（030「凍結紀錄」）。〕
+〔凍結後註記，2026-10-17：正式 session `formal-20261017-c1` 的結果見 decision 033（U2K 32 LOWER、M2K / M8K 2 EXACT、U8K NT）。本節規則沒有改變。〕
 在那之前沒有任何 C1 數據。本節只摘要；完整規則、揭露與依據見 decision 030。第 1–7 節不變，Phase 1 的判定不受影響。
 
 - **C0**（028，探索性）：8K 雙模式的有限度排查（GPU lock 下最多 3.0 h），只決定本節的分支 A–D。

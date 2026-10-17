@@ -21,7 +21,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–032（030 於 2026-10-17 凍結）。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–033（030 於 2026-10-17 凍結；033 是 C1 的結果）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -136,10 +136,11 @@
    smoke 通過、C0 分支 A、凍結證據已填入 `configs/capacity.toml`（decision 032，`f35fe85`）。
    **已凍結**：`freeze.capacity = true` 單獨一個 commit（profile 產生器以它為凍結 commit）；`tests/test_stage_c_frozen.py` 以 sha256 固定五個 Stage C 模組與 capacity.toml。
    凍結 commit `b3c9109`（profile 產生器的 `freeze_commit_problems` 已確認它是合格的凍結 commit）。
-   - **正式 session 執行中**：`formal-20261017-c1`，部署 `b3c9109`（manifest 216 個檔案相符），2026-10-17 02:51 起，GPU lock 下，單一 ssh 前景指令（030 8.4）。
-     開始前 Windows CPU 0.4%、可用 RAM 23.9 GB；Mac 只維持 ssh（`caffeinate -i`）。遠端 log：`/tmp/llmsl-c1.log`、`/tmp/llmsl-c1-plan.log`。
-   - session 期間不部署、不跑產品測試。
-   - 完成後：取回（不含 raw/）→ `capacity_report`（Mac）→ C1 結果的 decision log → `profile_gen --freeze-commit b3c91096f40ddc8a6d5294cea64fa1afa737ec50` → README / NEXT。
+   - **正式 session 完成**：`formal-20261017-c1`（部署 `b3c9109`，2026-10-17 02:51–10:18，7.45 h），69 / 74 個 run 有效，replay、sentinel、跨 session 偏移都通過。
+     結果（decision 033）：U2K C_PROD 32 LOWER、M2K / M8K 2 EXACT、**U8K NT**。
+     5 個無效的 run 都是 spill：BingWallpaper 在 08:29 自行重新啟動，在 NVIDIA 卡上用了約 190 MiB。spill 偵測擋下了它們，依規則不補跑。
+   - **待使用者決定**：U8K 是否以相同的凍結協定重跑一個完整 session（033 的選項 1–3）。
+     若要重跑，使用者要先讓 BingWallpaper 不會自動啟動（屬於系統設定，我不修改），我再事先寫好兩個 session 的取捨規則。
 
 ### Engineering
 1. 架構：decision 029。
@@ -151,7 +152,8 @@
    - **RTX 整合測試 IT-0 至 IT-6 全部通過**（2026-10-16，兩次：`pt-20261016T142720Z-itest`、`pt-20261016T143958Z`，release `635b954` / `f30d17c`），
      依 031 的產品規格（基線判定；> 2,048 MiB 拒絕）。只是產品測試，不是容量。
 4. **M2 已實作**（`b91a9bf`）：產生器、載入時的 provenance 驗證、verified 0 與 unavailable class。
-   還沒有任何 verified profile：等 `formal-20261017-c1` 的 analysis 之後產生、commit，再以 verified profile 在 RTX 上跑 IT（不在研究 session 期間）。
+   **第一份 verified profile**：`service/profiles/verified-formal-20261017-c1.json`（uniform-2k 32、mixed-2k 2、mixed-8k 2、uniform-8k unavailable）。
+   下一步：以 verified profile（active class uniform-2k）在 RTX 上跑 IT，不能和研究 session 重疊。
 
 ### Phase 1 收尾（2026-10-11，已完成）
 

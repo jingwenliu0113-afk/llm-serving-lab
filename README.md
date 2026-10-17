@@ -11,9 +11,9 @@
 >   - Advanced：隔離 H-B4 的成因（事先登記與凍結見 024，結果見 025）。
 > - **Phase 2** 分成兩條受控並行的線：
 >   - Research Stage C：Fixed-SLO 下的最大並發容量。事先登記已凍結（PREREGISTRATION §8、decision 030，2026-10-17）；
->     C0 的有限度排查為分支 A（decision 032）。正式 session 尚未執行，還沒有任何容量結論。
+>     C0 的有限度排查為分支 A（decision 032）。正式 session 已完成（decision 033）：uniform 2K 32（下界）、mixed 2K / 8K 2、uniform 8K 無法檢定。
 >   - Engineering：建在 vLLM 之上的 Capacity-Aware Serving Service（`service/`）。
->   - 尚未經 Stage C 驗證的容量都標為 provisional，不是產品限制。
+>   - 只有 Stage C 驗證過的容量（`service/profiles/verified-formal-20261017-c1.json`）是產品限制；其他都標為 provisional。
 
 ## 研究範圍
 
@@ -267,6 +267,30 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - allocator 沒有操弄。KV 只能往下調（熱 boot 可用量上限約 4.14 GiB，sm_120 不支援 fp8 KV），所以「KV 是主因」最多只能是推論級（R5）；兩個 L 都沒有落在 R5。
 - 8K uniform 的 boot 之間有兩個模式（約 2.48 與 2.82 秒，成因未知），使 8K 的 noise 偏大。事後把模式拉齊重算（敏感度計算，不是判定），8K 的類別與列都不變（025「限制」）。
 - Core 的判定與 deployment decision table 都不因 Advanced 改變。
+
+### Phase 2 Stage C：Fixed-SLO 下的最大並發（decision 030 / 033）
+
+正式 session `formal-20261017-c1`（凍結 commit `b3c9109`，C0 分支 A；7.45 h，69 / 74 個 run 有效）。
+- SLO 為 S2：TTFT 2 / 6 / 20 s，TPOT 100 ms；穩態時間窗；需要 n 次有效的 boot，且每次都在 5% guard band 內。
+- 有效性檢查都通過：replay、sentinel（漂移 0.08%）、跨 session 的偏移。
+
+| workload | C_PROD（產品上限） | C_SLO | 備註 |
+|---|---|---|---|
+| uniform 2K | **32**（下界） | 32（下界） | 先失守的是 TPOT。只跑一次負載測試會得到 34（SEARCH_MISMATCH） |
+| uniform 8K | **無法檢定（NT）** | NT | 一次 boot 在就緒時 spill，它的確認點都不足 n 次有效 run |
+| mixed 2K（10% 32K 長 request） | **2** | 2 | 並發 3 時短類 TTFT 超過門檻 |
+| mixed 8K（10% 32K 長 request） | **2** | 2 | 同上 |
+
+- **H-S1（mixed 降低容量）**：2K supported，8K NT。**H-S2（C_SLO ≤ C_KV）**：U2K inconclusive，U8K NT。
+- **5 個無效的 run 都是 spill**：
+  - 原因是 Windows 上的 BingWallpaper 在 session 進行中（08:29）自行啟動，在 NVIDIA 卡上多用了約 190 MiB VRAM。
+  - 031 的 spill 偵測擋下了這 5 個 run，依規則不補跑。
+  - 這使 uniform 8K 無法檢定，uniform 2K 只有下界。
+- **verified profile**：`service/profiles/verified-formal-20261017-c1.json`，由產生器產生，是第一份正式的產品上限。
+  - uniform-2k 32、mixed-2k 2、mixed-8k 2；
+  - uniform-8k 為 unavailable，產品不提供。
+  - 範圍只限封閉迴路、128 個 output token、准入之後的延遲（030 8.9）。
+- U8K 是否以相同的凍結協定重跑，待使用者決定（033）。
 
 ### 證據不支持的部分
 

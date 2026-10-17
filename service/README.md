@@ -11,14 +11,17 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 
 ## Provisional 的數值不是產品限制
 
-- 目前**沒有任何驗證過的容量**。只有由 Stage C 正式、有效、凍結的分析經產生器產生的 `verified` profile，才能成為產品限制（027 §4）。
+- 只有由 Stage C 正式、有效、凍結的分析經產生器產生的 `verified` profile，才能成為產品限制（027 §4）。
+  目前唯一的一份是 `profiles/verified-formal-20261017-c1.json`（decision 033）：
+  - uniform-2k 32（下界）、mixed-2k 2、mixed-8k 2；
+  - uniform-8k 為 unavailable，以它為 active class 時 `serve` 與 `deploy up` 都拒絕啟動。
 - `profiles/provisional-dev.json` 的上限（並發 4、佇列 4）是手動設定的開發值，只供開發與假後端的整合測試。
   它**不是容量**，不得當成產品限制引用，也不是 Core 的 C_knee。
 - provisional profile 只有在 `--allow-provisional` 或 `CAPSERVE_ALLOW_PROVISIONAL=1` 時才能載入；
   這時啟動訊息、`/readyz`、`/metrics`（`capserve_profile_verified 0`）與每個 response 的 `x-capserve-profile` header 都標示 provisional。
 - `python -m capserve.profile_gen` 在 `configs/capacity.toml` 的 `[freeze] capacity` 為 true 之前一律 exit 2（見下一節）。
 
-## Verified profile（M2 的產生器；目前還沒有任何 verified profile）
+## Verified profile（M2 的產生器）
 
 ```bash
 PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
