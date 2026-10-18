@@ -117,9 +117,10 @@
 - **適用範圍**（8.9）：封閉迴路、128 個 output token、准入之後的延遲；這台 RTX 5070 Ti（WSL2）、這個模型與 Core B 的 argv。
   開放迴路、其他長度的輸出與開場湧入都不在估計量內。
 - **RTX 產品整合測試**（release `7513d62`，2026-10-18）：
-  - verified profile 的 IT-0、1、2、4、5、6 全部通過；
-  - IT-3 以 provisional-rtx 在同一 release 上通過；
-  - 細節與理由見 029 最後的補記。
+  - verified profile 的 IT-0、1、2、4、5、6 全部通過。
+  - **verified profile 下的 IT-3 無法判定，不算通過**：128 token 的輸出上限無法區分 abort 和自然結束，第一次執行記為不通過。
+  - IT-3 的決定性驗證只來自 provisional-rtx（1,024 token），在同一 release 上通過。
+  - 細節見 029 的補記與 036。
 - **獨立核對**（2026-10-18，在 commit 之後、push 之前）：
   - 另一個 agent 不 import 分析程式，自己從 rows 與逐 request 檔重算：392 項比較，0 項不符。
   - `capacity_report` 能逐位元組重現 analysis.json；034 的各項條件都符合。

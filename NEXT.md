@@ -2,7 +2,14 @@
 
 ## 目前位置
 
-**Phase 2 進行中（使用者 2026-10-15 決定，decision 027）**：Research 與 Engineering 兩條線受控並行。
+**Phase 2 已結案（使用者 2026-10-19 決定，decision 036）**：接受正式研究結果，封版。
+- 不再追加正式 GPU 實驗，不修改已封存的結果，不放寬 SLO。
+- 後續的產品化或研究由使用者另外決定，目前沒有待辦。
+- **正式成果**：`service/profiles/verified-formal-20261017-c1b.json`（decision 035）。
+  - C_PROD：uniform 2K 32、uniform 8K 8、mixed 2K / 8K 2。
+  - 適用條件、IT-3 的限制與正式 profile 的保護見 036。
+
+（以下為 Phase 2 期間的紀錄）Research 與 Engineering 兩條線受控並行（使用者 2026-10-15 決定，decision 027）。
 - Phase 1（Core + Advanced，026 的 milestone）結果保留，不重新分析；凍結程式由 `test_core_untouched`、`test_frozen_untouched` 保護。
 - **Research Stage C**：
   - C0：8K 延遲雙模式的有限度排查（探索性）。
@@ -21,7 +28,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–035（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果）。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–036（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果；036 是 Phase 2 結案）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -161,7 +168,9 @@
    - **以最終 profile 跑 RTX 整合測試**（release `7513d62`，2026-10-18，029 的最新補記）：
      - verified profile 的 IT-0、1、2、4、5、6 全部通過（`pt-20261017T184655Z-itest`）。
      - 同一 release、同一次 lock 中，provisional-rtx 的 IT-0 至 IT-6 全部通過，IT-3 是決定性的（`pt-20261017T184834Z-itest`）。
-     - 128 token 的輸出上限讓 IT-3 無法區分 abort 和自然結束，所以 verified profile 不跑 IT-3。
+     - 128 token 的輸出上限讓 IT-3 無法區分 abort 和自然結束：verified profile 下的 IT-3 記為**無法判定，不算通過**（036）。
+   - **正式 profile 的保護**（036，2026-10-19）：`rtx-verified.toml` 的 `production_profile` 釘住最終 profile。
+     deploy 與 itest 會拒絕其他 profile 與任何允許 provisional 的執行；provisional profile 不得使用 Stage C 的 class 名稱。
 
 ### Phase 1 收尾（2026-10-11，已完成）
 

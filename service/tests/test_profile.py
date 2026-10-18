@@ -302,6 +302,31 @@ def test_a_provisional_profiles_classes_carry_no_status(tmp_path, pins, over, ne
     assert "provisional" in refusal(tmp_path, rehash(doc), pins=pins)
 
 
+@pytest.mark.parametrize("name", sorted(cp.CLASS_NAMES.values()))
+def test_a_provisional_profile_never_uses_a_verified_class_name(tmp_path, pins, name):
+    """Phase 2 closure (036): the Stage C class names belong to verified profiles. A provisional profile with a class
+    named uniform-2k could otherwise be served under a production config that selects uniform-2k, so it is refused
+    even with --allow-provisional."""
+    doc = provisional_doc(pins)
+    doc["classes"] = [_class(name=name)]
+    msg = refusal(tmp_path, rehash(doc), pins=pins)
+    assert name in msg and "reserved" in msg
+
+
+def test_a_provisional_profile_id_never_starts_with_verified(tmp_path, pins):
+    doc = provisional_doc(pins)
+    doc["profile_id"] = "verified-formal-20261017-c1b"
+    msg = refusal(tmp_path, rehash(doc), pins=pins)
+    assert "profile_id" in msg and "verified-" in msg
+
+
+def test_the_committed_provisional_profiles_use_no_reserved_name(pins):
+    for path in sorted((SERVICE / "profiles").glob("provisional-*.json")):
+        prof = cp.load_profile(path, allow_provisional=True, pins=pins)
+        assert not prof.verified and not prof.profile_id.startswith("verified-")
+        assert not {c.name for c in prof.classes} & set(cp.CLASS_NAMES.values()), path.name
+
+
 def test_serving_class_refuses_an_unavailable_class_and_keeps_a_verified_0(tmp_path, pins):
     prof = load(write(tmp_path, verified_doc(pins, classes=UNAVAILABLE)), allow_provisional=False, pins=pins)
     for name in ("uniform-8k", "mixed-2k"):

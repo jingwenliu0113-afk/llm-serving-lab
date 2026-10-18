@@ -264,8 +264,11 @@ def profile_problems(doc: dict, prof: CapacityProfile, pins: dict) -> list:
             problems.append(f"server.{key} {getattr(prof.server, key)!r} != pins {value!r}")
     if prof.verified:
         problems += _verified_problems(prof)
-    elif not (prof.provisional_reason or "").strip():
-        problems.append("a provisional profile needs a provisional_reason")
+    else:
+        if not (prof.provisional_reason or "").strip():
+            problems.append("a provisional profile needs a provisional_reason")
+        if prof.profile_id.startswith("verified-"):   # 036: never mistaken for the generator's verified-<session>
+            problems.append(f"profile_id {prof.profile_id!r}: a provisional profile's id never starts with 'verified-'")
     return problems
 
 
@@ -282,6 +285,9 @@ def _provisional_class_problems(c: WorkloadClass) -> list:
     extra = [k for k in ("status", "bound", "unavailable_reason", "evidence") if getattr(c, k) is not None]
     problems = [f"class {c.name}: {extra} belong to a verified profile's classes; a provisional profile's classes "
                 "carry none (030 8.7)"] if extra else []
+    if c.name in CLASS_NAMES.values():   # 036: a production config selects these names; never a provisional limit
+        problems.append(f"class name {c.name!r} is reserved for a verified profile's Stage C class (030 8.7); a "
+                        "provisional profile names its classes otherwise")
     return problems + _limit_problems(c)
 
 

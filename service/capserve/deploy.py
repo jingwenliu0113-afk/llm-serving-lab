@@ -148,6 +148,9 @@ class DeployConfig(BaseModel):
     startup_timeout_s: float = Field(900.0, gt=0, allow_inf_nan=False)
     max_hold_s: float = Field(3600.0, gt=0, le=MAX_HOLD_S, allow_inf_nan=False)
     drain_timeout_s: int = Field(60, ge=0, le=MAX_DRAIN_S)
+    # 036: a production config pins the one verified profile it serves (release-relative service/profiles/<name>.json);
+    # `up` then refuses any other --profile and any run with provisional profiles allowed. None: an integration config.
+    production_profile: str | None = None
     gateway: dict = Field(default_factory=dict)
 
     @property
@@ -185,6 +188,9 @@ class DeployConfig(BaseModel):
         svc, research = Path(self.service_root).resolve(), Path(self.research_dir).resolve()
         if svc == research or svc.is_relative_to(research) or research.is_relative_to(svc):
             problems.append(f"service_root {svc} overlaps the research directory {research}")
+        if self.production_profile is not None and not VERIFIED_PROFILE_PATH.fullmatch(self.production_profile):
+            problems.append(f"production_profile {self.production_profile!r} is not service/profiles/<name>.json, the "
+                            "only place a served verified profile lives in a release (036)")
         owned = sorted(set(self.gateway) & set(OWNED_GATEWAY_KEYS))
         if owned:
             problems.append(f"[gateway] must not set {owned}: the deploy owns them")
@@ -335,6 +341,24 @@ def verified_profile_problems(profile_path, data: bytes, release_root) -> list:
     if hashlib.sha256(data).hexdigest() != want:
         return [f"{rel} differs from its DEPLOY_MANIFEST.json hash: {why}"]
     return []
+
+
+def production_profile_problems(cfg: DeployConfig, profile_path, *, allow_provisional: bool, release_root) -> list:
+    """036: a production config (production_profile set) serves exactly its pinned verified profile and never runs
+    with provisional profiles allowed, so a provisional profile, another committed profile or a leftover
+    CAPSERVE_ALLOW_PROVISIONAL=1 cannot replace the product limits. [] for an integration config (no pin)."""
+    if cfg.production_profile is None:
+        return []
+    problems = []
+    if allow_provisional:
+        problems.append(f"this production config (production_profile {cfg.production_profile}) never runs with "
+                        "provisional profiles allowed: drop --allow-provisional and unset CAPSERVE_ALLOW_PROVISIONAL "
+                        "(036)")
+    pinned = Path(release_root).resolve() / cfg.production_profile
+    if Path(profile_path).resolve() != pinned:
+        problems.append(f"--profile {profile_path} is not this production config's production_profile "
+                        f"{cfg.production_profile} ({pinned}); a production deploy serves only that file (036)")
+    return problems
 
 
 # ---------------------------------------------------------------- effects (all injectable)
@@ -632,11 +656,13 @@ def up(cfg: DeployConfig, profile_path, *, allow_provisional: bool, loadtest: st
     # 1-2. release, pins, profile, preflight: refuse with every problem before anything starts
     sha, problems = release_problems(release_root, cfg)
     problems += stage_b_problems(pins)
+    problems += production_profile_problems(cfg, profile_path, allow_provisional=allow_provisional,
+                                            release_root=release_root)
     prof = profile_bytes = None
     try:   # read once: these bytes are checked, recorded and served (runs/<id>/profile.json)
         profile_bytes = Path(profile_path).read_bytes()
-        prof = parse_profile(profile_bytes, source=profile_path, allow_provisional=allow_provisional, pins=pins,
-                             frozen=frozen)
+        prof = parse_profile(profile_bytes, source=profile_path, pins=pins, frozen=frozen,
+                             allow_provisional=allow_provisional and cfg.production_profile is None)
     except OSError as exc:
         problems.append(f"{profile_path}: cannot read the profile: {exc}")
     except ProfileError as exc:

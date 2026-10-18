@@ -1,4 +1,4 @@
-# capserve on the RTX (WSL2 Ubuntu-22.04) with the verified profile (decision 035): product only, never research.
+# capserve on the RTX (WSL2 Ubuntu-22.04): the production config, verified profile only (decisions 035 / 036).
 # Read by `python -m capserve.deploy` and `python -m capserve.loadtest` / `capserve.itest` (capserve/deploy.py).
 
 [deploy]
@@ -9,6 +9,9 @@ gateway_port = 8080
 startup_timeout_s = 900                               # Stage B cold boot 164.4 s; the first product boot is cold (own HOME)
 max_hold_s = 3600                                     # bounds how long the shared GPU lock is held (029: <= 1 h per session)
 drain_timeout_s = 60
+# 036: the production config pins the one verified profile it serves; `capserve.deploy up` (and capserve.itest) refuse
+# any other --profile, and any run with --allow-provisional or CAPSERVE_ALLOW_PROVISIONAL=1.
+production_profile = "service/profiles/verified-formal-20261017-c1b.json"
 
 # capserve gateway settings (capserve/config.py). backend_url, host, port and drain_timeout_s are set by the deploy
 # (127.0.0.1 only, so no API key is needed). The limits come from the profile's active class, never from here.

@@ -9,16 +9,67 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 - `/healthz`、`/readyz`、`/metrics`（Prometheus，只供營運，不是研究數據）。
 - 上限來自 capacity profile（`profiles/`）中的 `active_class`。
 
-## Provisional 的數值不是產品限制
+## 正式成果與適用條件（decision 035 / 036）
 
 - 只有由 Stage C 正式、有效、凍結的分析經產生器產生的 `verified` profile，才能成為產品限制（027 §4）。
-  目前唯一的一份是 `profiles/verified-formal-20261017-c1b.json`（decision 035）：
-  - uniform-2k 32、uniform-8k 8、mixed-2k 2、mixed-8k 2，都是 exact；
-  - 範圍只限封閉迴路、128 個 output token、准入之後的延遲。
-  - C 個 request 同時到達時，第一波的 TTFT 可能遠高於 SLO（uniform-2k 最高 10.4 s、uniform-8k 11.0 s），這不在驗證範圍內。
-  - RTX 上以它部署：`service/deploy/rtx-verified.toml`（active class uniform-2k）。
-  - 整合測試：verified profile 跑 IT-0、1、2、4、5、6，IT-3 以 provisional-rtx 在同一 release 上跑（理由見 decision 029 最後的補記）。
+- 正式 profile：`profiles/verified-formal-20261017-c1b.json`（decision 035），四個 class 都是 verified、exact：
+
+  | class | prompt 上限 | 輸出上限 | max_concurrency = max_queue |
+  |---|---|---|---|
+  | uniform-2k | 1,920 | 128 | 32 |
+  | uniform-8k | 8,064 | 128 | 8 |
+  | mixed-2k | 32,640 | 128 | 2 |
+  | mixed-8k | 32,640 | 128 | 2 |
+
+- **適用條件**（完整列表見 decision 036）：
+  - RTX 5070 Ti 16 GB 上的 WSL2；vLLM 0.30.0；Qwen3.5-9B W4A16，Core B 的 server argv（每次 boot 以 fingerprint 核對）；
+  - SLO S2：短類 P95 TTFT 2 / 6 s、P95 TPOT 100 ms、mixed 的 32K request ≤ 20 s；
+  - 封閉迴路，輸出 128 token，TTFT 從准入後起算；每個關鍵點 5 次 boot，都在 5% guard band 內。
+- **不涵蓋**：
+  - 開放迴路或 Poisson 到達、其他輸出長度；
+  - 准入前的排隊；
+  - 開場湧入：C 個 request 同時到達時，uniform 第一波的 TTFT 最高 10.4 s（2K）與 11.0 s（8K），遠高於 SLO。
+
+## 正式部署與保護
+
+- 正式部署只用正式設定：
+
+  ```bash
+  python -m capserve.deploy up --config service/deploy/rtx-verified.toml \
+      --profile service/profiles/verified-formal-20261017-c1b.json
+  ```
+
+  - 在 GPU lock 下執行，active class 為 uniform-2k。
+- `rtx-verified.toml` 以 `[deploy] production_profile` 釘住這份 verified profile（036）。`capserve.deploy up`（包括 `--loadtest`）與 `capserve.itest` 會在啟動任何東西之前拒絕：
+  - 其他任何 `--profile`，包括另一份 verified profile；
+  - 任何允許 provisional 的執行：`--allow-provisional`，或 shell 中留著的 `CAPSERVE_ALLOW_PROVISIONAL=1`。
+- provisional profile 不得使用 Stage C 的 class 名稱（uniform-2k、uniform-8k、mixed-2k、mixed-8k），id 也不得以 `verified-` 開頭。
+- unavailable 或 verified 0 的 class 不能作為 active class。
+- `python -m capserve serve` 是 gateway 的低階進入點，供開發使用，不讀部署設定；正式部署不直接用它。
+- `rtx.toml` 是整合測試設定，使用 provisional-rtx，沒有釘選。
+
+## 整合測試的結果與限制（029 最後的補記、036）
+
+| 測試 | verified profile（`rtx-verified.toml`） | provisional-rtx（`rtx.toml`，同一 release） |
+|---|---|---|
+| IT-0、IT-1、IT-2、IT-4、IT-5、IT-6 | 通過 | 通過 |
+| IT-3（client 斷線） | **無法判定，不算通過** | 通過（決定性） |
+
+- verified profile 的輸出上限是 128 token。斷線時只剩約 1.0–1.4 s 的生成量，少於 IT-3 要求的 4 s，所以無法區分「被 abort」和「本來就跑完」。
+  - 第一次執行記為不通過。斷線後生成確實停止、vLLM 的 running 與 waiting 都回到 0，但這不構成決定性的證據。
+- 決定性的斷線驗證只來自 provisional-rtx（1,024 token 輸出上限）。斷線處理和 profile 無關，所以推論 verified 設定下也成立，但在 128 token 下沒有直接證據。
+- 以 verified profile 跑 IT 時用：
+
+  ```bash
+  python -m capserve.itest IT-0 IT-1 IT-2 IT-4 IT-5 IT-6 --config service/deploy/rtx-verified.toml
+  ```
+
+  - 沒有 `--profile` 時，預設就是釘住的 profile。
+
+## Provisional 的數值不是產品限制
+
 - `profiles/provisional-dev.json` 的上限（並發 4、佇列 4）是手動設定的開發值，只供開發與假後端的整合測試。
+  `profiles/provisional-rtx.json`（並發 4、佇列 4、輸出 1,024 token）只供 RTX 整合測試（`rtx.toml`）。
   它**不是容量**，不得當成產品限制引用，也不是 Core 的 C_knee。
 - provisional profile 只有在 `--allow-provisional` 或 `CAPSERVE_ALLOW_PROVISIONAL=1` 時才能載入；
   這時啟動訊息、`/readyz`、`/metrics`（`capserve_profile_verified 0`）與每個 response 的 `x-capserve-profile` header 都標示 provisional。

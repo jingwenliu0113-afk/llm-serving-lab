@@ -5,14 +5,14 @@
 這是一個事先登記（pre-registered）的實驗：hypothesis、門檻、metric 與 protocol 都在看到正式數據之前寫定並凍結，
 之後的任何變更都有 decision log。結論只來自有效的正式 session，失敗、OOM、not testable 的單位照實報告。
 
-> **狀態（2026-10-18）：Phase 2 進行中**（使用者決定，decision 027）。
+> **狀態（2026-10-19）：Phase 2 已結案**（使用者決定，decision 036）。後續的產品化或研究由使用者另外決定。
 > - **Phase 1 已完成**，結果保留、不重新分析：
 >   - Core：A（macos-metal、wsl2-cuda）、B（uniform、mixed）、quality、deployment decision table。
 >   - Advanced：隔離 H-B4 的成因（事先登記與凍結見 024，結果見 025）。
-> - **Phase 2** 分成兩條受控並行的線：
+> - **Phase 2 已完成**（decision 027 的兩條線）：
 >   - Research Stage C：Fixed-SLO 下的最大並發容量。事先登記已凍結（PREREGISTRATION §8、decision 030，2026-10-17）；
 >     C0 的有限度排查為分支 A（decision 032）。最終結果（decision 035，重跑 `formal-20261017-c1b`）：C_PROD 為 uniform 2K 32、uniform 8K 8、mixed 2K / 8K 2。
->   - Engineering：建在 vLLM 之上的 Capacity-Aware Serving Service（`service/`）。
+>   - Engineering：建在 vLLM 之上的 Capacity-Aware Serving Service（`service/`），以正式設定 `service/deploy/rtx-verified.toml` 部署。
 >   - 只有 Stage C 驗證過的容量（`service/profiles/verified-formal-20261017-c1b.json`）是產品限制；其他都標為 provisional。
 
 ## 研究範圍
@@ -49,9 +49,12 @@
 - [SPEC.md](SPEC.md)：研究問題與範圍。
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
   分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
-- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–027）。
+- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–036）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
   - 023 是 Gate 的決定，024 是 Advanced 的事先登記（凍結 commit `97a948c`），025 是 Advanced 的結果，026 是 Phase 1 收尾的決定，027 是 Phase 2 的兩條線與治理規則。
+  - Phase 2：
+    - 028 / 032 是 C0；029 是 capserve 的架構與實作補記；030 是 Stage C 的事先登記（凍結 commit `b3c9109`）；031 是 GPU 閒置判定；
+    - 033 是第一個 C1 session（已被取代），034 是重跑的取捨規則，035 是最終結果，036 是 Phase 2 結案（含適用條件、IT 的限制與正式 profile 的保護）。
 - [docs/EXPERIMENT_RULES.md](docs/EXPERIMENT_RULES.md)、[docs/RESULTS_FORMAT.md](docs/RESULTS_FORMAT.md)、[docs/STORAGE_PLAN.md](docs/STORAGE_PLAN.md)。
 - [MACHINE_POLICY.md](MACHINE_POLICY.md)：兩台機器的分工與 lock。
 - [configs/pins.toml](configs/pins.toml)：所有 pin。
@@ -67,7 +70,8 @@ scripts/      llama.cpp build、GGUF 產生、env capture、WSL 部署與傳輸
 configs/      pins.toml 與各 lock 檔
 results/      每個 session 的 plan / rows / env / analysis（raw/ 不進 git）
 tests/        pytest（stdlib only 的分析程式都有測試）
-tools/        with-mac-lock（Mac 重負載 lock）
+tools/        with-mac-lock（Mac 重負載 lock）、RTX 的部署與取回腳本
+service/      capserve：Capacity-Aware Serving Service（Phase 2 Engineering；見 service/README.md）
 ```
 
 ## 重現
@@ -268,7 +272,7 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - 8K uniform 的 boot 之間有兩個模式（約 2.48 與 2.82 秒，成因未知），使 8K 的 noise 偏大。事後把模式拉齊重算（敏感度計算，不是判定），8K 的類別與列都不變（025「限制」）。
 - Core 的判定與 deployment decision table 都不因 Advanced 改變。
 
-### Phase 2 Stage C：Fixed-SLO 下的最大並發（decision 030 / 033–035）
+### Phase 2 Stage C：Fixed-SLO 下的最大並發（decision 030 / 033–036）
 
 **最終結果：`formal-20261017-c1b`**（035）。
 - 凍結 commit `b3c9109`，C0 分支 A；8.33 h，80 / 80 個 run 有效，沒有 spill。
@@ -296,6 +300,39 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
   - 使用者決定以相同的凍結協定重跑，並事先寫定「新 session 有效時全部以它為準」（034）。
   - 兩個 session 能比較的部分都一致：階段 S 的選點相同，U2K 的 C_PROD 都是 32，mixed 都是 2。
 
+**容量的適用條件**（完整列表見 decision 036）
+- **硬體**：RTX 5070 Ti 16 GB（driver 617.42，同時驅動桌面），Windows 上的 WSL2；單一 GPU、單一 vLLM，GPU 上沒有其他工作。
+- **軟體**：vLLM 0.30.0；`RedHatAI/Qwen3.5-9B-quantized.w4a16`（W4A16）。
+  - Core B 的 server argv：max-model-len 32768、MNBT 2048、KV 4 GiB（248 個 block）、prefix caching 關閉、FLASH_ATTN。
+  - 產品端每次 boot 都以 fingerprint 核對。
+- **SLO**：S2，短類 P95 TTFT 2 / 6 s（2K / 8K）、全部 request 的 P95 TPOT 100 ms；mixed 的 32K request 也要 ≤ 20 s；穩態時間窗。
+- **Workload**：
+  - uniform：1,920 / 8,064 token 的 prompt；
+  - mixed：90% 短 prompt、10% 為 32,640 token；
+  - 輸出固定 128 token，temperature 0。
+- **測試方式**：
+  - 封閉迴路，`--max-concurrency C`，每個 run 至少 200 個 request；
+  - TTFT 是准入之後的延遲，不含 client 端排隊；
+  - 關鍵點各 5 次獨立 boot。
+- **不涵蓋**：
+  - 開放迴路或 Poisson 到達、其他輸出長度；
+  - 開場湧入：C 個 request 同時到達時，uniform 第一波的 TTFT 最高 10–11 s；
+  - 准入前的排隊、prefix caching，以及其他 GPU、版本或模型。
+
+**產品整合測試**（RTX；029、036）
+
+| 測試 | verified profile | provisional-rtx（同一 release） |
+|---|---|---|
+| IT-0、1、2、4、5、6 | 通過 | 通過 |
+| IT-3（client 斷線） | **無法判定，不算通過** | 通過（決定性） |
+
+- **verified profile 下的 IT-3**：輸出上限 128 token，斷線時只剩約 1–1.4 s 的生成量，無法區分「被 abort」和「本來就跑完」。
+  - 第一次執行記為不通過；斷線後生成確實停止，但這不構成決定性的證據。
+  - 決定性的斷線驗證只來自 provisional-rtx（1,024 token）。斷線處理和 profile 無關，所以推論 verified 設定下也成立，但沒有直接證據。
+- **正式 profile 的保護**：`rtx-verified.toml` 以 `production_profile` 釘住 verified profile。
+  - 部署與 IT 都會拒絕其他 profile，也拒絕任何允許 provisional 的執行（`--allow-provisional`、`CAPSERVE_ALLOW_PROVISIONAL=1`）。
+  - provisional profile 不得使用 Stage C 的 class 名稱。
+
 ### 證據不支持的部分
 
 - Metal 上的 quality、長 context（> 512）的 quality、Core B（W4A16）的 quality：都沒有量。
@@ -308,6 +345,7 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 ## Future Work（decision 026；Phase 2 的處理見 027）
 
 以下都沒有在 Phase 1 中回答。Phase 2（027）只處理其中的 fixed-SLO 最大並發，以及 8K 雙模式的有限度排查；其餘仍要使用者另外決定。
+Phase 2 結案後的後續項目（產品化 v1、開放迴路容量、其他輸出長度、開場湧入、O-32K / O-T 等）見 decision 036。
 
 - **8K uniform 的雙模式**：短類 P95 在 boot 之間落在約 2.48 秒或約 2.82 秒，成因未知（025「限制」）。
   它使 8K 的 noise 偏大；事後把模式拉齊重算，8K 的類別與判讀列都不變，也不影響既有的部署結論，所以目前不追查。

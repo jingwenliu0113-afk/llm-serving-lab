@@ -697,7 +697,8 @@ def parser() -> argparse.ArgumentParser:
                                 description="RTX integration tests IT-0..IT-6 of decision 029 (product tests only)")
     p.add_argument("tests", nargs="+", choices=TESTS, help="tests to run (always in IT-0..IT-6 order)")
     p.add_argument("--config", default=str(deploy.DEFAULT_CONFIG), help="deploy config (TOML)")
-    p.add_argument("--profile", default=str(DEFAULT_PROFILE), help="capacity profile for the boot (JSON)")
+    p.add_argument("--profile", help="capacity profile for the boot (JSON; default: the config's production_profile, "
+                                     "else service/profiles/provisional-rtx.json)")
     p.add_argument("--allow-provisional", action="store_true", help="allow a provisional profile (not product limits)")
     p.add_argument("--since", help="IT-6 reference: an earlier product run id (default: this itest run)")
     return p
@@ -718,6 +719,14 @@ def main(argv: list | None = None, *, fx: Effects | None = None) -> int:
         cfg = deploy.load_config(args.config)
     except deploy.DeployError as exc:
         say(str(exc))
+        return 2
+    if args.profile is None:   # 036: a production config tests the verified profile it pins
+        args.profile = str(deploy.RELEASE_ROOT / cfg.production_profile) if cfg.production_profile else \
+            str(DEFAULT_PROFILE)
+    problems = deploy.production_profile_problems(cfg, args.profile, allow_provisional=args.allow_provisional,
+                                                  release_root=deploy.RELEASE_ROOT)
+    if problems:
+        say("; ".join(problems) + "; nothing started")
         return 2
     lock_fd = None
     if locked:

@@ -1085,6 +1085,80 @@ def test_state_writes_are_atomic_and_stamped(world):
     assert not list(world.svc.glob("*.tmp"))
 
 
+# ------------------------------------------------------------------ production config (036) --
+
+PROD_REL = "service/profiles/verified-prod.json"
+
+
+def production(world, **gateway):
+    """A release holding a committed verified profile, and a deploy config that pins it as its production profile."""
+    path = add_to_release(world.release, PROD_REL, json.dumps(verified_doc()).encode())
+    return path, world.cfg(production_profile=PROD_REL, gateway=gateway or VERIFIED_ACTIVE["gateway"])
+
+
+def test_a_production_config_serves_its_pinned_verified_profile(world):
+    path, cfg = production(world)
+    assert up(world, path, allow_provisional=False, cfg=cfg) == 0
+    (gw,) = [s for s in world.started if s["name"] == "gateway"]
+    assert "--allow-provisional" not in gw["argv"]
+    assert runs.read_meta(world.run_dir())["profile"]["status"] == "verified"
+
+
+def test_a_production_config_refuses_any_other_profile_even_a_committed_verified_one(world, capsys):
+    _, cfg = production(world)
+    other = add_to_release(world.release, "service/profiles/verified-other.json", json.dumps(verified_doc()).encode())
+    assert up(world, other, allow_provisional=False, cfg=cfg) == 2
+    err = capsys.readouterr().err
+    assert world.started == [] and not (world.svc / "runs").exists()
+    assert "production_profile" in err and PROD_REL in err
+
+
+def test_a_production_config_refuses_a_provisional_profile_whatever_the_flag(world, prof, capsys):
+    _, cfg = production(world, active_class="test")
+    assert up(world, prof, allow_provisional=True, cfg=cfg) == 2
+    err = capsys.readouterr().err
+    assert world.started == [] and "production_profile" in err
+
+
+def test_a_production_config_refuses_allow_provisional_even_with_its_own_profile(world, capsys):
+    """A CAPSERVE_ALLOW_PROVISIONAL=1 left in the shell (main merges it into allow_provisional) must not slip through:
+    a production deploy never runs with provisional profiles allowed."""
+    path, cfg = production(world)
+    assert up(world, path, allow_provisional=True, cfg=cfg) == 2
+    err = capsys.readouterr().err
+    assert world.started == [] and "--allow-provisional" in err and "CAPSERVE_ALLOW_PROVISIONAL" in err
+
+
+def test_production_profile_problems_names_every_reason(world):
+    path, cfg = production(world)
+    assert deploy.production_profile_problems(cfg, path, allow_provisional=False, release_root=world.release) == []
+    assert deploy.production_profile_problems(world.cfg(), "/anything.json", allow_provisional=True,
+                                              release_root=world.release) == []   # no pin: an integration config
+    both = deploy.production_profile_problems(cfg, world.release / "x.json", allow_provisional=True,
+                                              release_root=world.release)
+    assert len(both) == 2
+
+
+@pytest.mark.parametrize("bad", ["profiles/x.json", "service/profiles/sub/x.json", "service/profiles/x.JSON",
+                                 "/abs/service/profiles/x.json", "service/profiles/.json", ""])
+def test_production_profile_must_be_a_top_level_service_profiles_file(world, bad):
+    with pytest.raises(deploy.DeployError, match="production_profile"):
+        deploy.DeployConfig.checked({"service_root": str(world.svc), "production_profile": bad,
+                                     "gateway": {"active_class": "uniform-2k"}})
+
+
+def test_the_repo_production_config_pins_the_final_verified_profile():
+    """036: rtx-verified.toml is the production config; it serves only verified-formal-20261017-c1b.json, whose active
+    class is verified with a positive limit. rtx.toml (integration tests, provisional-rtx) pins nothing."""
+    from capserve.profile import load_profile
+    cfg = deploy.load_config(ROOT / "service" / "deploy" / "rtx-verified.toml")
+    assert cfg.production_profile == "service/profiles/verified-formal-20261017-c1b.json"
+    prof = load_profile(ROOT / cfg.production_profile, allow_provisional=False)
+    cls = prof.serving_class(cfg.gateway["active_class"])
+    assert prof.verified and cls.serviceable and (cls.name, cls.max_concurrency, cls.bound) == ("uniform-2k", 32, "exact")
+    assert deploy.load_config(deploy.DEFAULT_CONFIG).production_profile is None
+
+
 # ------------------------------------------------------------------ the committed RTX profile --
 
 def test_the_rtx_profile_is_provisional_conservative_and_for_this_server():

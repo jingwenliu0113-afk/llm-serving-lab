@@ -480,6 +480,42 @@ class Orchestra:
             self._become_ready()
 
 
+def production_orchestra(tmp_path):
+    """Orchestra with a production config (036): [deploy] production_profile pins a verified profile."""
+    o = Orchestra(tmp_path)
+    o.cfg_path.write_text(f'[deploy]\nservice_root = "{o.svc}"\nmax_hold_s = 100\n'
+                          'production_profile = "service/profiles/verified-formal-20261017-c1b.json"\n'
+                          '[gateway]\nactive_class = "uniform-2k"\n')
+    o.cfg = deploy.load_config(o.cfg_path)
+    return o
+
+
+def test_a_production_config_boots_its_pinned_profile_by_default(tmp_path):
+    o = production_orchestra(tmp_path)
+    assert itest.main(["IT-1", "--config", str(o.cfg_path)], fx=o.fx()) == 0
+    (sup,) = o.started
+    argv = sup["argv"]
+    assert argv[argv.index("--profile") + 1] == str(deploy.RELEASE_ROOT / o.cfg.production_profile)
+    assert "--allow-provisional" not in argv
+
+
+@pytest.mark.parametrize("extra", [["--allow-provisional"],
+                                   ["--profile", str(ROOT / "service" / "profiles" / "provisional-rtx.json")]])
+def test_a_production_config_refuses_provisional_runs_before_anything_starts(tmp_path, capsys, extra):
+    o = production_orchestra(tmp_path)
+    assert itest.main(["IT-1", "--config", str(o.cfg_path), *extra], fx=o.fx()) == 2
+    assert o.started == [] and not (o.svc / "runs").exists()
+    assert "production_profile" in capsys.readouterr().err
+
+
+def test_an_integration_config_still_defaults_to_the_provisional_rtx_profile(tmp_path):
+    o = Orchestra(tmp_path)
+    assert itest.main(["IT-1", "--config", str(o.cfg_path), "--allow-provisional"], fx=o.fx()) == 0
+    (sup,) = o.started
+    argv = sup["argv"]
+    assert argv[argv.index("--profile") + 1] == str(itest.DEFAULT_PROFILE.resolve())
+
+
 def test_one_boot_runs_every_booted_test_in_order_then_stops(tmp_path, capsys):
     o = Orchestra(tmp_path)
     code = itest.main(["IT-6", "IT-2", "IT-1", "IT-0", "--config", str(o.cfg_path), "--allow-provisional"],
