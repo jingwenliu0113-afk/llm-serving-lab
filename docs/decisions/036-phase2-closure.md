@@ -88,7 +88,7 @@
 
 ## 產品整合測試的結果與限制（029 最後的補記）
 
-| 測試（release `7513d62`，釘選之前） | verified profile（`rtx-verified.toml`） | provisional-rtx（同一 release） |
+| 測試（release `7513d62`；最終 `5201760` 重跑了 verified 的 IT-0、1、2、4、5、6 與 provisional 的 IT-0、3、6，結果相同） | verified profile（`rtx-verified.toml`） | provisional-rtx（同一 release） |
 |---|---|---|
 | IT-0、IT-1、IT-2、IT-4、IT-5、IT-6 | 通過 | 通過 |
 | **IT-3（client 斷線）** | **無法判定，不算通過** | 通過（決定性） |
@@ -134,7 +134,7 @@
 
 - 研究程式、`configs/capacity.toml` 與所有正式 session 的結果都沒有修改。凍結的位元組由 `test_stage_c_frozen`、`test_frozen_untouched` 與 `test_core_untouched` 保護。
 - 沒有任何正式 GPU 實驗在進行或排程。
-- 已完成的 RTX 產品測試在 release `7513d62` 上執行，那時還沒有釘選（029 的補記）。釘選只改了啟動前的檢查，已由 Mac 上的測試驗證。
+- 釘選之後的最終 release 也在 RTX 上做了產品測試，見文末「結案紀錄」。
 
 ## 後續（由使用者另外決定）
 
@@ -147,3 +147,24 @@
   - 8K 滑移的觸發點；
   - 026 列出的 Phase 1 Future Work。
 - **環境**：再跑正式 session 之前，建議使用者停用 BingWallpaper 的自動啟動（033 / 034）。這屬於系統設定，我不修改。
+
+## 結案紀錄（2026-10-19）
+
+**RTX 產品測試**：最終 release `5201760`，在同一次 GPU lock 中，01:16–01:19 執行。之後的 commit 只改文件。這是產品測試，不是研究實驗。
+- **正式設定的拒絕路徑**：以 `rtx-verified.toml` 執行 `capserve.itest` 時，下列三種情況都以 exit 2 結束，沒有啟動任何東西：
+  - 帶 `--allow-provisional`；
+  - 只設定環境變數 `CAPSERVE_ALLOW_PROVISIONAL=1`；
+  - 指定 `--profile service/profiles/provisional-rtx.json`。
+- **verified profile**：沒有指定 `--profile`，預設就載入釘選的 `verified-formal-20261017-c1b.json`。IT-0、IT-1、IT-2、IT-4、IT-5、IT-6 全部通過（`pt-20261018T171607Z-itest`）。
+- **provisional-rtx**：IT-0、IT-3、IT-6 通過，IT-3 是決定性的（`pt-20261018T171748Z-itest`）。
+- **verified profile 下的 IT-3**：仍為無法判定，不算通過（見上文）。
+
+**結案時的檢查**
+- **RTX**：
+  - 沒有殘留的 vLLM 或 capserve 程序，也沒有人持有 GPU lock；
+  - 服務的 state.json 為 stopped；
+  - 研究目錄仍是部署 `b3c9109`，216 個檔案和 manifest 一致。
+- **Mac**：
+  - 完整測試 2,310 個通過（5 個 skipped）；
+  - 從 `7513d62` 到結案，`results/`、`configs/`、`benchmarks/`、`quality/`、`data/` 都沒有變更；從凍結 commit `b3c9109` 起，`benchmarks/` 與 `configs/` 也沒有變更；
+  - 工作區乾淨，所有 commit 都已 push 到 private 的 origin/main。

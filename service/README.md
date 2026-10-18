@@ -56,7 +56,7 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 
 ## 整合測試的結果與限制（029 最後的補記、036）
 
-| 測試（release `7513d62`） | verified profile（`rtx-verified.toml`） | provisional-rtx（`rtx.toml`，同一 release） |
+| 測試（release `7513d62`；最終 `5201760` 重跑了 verified 的 IT-0、1、2、4、5、6 與 provisional 的 IT-0、3、6，結果相同） | verified profile（`rtx-verified.toml`） | provisional-rtx（`rtx.toml`，同一 release） |
 |---|---|---|
 | IT-0、IT-1、IT-2、IT-4、IT-5、IT-6 | 通過 | 通過 |
 | IT-3（client 斷線） | **無法判定，不算通過** | 通過（決定性） |

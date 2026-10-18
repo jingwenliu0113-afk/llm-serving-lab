@@ -323,7 +323,7 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 
 **產品整合測試**（RTX；029、036）
 
-| 測試（release `7513d62`） | verified profile | provisional-rtx（同一 release） |
+| 測試（release `7513d62`；最終 `5201760` 重跑了 verified 的 IT-0、1、2、4、5、6 與 provisional 的 IT-0、3、6，結果相同） | verified profile | provisional-rtx（同一 release） |
 |---|---|---|
 | IT-0、1、2、4、5、6 | 通過 | 通過 |
 | IT-3（client 斷線） | **無法判定，不算通過** | 通過（決定性） |

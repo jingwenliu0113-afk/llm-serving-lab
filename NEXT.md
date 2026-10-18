@@ -8,6 +8,9 @@
 - **正式成果**：`service/profiles/verified-formal-20261017-c1b.json`（decision 035）。
   - C_PROD：uniform 2K 32、uniform 8K 8、mixed 2K / 8K 2。
   - 適用條件、IT-3 的限制與正式 profile 的保護見 036。
+- **結案檢查**（2026-10-19，036 的結案紀錄）：
+  - 最終 release `5201760` 在 RTX 上通過正式設定的拒絕檢查；verified IT 的 IT-0、1、2、4、5、6 通過，IT-3 為無法判定；provisional-rtx 的 IT-3 通過。
+  - 完整測試 2,310 個通過；工作區乾淨，已 push；RTX 上沒有殘留的程序或 lock。
 
 （以下為 Phase 2 期間的紀錄）Research 與 Engineering 兩條線受控並行（使用者 2026-10-15 決定，decision 027）。
 - Phase 1（Core + Advanced，026 的 milestone）結果保留，不重新分析；凍結程式由 `test_core_untouched`、`test_frozen_untouched` 保護。

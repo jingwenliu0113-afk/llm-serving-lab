@@ -470,3 +470,7 @@ M2（verified profile 的產生器與 class 狀態處理）依本文與 030 8.7 
 - **沒有改的部分**：
   - `python -m capserve serve` 不讀部署設定，仍可用 `--allow-provisional` 載入 provisional profile。這時處處標示 provisional（M0）。它是開發用的低階進入點，正式部署只用 `deploy up`。
   - IT-3 的門檻不變。
+- **RTX 上的確認**（2026-10-19，最終 release `5201760`，036 的結案紀錄）：
+  - 以 `rtx-verified.toml` 執行 itest 時，`--allow-provisional`、環境變數、另一份 profile 三種情況都在啟動前以 exit 2 拒絕；
+  - 不指定 `--profile` 時載入釘選的 verified profile，IT-0、1、2、4、5、6 通過；
+  - provisional-rtx 的 IT-3 通過。
