@@ -24,9 +24,15 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 - **適用條件**（完整列表見 decision 036）：
   - RTX 5070 Ti 16 GB 上的 WSL2；vLLM 0.30.0；Qwen3.5-9B W4A16，Core B 的 server argv（每次 boot 以 fingerprint 核對）；
   - SLO S2：短類 P95 TTFT 2 / 6 s、P95 TPOT 100 ms、mixed 的 32K request ≤ 20 s；
-  - 封閉迴路，輸出 128 token，TTFT 從准入後起算；每個關鍵點 5 次 boot，都在 5% guard band 內。
+  - 封閉迴路，輸出 128 token，TTFT 從准入後起算。
+  - 每個關鍵點 5 次 boot（c_low 為 3 次；uniform-2k 的 32 就是 c_low，3 / 3 PASS），每次的 R（指標 / SLO 門檻）都 ≤ 0.95，也就是留出 5% 的 guard band。
+  - 落在 guard band 內（0.95 < R ≤ 1）的點是 MARGINAL，不算進 C_PROD。
 - **不涵蓋**：
   - 開放迴路或 Poisson 到達、其他輸出長度；
+  - 其他 prompt 長度分布：
+    - uniform 只驗證了剛好 1,920 / 8,064 token；
+    - mixed 只驗證了 90 / 10 的 mix，雖然 class 接受任何 ≤ 32,640 token 的 prompt；
+  - 經過 capserve gateway 的流量：容量是直接對 vLLM 的 `/v1/completions` 量的，不含 gateway 的開銷、chat template 與 `/tokenize` 呼叫；
   - 准入前的排隊；
   - 開場湧入：C 個 request 同時到達時，uniform 第一波的 TTFT 最高 10.4 s（2K）與 11.0 s（8K），遠高於 SLO。
 
@@ -50,7 +56,7 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 
 ## 整合測試的結果與限制（029 最後的補記、036）
 
-| 測試 | verified profile（`rtx-verified.toml`） | provisional-rtx（`rtx.toml`，同一 release） |
+| 測試（release `7513d62`） | verified profile（`rtx-verified.toml`） | provisional-rtx（`rtx.toml`，同一 release） |
 |---|---|---|
 | IT-0、IT-1、IT-2、IT-4、IT-5、IT-6 | 通過 | 通過 |
 | IT-3（client 斷線） | **無法判定，不算通過** | 通過（決定性） |

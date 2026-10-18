@@ -508,6 +508,28 @@ def test_a_production_config_refuses_provisional_runs_before_anything_starts(tmp
     assert "production_profile" in capsys.readouterr().err
 
 
+def test_a_production_config_refuses_a_leftover_allow_provisional_env_before_anything_starts(tmp_path, capsys):
+    """Review finding (036): itest checks the same effective value as deploy.main, flag or CAPSERVE_ALLOW_PROVISIONAL=1."""
+    o = production_orchestra(tmp_path)
+    fx = o.fx()
+    fx.base_env = {**fx.base_env, "CAPSERVE_ALLOW_PROVISIONAL": "1"}
+    assert itest.main(["IT-1", "--config", str(o.cfg_path)], fx=fx) == 2
+    assert o.started == [] and not (o.svc / "runs").exists()
+    err = capsys.readouterr().err
+    assert "production_profile" in err and "CAPSERVE_ALLOW_PROVISIONAL" in err
+
+
+def test_a_production_config_refuses_a_copy_of_the_pinned_profile_elsewhere(tmp_path, capsys):
+    """Same file name, other directory: the pin is the release file itself, never its name."""
+    o = production_orchestra(tmp_path)
+    pinned = deploy.RELEASE_ROOT / o.cfg.production_profile
+    copy = tmp_path / "elsewhere" / pinned.name
+    copy.parent.mkdir()
+    copy.write_bytes(pinned.read_bytes())
+    assert itest.main(["IT-1", "--config", str(o.cfg_path), "--profile", str(copy)], fx=o.fx()) == 2
+    assert o.started == [] and "production_profile" in capsys.readouterr().err
+
+
 def test_an_integration_config_still_defaults_to_the_provisional_rtx_profile(tmp_path):
     o = Orchestra(tmp_path)
     assert itest.main(["IT-1", "--config", str(o.cfg_path), "--allow-provisional"], fx=o.fx()) == 0

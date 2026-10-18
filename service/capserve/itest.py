@@ -66,7 +66,7 @@ import coreb_smoke as smoke
 import run_adv
 import run_core_b as rb
 from capserve import deploy, loadtest, procs, runs
-from capserve.config import API_KEY_ENV, Settings, load_settings
+from capserve.config import API_KEY_ENV, Settings, allow_provisional, load_settings
 from capserve.proxy import SSEFramer, has_content, is_error
 from capserve.tokens import PromptBudget, TokenizeError
 from capserve.upstream import KEEPALIVE_EXPIRY_S
@@ -723,8 +723,10 @@ def main(argv: list | None = None, *, fx: Effects | None = None) -> int:
     if args.profile is None:   # 036: a production config tests the verified profile it pins
         args.profile = str(deploy.RELEASE_ROOT / cfg.production_profile) if cfg.production_profile else \
             str(DEFAULT_PROFILE)
-    problems = deploy.production_profile_problems(cfg, args.profile, allow_provisional=args.allow_provisional,
-                                                  release_root=deploy.RELEASE_ROOT)
+    # the same effective value as the child's deploy.main: the flag or a CAPSERVE_ALLOW_PROVISIONAL=1 it would inherit
+    problems = deploy.production_profile_problems(
+        cfg, args.profile, allow_provisional=allow_provisional(args.allow_provisional, fx.base_env),
+        release_root=deploy.RELEASE_ROOT)
     if problems:
         say("; ".join(problems) + "; nothing started")
         return 2

@@ -46,6 +46,7 @@
   - driver 617.42，power limit 為預設的 300 W。
 - 主機：AMD Ryzen 5 7600、32 GB RAM；Windows 主機上的 WSL2 Ubuntu-22.04。
 - 這張卡同時驅動 4K 桌面。session 期間的閒置 VRAM 為 567–568 MiB。
+- HAGS 開啟（`HwSchMode` = 2），`.wslconfig` 為 memory 31 GB、swap 8 GB。這是 Stage B 實測的平台設定（PREREGISTRATION §4），Stage C 的 session 沒有重新擷取。
 - 每次 boot 前都以 031 的閒置判定與 spill 偵測檢查；GPU 上沒有其他工作。
 - 單一 GPU，單一 vLLM 執行個體。
 
@@ -75,7 +76,11 @@
 - **產品對應**：每個 class 的 `max_concurrency` = `max_queue` = C_PROD，prompt 上限依 workload 而定，輸出上限 128 token。
 
 **不在驗證範圍內**
-- 開放迴路或 Poisson 到達、輸出長度不是 128、其他 prompt 長度分布。
+- 開放迴路或 Poisson 到達、輸出長度不是 128。
+- 其他 prompt 長度分布：
+  - uniform 只驗證了剛好 1,920 / 8,064 token，class 接受較短的 prompt，但沒有驗證；
+  - mixed 只驗證了 90 / 10 的 mix，雖然 class 接受任何 ≤ 32,640 token 的 prompt。
+- 經過 capserve gateway 的流量：容量是直接對 vLLM 的 `/v1/completions` 量的，不含 gateway 的開銷、chat template 與 `/tokenize` 呼叫。這是 029「待決」中列出的未驗證假設。
 - **開場湧入**：C 個 request 同時到達時，uniform 兩類第一波的 TTFT 最高 10.35 s（2K）與 11.04 s（8K），遠高於 SLO；mixed 兩類在 SLO 內。
 - 准入之前的排隊時間。
 - prefix caching、其他 GPU / driver / vLLM 版本 / 模型、多 GPU，以及 Mac 平台。
@@ -83,7 +88,7 @@
 
 ## 產品整合測試的結果與限制（029 最後的補記）
 
-| 測試 | verified profile（`rtx-verified.toml`） | provisional-rtx（同一 release） |
+| 測試（release `7513d62`，釘選之前） | verified profile（`rtx-verified.toml`） | provisional-rtx（同一 release） |
 |---|---|---|
 | IT-0、IT-1、IT-2、IT-4、IT-5、IT-6 | 通過 | 通過 |
 | **IT-3（client 斷線）** | **無法判定，不算通過** | 通過（決定性） |
@@ -102,7 +107,7 @@
 既有的保護：
 - provisional profile 要 `--allow-provisional` 或 `CAPSERVE_ALLOW_PROVISIONAL=1` 才能載入；
 - verified profile 必須是 release 中 `service/profiles/<name>.json`、而且列在 manifest 中的原始位元組；
-- 每份 commit 過的 verified profile 都要能由產生器逐位元組重新產生；
+- 每份 commit 過的 verified profile 都要能由產生器重新產生，除了 generator_commit 與涵蓋它的 hash 之外逐位元組相同；
 - unavailable 或 verified 0 的 class 不能作為 active class。
 
 **收尾時發現的缺口**
@@ -121,7 +126,7 @@
 4. **`python -m capserve serve` 是 gateway 的低階進入點**，供開發使用，不讀部署設定。正式部署只用 `capserve.deploy up --config service/deploy/rtx-verified.toml`。
    直接用 `serve` 載入 provisional profile 時，`/readyz`、`/metrics`（`capserve_profile_verified 0`）與每個 response 的 header 都會標示 provisional。
 
-**測試**：先寫失敗的測試，再實作。在 deploy、itest、profile 新增 23 個測試案例，其中包括 repo 設定的檢查：
+**測試**：先寫失敗的測試，再實作。在 deploy、itest、profile 新增 29 個測試案例（結案 commit 22 個，審查後再加 7 個），其中包括 repo 設定的檢查：
 - 正式設定釘住最終 profile，而且 active class 可服務；
 - 已 commit 的 provisional profile 沒有使用保留的名稱或 id。
 
@@ -129,7 +134,7 @@
 
 - 研究程式、`configs/capacity.toml` 與所有正式 session 的結果都沒有修改。凍結的位元組由 `test_stage_c_frozen`、`test_frozen_untouched` 與 `test_core_untouched` 保護。
 - 沒有任何正式 GPU 實驗在進行或排程。
-- 最後一次 RTX 產品測試在最終的 release 上執行，紀錄見下方的結案紀錄。
+- 已完成的 RTX 產品測試在 release `7513d62` 上執行，那時還沒有釘選（029 的補記）。釘選只改了啟動前的檢查，已由 Mac 上的測試驗證。
 
 ## 後續（由使用者另外決定）
 

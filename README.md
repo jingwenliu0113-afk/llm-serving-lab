@@ -277,7 +277,7 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 **最終結果：`formal-20261017-c1b`**（035）。
 - 凍結 commit `b3c9109`，C0 分支 A；8.33 h，80 / 80 個 run 有效，沒有 spill。
 - SLO 為 S2：TTFT 2 / 6 / 20 s，TPOT 100 ms；穩態時間窗。
-- 關鍵點要 5 次有效的 boot，每次的 R（指標 / SLO 門檻）都 ≤ 0.95，才算 PASS，也就是留出 5% 的 guard band。
+- 關鍵點要 5 次有效的 boot（c_low 為 3 次；uniform 2K 的 C_PROD 32 就是 c_low，3 / 3 PASS），每次的 R（指標 / SLO 門檻）都 ≤ 0.95，才算 PASS，也就是留出 5% 的 guard band。
   符合 SLO 但落在 guard band 內（0.95 < R ≤ 1）的點是 MARGINAL，不能算進 C_PROD。
 - 有效性檢查都通過：replay、sentinel（漂移 0.19%）、跨 session 的偏移。
 
@@ -313,15 +313,17 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - **測試方式**：
   - 封閉迴路，`--max-concurrency C`，每個 run 至少 200 個 request；
   - TTFT 是准入之後的延遲，不含 client 端排隊；
-  - 關鍵點各 5 次獨立 boot。
+  - 關鍵點各 5 次獨立 boot，c_low 為 3 次（uniform 2K 的 32 屬此）。
 - **不涵蓋**：
   - 開放迴路或 Poisson 到達、其他輸出長度；
+  - 其他 prompt 長度分布：uniform 只驗證了剛好 1,920 / 8,064 token，mixed 只驗證了 90 / 10 的 mix；
+  - 經過 capserve gateway 的流量：容量是直接對 vLLM 的 `/v1/completions` 量的，不含 gateway 的開銷、chat template 與 `/tokenize` 呼叫；
   - 開場湧入：C 個 request 同時到達時，uniform 第一波的 TTFT 最高 10–11 s；
   - 准入前的排隊、prefix caching，以及其他 GPU、版本或模型。
 
 **產品整合測試**（RTX；029、036）
 
-| 測試 | verified profile | provisional-rtx（同一 release） |
+| 測試（release `7513d62`） | verified profile | provisional-rtx（同一 release） |
 |---|---|---|
 | IT-0、1、2、4、5、6 | 通過 | 通過 |
 | IT-3（client 斷線） | **無法判定，不算通過** | 通過（決定性） |
@@ -354,6 +356,6 @@ Phase 2 結案後的後續項目（產品化 v1、開放迴路容量、其他輸
   - 觸發的時點仍未知，不再追查：5 段滑移中有 4 段從同一個 request（idx 89）開始；每次 boot 的第 1 個 bench 都沒有滑移；
     偏高比例 21%，低於 Phase 1 的 67%。
 - **2K 的 H-B4 成因**：落在 R6（KV 可能有關，但未確立），分解與操弄不一致。
-- **其他 Advanced 項目**：fixed-SLO 最大並發、其他 chunk threshold 或 KV 劑量、prefix caching、allocator 的操弄。
+- **其他 Advanced 項目**：fixed-SLO 最大並發（已由 Phase 2 的 Stage C 回答，見 035）、其他 chunk threshold 或 KV 劑量、prefix caching、allocator 的操弄。
 - **H-A2 被推翻的原因**：Core 沒有檢驗。
 - **quality 的缺口**：Metal 上的 quality、長 context（> 512）的 quality、Core B（W4A16）的 quality。

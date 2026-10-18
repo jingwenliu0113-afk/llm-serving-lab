@@ -458,13 +458,14 @@ M2（verified profile 的產生器與 class 狀態處理）依本文與 030 8.7 
 
 - **缺口**：正式部署設定 `rtx-verified.toml` 沒有指定要用哪一份 profile。
   shell 中留著的 `CAPSERVE_ALLOW_PROVISIONAL=1`，或誤傳一份 class 也叫 `uniform-2k` 的 provisional profile，都可能以正式設定的名義被部署。
-- **修正**（TDD，新增 23 個測試案例）：
+- **修正**（TDD；結案 commit 新增 22 個測試案例，審查後再加 7 個，共 29 個）：
   - `DeployConfig` 新增 `production_profile`，必須是 `service/profiles/<name>.json`。`rtx-verified.toml` 釘住 `verified-formal-20261017-c1b.json`。
   - **`deploy.production_profile_problems`**：有釘選時，`deploy up`（包括 `--loadtest`）在任何東西啟動之前拒絕不是這份檔案的 `--profile`，以及任何允許 provisional 的執行（flag 或環境變數）。
     這時 profile 一律以「不允許 provisional」的方式解析。
   - **`capserve.itest`**：
     - `--profile` 的預設改為：正式設定時用釘住的 profile，其他設定時仍是 provisional-rtx；
-    - 有釘選時，同樣在啟動前拒絕其他 profile 與 `--allow-provisional`。
+    - 有釘選時，同樣在啟動前拒絕其他 profile 與任何允許 provisional 的執行。
+      審查後改為和 `deploy.main` 用同一個有效值：flag 或會被子程序繼承的 `CAPSERVE_ALLOW_PROVISIONAL=1`。原本只看 flag，環境變數要到子程序 `deploy up` 才被拒絕。
   - **profile 載入器**：provisional profile 不得使用 Stage C 的 class 名稱（`CLASS_NAMES`），id 也不得以 `verified-` 開頭。
 - **沒有改的部分**：
   - `python -m capserve serve` 不讀部署設定，仍可用 `--allow-provisional` 載入 provisional profile。這時處處標示 provisional（M0）。它是開發用的低階進入點，正式部署只用 `deploy up`。

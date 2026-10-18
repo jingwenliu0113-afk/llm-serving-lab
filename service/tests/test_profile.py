@@ -313,9 +313,10 @@ def test_a_provisional_profile_never_uses_a_verified_class_name(tmp_path, pins, 
     assert name in msg and "reserved" in msg
 
 
-def test_a_provisional_profile_id_never_starts_with_verified(tmp_path, pins):
+@pytest.mark.parametrize("pid", ["verified-formal-20261017-c1b", "verified-other", "verified-"])
+def test_a_provisional_profile_id_never_starts_with_verified(tmp_path, pins, pid):
     doc = provisional_doc(pins)
-    doc["profile_id"] = "verified-formal-20261017-c1b"
+    doc["profile_id"] = pid
     msg = refusal(tmp_path, rehash(doc), pins=pins)
     assert "profile_id" in msg and "verified-" in msg
 

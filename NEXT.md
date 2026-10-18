@@ -122,7 +122,7 @@
   - 圖：`results/core_a/figures/{decode,prefill,memory}-mac-formal.svg`。worktree 已移除（內容與主 repo 的副本逐檔相同）。
 - 019 的 harness 已上線，並經過 review workflow：確認 10 項，均已修正。
 
-## 下一步（Phase 2）
+## Phase 2 的紀錄（已結案，decision 036）
 
 ### Research
 1. **C0**（decision 028）：

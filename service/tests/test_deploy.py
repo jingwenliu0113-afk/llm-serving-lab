@@ -1118,6 +1118,7 @@ def test_a_production_config_refuses_a_provisional_profile_whatever_the_flag(wor
     assert up(world, prof, allow_provisional=True, cfg=cfg) == 2
     err = capsys.readouterr().err
     assert world.started == [] and "production_profile" in err
+    assert "is provisional" in err   # second guard: under a pin the loader never allows a provisional profile
 
 
 def test_a_production_config_refuses_allow_provisional_even_with_its_own_profile(world, capsys):
@@ -1127,6 +1128,20 @@ def test_a_production_config_refuses_allow_provisional_even_with_its_own_profile
     assert up(world, path, allow_provisional=True, cfg=cfg) == 2
     err = capsys.readouterr().err
     assert world.started == [] and "--allow-provisional" in err and "CAPSERVE_ALLOW_PROVISIONAL" in err
+
+
+def test_deploy_main_merges_a_leftover_allow_provisional_env_into_up(monkeypatch, tmp_path):
+    """Review finding (036): `deploy up` under the production config gets allow_provisional=True from a leftover
+    CAPSERVE_ALLOW_PROVISIONAL=1 even without the flag, so production_profile_problems refuses it."""
+    seen = {}
+    monkeypatch.setattr(deploy, "up", lambda cfg, profile, **kw: seen.update(cfg=cfg, **kw) or 2)
+    monkeypatch.setattr(deploy.signal, "signal", lambda *a: None)
+    config = str(ROOT / "service" / "deploy" / "rtx-verified.toml")
+    profile = str(ROOT / "service" / "profiles" / "verified-formal-20261017-c1b.json")
+    assert deploy.main(["up", "--config", config, "--profile", profile], env={"CAPSERVE_ALLOW_PROVISIONAL": "1"}) == 2
+    assert seen["allow_provisional"] is True and seen["cfg"].production_profile is not None
+    assert deploy.main(["up", "--config", config, "--profile", profile], env={}) == 2
+    assert seen["allow_provisional"] is False
 
 
 def test_production_profile_problems_names_every_reason(world):
@@ -1140,7 +1155,8 @@ def test_production_profile_problems_names_every_reason(world):
 
 
 @pytest.mark.parametrize("bad", ["profiles/x.json", "service/profiles/sub/x.json", "service/profiles/x.JSON",
-                                 "/abs/service/profiles/x.json", "service/profiles/.json", ""])
+                                 "/abs/service/profiles/x.json", "service/profiles/.json", "",
+                                 "service/profiles/x.json.bak", "service/profiles/x.jsonl"])
 def test_production_profile_must_be_a_top_level_service_profiles_file(world, bad):
     with pytest.raises(deploy.DeployError, match="production_profile"):
         deploy.DeployConfig.checked({"service_root": str(world.svc), "production_profile": bad,
