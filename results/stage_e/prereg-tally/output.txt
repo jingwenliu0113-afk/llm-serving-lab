@@ -1,0 +1,134 @@
+== e1_slips
+== C0 explore-c0-20261016
+b2-n2-requests.jsonl [(89, 7)] normal max |dev| 6.9 [(11, [-334.7, -325.2], [-1.3, 1.4], [322.9, 328.8])]
+b2-n3-requests.jsonl [(129, 7)] normal max |dev| 4.8 [(16, [-335.6, -324.0], [-0.4, 3.6], [325.4, 333.5])]
+b3-n3-requests.jsonl [(89, 7)] normal max |dev| 6.1 [(11, [-330.9, -324.2], [-3.2, 1.1], [321.4, 329.6])]
+b4-n4-requests.jsonl [(89, 7)] normal max |dev| 6.3 [(11, [-332.8, -322.7], [-4.8, 0.2], [322.7, 329.7])]
+b6-n4-requests.jsonl [(89, 7)] normal max |dev| 5.4 [(11, [-334.9, -323.3], [-1.0, 4.4], [322.8, 327.5])]
+C0 normal max |dev| over benches 28.3
+== Core C8 raw
+r 1 [(65, 7), (73, 7), (169, 7)] normal max |dev| 134.3 [(8, [-437.2, -328.7], [2.2, 19.1], [1.9, 54.8]), (9, [1.9, 54.8], [-437.2, -328.7], [243.4, 330.4]), (21, [-369.5, -326.9], [-67.8, 4.8], [328.9, 355.5])]
+   slip gaps [(8, 90.5), (9, 92.3), (21, 91.8)] normal range 410.6 422.9
+r 2 [(73, 7), (89, 7), (169, 7)] normal max |dev| 137.8 [(9, [-338.2, -253.3], [-86.8, 0.4], [261.7, 330.7]), (11, [-328.7, -281.1], [261.7, 330.7], [320.4, 332.1]), (21, [-371.9, -324.8], [-58.5, 40.9], [265.1, 349.0])]
+   slip gaps [(9, 92.7), (11, 94.7), (21, 92.6)] normal range 415.0 426.1
+r 3 [(89, 7), (169, 7)] normal max |dev| 60.1 [(11, [-350.7, -323.2], [-6.7, 2.1], [318.6, 338.3]), (21, [-356.3, -324.1], [-10.9, -1.0], [323.0, 363.8])]
+   slip gaps [(11, 92.2), (21, 91.8)] normal range 417.4 420.6
+== Advanced 8K uniform B0/G/K3
+B0-8192-uniform-r1-requests.jsonl [] slip gaps [] normal (416.3, 419.8)
+B0-8192-uniform-r2-requests.jsonl [(129, 7), (185, 7)] slip gaps [(16, 90.2), (23, 90.6)] normal (416.4, 419.6)
+B0-8192-uniform-r3-requests.jsonl [] slip gaps [] normal (416.3, 419.4)
+G-8192-uniform-r1-requests.jsonl [(65, 7)] slip gaps [(8, 90.5)] normal (416.2, 419.7)
+G-8192-uniform-r2-requests.jsonl [] slip gaps [] normal (414.9, 419.2)
+G-8192-uniform-r3-requests.jsonl [] slip gaps [] normal (416.4, 419.4)
+K3-8192-uniform-r1-requests.jsonl [(129, 7), (193, 7)] slip gaps [(16, 90.6), (24, 90.4)] normal (416.4, 419.5)
+K3-8192-uniform-r2-requests.jsonl [(129, 7)] slip gaps [(16, 91.9)] normal (416.4, 419.5)
+K3-8192-uniform-r3-requests.jsonl [(89, 7), (193, 7)] slip gaps [(11, 94.0), (24, 91.2)] normal (416.3, 419.1)
+21 Counter({89: 7, 129: 4, 169: 3, 65: 2, 73: 2, 193: 2, 185: 1})
+Counter({'Core': 8, 'Adv': 8, 'C0': 5})
+== e1_steps
+normal ('B0-8192-uniform-r1', 5, 3.3, 18.3, 3, 27.5, 0.0, [(11.7, 0, 0, 7), (26.7, 0, 0, 7), (72.7, 0, 0, 7), (413.7, 1, 2041, 7)])
+normal ('B0-8192-uniform-r2', 5, 2.7, 18.7, 3, 27.8, 0.0, [(12.3, 0, 0, 7), (28.3, 0, 0, 7), (72.3, 0, 0, 7), (414.3, 1, 2041, 7)])
+prec ('B0-8192-uniform-r2', 15, 2.8, 18.8, 3, 27.8, 0.0, [(12.2, 0, 0, 7), (28.2, 0, 0, 7), (73.2, 0, 0, 7), (414.2, 1, 2041, 7)])
+slip ('B0-8192-uniform-r2', 16, 2.6, 18.6, 4, 42.6, 0.0, [(12.4, 0, 0, 7), (27.4, 0, 0, 7), (42.4, 0, 0, 7), (87.4, 0, 0, 7), (429.4, 1, 2042, 6)])
+prec ('B0-8192-uniform-r2', 22, 3.1, 19.1, 3, 27.5, 0.0, [(11.9, 0, 0, 7), (26.9, 0, 0, 7), (71.9, 0, 0, 7), (414.9, 1, 2041, 7)])
+slip ('B0-8192-uniform-r2', 23, 3.2, 19.2, 4, 42.8, 0.0, [(11.8, 0, 0, 7), (27.8, 0, 0, 7), (41.8, 0, 0, 7), (87.8, 0, 0, 7), (428.8, 1, 2042, 6)])
+normal ('B0-8192-uniform-r3', 5, 2.8, 18.8, 3, 27.9, 0.0, [(12.2, 0, 0, 7), (27.2, 0, 0, 7), (73.2, 0, 0, 7), (414.2, 1, 2041, 7)])
+normal ('G-8192-uniform-r1', 5, 2.6, 18.6, 3, 27.8, 0.0, [(12.4, 0, 0, 7), (27.4, 0, 0, 7), (73.4, 0, 0, 7), (414.4, 1, 2041, 7)])
+prec ('G-8192-uniform-r1', 7, 2.5, 18.5, 3, 27.8, 0.0, [(12.5, 0, 0, 7), (27.5, 0, 0, 7), (72.5, 0, 0, 7), (413.5, 1, 2041, 7)])
+slip ('G-8192-uniform-r1', 8, 3.1, 19.1, 4, 42.7, 0.0, [(11.9, 0, 0, 7), (27.9, 0, 0, 7), (41.9, 0, 0, 7), (87.9, 0, 0, 7), (427.9, 1, 2042, 6)])
+normal ('G-8192-uniform-r2', 5, 3.2, 18.2, 3, 27.7, 0.0, [(11.8, 0, 0, 7), (27.8, 0, 0, 7), (72.8, 0, 0, 7), (413.8, 1, 2041, 7)])
+normal ('G-8192-uniform-r3', 5, 2.5, 18.5, 3, 27.9, 0.0, [(12.5, 0, 0, 7), (28.5, 0, 0, 7), (72.5, 0, 0, 7), (414.5, 1, 2041, 7)])
+normal ('K3-8192-uniform-r1', 5, 2.7, 18.7, 3, 27.8, 0.0, [(12.3, 0, 0, 7), (27.3, 0, 0, 7), (72.3, 0, 0, 7), (418.3, 1, 2041, 7)])
+prec ('K3-8192-uniform-r1', 15, 2.9, 18.9, 3, 27.7, 0.0, [(12.1, 0, 0, 7), (27.1, 0, 0, 7), (72.1, 0, 0, 7), (415.1, 1, 2041, 7)])
+slip ('K3-8192-uniform-r1', 16, 3.0, 19.0, 4, 43.0, 0.0, [(12.0, 0, 0, 7), (28.0, 0, 0, 7), (43.0, 0, 0, 7), (88.0, 0, 0, 7), (429.0, 1, 2042, 6)])
+prec ('K3-8192-uniform-r1', 23, 3.4, 18.4, 3, 27.5, 0.0, [(11.6, 0, 0, 7), (27.6, 0, 0, 7), (72.6, 0, 0, 7), (414.6, 1, 2041, 7)])
+normal ('K3-8192-uniform-r2', 5, 2.6, 18.6, 3, 27.9, 0.0, [(12.4, 0, 0, 7), (27.4, 0, 0, 7), (73.4, 0, 0, 7), (415.4, 1, 2041, 7)])
+prec ('K3-8192-uniform-r2', 15, 2.5, 18.5, 3, 28.7, 0.0, [(12.5, 0, 0, 7), (28.5, 0, 0, 7), (74.5, 0, 0, 7), (414.5, 1, 2041, 7)])
+slip ('K3-8192-uniform-r2', 16, 3.4, 18.4, 4, 43.8, 0.0, [(12.6, 0, 0, 7), (28.6, 0, 0, 7), (43.6, 0, 0, 7), (89.6, 0, 0, 7), (429.6, 1, 2042, 6)])
+normal ('K3-8192-uniform-r3', 5, 2.9, 18.9, 3, 27.8, 0.0, [(12.1, 0, 0, 7), (27.1, 0, 0, 7), (72.1, 0, 0, 7), (415.1, 1, 2041, 7)])
+prec ('K3-8192-uniform-r3', 10, 2.5, 18.5, 3, 27.7, 0.0, [(12.5, 0, 0, 7), (27.5, 0, 0, 7), (72.5, 0, 0, 7), (414.5, 1, 2041, 7)])
+slip ('K3-8192-uniform-r3', 11, 2.7, 18.7, 4, 41.5, 0.0, [(12.3, 0, 0, 7), (28.3, 0, 0, 7), (43.3, 0, 0, 7), (91.3, 0, 0, 7), (431.3, 1, 2042, 6)])
+prec ('K3-8192-uniform-r3', 23, 3.0, 19.0, 3, 26.9, 0.0, [(11.0, 0, 0, 7), (27.0, 0, 0, 7), (72.0, 0, 0, 7), (414.0, 1, 2041, 7)])
+n_dec slip Counter({4: 6}) normal Counter({3: 193})
+phase a-t_prev slip [2.6, 2.7, 3.0, 3.1, 3.2, 3.4]
+normal phase min/med/max 1.3 2.9 3.8 193
+normal a-t_{prev-1} min/med/max 17.7 18.6 21.3
+slip a - t_prev-1 [18.4, 18.6, 18.7, 19.0, 19.1, 19.2]
+F slip [41.5, 42.6, 42.7, 42.8, 43.0, 43.8] F normal range 25.0 28.4
+== e3_core_a_fit
+macos-metal 2048 global a=5.944 (SE 1.338) b=3.800 (SE 0.238) s=1.117
+  cell SE(t) ms: {'4B-Q4_K_M': 0.048, '4B-Q6_K': 0.117, '4B-Q8_0': 0.299, '9B-Q4_K_M': 0.388, '9B-Q6_K': 0.371, '9B-Q8_0': 0.513}
+  residuals ms: {'4B-Q4_K_M': 0.164, '4B-Q6_K': -0.101, '4B-Q8_0': -1.3, '9B-Q4_K_M': 0.527, '9B-Q6_K': 1.523, '9B-Q8_0': -0.814}
+  within 4B a=8.679 b=2.954 s=0.292
+  within 9B a=9.346 b=3.363 s=1.284
+  cross-size Q4_K_M b=3.954 a=5.664
+  cross-size Q6_K b=4.330 a=3.915
+  cross-size Q8_0 b=3.922 a=4.073
+  ANCOVA common b=3.275 a4=7.485 a9=9.948 s=0.804 -> fixed a0=5.299, per-Gparam c=0.519 ms
+  H-A2 pair obs ratio 2.221 bytes ratio 2.993 affine-pred ratio 2.291
+  est 9B-Q4_0 x0=4.912 yhat=24.606
+  est 4B-Q4_0 x0=2.730 yhat=16.319
+  est 4B-Q5_K_M x0=3.245 yhat=18.275
+  control |r(Q6_K)-r(Q4_K_M)| 4B 0.265 9B 0.996
+  Q8_0 - Q4_K_M residual diffs 4B -1.465 9B -1.340
+wsl2-cuda 2048 global a=1.876 (SE 0.151) b=1.183 (SE 0.027) s=0.126
+  cell SE(t) ms: {'4B-Q4_K_M': 0.015, '4B-Q6_K': 0.028, '4B-Q8_0': 0.025, '9B-Q4_K_M': 0.017, '9B-Q6_K': 0.06, '9B-Q8_0': 0.031}
+  residuals ms: {'4B-Q4_K_M': 0.053, '4B-Q6_K': -0.097, '4B-Q8_0': -0.06, '9B-Q4_K_M': 0.014, '9B-Q6_K': 0.192, '9B-Q8_0': -0.102}
+  within 4B a=2.057 b=1.125 s=0.083
+  within 9B a=2.186 b=1.142 s=0.186
+  cross-size Q4_K_M b=1.166 a=1.978
+  cross-size Q6_K b=1.277 a=1.437
+  cross-size Q8_0 b=1.172 a=1.866
+  ANCOVA common b=1.139 a4=2.006 a9=2.212 s=0.118 -> fixed a0=1.822, per-Gparam c=0.043 ms
+  H-A2 pair obs ratio 2.243 bytes ratio 2.993 affine-pred ratio 2.285
+  est 9B-Q4_0 x0=4.912 yhat=7.685
+  est 4B-Q4_0 x0=2.730 yhat=5.105
+  est 4B-Q5_K_M x0=3.245 yhat=5.714
+  control |r(Q6_K)-r(Q4_K_M)| 4B 0.150 9B 0.178
+  Q8_0 - Q4_K_M residual diffs 4B -0.113 9B -0.116
+=== leave-pair-out phi
+macos-metal LPO a=2.748 b=4.464 Rbytes 2.993 Robs 2.221 Raff 2.642 phi 0.455
+    4B-Q4_K_M 9B-Q4_K_M Rb 1.816 Ro 1.545 Ra 1.528 dev -14.9% phi 1.06
+    4B-Q4_K_M 9B-Q6_K Rb 2.325 Ro 1.930 Ra 1.859 dev -17.0% phi 1.18
+    4B-Q4_K_M 9B-Q8_0 Rb 2.993 Ro 2.221 Ra 2.291 dev -25.8% phi 0.91
+    4B-Q6_K 9B-Q4_K_M Rb 1.438 Ro 1.340 Ra 1.306 dev -6.8% phi 1.34
+    4B-Q6_K 9B-Q6_K Rb 1.842 Ro 1.674 Ra 1.589 dev -9.1% phi 1.51
+    4B-Q6_K 9B-Q8_0 Rb 2.371 Ro 1.927 Ra 1.958 dev -18.7% phi 0.93
+    4B-Q8_0 9B-Q4_K_M Rb 1.123 Ro 1.180 Ra 1.092 dev +5.0% phi -0.55
+    4B-Q8_0 9B-Q6_K Rb 1.439 Ro 1.474 Ra 1.329 dev +2.4% phi -3.14
+    4B-Q8_0 9B-Q8_0 Rb 1.852 Ro 1.697 Ra 1.638 dev -8.4% phi 1.38
+wsl2-cuda LPO a=1.395 b=1.280 Rbytes 2.993 Robs 2.243 Raff 2.446 phi 0.730
+    4B-Q4_K_M 9B-Q4_K_M Rb 1.816 Ro 1.513 Ra 1.526 dev -16.7% phi 0.96
+    4B-Q4_K_M 9B-Q6_K Rb 2.325 Ro 1.872 Ra 1.855 dev -19.5% phi 1.04
+    4B-Q4_K_M 9B-Q8_0 Rb 2.993 Ro 2.243 Ra 2.285 dev -25.1% phi 0.94
+    4B-Q6_K 9B-Q4_K_M Rb 1.438 Ro 1.328 Ra 1.305 dev -7.7% phi 1.21
+    4B-Q6_K 9B-Q6_K Rb 1.842 Ro 1.643 Ra 1.586 dev -10.8% phi 1.29
+    4B-Q6_K 9B-Q8_0 Rb 2.371 Ro 1.969 Ra 1.954 dev -17.0% phi 1.04
+    4B-Q8_0 9B-Q4_K_M Rb 1.123 Ro 1.103 Ra 1.092 dev -1.8% phi 1.52
+    4B-Q8_0 9B-Q6_K Rb 1.439 Ro 1.364 Ra 1.327 dev -5.2% phi 1.50
+    4B-Q8_0 9B-Q8_0 Rb 1.852 Ro 1.635 Ra 1.635 dev -11.7% phi 1.00
+=== cross-size intercepts with SE
+macos-metal Q8_0 x4=4.653 x9=8.617 a_f=4.073 SE=0.886 a/SE=4.6
+macos-metal Q6_K x4=3.634 x9=6.695 a_f=3.915 SE=0.510 a/SE=7.7
+macos-metal Q4_K_M x4=2.879 x9=5.227 a_f=5.664 SE=0.488 a/SE=11.6
+wsl2-cuda Q8_0 x4=4.653 x9=8.617 a_f=1.866 SE=0.065 a/SE=28.8
+wsl2-cuda Q6_K x4=3.634 x9=6.695 a_f=1.437 SE=0.093 a/SE=15.4
+wsl2-cuda Q4_K_M x4=2.879 x9=5.227 a_f=1.978 SE=0.040 a/SE=49.0
+== stage_c_m2k
+M2K C 1: n 6, total tok/s 2093, short P95 TTFT 327 ms kv_peak max 0.267
+M2K C 2: n 6, total tok/s 2950, short P95 TTFT 638 ms kv_peak max 0.296
+M2K C 3: n 2, total tok/s 3474, short P95 TTFT 6614 ms kv_peak max 0.324
+M2K C 4: n 1, total tok/s 3826, short P95 TTFT 6656 ms kv_peak max 0.583
+U2K C 1: n 1, total tok/s 1113, short P95 TTFT 327 ms kv_peak max 0.028
+U2K C 2: n 1, total tok/s 1810, short P95 TTFT 639 ms kv_peak max 0.057
+U2K C 4: n 1, total tok/s 2790, short P95 TTFT 962 ms kv_peak max 0.113
+U2K C 8: n 1, total tok/s 3888, short P95 TTFT 969 ms kv_peak max 0.227
+U2K C 16: n 1, total tok/s 4701, short P95 TTFT 2052 ms kv_peak max 0.453
+U2K C 32: n 4, total tok/s 5217, short P95 TTFT 5456 ms kv_peak max 0.907
+U2K C 33: n 3, total tok/s 5178, short P95 TTFT 5624 ms kv_peak max 0.935
+U2K C 34: n 4, total tok/s 5193, short P95 TTFT 5798 ms kv_peak max 0.964
+U2K C 35: n 2, total tok/s 5210, short P95 TTFT 5967 ms kv_peak max 0.992
+U2K C 36: n 1, total tok/s 5169, short P95 TTFT 6132 ms kv_peak max 0.992
+U2K C 40: n 1, total tok/s 5180, short P95 TTFT 6473 ms kv_peak max 0.992
+U2K C 48: n 1, total tok/s 5190, short P95 TTFT 7865 ms kv_peak max 0.992
+U2K C 64: n 1, total tok/s 5181, short P95 TTFT 12674 ms kv_peak max 0.992

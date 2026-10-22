@@ -511,16 +511,18 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
 
 ## 11. Stage E addendum：機制（decision 037、041）
 
-**狀態：DRAFT**（041 第 2 版）。三個部分各自凍結（`configs/stage_e.toml` 的 `freeze.e1`、`freeze.e2`、`freeze.e3`）；凍結前沒有任何 Stage E 數據。
-本節只摘要；完整規則、揭露與修訂紀錄見 decision 041。第 1–10 節不變，H-A2、H-B4 與 Advanced 的判定不受影響。
+**狀態：DRAFT**（041 第 3 版；第 6 節的四個範圍決定等使用者決定）。各部分各自凍結（`configs/stage_e.toml` 的 `freeze.e1`、`e1p`、`e2`、`e3_cuda`、`e3_metal`）；凍結前沒有任何 Stage E 數據。
+本節只摘要；完整規則、揭露與修訂紀錄見 decision 041。第 1–10 節不變，H-A2、H-B4、Advanced 與 C0 的判定不受影響。
 
-- **E1（探索性，桌面分析，不用 GPU）**：8K 滑移的觸發點。第 1 版的 client / server 問題已由既有數據回答（全部是 server）；
-  第 2 版用 Advanced、C0 與 Core 的既有數據往前追溯前一組的不同步從哪裡開始，以事先寫定的三類事件描述，不是檢定。
-- **E2（正式，RTX）**：2K 的 H-B4 成因。024 的規則全部沿用，所有因果對比都以同一 session、同一 C 的 B0 為參照；
-  - 格子：B0 / T 在 C 8 與 C 25，T256、K35、K3 在 C 25，uniform 與 mixed 各 3 次 restart；另加共享前綴的 PC 開 / 關（C 25，只有 uniform）。
-  - H-E2a：C 8 時 T 的類別 ∈ {M, P}；H-E2b：C 25 時 T 為 N（重現 025）；H-E2c：C 25 時 T256 ∈ {M, P}（預測不成立）；
-    H-E2d：ρ 隨 KV 減少而增加（不預測方向）；H-E2e：PC 開時短類 P95 TTFT ≤ 0.8 倍且超出 noise。
-  - H-E2a、H-E2c、H-E2d 的組合依 041 的解讀表判讀；C 8 同時降低 KV 壓力，這個混淆已揭露。
-- **E3（正式，Mac 與 RTX）**：由 pins 的 BF16 GGUF 量化出 9B-Q4_0 與 4B-Q5_K_M；每個平台在同一 session 量 8 個設定，以 6 個舊設定擬合 t = a + b × bytes。
-  - H-E3a：4B-Q5_K_M 的預測誤差 ≤ 樣本內最大殘差加 2 SE；H-E3b：9B-Q4_0 的殘差比 9B-Q4_K_M 更負，且超出 noise（不預測）。
-- **輸出**：`results/stage_e/<session>/`；新的結果不改變任何既有判定。
+- **共通**：判定只有 supported、not supported、NT（NT 不等於 not supported，會換列時標 incomplete）；判定只用同一 session 的數字；只分析第一個有效的正式 session。
+- **E1（探索性）**：
+  - E1-D（桌面分析，0 GPU）：以事先定義的 L1–L5（F 尖峰、多一個 decode-only step、前一組提早完成、提早到達、多等一個 prefill step）在三組既有數據上重現滑移的鏈；
+  - E1-P（換 seed 探針，約 2.5 h GPU，等使用者決定）：觸發和 prompt 內容還是位置綁定，以 Jaccard 讀法描述。
+- **E2（正式，RTX）**：為什麼 T 在 2K、C 25 無效？候選為負載（S）、T × KV（V）與 threshold 太大（Th）。
+  - 格子：B0 / T / T256 在 C 25；B0 / T 在 C 8 的 4 GiB 與 2.5 GiB；共享前綴的 PC 關 / 開；48 次 boot。
+  - T 有效 = 024 A5 類別 ∈ {M, P} 且 m ≥ 0.20；H-C0 閘門以 `h_b4_values` 判定；KV 操弄以 gate-zone 份額與 uniform 特異性檢查。
+  - Hypotheses：H-E2-0（閘門）、H-E2-R（T@25 無效，重現 025）、H-E2a（T@8 有效）、H-E2b（T@8k 無效，不預測）、H-E2c（T256@25 有效，不預測）、H-E2k（C 8 的 KV 劑量，024 A7(i)）、H-E2e（PC 的能力檢查）。
+  - 依 041 的解讀表 R0–R6 判讀；在 C 25 無法以移除確立成因。
+- **E3（正式，Mac 與 RTX）**：8 個設定（4B 與 9B 的 Q8_0、Q6_K、Q4_K_M、Q4_0），只量 L 2048，每個平台在同一 session 內擬合。
+  - H-E3a：非比例成分的重現（3 個舊格式的跨 size 截距 > 2 SE）；H-E3b：兩個 size 的 r(Q4_0) − r(Q4_K_M) 都為負且超出 max(2 SE, κ)，不預測；依 041 的解讀表判讀。
+- **輸出**：`results/stage_e/<session>/`；設計前看過的重算在 `results/stage_e/prereg-tally/`（descriptive_only）。
