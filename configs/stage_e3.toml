@@ -1,0 +1,61 @@
+# Stage E3 settings: decision 041 v3 §3 (H-A2's cause), PREREGISTRATION §11 (DRAFT). Each platform freezes on its own
+# (a held Mac lock never holds the RTX half back). benchmarks/stage_e3.py refuses a formal plan until its platform's
+# freeze is true and its pilot passed; the analysis refuses sessions that are not frozen formal ones. Core A's flags,
+# build and old GGUFs come from configs/pins.toml read-only; the two new Q4_0 GGUFs are pinned here once produced
+# (scripts/produce_gguf_e3.py, Mac lock).
+schema_version = 1
+
+[freeze]
+e3_metal = false
+e3_cuda = false
+pilot_e3_metal = ""                                       # session id of the passed Mac pilot
+pilot_e3_cuda = ""                                        # session id of the passed RTX pilot
+
+[e3]
+seed = 20261008                                           # job order: Random(sha256("<seed>:stage_e:E3:<platform>"))
+L = 2048                                                  # 041 v3 §3.2: L 2048 only
+reps = 3
+sentinel = { size = "4B", quant = "Q4_K_M" }              # Core A's sentinel cell
+sentinel_drift_max = 0.03
+cap_hours = { "macos-metal" = 1.5, "wsl2-cuda" = 1.0 }
+
+# The eight configs: the six of pins core_a (sha256 / size from pins) and the two new Q4_0s. token_embd bytes and tie
+# are read from each GGUF header (scripts/gguf_tensors.py); tied files keep token_embd in the decode bytes.
+[e3.files.4B-Q8_0]
+filename = "Qwen3.5-4B-Q8_0.gguf"
+token_embd_bytes = 675430400
+tied = true
+[e3.files.4B-Q6_K]
+filename = "Qwen3.5-4B-Q6_K.gguf"
+token_embd_bytes = 521472000
+tied = true
+[e3.files.4B-Q4_K_M]
+filename = "Qwen3.5-4B-Q4_K_M.gguf"
+token_embd_bytes = 521472000
+tied = true
+[e3.files.9B-Q8_0]
+filename = "Qwen3.5-9B-Q8_0.gguf"
+token_embd_bytes = 1080688640
+tied = false
+[e3.files.9B-Q6_K]
+filename = "Qwen3.5-9B-Q6_K.gguf"
+token_embd_bytes = 834355200
+tied = false
+[e3.files.9B-Q4_K_M]
+filename = "Qwen3.5-9B-Q4_K_M.gguf"
+token_embd_bytes = 572129280
+tied = false
+[e3.files.4B-Q4_0]
+filename = "Qwen3.5-4B-Q4_0.gguf"
+sha256 = ""                                               # pinned after scripts/produce_gguf_e3.py
+size_bytes = 0
+token_embd_bytes = 0
+tied = true
+tensor_types = {}
+[e3.files.9B-Q4_0]
+filename = "Qwen3.5-9B-Q4_0.gguf"
+sha256 = ""
+size_bytes = 0
+token_embd_bytes = 0
+tied = false
+tensor_types = {}

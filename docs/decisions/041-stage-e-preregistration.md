@@ -7,7 +7,7 @@
 
 ## 0. 共通規則
 
-| 旗標（`configs/stage_e.toml`） | 範圍 | 凍結證據 |
+| 旗標（每個部分自己的設定檔：`configs/stage_e1.toml`、`stage_e2.toml`、`stage_e3.toml`） | 範圍 | 凍結證據 |
 |---|---|---|
 | `freeze.e1` | E1-D（桌面分析） | 分析模組、合成 fixture 的測試與取回清單一起 commit；在取回任何 raw 之前完成 |
 | `freeze.e1p` | E1-P（換 seed 探針） | 一次通過的 smoke，`harness_sha256` 相同 |
@@ -15,6 +15,7 @@
 | `freeze.e3_cuda`、`freeze.e3_metal` | E3 的兩個平台 | 各一次通過的 pilot |
 
 - 凍結前，正式 plan 一律拒絕（040 補記 13）。`pins.toml` 與 `capacity.toml` 不寫入。
+- 每個部分一個設定檔（和 Stage Q3 相同）：一個部分改設定時，不會讓另一個部分的凍結證據失效。
 - 凍結模組只 import，不修改。沒有 guard test 保護的匯入模組列入該部分的 `harness_sha256`：c0_analysis、run_c0_probe、core_a_plan、stage_b、produce_gguf、sync_gguf_to_wsl、gguf_tensors、disk_guard。
 - 判定值只有 supported、not supported、NT。
   - **NT 不等於 not supported。** 解讀表中，某個 NT 若改成其他值就會換列時，結論標為 incomplete（024:429）。
@@ -247,7 +248,7 @@
 
 - 問題：在這個 hybrid（GDN）模型與 vLLM 0.30.0 上，共享前綴時 prefix caching 能否縮短短類 TTFT？所有基準都關閉 PC，所以它不是已觀察到的 H-B4 的成因。
 - 處理的定義：PC 的 flag，加上 vLLM 因此改變的 hybrid cache 模式（024:194）；smoke 記錄 mamba_cache_mode 與 attention block size。
-- dataset（WSL、CPU 產生）：只呼叫一次 `RandomDataset.sample(num_requests = N + warmup, prefix_len, input_len, range_ratio = 0)`，seed 20261008；以 server 的 tokenizer 驗證每列恰好 1,920 token、所有列的共同 token-id 前綴 ≥ 3 × block_size（528 時 1,584），否則不寫檔；實測的共同前綴長度與 sha256 pin 在 `stage_e.toml`。
+- dataset（WSL、CPU 產生）：只呼叫一次 `RandomDataset.sample(num_requests = N + warmup, prefix_len, input_len, range_ratio = 0)`，seed 20261008；以 server 的 tokenizer 驗證每列恰好 1,920 token、所有列的共同 token-id 前綴 ≥ 3 × block_size（528 時 1,584），否則不寫檔；實測的共同前綴長度與 sha256 pin 在該部分的設定檔。
 - 命中檢查（每次 boot）：span 有 cached-token 欄位時（smoke 確認），≥ 95% 的主 request 命中 1,584 token；否則 Δprefix_cache_hits ≥ 0.95 × N × 1,584 且 ≤ (N + warmup + 1) × 1,584；PC-off 必須為 0；不符合時該 run 無效。
 - block_size 若不是 528：另寫 decision log 並重做 dataset，不臨時改設計。
 
@@ -287,7 +288,7 @@
 - 只量 L 2048，3 次重複，前後各一個 sentinel（4B-Q4_K_M，漂移 ≤ 3%）。8K、32K 不服務任何 hypothesis，刪除。
 - 其他沿用 Core A 的 decode 協定（llama.cpp b11146、005 的 flag set、`core_a_plan._bench_job`）；順序 `Random(sha256(f"20261008:stage_e:E3:{platform}"))`。
 - **GGUF 產生**（Mac lock 下）：從 pins 的 BF16 GGUF 以 `llama-quantize` 產生 Q4_0，預設配方、不加 `--pure`；9B 沒有 tie，`output.weight` 留在 Q6_K（和 9B-Q4_K_M 相同），照實揭露；4B 有 tie，token_embd 以實際產物為準。
-  sha256、大小、tensor 類型分布、token_embd 的 bytes 與類型、是否 tie 都 pin 在 `stage_e.toml`；磁碟保留 50 GiB；以 `sync_gguf_to_wsl.copy_one` 傳到 WSL 並驗證 sha256。
+  sha256、大小、tensor 類型分布、token_embd 的 bytes 與類型、是否 tie 都 pin 在該部分的設定檔；磁碟保留 50 GiB；以 `sync_gguf_to_wsl.copy_one` 傳到 WSL 並驗證 sha256。
 
 ### 3.3 量的定義（單位 ms/token）
 
@@ -329,7 +330,7 @@
 
 - Mac：Mac lock、Apple 140W adapter（記錄名稱與協商瓦數）、同一 session 一個電力模式、012 的電量與 thermal 規則與充電閘門；凍結的 `run_core_a` 要求 70W，所以 E3 有自己的 runner（重用 job 格式、解析與 env capture）。
 - RTX：session 開始時量 B（`stage_b.measure_baseline`）；只套用 spill 的速度判定（E3 不跑 fit run，記憶體判定不適用，揭露）。
-- 每次 session 前驗證 8 個 GGUF 的 sha256；每列 llama-bench 結果的 model_filename、model_size、model_type 都要和 `stage_e.toml` 一致。
+- 每次 session 前驗證 8 個 GGUF 的 sha256；每列 llama-bench 結果的 model_filename、model_size、model_type 都要和 `configs/stage_e3.toml` 一致。
 - sentinel 漂移 > 3% 或 env 無效：session 作廢，可重跑一次；只分析第一個有效的 session。
 - 任一格少於 3 個 ok 的 process 或有 spill：依賴該格的 hypothesis 為 NT（H-E3a 需要 6 個舊設定；H-E3b 需要兩個 size 的 Q4_0、Q4_K_M、Q6_K）。不改設定重試。
 - 上限：Mac session 1.5 h，RTX 1.0 h；到上限時停止，未完成的格為 NT。
