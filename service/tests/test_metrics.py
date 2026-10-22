@@ -18,7 +18,8 @@ PROFILE = CapacityProfile.model_validate({
     "provenance": None, "content_sha256": "x"})
 NAMES = {
     "capserve_requests_total", "capserve_rejections_total", "capserve_client_errors_total",
-    "capserve_upstream_errors_total", "capserve_client_disconnects_total", "capserve_queue_wait_seconds",
+    "capserve_upstream_errors_total", "capserve_client_disconnects_total", "capserve_key_requests_total",
+    "capserve_queue_wait_seconds",
     "capserve_ttft_seconds", "capserve_upstream_ttft_seconds", "capserve_e2e_seconds", "capserve_in_flight",
     "capserve_queued", "capserve_pending", "capserve_concurrency_limit", "capserve_queue_limit",
     "capserve_backend_ready", "capserve_profile_verified", "capserve_profile_info"}

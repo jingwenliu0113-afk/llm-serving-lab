@@ -23,7 +23,8 @@
   - [x] IT-3 改用 token 數判定，IT-4 測 thinking 開與關（§2）。RTX 上還沒執行。
   - [x] adaptive Retry-After（§3）。
   - [x] 內建 tokenizer（§4；正式設定仍是 vllm，等 RTX 的 IT-4 證明計數一致才切換）。
-  - [ ] quota（§5）、TLS（§6）、常駐功能（§7）。
+  - [x] quota（§5）。
+  - [ ] TLS（§6）、常駐功能（§7）。
   - 全部完成後，在 GPU 空檔跑一次 RTX 產品測試（IT-0 至 IT-6，verified 與 provisional）。正式研究 session 進行中不跑。
 - Stage D 的事先登記草稿。
 

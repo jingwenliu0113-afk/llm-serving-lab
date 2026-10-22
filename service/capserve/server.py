@@ -21,6 +21,7 @@ import uvicorn
 
 from capserve.app import Gateway, create_app
 from capserve.config import ConfigError, Settings, check_bind
+from capserve.keys import KeyRing
 from capserve.profile import CapacityProfile
 from capserve.tokens import LocalTokenizer
 
@@ -47,10 +48,10 @@ class CapserveServer(uvicorn.Server):
 
 
 def run(settings: Settings, profile: CapacityProfile, *, api_key: bytes | None,
-        local_tokenizer: LocalTokenizer | None = None) -> None:
+        local_tokenizer: LocalTokenizer | None = None, keyring: KeyRing | None = None) -> None:
     """Serve until SIGINT / SIGTERM (the caller has already loaded an allowed profile and, for tokenizer "local",
     the tokenizer)."""
-    check_bind(settings.host, api_key)
-    gateway = create_app(settings, profile, api_key=api_key, local_tokenizer=local_tokenizer)
+    check_bind(settings.host, api_key or keyring)
+    gateway = create_app(settings, profile, api_key=api_key, local_tokenizer=local_tokenizer, keyring=keyring)
     config = build_config(gateway, settings)
     CapserveServer(config, gateway).run()

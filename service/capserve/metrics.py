@@ -37,6 +37,8 @@ class Metrics:
         self.upstream_errors = Counter("capserve_upstream_errors", "vLLM failures", ["kind"], registry=r)
         self.client_disconnects = Counter("capserve_client_disconnects", "Clients gone before the end", ["phase"],
                                           registry=r)
+        self.key_requests = Counter("capserve_key_requests", "Finished requests per API key name (038 §5)",
+                                    ["key", "outcome"], registry=r)
         self.queue_wait = Histogram("capserve_queue_wait_seconds", "Admission wait", buckets=BUCKETS, registry=r)
         self.ttft = Histogram("capserve_ttft_seconds", "Arrival to first content (queue included)", ["route"],
                               buckets=BUCKETS, registry=r)
@@ -70,6 +72,8 @@ class Metrics:
             self.upstream_errors.labels(rec.upstream_error).inc()
         if rec.disconnect_phase:
             self.client_disconnects.labels(rec.disconnect_phase).inc()
+        if rec.key:
+            self.key_requests.labels(rec.key, rec.outcome or "cancelled").inc()
         if rec.route is None:
             return
         stream = "unknown" if rec.stream is None else ("true" if rec.stream else "false")

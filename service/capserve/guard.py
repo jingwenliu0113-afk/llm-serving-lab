@@ -62,6 +62,7 @@ class RequestRecord:
     ttft_s: float | None = None
     upstream_ttft_s: float | None = None
     duration_s: float | None = None
+    key: str | None = None              # the API key's name (038 §5 keys file); never the key
 
 
 def on_cleanup(scope, fn: Callable[[], Awaitable[None] | None]) -> None:

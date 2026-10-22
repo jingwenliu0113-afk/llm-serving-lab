@@ -23,9 +23,10 @@ class Runner:
     def __init__(self):
         self.calls = []
 
-    def __call__(self, settings, profile, *, api_key, local_tokenizer=None):
+    def __call__(self, settings, profile, *, api_key, local_tokenizer=None, keyring=None):
         self.calls.append((settings, profile, api_key))
         self.local_tokenizer = local_tokenizer
+        self.keyring = keyring
 
 
 @pytest.fixture
@@ -200,3 +201,38 @@ def cfg_path(tmp_path):
     path = tmp_path / "plain.toml"
     path.write_text('active_class = "dev-2k"\n')
     return path
+
+
+KEYS = '[[keys]]\nname = "a"\nsha256 = "' + "0" * 64 + '"\n'
+
+
+def test_a_keys_file_outside_the_checkout_is_loaded(tmp_path, cfg):
+    keys = tmp_path / "keys.toml"
+    keys.write_text(KEYS)
+    run = Runner()
+    assert main(["serve", "--config", cfg, "--profile", DEV, "--allow-provisional"],
+                env={"CAPSERVE_API_KEYS_FILE": str(keys)}, run=run) == 0
+    assert run.keyring.names == ("a",) and run.calls[0][2] is None
+
+
+def test_a_public_bind_is_allowed_with_a_keys_file(tmp_path):
+    keys = tmp_path / "keys.toml"
+    keys.write_text(KEYS)
+    path = tmp_path / "gw.toml"
+    path.write_text('active_class = "dev-2k"\nhost = "0.0.0.0"\n')
+    assert main(["serve", "--config", str(path), "--profile", DEV, "--allow-provisional"],
+                env={"CAPSERVE_API_KEYS_FILE": str(keys)}, run=Runner()) == 0
+
+
+@pytest.mark.parametrize("where", ["checkout", "both", "bad"])
+def test_a_keys_file_is_refused_inside_the_checkout_with_the_single_key_or_when_bad(tmp_path, cfg, capsys, where):
+    keys = tmp_path / "keys.toml"
+    keys.write_text(KEYS if where != "bad" else "[[keys]]\n")
+    env = {"CAPSERVE_API_KEYS_FILE": str(keys)}
+    if where == "checkout":
+        env["CAPSERVE_API_KEYS_FILE"] = str(SERVICE / "profiles" / "provisional-dev.json")
+    if where == "both":
+        env["CAPSERVE_API_KEY"] = "k"
+    run = Runner()
+    assert main(["serve", "--config", cfg, "--profile", DEV, "--allow-provisional"], env=env, run=run) == 2
+    assert run.calls == []

@@ -169,6 +169,21 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve serve --config /tmp/g
 ```
 
 - 設定檔的欄位與預設值見 `capserve/config.py`。`CAPSERVE_API_KEY` 只從環境變數讀取；沒有設定時只能綁 loopback。
+- **per-key quota**（038 §5）：
+  - 設定 `CAPSERVE_API_KEYS_FILE` 指向一個 TOML 金鑰檔。檔案必須放在 repo 與 release 之外，和 `CAPSERVE_API_KEY` 二選一。
+  - 檔案中每把金鑰只寫名稱與 sha256，**不寫金鑰本身**。可以加上 `requests_per_minute`、`max_in_flight` 兩種限制。
+
+    ```toml
+    [[keys]]
+    name = "team-a"
+    sha256 = "<金鑰 UTF-8 位元組的 sha256，64 個小寫十六進位字元>"
+    requests_per_minute = 60
+    max_in_flight = 8
+    ```
+
+  - 超過限制時回 429 `quota_exceeded`，並帶 Retry-After。
+  - access log 與 metrics（`capserve_key_requests_total{key, outcome}`）只記名稱。
+  - quota 只會擋掉 request，不會提高 profile 允許的並發。
 - 單一 process，uvicorn 固定 `http="h11"`、`loop="asyncio"`；SIGTERM 時先 drain，exit −15 為正常結束。
 - 部署管理與整合測試（M1，decision 029 的 M1 實作補記）：
   - `python -m capserve.deploy render|up|status|stop`：在 RTX 上以 GPU lock 啟動 vLLM 與 gateway（前景 supervisor），teardown 一定執行。

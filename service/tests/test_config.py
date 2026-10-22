@@ -96,3 +96,11 @@ def test_the_local_tokenizer_needs_its_snapshot_path(tmp_path):
         path.write_text('active_class = "2k"\n' + text)
         with pytest.raises(cfg.ConfigError):
             cfg.load_settings(path)
+
+
+def test_the_keys_file_comes_from_the_environment_and_excludes_the_single_key():
+    """038 §5: CAPSERVE_API_KEYS_FILE (per-key quotas) or CAPSERVE_API_KEY (one key, no quota), never both."""
+    assert cfg.keys_file_from_env({"CAPSERVE_API_KEYS_FILE": "/etc/k.toml"}) == "/etc/k.toml"
+    assert cfg.keys_file_from_env({"CAPSERVE_API_KEYS_FILE": ""}) is None and cfg.keys_file_from_env({}) is None
+    with pytest.raises(cfg.ConfigError, match="either"):
+        cfg.keys_file_from_env({"CAPSERVE_API_KEYS_FILE": "/etc/k.toml", "CAPSERVE_API_KEY": "k"})

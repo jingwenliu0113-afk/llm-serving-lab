@@ -1,8 +1,9 @@
 """Gateway settings (decision 029): a TOML file validated by strict pydantic models (unknown keys are errors).
 
-The environment supplies exactly two things, never stored in settings or logs:
-- CAPSERVE_API_KEY: the optional bearer key (bytes; compared with hmac.compare_digest). Without a key the gateway
-  binds only a loopback address.
+The environment supplies exactly three things, never stored in settings or logs:
+- CAPSERVE_API_KEY: the optional bearer key (bytes; compared with hmac.compare_digest), or
+- CAPSERVE_API_KEYS_FILE: per-key keys (sha256 only) with quotas (038 §5, capserve/keys.py); never both. Without
+  either the gateway binds only a loopback address.
 - CAPSERVE_ALLOW_PROVISIONAL=1: the same as --allow-provisional (027 §4).
 
 Limits (max_concurrency, max_queue, token bounds) come from the capacity profile's active_class, never from here;
@@ -22,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from capserve.profile import WorkloadClass
 
 API_KEY_ENV = "CAPSERVE_API_KEY"
+KEYS_FILE_ENV = "CAPSERVE_API_KEYS_FILE"
 ALLOW_PROVISIONAL_ENV = "CAPSERVE_ALLOW_PROVISIONAL"
 
 
@@ -115,6 +117,13 @@ def api_key_from_env(env: Mapping[str, str]) -> bytes | None:
     return key.encode("utf-8") if key else None
 
 
+def keys_file_from_env(env: Mapping[str, str]) -> str | None:
+    path = env.get(KEYS_FILE_ENV, "")
+    if path and env.get(API_KEY_ENV, ""):
+        raise ConfigError(f"set either {API_KEY_ENV} (one key) or {KEYS_FILE_ENV} (per-key quotas), not both")
+    return path or None
+
+
 def allow_provisional(flag: bool, env: Mapping[str, str]) -> bool:
     return bool(flag) or env.get(ALLOW_PROVISIONAL_ENV) == "1"
 
@@ -128,7 +137,9 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
-def check_bind(host: str, api_key: bytes | None) -> None:
-    """Without an API key the gateway is reachable only from this machine (029 Auth)."""
-    if api_key is None and not _is_loopback(host):
-        raise ConfigError(f"refusing to bind {host!r} without {API_KEY_ENV}: only loopback is allowed without a key")
+def check_bind(host: str, auth) -> None:
+    """Without a key (auth: the API key or the keyring, None when neither) the gateway is reachable only from this
+    machine (029 Auth)."""
+    if auth is None and not _is_loopback(host):
+        raise ConfigError(f"refusing to bind {host!r} without {API_KEY_ENV} or {KEYS_FILE_ENV}: only loopback is "
+                          "allowed without a key")

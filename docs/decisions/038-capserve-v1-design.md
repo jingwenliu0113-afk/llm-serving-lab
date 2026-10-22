@@ -193,3 +193,19 @@
   - completion 加上 n = 1,920，chat 加上「' the' × 1,900」，都在 uniform-2k 的上限附近；
   - tokenizer 無法載入時 IT-4 不通過。
 - **正式設定仍是 `tokenizer = "vllm"`**：RTX 的 IT-4 通過之後，另外 commit 切換。
+
+**5. per-key quota（2026-10-23）**
+- 新模組 `capserve/keys.py`：
+  - `KeyEntry` 是 strict 的 pydantic model：名稱必須符合 `[A-Za-z0-9._-]{1,64}`，sha256 為 64 個小寫十六進位字元；
+  - 檔案中不允許其他欄位，所以明文金鑰的欄位會被拒絕；名稱或 sha256 重複都拒絕。
+- **`KeyRing.admit`**：
+  - 先檢查 `max_in_flight`，被它拒絕的 request 不消耗 token；
+  - 再檢查 bucket：第一次使用時是滿的，依 `requests_per_minute / 60` 每秒補充；不足時回傳等到下一個 token 的秒數。
+  - 回傳的 release 是 idempotent 的，登記為 scope cleanup，所以 in_flight 從驗證算到 response 結束。
+- **順序**：驗證 → 503 閘門 → quota → 讀 body。後端不可用時，request 不消耗 quota。
+- **429 `quota_exceeded`**：bucket 的 Retry-After 是等待秒數；`max_in_flight` 用 §3 的 queue_full 估計值。
+- **設定**：
+  - `CAPSERVE_API_KEYS_FILE` 與 `CAPSERVE_API_KEY` 同時設定時，`capserve serve` exit 2；
+  - 檔案在 checkout 或 release 之內時拒絕；
+  - `check_bind` 接受單一金鑰或 keyring。
+- `RequestRecord.key` 記錄名稱，access log 因此帶有名稱；新增 counter `capserve_key_requests_total{key, outcome}`。

@@ -11,9 +11,9 @@ C_PROD UNSTABLE / NT, decision 030 8.7) never builds a gateway (ProfileError), w
 503 with not_ready_reason class_not_serviceable, and /v1/models, /healthz and /metrics work as usual.
 
 A completion request, after the guard (request id, pending cap):
- 2. auth: optional bearer key, compared as bytes with hmac.compare_digest (401);
+ 2. auth: optional bearer key, compared as bytes with hmac.compare_digest, or a keys file's key by sha256 (401);
  3. gate: a verified 0 class -> 503 class_not_serviceable; draining or backend not ready -> 503 with Retry-After;
-    all before the body is read and never queued;
+    all before the body is read and never queued; then the key's quota (038 §5): 429 quota_exceeded;
  4. body: at most max_body_bytes (413) within body_read_timeout_s (408);
  5. validation (openai_api): allowlist, served model, exactly one prompt, max_tokens injected / bounded;
  6. byte fast path (tokens): whether a count is needed at all; with the local tokenizer (038 §4) the count happens
@@ -48,6 +48,7 @@ from starlette.routing import Route
 from capserve.admission import NOT_SERVICEABLE, STATUS, AdmissionController, Rejection
 from capserve.config import ConfigError, Settings
 from capserve.guard import RECORD_KEY, Guard, on_cleanup
+from capserve.keys import KeyRing, QuotaDenied
 from capserve.metrics import Metrics
 from capserve.openai_api import ApiError, openai_error, parse_request
 from capserve.profile import CapacityProfile
@@ -81,12 +82,14 @@ class Gateway:
     """The ASGI app plus its state (admission, backend monitor, clients, metrics)."""
 
     def __init__(self, settings: Settings, profile: CapacityProfile, *, api_key: bytes | None = None,
-                 clock: Callable[[], float] = time.monotonic, local_tokenizer: LocalTokenizer | None = None):
+                 clock: Callable[[], float] = time.monotonic, local_tokenizer: LocalTokenizer | None = None,
+                 keyring: KeyRing | None = None):
         self.settings = settings
         self.profile = profile
         self.cls = profile.serving_class(settings.active_class)   # ProfileError for an unavailable class (030 8.7)
         self.served_model = profile.server.model_repo
         self.api_key = api_key
+        self.keyring = keyring
         self.clock = clock
         self.draining = False
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -212,13 +215,22 @@ class Gateway:
 
     # ------------------------------------------------------------ simple routes
 
-    def _authorized(self, scope) -> bool:
-        if self.api_key is None:
-            return True
-        for name, value in scope["headers"]:
-            if name == b"authorization":
-                return hmac.compare_digest(value, b"Bearer " + self.api_key)
-        return False
+    def _identify(self, scope) -> str | None:
+        """The caller: "" without keys or with the single key, the key's name with a keys file, None when refused."""
+        if self.api_key is None and self.keyring is None:
+            return ""
+        value = next((v for n, v in scope["headers"] if n == b"authorization"), None)
+        if value is None:
+            return None
+        if self.api_key is not None:
+            return "" if hmac.compare_digest(value, b"Bearer " + self.api_key) else None
+        return self.keyring.match(value[len(b"Bearer "):]) if value.startswith(b"Bearer ") else None
+
+    def _quota_denied(self, rec, exc: QuotaDenied) -> Response:
+        rec.outcome, rec.reason = "rejected", "quota_exceeded"
+        retry = exc.retry_after_s if exc.retry_after_s is not None else self.retry.seconds("queue_full")
+        return openai_error(429, "rate_limit_error", "quota_exceeded",
+                            f"this API key's {exc.limit} quota is used up; retry later", retry_after_s=retry)
 
     def _unauthorized(self, rec) -> Response:
         return self._client_error(rec, 401, "invalid_api_key", "missing or invalid API key")
@@ -247,7 +259,7 @@ class Gateway:
         return Response(self.metrics.exposition(), media_type=CONTENT_TYPE_LATEST)
 
     async def models(self, request: Request) -> Response:
-        if not self._authorized(request.scope):
+        if self._identify(request.scope) is None:
             return self._unauthorized(request.scope[RECORD_KEY])
         return JSONResponse({"object": "list",
                              "data": [{"id": self.served_model, "object": "model", "owned_by": "capserve"}]})
@@ -280,10 +292,17 @@ class Gateway:
         scope = request.scope
         rec = scope[RECORD_KEY]
         cls = self.cls
-        if not self._authorized(scope):
+        key = self._identify(scope)
+        if key is None:
             return self._unauthorized(rec)
+        rec.key = key or None
         if reason := self._unavailable():
             return self._reject(rec, reason)
+        if self.keyring is not None:
+            try:
+                on_cleanup(scope, self.keyring.admit(key, self.clock()))
+            except QuotaDenied as exc:
+                return self._quota_denied(rec, exc)
         try:
             raw = await self._read_body(request)
         except _TooLarge:
@@ -379,5 +398,6 @@ class Gateway:
 
 
 def create_app(settings: Settings, profile: CapacityProfile, *, api_key: bytes | None = None,
-               clock: Callable[[], float] = time.monotonic, local_tokenizer: LocalTokenizer | None = None) -> Gateway:
-    return Gateway(settings, profile, api_key=api_key, clock=clock, local_tokenizer=local_tokenizer)
+               clock: Callable[[], float] = time.monotonic, local_tokenizer: LocalTokenizer | None = None,
+               keyring: KeyRing | None = None) -> Gateway:
+    return Gateway(settings, profile, api_key=api_key, clock=clock, local_tokenizer=local_tokenizer, keyring=keyring)

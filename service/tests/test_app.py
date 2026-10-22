@@ -16,6 +16,7 @@ import pytest
 from capserve.app import create_app
 from capserve.profile import CapacityProfile, ProfileError
 from capserve.proxy import ClientDisconnected
+from capserve.keys import load_keyring
 from capserve.tokens import LocalTokenizer
 from fakes.fake_tokenizer import WordsHF
 from fakes.fake_vllm import MODEL, FakeConfig
@@ -685,3 +686,58 @@ def test_local_mode_needs_a_tokenizer(tmp_path):
     settings = gateway_settings("http://127.0.0.1:9", tokenizer="local", tokenizer_path=str(tmp_path / "none"))
     with pytest.raises(ConfigError, match="tokenizer"):
         create_app(settings, make_profile())
+
+
+# ------------------------------------------------------------------ per-key quota (038 §5) --
+
+def keyring(tmp_path):
+    import hashlib
+    sha = {k: hashlib.sha256(k.encode()).hexdigest() for k in ("key-a", "key-b")}
+    path = tmp_path / "keys.toml"
+    path.write_text(f'[[keys]]\nname = "team-a"\nsha256 = "{sha["key-a"]}"\nrequests_per_minute = 2\n'
+                    f'max_in_flight = 1\n\n[[keys]]\nname = "team-b"\nsha256 = "{sha["key-b"]}"\n')
+    return load_keyring(path)
+
+
+A = {"Authorization": "Bearer key-a"}
+B = {"Authorization": "Bearer key-b"}
+
+
+async def test_each_key_has_its_own_rate_limit(tmp_path):
+    async with stack(keyring=keyring(tmp_path)) as st, st.client() as c:
+        assert [(await c.post("/v1/completions", json=COMP, headers=A)).status_code for _ in range(2)] == [200, 200]
+        r = await c.post("/v1/completions", json=COMP, headers=A)
+        assert r.status_code == 429 and (error(r)["type"], error(r)["code"]) == ("rate_limit_error", "quota_exceeded")
+        assert r.headers["retry-after"] == "30" and r.headers["x-should-retry"] == "true"
+        assert (await c.post("/v1/completions", json=COMP, headers=B)).status_code == 200
+        for headers in ({}, {"Authorization": "Bearer key-c"}, {"Authorization": "key-a"}):
+            assert (await c.post("/v1/completions", json=COMP, headers=headers)).status_code == 401
+        assert (await c.get("/v1/models", headers=B)).status_code == 200
+        assert (await c.get("/v1/models")).status_code == 401
+        assert metric(st.gateway, "capserve_key_requests_total", key="team-a", outcome="ok") == 2
+        assert metric(st.gateway, "capserve_key_requests_total", key="team-a", outcome="rejected") == 1
+        assert metric(st.gateway, "capserve_key_requests_total", key="team-b", outcome="ok") == 1
+        assert metric(st.gateway, "capserve_rejections_total", reason="quota_exceeded") == 1
+        assert "authorization" not in st.fake.generations[0].headers
+
+
+async def test_a_key_at_its_in_flight_cap_is_429_while_others_proceed(tmp_path):
+    async with stack(FakeConfig(hang=True), keyring=keyring(tmp_path)) as st, st.client() as c:
+        first = asyncio.create_task(c.post("/v1/completions", json=COMP, headers=A))
+        await asyncio.wait_for(st.fake.started.wait(), 5)
+        r = await c.post("/v1/completions", json=COMP, headers=A)
+        assert r.status_code == 429 and error(r)["code"] == "quota_exceeded" and "retry-after" in r.headers
+        other = asyncio.create_task(c.post("/v1/completions", json=COMP, headers=B))
+        await until(lambda: st.fake.in_flight == 2)
+        st.fake.release.set()
+        assert ((await first).status_code, (await other).status_code) == (200, 200)
+        assert (await c.post("/v1/completions", json=COMP, headers=A)).status_code == 200   # released at the end
+        assert st.gateway.keyring.in_flight("team-a") == 0
+
+
+async def test_the_quota_is_checked_after_the_gate(tmp_path):
+    """A request the gateway cannot serve anyway (backend down) costs no quota."""
+    async with stack(FakeConfig(healthy=False), keyring=keyring(tmp_path), wait_ready=False) as st, st.client() as c:
+        for _ in range(3):
+            r = await c.post("/v1/completions", json=COMP, headers=A)
+            assert r.status_code == 503 and error(r)["code"] == "backend_unavailable"

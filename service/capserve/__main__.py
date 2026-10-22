@@ -20,11 +20,14 @@ import os
 import sys
 from pathlib import Path
 
-from capserve.config import ConfigError, allow_provisional, api_key_from_env, check_bind, load_settings
+from capserve.config import (ConfigError, allow_provisional, api_key_from_env, check_bind, keys_file_from_env,
+                             load_settings)
+from capserve.keys import KeyFileError, load_keyring
 from capserve.profile import ProfileError, parse_profile
 from capserve.tokens import LocalTokenizer, TokenizerLoadError
 
 PROFILES_DIR = Path(__file__).resolve().parents[1] / "profiles"   # service/profiles of this checkout or release
+CHECKOUT = Path(__file__).resolve().parents[2]                     # this checkout or release: no keys file in it
 
 
 def committed_profile_problems(data: bytes, profiles_dir) -> list:
@@ -53,7 +56,12 @@ def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_
     try:
         settings = load_settings(args.config)
         api_key = api_key_from_env(env)
-        check_bind(settings.host, api_key)
+        keyring = None
+        if keys_path := keys_file_from_env(env):   # 038 §5: names and sha256 only, outside anything deployed or committed
+            if Path(keys_path).resolve().is_relative_to(CHECKOUT):
+                raise ConfigError(f"the keys file must not be inside {CHECKOUT} (the checkout or release)")
+            keyring = load_keyring(keys_path)
+        check_bind(settings.host, api_key or keyring)
         try:
             data = Path(args.profile).read_bytes()      # read once: these bytes are checked and served
         except OSError as exc:
@@ -65,7 +73,7 @@ def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_
         cls = profile.serving_class(settings.active_class)   # an unavailable class: refused, no flag overrides it
         # 038 §4: a local tokenizer is loaded before serving; one that cannot load is a configuration error
         local = LocalTokenizer.load(settings.tokenizer_path) if settings.tokenizer == "local" else None
-    except (ConfigError, ProfileError, TokenizerLoadError) as exc:
+    except (ConfigError, ProfileError, TokenizerLoadError, KeyFileError) as exc:
         print(f"capserve: {exc}", file=sys.stderr)
         return 2
     if not profile.verified:
@@ -78,7 +86,7 @@ def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_
     if run is None:
         from capserve.server import run
         logging.basicConfig(level=logging.INFO, format="%(message)s")
-    run(settings, profile, api_key=api_key, local_tokenizer=local)
+    run(settings, profile, api_key=api_key, local_tokenizer=local, keyring=keyring)
     return 0
 
 

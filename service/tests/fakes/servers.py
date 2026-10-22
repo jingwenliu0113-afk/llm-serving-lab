@@ -98,12 +98,13 @@ class Stack:
 
 @contextlib.asynccontextmanager
 async def stack(fake_cfg: FakeConfig | None = None, profile: CapacityProfile | None = None, *,
-                api_key: bytes | None = None, wait_ready: bool = True, local_tokenizer=None, **settings_over):
+                api_key: bytes | None = None, wait_ready: bool = True, local_tokenizer=None, keyring=None,
+                **settings_over):
     fake = FakeVLLM(fake_cfg)
     async with serve(fake.app) as fake_url:
         settings = gateway_settings(fake_url, **settings_over)
         prof = profile or make_profile()
-        gw = create_app(settings, prof, api_key=api_key, local_tokenizer=local_tokenizer)
+        gw = create_app(settings, prof, api_key=api_key, local_tokenizer=local_tokenizer, keyring=keyring)
         config = srv.build_config(gw, settings)
         async with serve_config(config, _in_loop(srv.CapserveServer)(config, gw)) as url:
             if wait_ready:
