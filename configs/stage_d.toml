@@ -1,0 +1,77 @@
+# Stage D settings: decision 039, PREREGISTRATION §9 (DRAFT). Machine-readable; benchmarks/stage_d_plan.py checks every
+# value against the 039 rules (stage_d_problems) and refuses a plan otherwise. Like configs/capacity.toml (030), Stage D
+# never writes configs/pins.toml or configs/capacity.toml; Core B / Stage B values are read from pins.toml read-only.
+schema_version = 1
+
+[freeze]
+# 039 凍結: commit and push §9, 039, this file, stage_d_plan / stage_d_analysis / run_stage_d / stage_d_report /
+# stage_d_datasets and their tests together, then set true, then collect Stage D data. stage_d_plan refuses true
+# unless every evidence below names a passed mini smoke session (results/stage_d/<id>/session.json, formal false,
+# smoke.ok true) of that kind.
+stage_d = false
+mini_closed = ""                                          # session id of the passed D-A mini smoke
+mini_open = ""                                            # session id of the passed D-B mini smoke
+mini_verify = ""                                          # session id of the passed D-C mini smoke
+
+[stage_d]
+seed = 20261008                                           # Core B seed (the 030 shuffles and the var datasets)
+derived_from = "formal-20261009-coreb-uniform"            # C_KV's block pool (248 x 528), as 030
+c1b_session = "formal-20261017-c1b"                       # 035: the C_PROD the hypotheses and lambda_ref read
+guard_band = 0.05                                         # 030 8.1 m
+n_near = 5                                                # 030 8.4
+n_low = 3                                                 # 030 8.4
+c_cap = { max = 128, kv_factor = 2 }                      # 030 8.4: min(128, 2 C_KV)
+tau1_s = { "2048" = 1.845, "8192" = 2.95, "32768" = 7.92 }  # 030 8.4: Core C 1 time per request (timeouts only)
+t_tau_factor = 2                                          # 039 D-A: T workloads' tau1 = 2 x B0's (timeouts only)
+server_ready_timeout_s = 1800                             # 030 8.4
+mix_dataset_sha256 = { "8192" = "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2" }  # M8K-T: the 007 8K mix (pins)
+var_dataset_sha256 = { "2048" = "", "8192" = "" }         # D-C var workloads: stage_d_datasets output, pinned before the freeze
+
+[stage_d.sessions]
+# 039: the workloads of each session, in Phase S order
+D-A1 = ["U32K", "U8K-T", "M8K-T"]
+D-A2 = ["U2K-O512", "U8K-O512"]
+D-B = ["U2K-P", "U8K-P"]
+D-C = ["U2K-var", "U8K-var", "U2K-gw", "U8K-gw"]
+
+[stage_d.open_loop]
+# 039 D-B: lambda_ref(w) = C_PROD(w) / mean e2e latency of the c1b Phase C runs at C_PROD (W = [C, N - C)),
+# recomputed from the committed c1b files by stage_d_plan; the grid's index i (1-based) is the "C" of 030's search.
+grid = [0.4, 0.55, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5]
+min_n = 300                                               # N(lambda) = max(min_n, ceil(min_duration_s x lambda))
+min_duration_s = 300
+trim = 0.1                                                # W = idx in [ceil(0.1 N), N - ceil(0.1 N))
+warmups = 10
+burstiness = 1.0                                          # Poisson
+
+[stage_d.verify]
+# 039 D-C: n runs at each point's C (the c1b C_PROD of its class), one boot per run
+n = 5
+points = { "U2K-var" = 32, "U8K-var" = 8, "U2K-gw" = 32, "U8K-gw" = 8 }
+gateway_port = 8080
+gateway_profile = "service/profiles/verified-formal-20261017-c1b.json"
+
+[stage_d.sentinel]
+# 030 8.4 / 8.6: one boot at the start and one at the end of every session, U2K at C 25 on the Core B server
+workload = "U2K"
+C = 25
+tolerance = 0.03
+
+[slo]
+# 037 §3 / 039: S2, the user's Stage C choice (030), unchanged
+id = "S2"
+ttft_p95_ms = { "2048" = 2000, "8192" = 6000, "32768" = 20000 }
+tpot_p95_ms = 100
+mixed_long = "budget"
+
+[secondary_slo.S1]
+id = "S1"
+ttft_p95_ms = { "2048" = 1000, "8192" = 3000, "32768" = 10000 }
+tpot_p95_ms = 50
+mixed_long = "budget"
+
+[secondary_slo.S3]
+id = "S3"
+ttft_p95_ms = { "2048" = 2000, "8192" = 6000, "32768" = 20000 }
+tpot_p95_ms = 200
+mixed_long = "budget"
