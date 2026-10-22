@@ -17,3 +17,6 @@ production_profile = "service/profiles/verified-formal-20261017-c1b.json"
 # (127.0.0.1 only, so no API key is needed). The limits come from the profile's active class, never from here.
 [gateway]
 active_class = "uniform-2k"                     # verified-formal-20261017-c1b (decision 035): C_PROD 32, exact
+# 038 §4: prompt lengths are counted in the gateway from the snapshot vLLM serves (the deploy sets tokenizer_path), not
+# with vLLM's /tokenize. Switched after RTX IT-4 (release c9202c5, 2026-10-23) found all 23 local counts equal to vLLM's.
+tokenizer = "local"

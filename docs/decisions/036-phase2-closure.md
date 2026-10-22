@@ -136,6 +136,12 @@
 - 沒有任何正式 GPU 實驗在進行或排程。
 - 釘選之後的最終 release 也在 RTX 上做了產品測試，見文末「結案紀錄」。
 
+## Phase 3 的補記（2026-10-23，decision 037 / 038）
+
+- 本文「verified profile 下的 IT-3 無法判定」的限制已由 038 §2 解除：IT-3 改以生成的 token 數判定。
+- release `c9202c5` 以 `rtx-verified.toml` 執行 IT-0 至 IT-6，全部通過。IT-3 為決定性：串流生成 8 / 128 個 token，非串流 49 / 128（`pt-20261022T170336Z-itest`）。
+- 本文其他內容，包括正式容量、適用條件與 profile 的釘選，都不變。
+
 ## 後續（由使用者另外決定）
 
 - **產品化**：v1 項目（029「里程碑」），例如多 class 或 token 加權的准入、in-process tokenizer、adaptive Retry-After、quota、TLS proxy；常駐服務也需要使用者決定。

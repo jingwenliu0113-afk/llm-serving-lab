@@ -333,7 +333,8 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - **verified profile 下的 IT-3**：輸出上限 128 token，斷線時只剩約 1–1.4 s 的生成量，無法區分「被 abort」和「本來就跑完」。
   - 第一次執行記為不通過；斷線後生成確實停止，但這不構成決定性的證據。
   - 決定性的斷線驗證只來自 provisional-rtx（1,024 token）。斷線處理和 profile 無關，所以推論 verified 設定下也成立，但沒有直接證據。
-  - Phase 3 把 IT-3 改為以生成的 token 數判定，在 128 token 下也能決定（decision 038 §2）。新判定還沒有在 RTX 上執行，在那之前上表的結果不變。
+  - **Phase 3 已解除這個限制**（decision 038 §2）：IT-3 改為以生成的 token 數判定。
+    release `c9202c5`（2026-10-23）以 verified profile 執行時是決定性的通過：串流生成 8 / 128 個 token，非串流 49 / 128。
 - **正式 profile 的保護**：`rtx-verified.toml` 以 `production_profile` 釘住 verified profile。
   - 部署與 IT 都會拒絕其他 profile，也拒絕任何允許 provisional 的執行（`--allow-provisional`、`CAPSERVE_ALLOW_PROVISIONAL=1`）。
   - provisional profile 不得使用 Stage C 的 class 名稱。

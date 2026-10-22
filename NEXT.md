@@ -20,9 +20,9 @@
 
 - 產品 v1（decision 038）：
   - [x] thinking 預設關閉、client 可開啟（§1）；
-  - [x] IT-3 改用 token 數判定，IT-4 測 thinking 開與關（§2）。RTX 上還沒執行。
+  - [x] IT-3 改用 token 數判定，IT-4 測 thinking 開與關（§2）。RTX release `c9202c5`：verified 的 IT-3 決定性通過（8 / 128、49 / 128）。
   - [x] adaptive Retry-After（§3）。
-  - [x] 內建 tokenizer（§4；正式設定仍是 vllm，等 RTX 的 IT-4 證明計數一致才切換）。
+  - [x] 內建 tokenizer（§4）。RTX 的 IT-4 中 23 項計數全部相等，兩份設定都已改為 `local`；local 模式的實際啟動等下一次 RTX 測試確認。
   - [x] quota（§5）。
   - [ ] TLS（§6）、常駐功能（§7）。
   - 全部完成後，在 GPU 空檔跑一次 RTX 產品測試（IT-0 至 IT-6，verified 與 provisional）。正式研究 session 進行中不跑。

@@ -1175,6 +1175,15 @@ def test_the_repo_production_config_pins_the_final_verified_profile():
     assert deploy.load_config(deploy.DEFAULT_CONFIG).production_profile is None
 
 
+def test_both_repo_configs_count_prompts_in_the_gateway():
+    """038 §4: switched to the local tokenizer after RTX IT-4 (release c9202c5) found every local count equal to
+    vLLM's /tokenize; the deploy points it at the snapshot vLLM serves."""
+    for name in ("rtx.toml", "rtx-verified.toml"):
+        cfg = deploy.load_config(ROOT / "service" / "deploy" / name)
+        assert cfg.gateway["tokenizer"] == "local"
+        assert deploy.gateway_settings(cfg)["tokenizer_path"] == bp.snapshot_dir(PINS)
+
+
 # ------------------------------------------------------------------ the committed RTX profile --
 
 def test_the_rtx_profile_is_provisional_conservative_and_for_this_server():

@@ -209,3 +209,20 @@
   - 檔案在 checkout 或 release 之內時拒絕；
   - `check_bind` 接受單一金鑰或 keyring。
 - `RequestRecord.key` 記錄名稱，access log 因此帶有名稱；新增 counter `capserve_key_requests_total{key, outcome}`。
+
+**RTX 產品測試（release `c9202c5`，2026-10-23 01:03–01:08，同一次 GPU lock）**
+- **開始前**：lock 空著；GPU 已用 1,406 MiB（≤ 2,048，031 的產品規格允許）；Windows CPU 4%，可用 RAM 20.7 GB。
+  BingWallpaper 與 Radeon Software 都在執行。這是產品測試，不是研究。
+- **`rtx-verified.toml`**（`pt-20261022T170336Z-itest`）：IT-0 至 IT-6 全部通過，supervisor 以 143 正常結束。
+  - IT-3（新判定）是決定性的：
+    - 串流：讀 8 個 event 後斷線，生成 8 / 128 個 token；running + waiting 在 0.07 s 內回到 0；
+    - 非串流：生成 49 / 128 個 token，0.18 s 內回到 0。
+    036 揭露的 IT-3 限制因此解除。
+  - IT-4：23 項計數比對（5 個 completion、9 個 chat 案例 × thinking 開與關）全部相等。
+    - thinking 關閉時，template 多 2 個 token（例如單一 user message：12 對 10；8 個 message：47 對 45），都在常數之內；
+    - 「' the' × 1,900」的 chat 為 1,912 個 token（thinking 關閉）。
+  - IT-0：服務的 snapshot 載入成功，「' the' × 16」為 16 個 token。
+- **`rtx.toml`**（provisional-rtx，`pt-20261022T170524Z-itest`）：IT-0 至 IT-6 全部通過。
+  IT-3 生成 8 / 1,024 與 46 / 1,024 個 token；IT-4 的 23 項全部相等。
+- 依 §4 的規則，**`rtx.toml` 與 `rtx-verified.toml` 都改為 `tokenizer = "local"`**（另一個 commit；有測試檢查）。
+  release `c9202c5` 的 IT 只證明計數一致；gateway 在 local 模式下的實際啟動，由下一次 RTX 產品測試確認。

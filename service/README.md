@@ -57,7 +57,21 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 - `python -m capserve serve` 是 gateway 的低階進入點，供開發使用，不讀部署設定；正式部署不直接用它。
 - `rtx.toml` 是整合測試設定，使用 provisional-rtx，沒有釘選。
 
-## 整合測試的結果與限制（029 最後的補記、036）
+## 整合測試的結果與限制（029 最後的補記、036、038）
+
+**目前的結果**：release `c9202c5`（2026-10-23，038 的 IT），同一次 GPU lock 中執行
+
+| 測試 | verified profile（`rtx-verified.toml`） | provisional-rtx（`rtx.toml`） |
+|---|---|---|
+| IT-0 至 IT-6 | 全部通過 | 全部通過 |
+| IT-3（client 斷線，新判定） | **通過（決定性）**：串流生成 8 / 128 個 token，非串流 49 / 128 | 通過（決定性）：8 / 1,024、46 / 1,024 |
+| IT-4（本地 tokenizer 與 vLLM 的計數） | 23 項全部相等 | 23 項全部相等 |
+
+- 有 abort 時，生成的 token 數小於上限 M；沒有 abort 時，`ignore_eos` 會讓它剛好等於 M。所以 IT-3 在 128 token 下也是決定性的，036 的限制已解除。
+- thinking 關閉時，chat template 比開啟時多 2 個 token（例如單一 user message：12 對 10），都在 `chat_overhead` 等常數之內。
+- 這次執行時，正式設定仍是 `tokenizer = "vllm"`。計數一致後，兩份設定都改為 `local`（038 §4）。
+
+**之前的結果**（036，舊判定）
 
 | 測試（release `7513d62`；最終 `5201760` 重跑了 verified 的 IT-0、1、2、4、5、6 與 provisional 的 IT-0、3、6，結果相同） | verified profile（`rtx-verified.toml`） | provisional-rtx（`rtx.toml`，同一 release） |
 |---|---|---|
@@ -71,11 +85,11 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
   - 斷線的 request 用 `ignore_eos` 與 class 的輸出上限 M；
   - 比較 vLLM 的 `generation_tokens_total` 在 request 前後的差值。沒有 abort 時差值一定是 M，所以差值小於 M 就證明生成被截斷。
   - 這個判定不依賴剩餘的生成時間，在 128 token 下也是決定性的。
-  - 上表是舊判定的結果。新判定還沒有在 RTX 上執行，在那之前 verified profile 下的 IT-3 仍然是「無法判定，不算通過」。
+  - 新判定的結果見上方「目前的結果」。
 - 以 verified profile 跑 IT 時用：
 
   ```bash
-  python -m capserve.itest IT-0 IT-1 IT-2 IT-4 IT-5 IT-6 --config service/deploy/rtx-verified.toml
+  python -m capserve.itest IT-0 IT-1 IT-2 IT-3 IT-4 IT-5 IT-6 --config service/deploy/rtx-verified.toml
   ```
 
   - 沒有 `--profile` 時，預設就是釘住的 profile。
@@ -151,7 +165,7 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
     - gateway 從 vLLM 服務的同一份 snapshot 載入 tokenizer，在准入之前自己計數，不呼叫 vLLM；
     - 部署時由 deploy 填入 snapshot 路徑；
     - 載入失敗時 gateway 拒絕啟動。
-  - 正式設定目前仍是 `vllm`。IT-4 證明兩者的計數在 RTX 上完全相等之後，才會切換。
+  - release `c9202c5` 的 IT-4 中，23 項計數全部相等，所以 `rtx.toml` 與 `rtx-verified.toml` 都已改為 `local`。
 
 ## 執行
 
