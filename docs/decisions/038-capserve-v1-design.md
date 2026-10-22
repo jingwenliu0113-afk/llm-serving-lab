@@ -226,3 +226,24 @@
   IT-3 生成 8 / 1,024 與 46 / 1,024 個 token；IT-4 的 23 項全部相等。
 - 依 §4 的規則，**`rtx.toml` 與 `rtx-verified.toml` 都改為 `tokenizer = "local"`**（另一個 commit；有測試檢查）。
   release `c9202c5` 的 IT 只證明計數一致；gateway 在 local 模式下的實際啟動，由下一次 RTX 產品測試確認。
+
+**6. TLS（2026-10-23）**
+- **gateway**：
+  - `Settings.tls`（`[tls] certfile`、`keyfile`，兩者都必要，不允許其他欄位）交給 uvicorn 的 `ssl_certfile` / `ssl_keyfile`；
+  - `capserve serve` 在啟動前檢查：兩個檔案都不在 checkout 或 release 之內、都可讀，而且 `load_cert_chain` 成功。否則 exit 2。
+- **deploy**：
+  - 新增 `[deploy] gateway_host`，只能是 `127.0.0.1` 或 `0.0.0.0`。限定這兩個，是因為所有 probe 都經 loopback 連線；
+  - `0.0.0.0` 必須有 `[gateway.tls]`；
+  - preflight 要求 supervisor 的環境中有 `CAPSERVE_API_KEY` 或 `CAPSERVE_API_KEYS_FILE`（`public_gateway_problems`），在啟動 vLLM 之前就拒絕；
+  - `gateway_url` 在有 TLS 時改用 https。
+- **本機的 client**：`gateway_verify` 是 `config.loopback_client_context`，用於 deploy 的 readiness probe 與 status、loadtest、itest。
+  - 只信任設定中的憑證，不載入系統 CA；
+  - 加上 `VERIFY_X509_PARTIAL_CHAIN`，CA 簽發的 leaf 憑證也能當作信任的錨點；
+  - 不檢查主機名稱：probe 連的是 127.0.0.1，公開的憑證不會包含這個名稱。
+- **測試**：在測試自己的暫存目錄中，用 `openssl` 產生一天期的自簽憑證，測試結束即刪除（`fakes/certs.py`）。
+  以真正的 uvicorn 驗證四件事：
+  - HTTPS 可以服務；
+  - 不信任這張憑證的 client 無法連線；
+  - 純 HTTP 不被服務；
+  - deploy 的 probe 只信任這張憑證。
+- **沒有在 RTX 上測**：正式設定只綁 loopback，沒有 TLS；正式用的憑證屬於使用者。對外開放與否由使用者決定。

@@ -236,3 +236,33 @@ def test_a_keys_file_is_refused_inside_the_checkout_with_the_single_key_or_when_
     run = Runner()
     assert main(["serve", "--config", cfg, "--profile", DEV, "--allow-provisional"], env=env, run=run) == 2
     assert run.calls == []
+
+
+def tls_config(tmp_path, cert, key, host="127.0.0.1"):
+    path = tmp_path / "tls.toml"
+    path.write_text(f'active_class = "dev-2k"\nhost = "{host}"\n[tls]\ncertfile = "{cert}"\nkeyfile = "{key}"\n')
+    return str(path)
+
+
+def test_tls_files_are_checked_before_serving(tmp_path, capsys):
+    from fakes.certs import self_signed
+    cert, key = self_signed(tmp_path)
+    run = Runner()
+    assert main(["serve", "--config", tls_config(tmp_path, cert, key), "--profile", DEV, "--allow-provisional"],
+                env={}, run=run) == 0
+    assert run.calls[0][0].tls.certfile == cert
+    for bad_cert, bad_key, why in ((str(tmp_path / "none.pem"), key, "cannot read"),
+                                   (cert, str(SERVICE / "profiles" / "provisional-dev.json"), "inside")):
+        run = Runner()
+        assert main(["serve", "--config", tls_config(tmp_path, bad_cert, bad_key), "--profile", DEV,
+                     "--allow-provisional"], env={}, run=run) == 2
+        assert run.calls == [] and why in capsys.readouterr().err
+
+
+def test_tls_does_not_replace_the_key_on_a_public_bind(tmp_path):
+    from fakes.certs import self_signed
+    cert, key = self_signed(tmp_path)
+    path = tls_config(tmp_path, cert, key, host="0.0.0.0")
+    assert main(["serve", "--config", path, "--profile", DEV, "--allow-provisional"], env={}, run=Runner()) == 2
+    assert main(["serve", "--config", path, "--profile", DEV, "--allow-provisional"],
+                env={"CAPSERVE_API_KEY": "k"}, run=Runner()) == 0

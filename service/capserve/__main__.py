@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import ssl
 import sys
 from pathlib import Path
 
@@ -43,6 +44,23 @@ def committed_profile_problems(data: bytes, profiles_dir) -> list:
             "the committed profiles the generator reproduces, 029), never a hand-written file elsewhere"]
 
 
+def tls_problems(tls, checkout=CHECKOUT) -> list:
+    """038 §6: the certificate and key are the user's, outside the checkout or release, readable and a pair."""
+    problems = []
+    for name in ("certfile", "keyfile"):
+        path = Path(getattr(tls, name))
+        if path.resolve().is_relative_to(checkout):
+            problems.append(f"[tls] {name} {path} is inside {checkout} (the checkout or release)")
+        elif not os.access(path, os.R_OK) or not path.is_file():
+            problems.append(f"[tls] cannot read {name} {path}")
+    if not problems:
+        try:
+            ssl.create_default_context(ssl.Purpose.CLIENT_AUTH).load_cert_chain(tls.certfile, tls.keyfile)
+        except (ssl.SSLError, OSError) as exc:
+            problems.append(f"[tls] cannot load the certificate and key: {exc}")
+    return problems
+
+
 def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_dir=PROFILES_DIR) -> int:
     env = os.environ if env is None else env
     parser = argparse.ArgumentParser(prog="python -m capserve", description="capacity-aware gateway in front of vLLM")
@@ -55,6 +73,8 @@ def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_
     args = parser.parse_args(argv)
     try:
         settings = load_settings(args.config)
+        if settings.tls is not None and (problems := tls_problems(settings.tls)):
+            raise ConfigError("; ".join(problems))
         api_key = api_key_from_env(env)
         keyring = None
         if keys_path := keys_file_from_env(env):   # 038 §5: names and sha256 only, outside anything deployed or committed

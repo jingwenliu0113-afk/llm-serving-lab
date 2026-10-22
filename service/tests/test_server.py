@@ -52,3 +52,12 @@ def test_run_refuses_a_public_bind_without_a_key():
     public = settings.model_copy(update={"host": "0.0.0.0"})
     with pytest.raises(srv.ConfigError):
         srv.run(public, make_profile(), api_key=None)
+
+
+def test_tls_settings_reach_uvicorn(tmp_path):
+    gw, settings = gateway(tls={"certfile": "/c.pem", "keyfile": "/k.pem"})
+    c = srv.build_config(gw, settings)
+    assert (c.ssl_certfile, c.ssl_keyfile) == ("/c.pem", "/k.pem")
+    gw, settings = gateway()
+    c = srv.build_config(gw, settings)
+    assert (c.ssl_certfile, c.ssl_keyfile) == (None, None)

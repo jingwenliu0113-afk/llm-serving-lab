@@ -1214,3 +1214,40 @@ def test_a_local_tokenizer_gets_the_served_snapshot(world):
     with pytest.raises(deploy.DeployError, match="tokenizer_path"):
         deploy.DeployConfig.checked({"service_root": str(world.svc), "gateway": {
             "active_class": "test", "tokenizer": "local", "tokenizer_path": "/elsewhere"}})
+
+
+# ------------------------------------------------------------------ TLS and the bind address (038 §6) --
+
+def test_a_tls_gateway_is_probed_over_https_trusting_its_certificate(world, tmp_path):
+    import ssl
+    from fakes.certs import self_signed
+    cert, key = self_signed(tmp_path)
+    cfg = world.cfg(gateway={"active_class": "test", "tls": {"certfile": cert, "keyfile": key}})
+    assert cfg.gateway_url == "https://127.0.0.1:8080"
+    assert isinstance(cfg.gateway_verify, ssl.SSLContext) and cfg.gateway_verify.check_hostname is False
+    plain = world.cfg()
+    assert plain.gateway_url == "http://127.0.0.1:8080" and plain.gateway_verify is True
+
+
+def test_the_gateway_binds_loopback_unless_tls_opens_it_to_all_interfaces(world):
+    assert deploy.gateway_settings(world.cfg())["host"] == "127.0.0.1"
+    tls = {"certfile": "/c.pem", "keyfile": "/k.pem"}
+    cfg = deploy.DeployConfig.checked({"service_root": str(world.svc), "gateway_host": "0.0.0.0",
+                                       "gateway": {"active_class": "test", "tls": tls}})
+    assert deploy.gateway_settings(cfg)["host"] == "0.0.0.0"
+    with pytest.raises(deploy.DeployError, match="tls"):
+        deploy.DeployConfig.checked({"service_root": str(world.svc), "gateway_host": "0.0.0.0",
+                                     "gateway": {"active_class": "test"}})
+    with pytest.raises(deploy.DeployError, match="gateway_host"):
+        deploy.DeployConfig.checked({"service_root": str(world.svc), "gateway_host": "192.168.1.5",
+                                     "gateway": {"active_class": "test", "tls": tls}})
+
+
+def test_a_public_gateway_needs_a_key_before_anything_starts(world):
+    tls = {"certfile": "/c.pem", "keyfile": "/k.pem"}
+    cfg = deploy.DeployConfig.checked({"service_root": str(world.svc), "gateway_host": "0.0.0.0",
+                                       "gateway": {"active_class": "test", "tls": tls}})
+    assert deploy.public_gateway_problems(cfg, {}) != []
+    assert deploy.public_gateway_problems(cfg, {"CAPSERVE_API_KEY": "k"}) == []
+    assert deploy.public_gateway_problems(cfg, {"CAPSERVE_API_KEYS_FILE": "/etc/keys.toml"}) == []
+    assert deploy.public_gateway_problems(world.cfg(), {}) == []

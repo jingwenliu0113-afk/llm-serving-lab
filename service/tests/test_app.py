@@ -741,3 +741,21 @@ async def test_the_quota_is_checked_after_the_gate(tmp_path):
         for _ in range(3):
             r = await c.post("/v1/completions", json=COMP, headers=A)
             assert r.status_code == 503 and error(r)["code"] == "backend_unavailable"
+
+
+# ------------------------------------------------------------------ TLS (038 §6) --
+
+async def test_the_gateway_serves_https_with_the_configured_certificate(tmp_path):
+    from fakes.certs import self_signed
+    cert, key = self_signed(tmp_path)
+    async with stack(tls={"certfile": cert, "keyfile": key}) as st:
+        assert st.url.startswith("https://")
+        async with st.client() as c:                        # trusts exactly this certificate
+            r = await c.post("/v1/completions", json=COMP)
+            assert r.status_code == 200 and (await c.get("/readyz")).status_code == 200
+        async with httpx.AsyncClient(base_url=st.url, trust_env=False) as untrusted:
+            with pytest.raises(httpx.ConnectError):        # a client that does not trust it cannot connect
+                await untrusted.get("/healthz")
+        async with httpx.AsyncClient(base_url=st.url.replace("https://", "http://"), trust_env=False) as plain:
+            with pytest.raises(httpx.HTTPError):           # plain HTTP is not served
+                await plain.get("/healthz")

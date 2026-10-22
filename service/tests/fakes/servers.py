@@ -17,7 +17,7 @@ import uvicorn
 
 from capserve import server as srv
 from capserve.app import Gateway, create_app
-from capserve.config import Settings
+from capserve.config import Settings, loopback_client_context
 from capserve.profile import CapacityProfile, content_sha256
 from fakes.fake_vllm import MODEL, FakeConfig, FakeVLLM
 
@@ -57,7 +57,7 @@ def _in_loop(server_cls):
 
 
 @contextlib.asynccontextmanager
-async def serve_config(config: uvicorn.Config, server: uvicorn.Server):
+async def serve_config(config: uvicorn.Config, server: uvicorn.Server, scheme: str = "http"):
     task = asyncio.create_task(server.serve())
     loop = asyncio.get_running_loop()
     limit = loop.time() + STARTUP_LIMIT_S
@@ -70,7 +70,7 @@ async def serve_config(config: uvicorn.Config, server: uvicorn.Server):
         await asyncio.sleep(0.005)
     port = server.servers[0].sockets[0].getsockname()[1]
     try:
-        yield f"http://127.0.0.1:{port}"
+        yield f"{scheme}://127.0.0.1:{port}"
     finally:
         server.should_exit = True
         await task
@@ -92,6 +92,9 @@ class Stack:
     url: str
 
     def client(self, **kw) -> httpx.AsyncClient:
+        tls = self.gateway.settings.tls
+        if tls is not None:
+            kw.setdefault("verify", loopback_client_context(tls))
         return httpx.AsyncClient(base_url=self.url, trust_env=False, timeout=10.0,
                                  limits=httpx.Limits(max_connections=100), **kw)
 
@@ -106,7 +109,8 @@ async def stack(fake_cfg: FakeConfig | None = None, profile: CapacityProfile | N
         prof = profile or make_profile()
         gw = create_app(settings, prof, api_key=api_key, local_tokenizer=local_tokenizer, keyring=keyring)
         config = srv.build_config(gw, settings)
-        async with serve_config(config, _in_loop(srv.CapserveServer)(config, gw)) as url:
+        scheme = "https" if settings.tls else "http"
+        async with serve_config(config, _in_loop(srv.CapserveServer)(config, gw), scheme) as url:
             if wait_ready:
                 for _ in range(1000):
                     if gw.monitor.ready:

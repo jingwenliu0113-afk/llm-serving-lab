@@ -94,7 +94,7 @@ import gpu_idle as gi
 import run_adv
 import run_core_b
 from capserve import loadtest, procs, runs
-from capserve.config import API_KEY_ENV, Settings, allow_provisional
+from capserve.config import API_KEY_ENV, KEYS_FILE_ENV, TLS, Settings, allow_provisional, loopback_client_context
 from capserve.profile import FrozenConfigs, ProfileError, parse_profile, server_fingerprint
 
 RESEARCH_PORT = run_core_b.PORT
@@ -103,6 +103,7 @@ DEFAULT_CONFIG = RELEASE_ROOT / "service" / "deploy" / "rtx.toml"
 STATE_FILE = "state.json"
 OWNED_GATEWAY_KEYS = ("backend_url", "host", "port", "drain_timeout_s", "tokenizer_path")
 LOOPBACK = "127.0.0.1"
+ALL_INTERFACES = "0.0.0.0"   # 038 §6: the only other bind address; loopback stays reachable for the probes
 HTTP_TIMEOUT_S = 5.0
 HEALTH_POLL_S = 2.0
 GATEWAY_READY_TIMEOUT_S = 120.0
@@ -143,6 +144,8 @@ class DeployConfig(BaseModel):
     research_dir: str = bp.PROJECT_DIR                         # read-only: its venv and CUDA_HOME shim
     vllm_port: int = Field(8100, ge=1, le=65535)
     gateway_port: int = Field(8080, ge=1, le=65535)
+    # 038 §6: 127.0.0.1 (default) or 0.0.0.0, the latter only with [gateway.tls] and an API key in the environment
+    gateway_host: str = LOOPBACK
     # Stage B saw a 164 s cold boot; the first product boot is cold too (own HOME). max_hold_s (finite, <= 1 h)
     # bounds how long the shared lock is held before the teardown starts, the boot included.
     startup_timeout_s: float = Field(900.0, gt=0, allow_inf_nan=False)
@@ -158,8 +161,20 @@ class DeployConfig(BaseModel):
         return f"http://{LOOPBACK}:{self.vllm_port}"
 
     @property
+    def tls(self) -> TLS | None:
+        doc = self.gateway.get("tls")
+        return TLS.model_validate(doc) if doc else None
+
+    @property
     def gateway_url(self) -> str:
-        return f"http://{LOOPBACK}:{self.gateway_port}"
+        """Where this machine's own clients (probes, loadtest, itest) reach the gateway: always loopback."""
+        return f"{'https' if self.gateway.get('tls') else 'http'}://{LOOPBACK}:{self.gateway_port}"
+
+    @property
+    def gateway_verify(self):
+        """httpx `verify` for those clients: the configured certificate only (038 §6), else the default."""
+        tls = self.tls
+        return loopback_client_context(tls) if tls is not None else True
 
     @property
     def vllm_bin(self) -> str:
@@ -185,6 +200,12 @@ class DeployConfig(BaseModel):
             problems.append(f"vllm_port {self.vllm_port} is the research server's port {RESEARCH_PORT}")
         if self.vllm_port == self.gateway_port:
             problems.append("vllm_port and gateway_port must differ")
+        if self.gateway_host not in (LOOPBACK, ALL_INTERFACES):
+            problems.append(f"gateway_host {self.gateway_host!r} must be {LOOPBACK} or {ALL_INTERFACES} (the probes "
+                            "dial loopback)")
+        elif self.gateway_host == ALL_INTERFACES and not self.gateway.get("tls"):
+            problems.append(f"gateway_host {ALL_INTERFACES} needs [gateway.tls] (038 §6): never serve plain HTTP "
+                            "beyond this machine")
         svc, research = Path(self.service_root).resolve(), Path(self.research_dir).resolve()
         if svc == research or svc.is_relative_to(research) or research.is_relative_to(svc):
             problems.append(f"service_root {svc} overlaps the research directory {research}")
@@ -219,7 +240,7 @@ def load_config(path) -> DeployConfig:
 def gateway_settings(cfg: DeployConfig) -> dict:
     """The gateway's settings: rtx.toml [gateway] plus what the deploy owns (loopback only: no API key needed; with
     tokenizer = "local", tokenizer_path = the pinned snapshot vLLM serves, 038 §4)."""
-    doc = {**cfg.gateway, "backend_url": cfg.vllm_url, "host": LOOPBACK, "port": cfg.gateway_port,
+    doc = {**cfg.gateway, "backend_url": cfg.vllm_url, "host": cfg.gateway_host, "port": cfg.gateway_port,
            "drain_timeout_s": cfg.drain_timeout_s}
     if cfg.gateway.get("tokenizer") == "local":
         doc["tokenizer_path"] = bp.snapshot_dir(bp.load_pins())
@@ -367,13 +388,27 @@ def production_profile_problems(cfg: DeployConfig, profile_path, *, allow_provis
 
 # ---------------------------------------------------------------- effects (all injectable)
 
-def default_http_get(url: str, timeout: float = HTTP_TIMEOUT_S) -> tuple:
+def default_http_get(url: str, timeout: float = HTTP_TIMEOUT_S, verify=True) -> tuple:
     """(status, text); status 0 when nothing answered. No proxy, even if the environment names one."""
     try:
-        r = httpx.get(url, timeout=timeout, trust_env=False)
+        r = httpx.get(url, timeout=timeout, trust_env=False, verify=verify)
         return r.status_code, r.text
     except httpx.HTTPError as exc:
         return 0, f"{type(exc).__name__}: {exc}"
+
+
+def gateway_get(http_get: Callable, cfg: DeployConfig, path: str) -> tuple:
+    """http_get on the gateway; over HTTPS it trusts only the configured certificate (038 §6)."""
+    url = f"{cfg.gateway_url}{path}"
+    return http_get(url, verify=cfg.gateway_verify) if cfg.gateway.get("tls") else http_get(url)
+
+
+def public_gateway_problems(cfg: DeployConfig, env: Mapping[str, str]) -> list:
+    """038 §6: TLS never replaces authentication; a gateway on all interfaces needs a key in the environment it
+    inherits (the gateway's own check_bind would refuse it too, but only after vLLM booted)."""
+    if cfg.gateway_host == LOOPBACK or env.get(API_KEY_ENV) or env.get(KEYS_FILE_ENV):
+        return []
+    return [f"gateway_host {cfg.gateway_host} needs {API_KEY_ENV} or {KEYS_FILE_ENV} in the environment (038 §6)"]
 
 
 def utcnow() -> dt.datetime:
@@ -482,6 +517,7 @@ def preflight(cfg: DeployConfig, prof, *, pins: dict, env: dict, fingerprint: st
     except Exception as exc:  # noqa: BLE001 - nvidia-smi missing, failing, hung or unparsable: refuse, never guess
         problems.append(f"nvidia-smi failed: {type(exc).__name__}: {exc}")
     problems += [f"toolchain: {p}" for p in fx.toolchain_problems(env)]
+    problems += public_gateway_problems(cfg, fx.base_env)
     for name, port in (("vllm_port", cfg.vllm_port), ("gateway_port", cfg.gateway_port)):
         if not fx.port_free(port):
             problems.append(f"port {port} ({name}) is in use")
@@ -597,7 +633,8 @@ def loadtest_workload(scenario: str) -> Callable:
 
     def run(r: Running) -> dict:
         summary = loadtest.run_scenario(scenario, gateway_url=r.gateway_url, vllm_url=r.vllm_url, run_dir=r.run_dir,
-                                        time_limit_s=max(r.hold_deadline - r.fx.now(), 0.0), api_key=r.api_key)
+                                        time_limit_s=max(r.hold_deadline - r.fx.now(), 0.0), api_key=r.api_key,
+                                        verify=r.cfg.gateway_verify)
         return {"ok": bool(summary.get("ok")), "ended_by": "loadtest", "problems": list(summary.get("problems", [])),
                 "loadtest": {"scenario": scenario, "ok": summary.get("ok"), "summary": "summary.json"}}
 
@@ -813,13 +850,13 @@ def _serve(cfg, prof, *, argv, env, run_dir: Path, allow_provisional, workload, 
     gw = started["gateway"] = fx.start_group(gw_argv, procs.gateway_env(fx.base_env, cfg, release_root=release_root),
                                              run_dir / "gateway.log", cwd=run_dir, keep_fds=keep)
     set_phase("starting", gateway_pid=gw.pid)
-    why = _wait(lambda: fx.http_get(f"{cfg.gateway_url}/readyz")[0] == 200,
+    why = _wait(lambda: gateway_get(fx.http_get, cfg, "/readyz")[0] == 200,
                 dead=lambda: _exited(("vLLM", vllm), ("gateway", gw)), timeout_s=within_hold(GATEWAY_READY_TIMEOUT_S),
                 poll_s=HEALTH_POLL_S, fx=fx)
     if why:
         problems.append(f"gateway /readyz: {held_too_long(why)}")
         return 1
-    status, readyz_text = fx.http_get(f"{cfg.gateway_url}/readyz")
+    status, readyz_text = gateway_get(fx.http_get, cfg, "/readyz")
     if status != 200:
         problems.append(f"gateway /readyz returned {status} right after it was ready")
         return 1
@@ -948,7 +985,7 @@ def status(cfg: DeployConfig, *, proc_root: str = "/proc", http_get: Callable = 
     out = {"running": args is not None and is_supervisor(args), "state": state}
     if out["running"]:
         out["vllm_healthy"] = http_get(f"{cfg.vllm_url}/health")[0] == 200
-        out["gateway_ready"] = http_get(f"{cfg.gateway_url}/readyz")[0] == 200
+        out["gateway_ready"] = gateway_get(http_get, cfg, "/readyz")[0] == 200
     return out
 
 

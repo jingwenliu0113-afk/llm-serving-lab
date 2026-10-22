@@ -265,6 +265,7 @@ class Ctx:
     def gateway_client(self, **kw) -> httpx.AsyncClient:
         headers = {"authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         return httpx.AsyncClient(base_url=self.gateway_url, trust_env=False, headers=headers,
+                                 verify=self.cfg.gateway_verify,   # 038 §6: a TLS gateway's own certificate
                                  timeout=kw.pop("timeout", loadtest.REQUEST_TIMEOUT), **kw)
 
     def vllm_client(self) -> httpx.AsyncClient:
@@ -333,6 +334,7 @@ async def it2(ctx: Ctx) -> dict:
     sub = ctx.run_dir / "it2"
     sub.mkdir()
     s = await loadtest.run_async("overload", gateway_url=ctx.gateway_url, vllm_url=ctx.vllm_url, run_dir=sub,
+                                 verify=ctx.cfg.gateway_verify,
                                  time_limit_s=IT2_TIME_LIMIT_S, api_key=ctx.api_key, sample_interval_s=ctx.poll_s)
     checks, lim = s.get("checks") or {}, s.get("limits") or {}
     c = Checks()

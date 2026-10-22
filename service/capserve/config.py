@@ -14,6 +14,7 @@ the gateway is one process, otherwise its in-process limits would multiply.
 from __future__ import annotations
 
 import ipaddress
+import ssl
 import tomllib
 from pathlib import Path
 from typing import Literal, Mapping
@@ -68,6 +69,22 @@ class TokenOverheads(_Strict):
     completion_overhead: int = Field(1, ge=0)
 
 
+class TLS(_Strict):
+    """038 §6: the gateway serves HTTPS with these files (the user's certificate and key, outside the checkout)."""
+    certfile: str
+    keyfile: str
+
+
+def loopback_client_context(tls: TLS) -> ssl.SSLContext:
+    """How the supervisor, capserve.loadtest and capserve.itest reach their own TLS gateway on 127.0.0.1 (038 §6):
+    trust exactly the configured certificate (no system CAs; accepted as a trust anchor even when it is a CA-issued
+    leaf, VERIFY_X509_PARTIAL_CHAIN) and skip the host-name check, since a public certificate never names 127.0.0.1."""
+    ctx = ssl.create_default_context(cafile=tls.certfile)
+    ctx.check_hostname = False
+    ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+    return ctx
+
+
 class Settings(_Strict):
     active_class: str
     # 038 §4: "vllm" asks vLLM's /tokenize under a permit (029); "local" counts in the gateway from tokenizer_path,
@@ -89,6 +106,7 @@ class Settings(_Strict):
     monitor_fail_threshold: int = Field(3, ge=1)
     retry_after_s: RetryAfter = RetryAfter()
     tokens: TokenOverheads = TokenOverheads()
+    tls: TLS | None = None
 
     @model_validator(mode="after")
     def _tokenizer(self):

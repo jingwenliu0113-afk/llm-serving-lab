@@ -104,3 +104,27 @@ def test_the_keys_file_comes_from_the_environment_and_excludes_the_single_key():
     assert cfg.keys_file_from_env({"CAPSERVE_API_KEYS_FILE": ""}) is None and cfg.keys_file_from_env({}) is None
     with pytest.raises(cfg.ConfigError, match="either"):
         cfg.keys_file_from_env({"CAPSERVE_API_KEYS_FILE": "/etc/k.toml", "CAPSERVE_API_KEY": "k"})
+
+
+def test_tls_needs_both_files(tmp_path):
+    """038 §6: [tls] certfile and keyfile, both; nothing else in the table."""
+    path = tmp_path / "c.toml"
+    path.write_text('active_class = "2k"\n[tls]\ncertfile = "/c.pem"\nkeyfile = "/k.pem"\n')
+    s = cfg.load_settings(path)
+    assert (s.tls.certfile, s.tls.keyfile) == ("/c.pem", "/k.pem")
+    assert cfg.load_settings(tmp_path / "c.toml").tls is not None
+    path.write_text('active_class = "2k"\n')
+    assert cfg.load_settings(path).tls is None
+    for table in ('certfile = "/c.pem"\n', 'certfile = "/c.pem"\nkeyfile = "/k.pem"\npassword = "x"\n'):
+        path.write_text('active_class = "2k"\n[tls]\n' + table)
+        with pytest.raises(cfg.ConfigError):
+            cfg.load_settings(path)
+
+
+def test_the_loopback_client_trusts_exactly_the_configured_certificate(tmp_path):
+    import ssl
+    from fakes.certs import self_signed
+    cert, _ = self_signed(tmp_path)
+    ctx = cfg.loopback_client_context(cfg.TLS(certfile=cert, keyfile="/unused"))
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is False
+    assert ctx.verify_flags & ssl.VERIFY_X509_PARTIAL_CHAIN

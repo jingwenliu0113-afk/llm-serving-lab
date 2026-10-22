@@ -271,7 +271,7 @@ async def _snapshot(client: httpx.AsyncClient | None, path: Path) -> None:
 
 async def run_async(scenario: str, *, gateway_url: str, vllm_url: str | None, run_dir, time_limit_s: float | None
                     = None, api_key: str | None = None, sample_interval_s: float = SAMPLE_INTERVAL_S,
-                    clock: Callable[[], float] = time.monotonic) -> dict:
+                    clock: Callable[[], float] = time.monotonic, verify=True) -> dict:
     sc = SCENARIOS[scenario]
     run_dir = Path(run_dir)
     headers = {"authorization": f"Bearer {api_key}"} if api_key else {}
@@ -279,7 +279,7 @@ async def run_async(scenario: str, *, gateway_url: str, vllm_url: str | None, ru
                "note": runs.NOTE, "research_valid": False, "gateway_url": gateway_url, "vllm_url": vllm_url,
                "time_limit_s": time_limit_s}
     async with httpx.AsyncClient(base_url=gateway_url, trust_env=False, timeout=PROBE_TIMEOUT,
-                                 headers=headers) as probe:
+                                 headers=headers, verify=verify) as probe:
         try:
             ready = await probe.get("/readyz")
             readyz = ready.json() if ready.status_code == 200 else None
@@ -303,7 +303,7 @@ async def run_async(scenario: str, *, gateway_url: str, vllm_url: str | None, ru
     timed_out = False
     pool = httpx.Limits(max_connections=n_clients + 4, max_keepalive_connections=n_clients + 4)
     async with httpx.AsyncClient(base_url=gateway_url, trust_env=False, timeout=REQUEST_TIMEOUT, headers=headers,
-                                 limits=pool) as gw, \
+                                 limits=pool, verify=verify) as gw, \
             httpx.AsyncClient(base_url=vllm_url or "http://invalid", trust_env=False, timeout=PROBE_TIMEOUT) as vc:
         vllm = vc if vllm_url else None
         await _snapshot(gw, run_dir / "gateway-metrics-before.txt")
@@ -392,8 +392,9 @@ def main(argv: list | None = None, *, env=None) -> int:
         print(f"capserve.loadtest: {exc}", file=sys.stderr)
         return 2
     gateway = args.gateway or cfg.gateway_url
+    verify = True if args.gateway else cfg.gateway_verify   # 038 §6: the config's own gateway: its certificate
     vllm = None if args.vllm == "none" else (args.vllm or cfg.vllm_url)
-    status, text = deploy.default_http_get(f"{gateway}/readyz")
+    status, text = deploy.default_http_get(f"{gateway}/readyz", verify=verify)
     try:
         readyz = json.loads(text) if status == 200 else None
     except ValueError:
@@ -411,7 +412,7 @@ def main(argv: list | None = None, *, env=None) -> int:
         print(f"capserve.loadtest: {exc}", file=sys.stderr)
         return 2
     summary = run_scenario(args.scenario, gateway_url=gateway, vllm_url=vllm, run_dir=run_dir,
-                           time_limit_s=args.time_limit_s, api_key=env.get(API_KEY_ENV) or None)
+                           time_limit_s=args.time_limit_s, api_key=env.get(API_KEY_ENV) or None, verify=verify)
     runs.update_meta(run_dir, outcome={"ok": summary["ok"], "problems": summary["problems"]})
     print(json.dumps({"run_dir": str(run_dir), "ok": summary["ok"], "statuses": summary.get("statuses"),
                       "problems": summary["problems"]}, indent=1))

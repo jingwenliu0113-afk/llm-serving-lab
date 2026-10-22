@@ -32,7 +32,9 @@ def build_config(app: Gateway, settings: Settings) -> uvicorn.Config:
     return uvicorn.Config(app, host=settings.host, port=settings.port, http="h11", loop="asyncio", ws="none",
                           lifespan="on", workers=1, reload=False,
                           timeout_graceful_shutdown=settings.drain_timeout_s, limit_concurrency=None,
-                          access_log=False)
+                          access_log=False,   # 038 §6: HTTPS when [tls] is set
+                          ssl_certfile=settings.tls.certfile if settings.tls else None,
+                          ssl_keyfile=settings.tls.keyfile if settings.tls else None)
 
 
 class CapserveServer(uvicorn.Server):

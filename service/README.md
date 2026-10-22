@@ -198,6 +198,13 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve serve --config /tmp/g
   - 超過限制時回 429 `quota_exceeded`，並帶 Retry-After。
   - access log 與 metrics（`capserve_key_requests_total{key, outcome}`）只記名稱。
   - quota 只會擋掉 request，不會提高 profile 允許的並發。
+- **TLS**（038 §6）：
+  - gateway 設定加上 `[tls] certfile = "..."`、`keyfile = "..."` 就以 HTTPS 服務。
+  - 憑證與私鑰由使用者提供，必須放在 repo 與 release 之外；啟動時會檢查可讀，而且兩者是一對，否則 exit 2。
+  - TLS 不取代金鑰：綁定非 loopback 的位址仍然需要 `CAPSERVE_API_KEY` 或 `CAPSERVE_API_KEYS_FILE`。
+  - 部署時，`[deploy] gateway_host` 可以是 `127.0.0.1`（預設）或 `0.0.0.0`；`0.0.0.0` 必須有 `[gateway.tls]`，而且環境中要有金鑰，否則在啟動任何東西之前就拒絕。
+  - supervisor、loadtest 與 itest 一律經 loopback 連到自己的 gateway，只信任設定中的憑證，不檢查主機名稱。
+  - 正式設定 `rtx-verified.toml` 仍然只綁 loopback，沒有 TLS。是否對外開放由使用者決定。
 - 單一 process，uvicorn 固定 `http="h11"`、`loop="asyncio"`；SIGTERM 時先 drain，exit −15 為正常結束。
 - 部署管理與整合測試（M1，decision 029 的 M1 實作補記）：
   - `python -m capserve.deploy render|up|status|stop`：在 RTX 上以 GPU lock 啟動 vLLM 與 gateway（前景 supervisor），teardown 一定執行。
