@@ -345,10 +345,16 @@ def search_analysis(plan: dict, confirm_plan: dict, w: str, rows: list, requests
                              c_hat=cw.get("c_hat"), c_kv=NO_CKV if plan["kind"] == "open" else x["c_kv"],
                              late=est["late"]),
            "descriptive": {"c_full": est["full"], "c_late": est["late"]}}
-    if plan["kind"] == "open":   # a grid index's rate; INFEASIBLE (0) is below the lowest grid rate
-        rate = {k: (None if e[k]["value"] is None else 0 if e[k]["value"] == 0 else
-                    x["points"][str(e[k]["value"])]["rate"]) for k in ("c_slo", "c_prod")}
-        out.update(lambda_ref=x["lambda_ref"], rate_slo=rate["c_slo"], rate_prod=rate["c_prod"])
+    if plan["kind"] == "open":   # a grid index's rate and factor; INFEASIBLE (0) is below the lowest grid point
+        grid = plan["open_loop"]["grid"]
+
+        def at(k, field):
+            v = e[k]["value"]
+            return None if v is None else 0 if v == 0 else (grid[v - 1] if field == "factor" else
+                                                              x["points"][str(v)]["rate"])
+
+        out.update(lambda_ref=x["lambda_ref"], rate_slo=at("c_slo", "rate"), rate_prod=at("c_prod", "rate"),
+                   factor_slo=at("c_slo", "factor"), factor_prod=at("c_prod", "factor"))
     return out
 
 
@@ -391,14 +397,15 @@ def h_less(est: dict, bound: int) -> str:
 
 
 def h_open(x: dict) -> str:
-    """lambda_PROD < lambda_ref: supported when exact (or infeasible) at most 0.9 lambda_ref, not supported when at
-    least lambda_ref (a lower bound included), else inconclusive."""
-    est, rate, ref = x["c_prod"], x["rate_prod"], x["lambda_ref"]["lambda_ref"]
+    """lambda_PROD < lambda_ref on the grid's own factors (the rates are those factors x lambda_ref rounded to 4
+    decimals): supported when exact (or infeasible) at a factor of at most 0.9, not supported at a factor of at least 1
+    (a lower bound included), else inconclusive."""
+    est, factor = x["c_prod"], x["factor_prod"]
     if est["status"] in ("NT", "UNSTABLE"):
         return "NT"
-    if Fraction(str(rate)) >= Fraction(str(ref)):
+    if Fraction(str(factor)) >= 1:
         return "not supported"
-    if est["status"] in ("EXACT", "INFEASIBLE") and Fraction(str(rate)) <= Fraction(9, 10) * Fraction(str(ref)):
+    if est["status"] in ("EXACT", "INFEASIBLE") and Fraction(str(factor)) <= Fraction(9, 10):
         return "supported"
     return "inconclusive"
 
@@ -427,8 +434,9 @@ def hypotheses(kind: str, workloads: dict) -> dict:
             out["H-D3"] = {w: {"c_slo": r["c_slo"], "c_kv": r["c_kv"], "verdict": _ckv_verdict(r["c_slo"], r["c_kv"]),
                                "prediction": "supported"} for w, r in o512.items()}
     elif kind == "open":
-        out["H-D4"] = {w: {"rate_prod": r["rate_prod"], "lambda_ref": r["lambda_ref"]["lambda_ref"],
-                           "verdict": h_open(r), "prediction": "supported"} for w, r in workloads.items()}
+        out["H-D4"] = {w: {"rate_prod": r["rate_prod"], "factor_prod": r["factor_prod"],
+                           "lambda_ref": r["lambda_ref"]["lambda_ref"], "verdict": h_open(r), "prediction": "supported"}
+                       for w, r in workloads.items()}
     else:
         out["H-D6"] = {w: {"class": r["class"], "verdict": h_verify(r["class"]), "prediction": "supported"}
                        for w, r in workloads.items() if r["mix"] == "var"}
