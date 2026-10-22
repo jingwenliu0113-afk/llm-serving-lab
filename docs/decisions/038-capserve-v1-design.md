@@ -157,3 +157,14 @@
   - 一次生成全部 128 個 token 時，判為不通過。
   - 讀不到 token 數時，判為不通過。
 - 新的 IT-3 要在下一次 RTX 產品測試中執行。在那之前，036 的結論（verified 設定下的 IT-3 無法判定）不變。
+
+**3. adaptive Retry-After（2026-10-23）**
+- 新模組 `capserve/retry.py` 的 `RetryAfterPolicy`：
+  - guard 結束每個 request 時，以 `on_finish` 交給它；
+  - 只計入 outcome 為 ok、而且有 queue_wait 的 request，服務時間 = duration − queue_wait。
+- **guard 自己的 429**（pending 上限）也用同一個估計：`Guard` 的 `queue_full_retry_after_s` 改為 `retry_after_s(reason)`。
+- `AdmissionController` 不變，仍只收四個原因的固定值（`RetryAfter.fixed_values()`）。
+  它的 `Rejection.retry_after_s` 只供測試讀取，response 的值一律由 policy 決定。
+- `openai_api.retry_headers` 接受小數：`Retry-After` 取 `ceil`，`retry-after-ms` 取 `round`。整數輸入的結果和 MVP 相同。
+- **設定**：`[retry_after_s]` 加上 `mode`（預設 adaptive）、`min_s`（1）、`max_s`（60），`min_s ≤ max_s`。
+- MVP 的超載測試在任何 request 完成之前就觸發 429，所以仍得到固定值 2，不需要修改。

@@ -260,6 +260,40 @@ async def test_idle_connections_do_not_block_service():
                 writer.close()
 
 
+async def test_retry_after_follows_the_observed_service_time():
+    """038 §3: once requests have completed, a 429's Retry-After is (queued + 1) x mean service / max_concurrency,
+    clamped to [min_s, max_s]; before that it is the fixed value. 503s keep their fixed values."""
+    prof = make_profile(max_concurrency=1, max_queue=0)
+    retry = {"mode": "adaptive", "min_s": 0.001, "max_s": 60.0}
+    async with stack(FakeConfig(ttft_s=0.05), prof, retry_after_s=retry) as st, st.client() as c:
+        assert (await c.post("/v1/completions", json=COMP)).status_code == 200
+        mean = st.gateway.retry.mean_service_s
+        assert mean is not None and mean >= 0.05
+        st.fake.cfg.hang = True
+        first = asyncio.create_task(c.post("/v1/completions", json=COMP))
+        await asyncio.wait_for(st.fake.started.wait(), 5)
+        await until(lambda: st.gateway.ctrl.in_flight == 1)
+        r = await c.post("/v1/completions", json=COMP)
+        assert r.status_code == 429 and error(r)["code"] == "queue_full"
+        assert int(r.headers["retry-after-ms"]) == round(mean * 1000) and r.headers["retry-after"] == "1"
+        st.fake.release.set()
+        assert (await first).status_code == 200
+
+
+async def test_fixed_retry_after_mode_keeps_the_mvp_values():
+    prof = make_profile(max_concurrency=1, max_queue=0)
+    async with stack(FakeConfig(), prof, retry_after_s={"mode": "fixed"}) as st, st.client() as c:
+        assert (await c.post("/v1/completions", json=COMP)).status_code == 200
+        st.fake.cfg.hang = True
+        first = asyncio.create_task(c.post("/v1/completions", json=COMP))
+        await asyncio.wait_for(st.fake.started.wait(), 5)
+        await until(lambda: st.gateway.ctrl.in_flight == 1)
+        r = await c.post("/v1/completions", json=COMP)
+        assert r.status_code == 429 and (r.headers["retry-after"], r.headers["retry-after-ms"]) == ("2", "2000")
+        st.fake.release.set()
+        await first
+
+
 async def test_queue_timeout_is_429():
     prof = make_profile(max_concurrency=1, max_queue=1)
     async with stack(FakeConfig(hang=True), prof, max_queue_wait_s=0.05) as st, st.client() as c:

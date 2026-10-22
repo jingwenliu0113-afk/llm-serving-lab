@@ -21,7 +21,7 @@ def test_defaults_from_a_minimal_toml(tmp_path):
     assert (s.monitor_interval_s, s.monitor_timeout_s, s.monitor_fail_threshold) == (2.0, 2.0, 3)
     assert s.disconnect_poll_s == 0.25
     assert s.retry_after_s.model_dump() == {"queue_full": 2, "queue_timeout": 2, "backend_unavailable": 5,
-                                            "draining": 5}
+                                            "draining": 5, "mode": "adaptive", "min_s": 1.0, "max_s": 60.0}
     assert s.max_pending(CLS) == 4 + 4 + 16
 
 

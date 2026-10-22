@@ -262,6 +262,14 @@ def test_rejections_carry_retry_after_headers():
     assert json.loads(r.body)["error"]["param"] is None
 
 
+@pytest.mark.parametrize("seconds, header, ms", [(2, "2", "2000"), (2.3, "3", "2300"), (0.25, "1", "250"),
+                                                 (59.9996, "60", "60000")])
+def test_retry_after_rounds_seconds_up_and_keeps_milliseconds(seconds, header, ms):
+    """038 §3: an adaptive estimate is not a whole number of seconds; Retry-After (RFC 9110: integer seconds) rounds
+    it up, so a client never retries early, and retry-after-ms keeps the estimate."""
+    assert api.retry_headers(seconds) == {"Retry-After": header, "retry-after-ms": ms, "x-should-retry": "true"}
+
+
 def test_api_error_to_response():
     e = api.ApiError(404, "model_not_found", "unknown model", param="model")
     r = e.response()

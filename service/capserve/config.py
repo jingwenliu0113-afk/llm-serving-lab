@@ -15,9 +15,9 @@ from __future__ import annotations
 import ipaddress
 import tomllib
 from pathlib import Path
-from typing import Mapping
+from typing import Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from capserve.profile import WorkloadClass
 
@@ -33,12 +33,29 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
+REJECTION_REASONS = ("queue_full", "queue_timeout", "backend_unavailable", "draining")
+
+
 class RetryAfter(_Strict):
-    """Retry-After seconds per rejection reason (fixed per reason in the MVP; no adaptive value)."""
+    """Retry-After seconds per rejection reason. mode "adaptive" (038 §3, capserve/retry.py) estimates the 429s
+    (queue_full, queue_timeout) from the observed service time within [min_s, max_s] and uses the fixed values until
+    a request has completed and for the 503s; mode "fixed" is the MVP's fixed value per reason."""
     queue_full: int = Field(2, ge=1)
     queue_timeout: int = Field(2, ge=1)
     backend_unavailable: int = Field(5, ge=1)
     draining: int = Field(5, ge=1)
+    mode: Literal["fixed", "adaptive"] = "adaptive"
+    min_s: float = Field(1.0, gt=0)
+    max_s: float = Field(60.0, gt=0)
+
+    @model_validator(mode="after")
+    def _bounds(self):
+        if self.min_s > self.max_s:
+            raise ValueError(f"retry_after_s.min_s {self.min_s} > max_s {self.max_s}")
+        return self
+
+    def fixed_values(self) -> dict:
+        return {reason: getattr(self, reason) for reason in REJECTION_REASONS}
 
 
 class TokenOverheads(_Strict):

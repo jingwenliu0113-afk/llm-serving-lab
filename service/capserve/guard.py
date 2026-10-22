@@ -7,7 +7,8 @@ Per HTTP request, before anything else runs:
   (max_concurrency + max_queue + pre_admission_slots) a request gets 429 queue_full before its body is read.
   /healthz, /readyz and /metrics are exempt;
 - a RequestRecord on the scope ("capserve.record") that the endpoint fills in; at the end the guard hands it to
-  Metrics.finish and writes one JSON access-log line (no prompt or completion text, ever).
+  Metrics.finish and on_finish (the Retry-After policy's observe, 038 §3) and writes one JSON access-log line (no
+  prompt or completion text, ever). The guard's own 429 takes its Retry-After from retry_after_s("queue_full").
 Cleanups (on_cleanup) are registered on the scope by whoever acquires something (the admission permit, the upstream
 response) right after acquiring it; the guard runs them in a shielded finally, LIFO, each bounded by
 CLEANUP_TIMEOUT_S, whether the endpoint returned, raised, or was cancelled, and whether or not the response object
@@ -83,13 +84,15 @@ async def run_cleanups(scope, *, timeout_s: float = CLEANUP_TIMEOUT_S) -> None:
 
 
 class Guard:
-    def __init__(self, app, *, max_pending: int, profile_header: str, queue_full_retry_after_s: int, metrics,
+    def __init__(self, app, *, max_pending: int, profile_header: str, retry_after_s: Callable[[str], float], metrics,
+                 on_finish: Callable[[RequestRecord], None] | None = None,
                  clock: Callable[[], float] = time.monotonic):
         self.app = app
         self.max_pending = max_pending
         self.profile_header = profile_header.encode()
-        self.queue_full_retry_after_s = queue_full_retry_after_s
+        self.retry_after_s = retry_after_s
         self.metrics = metrics
+        self.on_finish = on_finish
         self.clock = clock
         self.pending = 0
 
@@ -115,7 +118,7 @@ class Guard:
             rec.outcome, rec.reason = "rejected", "queue_full"
             try:
                 await openai_error(429, "rate_limit_error", "queue_full", "too many pending requests; retry later",
-                                   retry_after_s=self.queue_full_retry_after_s)(scope, receive, send_with_headers)
+                                   retry_after_s=self.retry_after_s("queue_full"))(scope, receive, send_with_headers)
             finally:
                 self._finish(rec)
             return
@@ -141,5 +144,10 @@ class Guard:
             self.metrics.finish(rec)
         except Exception:
             log.exception("metrics failed")
+        if self.on_finish is not None:
+            try:
+                self.on_finish(rec)
+            except Exception:
+                log.exception("on_finish failed")
         entry = {k: v for k, v in asdict(rec).items() if v is not None and k not in ("arrival", "upstream_sent")}
         access_log.info(json.dumps({"ts": round(time.time(), 3), **entry}, sort_keys=True))

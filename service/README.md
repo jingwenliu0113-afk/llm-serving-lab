@@ -6,6 +6,9 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 - OpenAI 相容介面：`/v1/chat/completions`、`/v1/completions`（串流與非串流）、`/v1/models`。
   只接受允許清單內的欄位，每個 request 只接受一個 prompt；其他欄位回 400 `unsupported_parameter`。
 - 准入控制：FIFO、並發上限、有界佇列、排隊逾時；超載回 429、無法服務回 503，都帶 `Retry-After`。
+  - 429 的 `Retry-After` 依負載調整（038 §3）：(排隊數 + 1) × 最近完成的 request 的平均服務時間 ÷ 並發上限，夾在 1–60 s 之間。
+    還沒有任何 request 完成時用固定值。`Retry-After` 取整數秒並無條件進位，`retry-after-ms` 保留估計值。
+  - 503 維持固定值。設定 `[retry_after_s] mode = "fixed"` 可回到 MVP 的固定值。
 - `/healthz`、`/readyz`、`/metrics`（Prometheus，只供營運，不是研究數據）。
 - 上限來自 capacity profile（`profiles/`）中的 `active_class`。
 

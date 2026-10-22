@@ -21,13 +21,14 @@ context; documented in service/README.md); above it -> 400 max_tokens_exceeded. 
 max_completion_tokens only (vLLM reads max_completion_tokens or max_tokens; max_tokens is deprecated there).
 The body sent to vLLM is re-serialized from the validated model, never the client's bytes.
 
-Errors are {"error": {"message", "type", "param", "code"}}; rejections (429 / 503) add Retry-After, retry-after-ms
-and x-should-retry: true. Messages never echo request content.
+Errors are {"error": {"message", "type", "param", "code"}}; rejections (429 / 503) add Retry-After (whole seconds,
+rounded up), retry-after-ms and x-should-retry: true. Messages never echo request content.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from typing import Literal
 
@@ -53,12 +54,15 @@ def error_body(type_: str, code: str, message: str, *, param: str | None = None)
     return {"error": {"message": message, "type": type_, "param": param, "code": code}}
 
 
-def retry_headers(retry_after_s: int) -> dict:
-    return {"Retry-After": str(retry_after_s), "retry-after-ms": str(retry_after_s * 1000), "x-should-retry": "true"}
+def retry_headers(retry_after_s: float) -> dict:
+    """Retry-After in whole seconds, rounded up so a client never retries early (an adaptive estimate, 038 §3, is not
+    a whole number); retry-after-ms keeps the estimate."""
+    return {"Retry-After": str(math.ceil(retry_after_s)), "retry-after-ms": str(round(retry_after_s * 1000)),
+            "x-should-retry": "true"}
 
 
 def openai_error(status: int, type_: str, code: str, message: str, *, param: str | None = None,
-                 retry_after_s: int | None = None) -> JSONResponse:
+                 retry_after_s: float | None = None) -> JSONResponse:
     headers = retry_headers(retry_after_s) if retry_after_s is not None else None
     return JSONResponse(error_body(type_, code, message, param=param), status_code=status, headers=headers)
 

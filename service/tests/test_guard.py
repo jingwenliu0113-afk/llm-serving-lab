@@ -23,7 +23,7 @@ class Finished:
 
 
 def make_guard(app, max_pending=2, metrics=None):
-    return gd.Guard(app, max_pending=max_pending, profile_header=HEADER, queue_full_retry_after_s=2,
+    return gd.Guard(app, max_pending=max_pending, profile_header=HEADER, retry_after_s=lambda reason: 2,
                     metrics=metrics or Finished())
 
 

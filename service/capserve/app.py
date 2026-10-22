@@ -51,6 +51,7 @@ from capserve.metrics import Metrics
 from capserve.openai_api import ApiError, openai_error, parse_request
 from capserve.profile import CapacityProfile
 from capserve.proxy import ClientDisconnected, ProxyStream, cancel_on_disconnect, passthrough, read_capped
+from capserve.retry import RetryAfterPolicy
 from capserve.tokens import PromptBudget, TokenizeError
 from capserve.upstream import BackendMonitor, data_client
 
@@ -90,7 +91,9 @@ class Gateway:
         self.loop: asyncio.AbstractEventLoop | None = None
         self.ctrl = AdmissionController(max_concurrency=self.cls.max_concurrency, max_queue=self.cls.max_queue,
                                         max_queue_wait_s=settings.max_queue_wait_s,
-                                        retry_after_s=settings.retry_after_s.model_dump(), clock=clock)
+                                        retry_after_s=settings.retry_after_s.fixed_values(), clock=clock)
+        self.retry = RetryAfterPolicy(settings.retry_after_s, max_concurrency=self.cls.max_concurrency,
+                                      queued=lambda: self.ctrl.queued)
         self.client = data_client(settings.backend_url, max_concurrency=self.cls.max_concurrency)
         self.monitor = BackendMonitor(settings.backend_url, self.served_model, interval_s=settings.monitor_interval_s,
                                       timeout_s=settings.monitor_timeout_s,
@@ -109,7 +112,7 @@ class Gateway:
         self.starlette = Starlette(routes=routes, exception_handlers=handlers, lifespan=self._lifespan)
         self.guard = Guard(self.starlette, max_pending=settings.max_pending(self.cls),
                            profile_header=f"{profile.profile_id}; status={profile.status}",
-                           queue_full_retry_after_s=settings.retry_after_s.queue_full, metrics=self.metrics,
+                           retry_after_s=self.retry.seconds, metrics=self.metrics, on_finish=self.retry.observe,
                            clock=clock)
 
     async def __call__(self, scope, receive, send):
@@ -158,7 +161,7 @@ class Gateway:
             resp.headers["x-should-retry"] = "false"
             return resp
         return openai_error(STATUS[reason], type_, reason, REJECTION_MESSAGES[reason],
-                            retry_after_s=getattr(self.settings.retry_after_s, reason))
+                            retry_after_s=self.retry.seconds(reason))
 
     def _client_error(self, rec, status: int, code: str, message: str, *, param: str | None = None) -> Response:
         rec.outcome, rec.error_code = "client_error", code
