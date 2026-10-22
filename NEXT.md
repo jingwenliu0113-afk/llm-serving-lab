@@ -48,10 +48,14 @@
   - [ ] Q3：需要下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**等使用者同意**；
         之後在 WSL 產生 chunk 檔並 pin sha256 → pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性）→ 凍結。
   - 觀察：Mac 的 140W adapter 目前只協商到 94 W（20 V × 4.69 A；名稱檢查會通過）。可能是線材或連接埠的限制，重負載時電池可能下降（016 的充電閘門會處理）。
-- **Stage E**（decision 041，DRAFT 第 2 版；PREREGISTRATION §11）：
-  - [x] 整理凍結模組的介面後修訂 041（26 項，見其修訂紀錄）：E1 改為桌面分析（不用 GPU）；E2 全部對比在同一 session、C 8 取代 C 12、
-        加 T256 與 K3、刪除 allocator 操弄；E3 在同一 session 重量 6 個舊設定並擬合，GGUF 由 BF16 GGUF 量化。
-  - [ ] 041 第 2 版的審查 → harness（`configs/stage_e.toml`、E2 → E1 → E3，TDD）→ smoke / pilot → 各部分凍結 → 正式。
+- **Stage E**（decision 041，DRAFT 第 3 版；PREREGISTRATION §11）：
+  - [x] 第 2 版經審查（44 項確認）與設計 workflow（3 位設計者、3 位評審）後改寫為第 3 版（`6db1512`），設計前看過的重算在 `results/stage_e/prereg-tally/`。
+  - [ ] **等使用者決定**（041 §6）：A1 E1 的換 seed 探針、A2 allocator 不操弄、A3 PC 作為能力檢查、A4 E2 只能給條件式結論。
+  - [x] harness：E3（`320343a`）、E1-D（`1450a3c`）、E2（`a7a5e44`）；每個部分有自己的設定檔與凍結。
+  - [ ] E1-D 與 E3 的 harness 審查（workflow 執行中）→ 修正 → E1-D 凍結 → 取回 Advanced / C0 的 raw（GPU 空閒時）→ 分析。
+  - [ ] E3：Mac lock 釋放後產生兩個 Q4_0 GGUF（`scripts/produce_gguf_e3.py`）→ pin → 傳到 WSL → 兩個平台的 pilot → 凍結 → 正式。
+  - [ ] E2：WSL 原始碼核對（prefix caching、warmup 來源、計數器名稱）→ 共享前綴 dataset → smoke（GPU）→ 凍結 → 正式（約 4.2 h）。
+  - [ ] E1-P：等 A1。
 
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
 
