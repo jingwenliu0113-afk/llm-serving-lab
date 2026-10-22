@@ -43,7 +43,8 @@ up: a foreground supervisor (WSL kills detached jobs), run from a release direct
     status, active class and limits preflight checked, else teardown and exit 2;
  6. the workload: the capserve.loadtest scenario (a fixed module, never an arbitrary command), or hold until a
     signal, max_hold_s after the start or the exit of either child. max_hold_s (finite, <= 1 h: 029 allows no
-    resident daemon) bounds how long the shared lock is held before the teardown starts, the preflight's idle
+    resident daemon; `up --resident`, 038 §7, is resident() below, a user decision, with resident_hold instead of
+    hold) bounds how long the shared lock is held before the teardown starts, the preflight's idle
     window and the boot included; the teardown then adds at most drain_timeout_s (<= MAX_DRAIN_S) plus the kill
     waits, the after-workload reading and the idle wait;
  7. teardown, in a finally under run_adv.DeferredSignals (a second Ctrl-C cannot orphan a GPU process group), and
@@ -108,6 +109,7 @@ HTTP_TIMEOUT_S = 5.0
 HEALTH_POLL_S = 2.0
 GATEWAY_READY_TIMEOUT_S = 120.0
 HOLD_POLL_S = 1.0
+RESIDENT_BACKOFF_S, RESIDENT_BACKOFF_MAX_S = 5.0, 300.0   # 038 §7: 5, 10, 20, ... s between resident restarts
 GATEWAY_KILL_EXTRA_S = 10.0   # 029: SIGKILL the gateway drain_timeout_s + 10 s after SIGTERM
 KILL_WAIT_S = 10.0
 IDLE_RETURN_S = 60.0          # 029 / 031: GPU memory back within 60 s
@@ -151,6 +153,9 @@ class DeployConfig(BaseModel):
     startup_timeout_s: float = Field(900.0, gt=0, allow_inf_nan=False)
     max_hold_s: float = Field(3600.0, gt=0, le=MAX_HOLD_S, allow_inf_nan=False)
     drain_timeout_s: int = Field(60, ge=0, le=MAX_DRAIN_S)
+    # 038 §7, resident mode only (`up --resident`): give up after max_restarts failures within restart_window_s
+    max_restarts: int = Field(5, ge=1)
+    restart_window_s: float = Field(3600.0, gt=0, allow_inf_nan=False)
     # 036: a production config pins the one verified profile it serves (release-relative service/profiles/<name>.json);
     # `up` then refuses any other --profile and any run with provisional profiles allowed. None: an integration config.
     production_profile: str | None = None
@@ -627,6 +632,17 @@ def hold(run: Running) -> dict:
         run.fx.sleep(HOLD_POLL_S)
 
 
+def resident_hold(run: Running) -> dict:
+    """038 §7: serve until either child exits or a signal; no max_hold_s (resident mode, a user decision)."""
+    while True:
+        for name, proc in (("vLLM", run.vllm), ("gateway", run.gateway)):
+            code = proc.poll()
+            if code is not None:
+                return {"ok": False, "ended_by": f"{name.lower()}_exit",
+                        "problems": [f"{name} exited (code {code}) while serving (resident)"]}
+        run.fx.sleep(HOLD_POLL_S)
+
+
 def loadtest_workload(scenario: str) -> Callable:
     if scenario not in loadtest.SCENARIOS:
         raise DeployError(f"unknown load-test scenario {scenario!r}")
@@ -692,7 +708,8 @@ def up(cfg: DeployConfig, profile_path, *, allow_provisional: bool, loadtest: st
 
     if workload is None:
         workload = loadtest_workload(loadtest) if loadtest else hold
-    mode = f"loadtest:{loadtest}" if loadtest else ("hold" if workload is hold else "workload")
+    mode = f"loadtest:{loadtest}" if loadtest else (
+        "hold" if workload is hold else "resident" if workload is resident_hold else "workload")
 
     # 1-2. release, pins, profile, preflight: refuse with every problem before anything starts
     sha, problems = release_problems(release_root, cfg)
@@ -1035,6 +1052,39 @@ def stop(cfg: DeployConfig, *, proc_root: str = "/proc", kill: Callable = os.kil
         sleep(1)
 
 
+def resident(cfg: DeployConfig, profile_path, *, allow_provisional: bool, up: Callable | None = None,
+             now: Callable = time.monotonic, sleep: Callable = time.sleep, wall: Callable = utcnow, err=None,
+             **up_kw) -> int:
+    """038 §7, `up --resident`: up() with resident_hold, started again whenever it ends (a child exited, or a start
+    was refused, e.g. the GPU not yet idle after a crash), after a backoff of 5, 10, 20, ... s (at most 300 s) by the
+    failures within restart_window_s; at max_restarts of them it gives up (exit 1). This process keeps the shared GPU
+    lock throughout (flock's descriptor), so nothing else starts in between. A signal (stop) ends it at once: up()'s
+    teardown runs, the SystemExit propagates and nothing restarts. state.json says restarting / gave_up meanwhile."""
+    start = up if up is not None else globals()["up"]
+    err = err or sys.stderr
+    failures: list = []
+
+    def note(phase: str, **fields) -> None:
+        _best_effort(lambda: write_state(cfg, {**(read_state(cfg) or {}), **fields, "phase": phase}, wall=wall),
+                     f"state.json write (phase {phase})")
+
+    while True:
+        code = start(cfg, profile_path, allow_provisional=allow_provisional, workload=resident_hold, **up_kw)
+        t = now()
+        failures = [f for f in failures if t - f < cfg.restart_window_s] + [t]
+        if len(failures) >= cfg.max_restarts:
+            note("gave_up", failures=len(failures), last_exit=code)
+            print(f"capserve.deploy: resident: {len(failures)} failures within {cfg.restart_window_s:g} s "
+                  f"(max_restarts {cfg.max_restarts}); giving up", file=err, flush=True)
+            return 1
+        wait = min(RESIDENT_BACKOFF_S * 2 ** (len(failures) - 1), RESIDENT_BACKOFF_MAX_S)
+        note("restarting", failures=len(failures), last_exit=code, restart_in_s=wait)
+        print(f"capserve.deploy: resident: up exited {code}; restarting in {wait:g} s "
+              f"({len(failures)} of {cfg.max_restarts} failures within {cfg.restart_window_s:g} s)", file=err,
+              flush=True)
+        sleep(wait)
+
+
 # ---------------------------------------------------------------- CLI
 
 def _build_parser() -> tuple:
@@ -1052,8 +1102,12 @@ def _build_parser() -> tuple:
     subs["up"].add_argument("--profile", required=True, help="capacity profile (JSON)")
     subs["up"].add_argument("--allow-provisional", action="store_true",
                             help="allow a provisional profile (integration / product tests; not product limits)")
-    subs["up"].add_argument("--loadtest", choices=sorted(loadtest.SCENARIOS),
-                            help="run this capserve.loadtest scenario instead of holding")
+    mode = subs["up"].add_mutually_exclusive_group()
+    mode.add_argument("--loadtest", choices=sorted(loadtest.SCENARIOS),
+                      help="run this capserve.loadtest scenario instead of holding")
+    mode.add_argument("--resident", action="store_true",
+                      help="038 §7: serve without max_hold_s and restart on failure; holds the shared GPU lock "
+                           "indefinitely, so only with the user's consent and never during research")
     return parser, subs
 
 
@@ -1086,8 +1140,10 @@ def main(argv: list | None = None, *, env: Mapping[str, str] | None = None) -> i
         return stop(cfg)
     for sig in (signal.SIGTERM, signal.SIGHUP):   # SystemExit(128 + signum): the finally tears down
         signal.signal(sig, smoke._exit_on_signal)
-    return up(cfg, args.profile, allow_provisional=allow_provisional(args.allow_provisional, env),
-              loadtest=args.loadtest)
+    allowed = allow_provisional(args.allow_provisional, env)
+    if args.resident:
+        return resident(cfg, args.profile, allow_provisional=allowed)
+    return up(cfg, args.profile, allow_provisional=allowed, loadtest=args.loadtest)
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@
   - [x] 內建 tokenizer（§4）。RTX 的 IT-4 中 23 項計數全部相等，兩份設定都已改為 `local`；local 模式的實際啟動等下一次 RTX 測試確認。
   - [x] quota（§5）。
   - [x] TLS（§6；Mac 上以真正的 uvicorn 與自簽測試憑證驗證；正式設定仍只綁 loopback）。
-  - [ ] 常駐功能（§7）。
+  - [x] 常駐功能（§7；研究期間不常駐）。
   - 全部完成後，在 GPU 空檔跑一次 RTX 產品測試（IT-0 至 IT-6，verified 與 provisional）。正式研究 session 進行中不跑。
 - Stage D 的事先登記草稿。
 

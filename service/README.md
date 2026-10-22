@@ -205,6 +205,15 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve serve --config /tmp/g
   - 部署時，`[deploy] gateway_host` 可以是 `127.0.0.1`（預設）或 `0.0.0.0`；`0.0.0.0` 必須有 `[gateway.tls]`，而且環境中要有金鑰，否則在啟動任何東西之前就拒絕。
   - supervisor、loadtest 與 itest 一律經 loopback 連到自己的 gateway，只信任設定中的憑證，不檢查主機名稱。
   - 正式設定 `rtx-verified.toml` 仍然只綁 loopback，沒有 TLS。是否對外開放由使用者決定。
+- **常駐**（038 §7；**研究期間不常駐**，使用者決定）：
+  - `capserve.deploy up --resident`：
+    - 不套用 `max_hold_s`；
+    - vLLM 或 gateway 結束時，整套重新啟動（重新做 preflight），重啟前依序等待 5、10、20 … 秒，最長 300 秒；
+    - 在 `restart_window_s`（預設 3,600 s）內失敗 `max_restarts`（預設 5）次就放棄，state.json 寫入 `gave_up`；
+    - 期間 supervisor 一直持有 GPU lock。`capserve.deploy stop` 會結束它，不會再重啟。
+  - `tools/rtx/capserve_resident.sh <sha>`：以 `flock -n` 取得 GPU lock 後，用正式設定啟動常駐模式。lock 被占用時立刻結束，不等待、不搶占。
+  - 開機自動啟動要在 Windows 工作排程器註冊。這屬於系統設定，由使用者自己做；腳本開頭有指令範例。
+  - 研究需要 GPU 時，要先明確執行 `capserve.deploy stop`。研究的 runner 不會自動停掉服務。
 - 單一 process，uvicorn 固定 `http="h11"`、`loop="asyncio"`；SIGTERM 時先 drain，exit −15 為正常結束。
 - 部署管理與整合測試（M1，decision 029 的 M1 實作補記）：
   - `python -m capserve.deploy render|up|status|stop`：在 RTX 上以 GPU lock 啟動 vLLM 與 gateway（前景 supervisor），teardown 一定執行。

@@ -247,3 +247,16 @@
   - 純 HTTP 不被服務；
   - deploy 的 probe 只信任這張憑證。
 - **沒有在 RTX 上測**：正式設定只綁 loopback，沒有 TLS；正式用的憑證屬於使用者。對外開放與否由使用者決定。
+
+**7. 常駐功能（2026-10-23）**
+- **`resident_hold`**：只在 vLLM 或 gateway 結束時返回，不看 `max_hold_s`。`up()` 的 mode 記為 `resident`。
+- **`resident()`**（`up --resident`，和 `--loadtest` 互斥）：
+  - 每次 `up()` 結束都算一次失敗，包括被 preflight 拒絕（例如當機後 GPU 還沒回到閒置）；
+  - 只計入 `restart_window_s` 之內的失敗；
+  - backoff 為 min(5 × 2^(n−1), 300) 秒；失敗達 `max_restarts` 次就以 exit 1 放棄；
+  - 等待期間 state.json 為 `restarting`（含 `restart_in_s`），放棄時為 `gave_up`；
+  - signal（`stop`）會讓 SystemExit 穿過 `up()` 的 teardown，直接結束，不再重啟。
+  - 和設計的差別：沒有另外做「GPU 沒回到閒置就等待」的邏輯。`up()` 的 preflight 會拒絕，算一次失敗再 backoff，效果相同，程式比較少。
+- **設定**：`[deploy] max_restarts`（≥ 1，預設 5）、`restart_window_s`（> 0，預設 3,600）。
+- **`tools/rtx/capserve_resident.sh`**：`exec flock -n` 加上正式設定，不帶 `--allow-provisional`。
+  Windows 工作排程器的註冊寫在腳本的註解中，由使用者自己做；有測試檢查腳本中沒有 `schtasks` 與 `sudo`。

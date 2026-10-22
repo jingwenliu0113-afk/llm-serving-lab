@@ -15,6 +15,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 import core_b_plan as bp
 import coreb_smoke as smoke
@@ -1251,3 +1252,98 @@ def test_a_public_gateway_needs_a_key_before_anything_starts(world):
     assert deploy.public_gateway_problems(cfg, {"CAPSERVE_API_KEY": "k"}) == []
     assert deploy.public_gateway_problems(cfg, {"CAPSERVE_API_KEYS_FILE": "/etc/keys.toml"}) == []
     assert deploy.public_gateway_problems(world.cfg(), {}) == []
+
+
+# ------------------------------------------------------------------ resident (038 §7; not used during research) --
+
+def test_a_resident_hold_ignores_max_hold_and_ends_only_when_a_child_exits(world, prof):
+    def die(w):
+        if w.t >= 2 * w.cfg().max_hold_s and w.procs.get("vllm") and w.procs["vllm"].alive:
+            w.procs["vllm"].die(1)
+
+    world.on_sleep = die
+    assert up(world, prof, workload=deploy.resident_hold) == 1
+    meta = runs.read_meta(world.run_dir())
+    assert meta["mode"] == "resident" and meta["outcome"]["workload"]["ended_by"] == "vllm_exit"
+    assert world.t >= 2 * world.cfg().max_hold_s
+
+
+class Clock:
+    def __init__(self):
+        self.t, self.sleeps = 0.0, []
+
+    def now(self):
+        return self.t
+
+    def sleep(self, s):
+        self.sleeps.append(s)
+        self.t += s
+
+
+def resident(tmp_path, results, *, clock=None, cfg=None, run_s=100.0, **kw):
+    """deploy.resident with a scripted up(): each element is its exit code or an exception to raise, and each up()
+    takes run_s of the clock."""
+    clock = clock or Clock()
+    calls = []
+
+    def fake_up(cfg_, profile, **up_kw):
+        calls.append(up_kw)
+        clock.t += run_s
+        r = results[len(calls) - 1]
+        if isinstance(r, BaseException):
+            raise r
+        return r
+
+    cfg = cfg or deploy.DeployConfig(service_root=str(tmp_path / "svc"), gateway={"active_class": "x"})
+    code = deploy.resident(cfg, "p.json", allow_provisional=False, up=fake_up, now=clock.now, sleep=clock.sleep, **kw)
+    return code, calls, clock
+
+
+def test_resident_restarts_with_a_growing_backoff_until_the_limit(tmp_path):
+    code, calls, clock = resident(tmp_path, [1, 1, 2, 1, 1, 1])
+    assert code == 1 and len(calls) == 5                         # 5 failures (max_restarts) within restart_window_s
+    assert clock.sleeps == [5, 10, 20, 40]
+    assert all(c["workload"] is deploy.resident_hold and c["allow_provisional"] is False for c in calls)
+    state = json.loads((tmp_path / "svc" / "state.json").read_text())
+    assert state["phase"] == "gave_up" and state["failures"] == 5
+
+
+def test_resident_backoff_resets_once_restarts_leave_the_window(tmp_path):
+    cfg = deploy.DeployConfig(service_root=str(tmp_path / "svc"), max_restarts=2, restart_window_s=1000.0,
+                              gateway={"active_class": "x"})
+    clock = Clock()
+    with pytest.raises(SystemExit):
+        resident(tmp_path, [1, 1, 1, SystemExit(143)], cfg=cfg, clock=clock, run_s=2000.0)   # runs outlive the window
+    assert clock.sleeps == [5, 5, 5]
+
+
+def test_resident_never_restarts_after_a_signal(tmp_path):
+    with pytest.raises(SystemExit):
+        resident(tmp_path, [1, SystemExit(128 + signal.SIGTERM)])
+    state = json.loads((tmp_path / "svc" / "state.json").read_text())
+    assert state["phase"] == "restarting" and state["restart_in_s"] == 5   # written before the backoff sleep
+
+
+def test_resident_restart_limits_are_bounded():
+    for bad in ({"max_restarts": 0}, {"restart_window_s": 0.0}):
+        with pytest.raises(ValidationError):
+            deploy.DeployConfig(service_root="/svc", gateway={"active_class": "x"}, **bad)
+    assert (deploy.DeployConfig(service_root="/svc").max_restarts,
+            deploy.DeployConfig(service_root="/svc").restart_window_s) == (5, 3600.0)
+
+
+def test_the_cli_offers_resident_but_not_with_a_loadtest(tmp_path, capsys):
+    cfg = tmp_path / "d.toml"
+    cfg.write_text('[deploy]\nservice_root = "/svc"\n[gateway]\nactive_class = "x"\n')
+    with pytest.raises(SystemExit):
+        deploy.main(["up", "--config", str(cfg), "--profile", "p.json", "--resident", "--loadtest", "smoke"])
+    parser, subs = deploy._build_parser()
+    args = parser.parse_args(["up", "--config", str(cfg), "--profile", "p.json", "--resident"])
+    assert args.resident is True and args.loadtest is None
+
+
+def test_the_resident_script_takes_the_lock_without_waiting_and_serves_the_production_config():
+    text = (ROOT / "tools" / "rtx" / "capserve_resident.sh").read_text()
+    assert "exec flock -n /tmp/ai-portfolio-gpu.lock" in text and "capserve.deploy up --resident" in text
+    assert "--config service/deploy/rtx-verified.toml" in text and "--allow-provisional" not in text
+    assert "sudo" not in text and "schtasks" not in text.lower()     # the Windows task is the user's to register
