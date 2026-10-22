@@ -1,11 +1,14 @@
 # Stage E1-D settings: decision 041 v3 §1 (the 8K slip chain, an exploratory desk analysis on existing data),
 # PREREGISTRATION §11 (DRAFT). benchmarks/stage_e1.py reads no real input until freeze.e1 is true; the module, its
 # synthetic-fixture tests and the fetch list (stage_e1.FETCH) are committed first, then raw/ is fetched read-only
-# (tools/rtx/fetch_raw.sh) and checked against each session's raw_manifest.json. The output is descriptive only.
+# (tools/rtx/fetch_raw.sh, only while tools/rtx/gpu_status.sh prints FREE) and checked against each session's
+# raw_manifest.json. The [e1] values are pinned to 041 v3 (stage_e1.E1_VALUES). The output is descriptive only.
 schema_version = 1
 
 [freeze]
 e1 = false
+e1_harness_sha256 = ""                                    # stage_e1.harness_sha256() at the freeze; analyze and
+                                                          # fetch-list refuse a harness that differs
 
 [e1]
 f_spike_ms = 35.0                                         # L1: F of position 0 of the slipped group (seen gap 29.1-39.2)

@@ -41,12 +41,12 @@
 | 數據集 | 滑移段 | 起始 idx | 直接量到的 |
 |---|---|---|---|
 | Advanced B0、G、K3 的 8K uniform（9 run，觀測 flag 開） | 8 | B0-r2：129、185；G-r1：65；K3-r1：129、193；K3-r2：129；K3-r3：89、193 | server 到達：8k → 8k+1 的間隔，滑移組 90.2–94.0 ms，正常組 414.9–419.8 ms；position 0 的 F，滑移組 41.5–43.8 ms，正常組 25.0–28.7 ms（T / TG 的正常組最大 29.1 ms） |
-| C0（24 bench，flag 關） | 5 | 89 四次、129 一次 | 只有 TTFT 與 latency；前兆組 min_j(lat(8(k−1)+j) − lat(8(k−1))) 為 −335.4 至 −322.2 ms，其他 547 組 ≥ −17.3 ms |
+| C0（24 bench，flag 關） | 5 | 89 四次、129 一次 | 只有 TTFT 與 latency；前兆組 min_j(lat(8(k−1)+j) − lat(8(k−1))) 為 −335.4 至 −330.8 ms（35 個 offset 全部在 −335.4 至 −322.2 ms），其他 547 組 ≥ −17.3 ms |
 | Core B C 8（3 run，flag 關） | 8（3 + 3 + 2） | r1：65、73、169；r2：73、89、169；r3：89、169 | client 送出延遲 0.054–0.409 ms；滑移組間隔 90.5–94.7 ms，正常組 410.6–426.1 ms；r1 的 k 8、9 為連續滑移（r2 的 k 9、11 不相鄰） |
 
 - 21 段只落在 7 個起始 idx：89（7）、129（4）、169（3）、65（2）、73（2）、193（2）、185（1）。每段從 position 1 開始，長度 7。
 - Advanced 的 step 紀錄：從 8k 到達到它的第一個 prefill chunk 之間，正常組都是 3 個 decode-only step，滑移組 6 / 6 都是 4 個（k ≤ 23；含 k 24 為 8 / 8）；8k 到達時與前一個 step 的時間差兩種組沒有分開（正常 1.3–3.8 ms，滑移 2.6–3.4 ms）。
-- Advanced B0、G、K3 的 216 組中，「position 0 的 F > 35 ms」和滑移完全一致（8 / 8 對 0 / 208）。T 與 TG 沒有滑移，但也有 20 次 F > 35 ms，集中在相近的 idx。
+- Advanced B0、G、K3 的 216 組中，「position 0 的 F > 35 ms」和滑移完全一致（8 / 8 對 0 / 208）。T 與 TG 的 TTFT 結構不同（長 prefill 切成較小的 chunk），028 的 `classify_bench` 在它們上面每個 run 標出 12–16 段長度 1–4 的「滑移」，這不是本節所說的滑移，所以 T、TG 不做滑移分類（見 1.4）；它們在 g 1–23 也有 20 次 F > 35 ms，集中在相近的 idx。
 - 由已見數據可寫出一條五環的鏈（第 3 版的工作假設，不是結論）：
   1. 第 8k 個 request 的 F 多約 15 ms（約一個 decode-only step）；
   2. 它晚一次排程決策才進入 queue，第一個 prefill chunk 之前多一個 decode-only step；
@@ -63,7 +63,7 @@
 | Advanced 8K uniform derived（B0、G、K3、T、TG，15 run） | server arrival | 無 | 有 | 有 | — | 已 commit | 否 |
 | Advanced steps.jsonl（B0、G、K3） | — | — | — | — | 有 | gitignore 副本（c0-step0） | 否 |
 | Advanced steps.jsonl（T、TG） | — | — | — | — | 有 | 否 | 是 |
-| Advanced spans.jsonl、bench.json（15 run） | client start | e2e | 有 | 有 | — | 否 | 是 |
+| Advanced spans.jsonl、bench.json（B0、G、K3，9 run；T、TG 不用） | client start | e2e | 有 | 有 | — | 否 | 是 |
 | C0 derived | 無 | 只有 latency | 有 | 無 | 無 | 已 commit | 否 |
 | C0 raw bench.json（24） | start_times | start + latency | 有 | 無 | 無 | 否 | 是 |
 | Core B C 8 raw bench.json（3） | start_times | start + latency | 有 | 無 | 無 | gitignore 副本 | 否 |
@@ -73,20 +73,21 @@
 
 ### 1.4 E1-D 的量
 
-滑移段以 `c0_analysis.classify_bench` 判定（028）。組 g 指 idx 8g…8g+7；基準只用 g 1–23，g 0 與 g 24 只列出。k−1 本身也是滑移組時標「連續」，只計一次，不評估 L3。
+滑移段以 `c0_analysis.classify_bench` 判定（028），只用在 B0、G、K3、C0 與 Core。組 g 指 idx 8g…8g+7；基準只用 g 1–23；k 為 0 或 24 的段只列出，不計入鏈的判定（1.5）。k−1 本身也是滑移組時標「連續」，只計一次，不評估 L3。
 
 - **L1**（Advanced）：F(8k) > 35 ms。
-- **L2**（Advanced）：n_dec(k) = 8k 到達後、第一個 ctx_tok > 0 的 step 之前的 step 數；成立條件為等於全部組的中位數加 1。
+- **L2**（Advanced）：n_dec(k) = 8k 到達後、第一個 ctx_tok > 0 的 step 之前的 step 數；成立條件為等於同一 run 的 g 1–23 中位數加 1。
 - **L3**（C0、Core；Advanced 需取回 e2e）：dev_j(k−1) = (lat(8(k−1)+j) − lat(8(k−1))) − 同一 bench、同一 j 的正常組中位數；成立條件 min_j dev < −170 ms（028 的 SLIP_MS）。
 - **L4**：gap(k) = 到達(8k+1) − 到達(8k) < 200 ms。
 - **L5**（Advanced）：ΔQ(k) = 8k+1…8k+7 的 Q 減同位置正常組 Q 的中位數，取平均；成立條件 > 170 ms。
-- **送出延遲**（Core；C0 需取回）：送出時間減「釋放它的 request」的完成時間（送出前最早完成、還沒被用掉的那個）。
-- **輔助描述**：T、TG 的每次 F > 35 ms 是否也多一個 decode-only step（取回 T、TG 的 steps 後）。
+- **送出延遲**（Core；C0 與 Advanced 需取回 bench.json）：依時間排序，第 C + m 個送出減第 m 個完成（封閉迴路的 semaphore，與 idx 無關）；每段列出 8k+1…8k+7 的值與最大值。只用 client 的時鐘（start_times 與 latency），不和 server 的時鐘相減。
+- **F 尖峰的描述**（Advanced 全部 15 run；T、TG 只有這一項）：g 1–24 中 F(8g) > 35 ms 的組、F 的值、g 1–23 的尖峰率；有 step 紀錄時（T、TG 需取回），計 8g 到達之後、它自己的 prefill 開始 s = arrival + server_ttft − P 之前（含）結束的 step 數，與其中 decode-only 的數目，對照同一 run 的 g 1–23 中位數，並列出「尖峰而且多 1 個 step」的組數。step 的時間戳是 step 結束時，所以同時列出 s 減最後一個計入的時間戳（margin），margin 很小時計數可能差 1。這個錨點不用「第一個 ctx_tok > 0 的 step」，因為 T 的小 chunk 可能屬於別的 request。
 
 ### 1.5 E1-D 的描述規則
 
 - 逐段列出：數據集、run 或 bench、k、起始 idx、是否連續、可得的 L1–L5、送出延遲。
-- 「鏈在該數據集成立」：可評估的段中最多 1 段有某一環不成立，而且非滑移組中 L1 成立的比例 ≤ 2%；否則寫「鏈不完整」並列出例外。
+- 「鏈在該數據集成立」：可評估的段（g 1–23、非連續）中最多 1 段有某一環不成立，而且非滑移組中 L1 成立的比例 ≤ 2%；否則寫「鏈不完整」並列出例外。Advanced 的鏈只用 B0、G、K3；T、TG 的尖峰率另列在旁邊，結果文件明寫：若把 T、TG 的 20 次尖峰算進非滑移組，L1 的誤報率約 5.9%，超過 2%。
+- 缺少某個 raw 檔時，只把依賴它的量標 blocked（例如沒有 spans 時 L3 用代理量、沒有 bench.json 時沒有送出延遲）；raw 檔的 sha256 和 raw_manifest 不符時停止分析。
 - 三個數據集分開報告，不合併；起始 idx 的分布逐數據集列出。
 
 ### 1.6 E1-P：換 seed 的探針（A1 待決定）
@@ -119,10 +120,11 @@
 
 ### 1.7 E1 的凍結證據
 
-- **`freeze.e1`**：E1-D 的模組、合成 fixture 的測試（連續滑移、g 0 與 g 24 的排除、時鐘不跨來源）與取回清單一起 commit；之後才以 `tools/rtx/fetch_raw.sh` 唯讀取回並依 raw_manifest 驗證 sha256：
-  - `advanced formal-20261011-adv`：{B0,G,K3,T,TG}-8192-uniform-r{1,2,3} 的 spans.jsonl 與 bench.json，以及 {T,TG} 的 steps.jsonl；
+- **`freeze.e1`**：E1-D 的模組、合成 fixture 的測試（連續滑移、g 0 與 g 24 的排除、n = 192 的短 bench、時鐘不跨來源、亂序完成的送出延遲、e2e 與代理量不同、部分取回）與取回清單一起 commit，`freeze.e1_harness_sha256` 記下當時的 `harness_sha256()`；`[e1]` 的五個值固定為本節的值。`fetch-list` 與 `analyze` 在未凍結或 harness 不符時拒絕。之後才以 `tools/rtx/fetch_raw.sh` 唯讀取回（放進 `results/capacity/c0-step0/raw/<session>/`）並依 raw_manifest 驗證 sha256：
+  - `advanced formal-20261011-adv`：{B0,G,K3}-8192-uniform-r{1,2,3} 的 spans.jsonl 與 bench.json，以及 {T,TG} 的 steps.jsonl；
   - `capacity explore-c0-20261016`：b*-n*.bench.json。
-  - 取回會讀 WSL 的磁碟與網路，排在 GPU 正式 session 之外的時段。
+  - 取回會讀 WSL 的磁碟與網路，只在 `tools/rtx/gpu_status.sh` 印出 FREE 時進行（不拿、不等 lock），排在 GPU 正式 session 之外。
+  - 輸出只能是 `results/stage_e/<session>/` 下的新檔，記錄每個輸入（derived 與 raw）的 sha256、harness 與 `configs/stage_e1.toml` 的 sha256。
 - **`freeze.e1p`**：smoke 1 次 boot、2 個 bench（seed A、B 各一，N 16）。通過條件：每個主 id 都有 span、F 算得出來、時間窗內有 step 紀錄、seed B 的 input_lens 全部 8,064、derived schema 正確；延遲遮蔽，不看。
 
 ### 1.8 能交付與不能交付
@@ -365,6 +367,7 @@
 9. 025 的 K3（C 25）：ρ 1.695 → 1.904，noise 門檻 0.0039；a 0.123，未達 A7(i) 的 0.20。第 3 版不重跑 K3 / K35@25。
 10. 第 2 版的數字更正：C 4 → C 8 的 P95 為 969 → 977 ms（均值）；2 長 + 6 短為 174 / 247 個 block（不是 156），3 長的峰值 233。
 11. Phase 3 在 Mac 上的數字是 140W adapter 的條件（實際協商 94 W），不和 Phase 1 的 70W 數字比較。
+12. E1-D 與 E3 harness 的審查（凍結前）用 committed 的 derived 數據重算過：T、TG 上 `classify_bench` 標出的段與 20 次 F 尖峰的位置、C0 前兆組的 min_j、§1.2 的其他數字（全部重現）。這些都不是新的 raw 數據。
 
 ## 6. 相對 037 範圍的決定（等使用者決定）
 
@@ -400,3 +403,13 @@
   - 流程：刪除 allocator 操弄與縮小 E1 應由使用者決定；E3 的容許值是看過逐設定殘差後才定的；唯讀整理沒有 commit，無法稽核。
 - 一個設計 workflow（3 位設計者分別以最小改動、機制優先、效度優先提出第 3 版，3 位評審重算數字後評分）一致建議以效度優先的版本為骨架，移植其他兩版的優點；第 3 版即依此寫成，並修正評審重算時找到的數字錯誤（A_prior 漏了 idx 64、正常組 F 的最大值、Core r2 的 k 9 與 11 不相鄰等）。
 - 第 2 版的 E2（C 8 的 H-E2a、H-E2d 的 KV 劑量、解讀表）、E1 的 g* 與三類事件、E3 的 H-E3a / H-E3b 與 4B-Q5_K_M 全部被取代；相對 037 的範圍差異改列為第 6 節，等使用者決定。
+
+### 第 3 版的 harness 審查（2026-10-23，凍結前）
+
+- 一個審查 workflow 檢查 E1-D 與 E3 的 harness（審查者加反駁者），確認 34 項。E1-D 的處理：
+  - 取回的檔案改從 `fetch_raw.sh` 實際寫入的 `results/capacity/c0-step0/raw/<session>/` 讀；取回清單只列讀者真的會開的檔（T、TG 的 spans 與 bench.json 不再取回）。
+  - T、TG 不跑 `classify_bench`（它在 T、TG 上標出的段不是 §1.2 的滑移，而且會把 20 次 F 尖峰藏進「滑移組」）；改為所有 Advanced run 的 F 尖峰描述，n_dec 錨定在 8g 自己的 prefill 開始，並列 margin（1.2、1.4）。
+  - 送出延遲依時間排序配對，每段列出；k 24 的段不計入鏈的判定；缺檔只標 blocked。
+  - `freeze.e1_harness_sha256` 與 `[e1]` 的值固定；`fetch-list` 也受凍結限制；取回只在 GPU 空閒時；輸出限制在 `results/stage_e/<session>/` 的新檔並記錄輸入的 sha256（1.7）。
+  - 1.2 的數字更正：C0 前兆組的 min_j 是 −335.4 至 −330.8 ms（原文的 −322.2 是全部 offset 的上界）。
+  - 鏈的判定只用 B0、G、K3 是範圍上的選擇；T、TG 的尖峰率另列，並寫明把它們計入時 L1 的誤報率約 5.9%（1.5）。
