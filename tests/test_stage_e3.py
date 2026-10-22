@@ -30,6 +30,12 @@ NEW = {"4B-Q4_0": {"sha256": "a" * 64, "size_bytes": 2_500_000_000, "token_embd_
                    "model_type": "qwen35 9B Q4_0"}}
 
 
+BLANK = {"sha256": "", "size_bytes": 0, "token_embd_bytes": 0, "token_embd_type": "", "output_type": "",
+         "tensor_types": {}, "model_size": 0, "model_type": ""}
+UNPINNED = {**CFG, "e3": {**CFG["e3"], "files": {k: ({**v, **BLANK} if k in e3.NEW else v)
+                                                 for k, v in CFG["e3"]["files"].items()}}}
+
+
 def pinned(freeze=None):
     """The repo config with the two new GGUFs pinned and, optionally, frozen platforms."""
     files = {k: ({**v, **NEW[k]} if k in NEW else v) for k, v in CFG["e3"]["files"].items()}
@@ -140,13 +146,13 @@ def formal(root, platform="wsl2-cuda"):
 
 # ---------------------------------------------------------------- config and plans
 
-def test_the_repo_config_is_well_formed_unfrozen_and_waits_for_the_new_gguf_pins():
+def test_the_repo_config_is_well_formed_unfrozen_with_the_new_ggufs_pinned():
     assert e3.config_problems(CFG) == [] and CFG["freeze"] == {"e3_metal": False, "e3_cuda": False,
                                                                "pilot_e3_metal": "", "pilot_e3_cuda": ""}
     assert set(CFG["e3"]["files"]) == {f"{s}-{q}" for s in ("4B", "9B") for q in ("Q8_0", "Q6_K", "Q4_K_M", "Q4_0")}
-    assert e3.config_problems(pinned()) == []
-    assert any("4B-Q4_0" in p for p in e3.config_problems({**CFG, "freeze": {**CFG["freeze"], "e3_cuda": True,
-                                                                            "pilot_e3_cuda": "p"}}))
+    assert e3.new_file_problems(CFG) == [] and e3.config_problems(pinned()) == []
+    assert any("4B-Q4_0" in p for p in e3.config_problems({**UNPINNED, "freeze": {**CFG["freeze"], "e3_cuda": True,
+                                                                                 "pilot_e3_cuda": "p"}}))
 
 
 @pytest.mark.parametrize("change, why", [
@@ -166,7 +172,9 @@ def test_the_pinned_header_values_are_the_local_ggufs():
         pytest.skip("the Core A GGUFs are not on this machine")
     for key, c in CFG["e3"]["files"].items():
         if key in e3.NEW:
-            continue
+            if not (models / c["filename"]).is_file():
+                continue
+            assert (models / c["filename"]).stat().st_size == c["size_bytes"], key
         info = gguf_tensors.read_header(models / c["filename"])
         assert {**pe.header_facts(info), "model_type": pe.model_type(info, key.split("-")[0])} == \
             {k: c[k] for k in sorted(e3.FILE_KEYS - {"filename"})}, key
@@ -210,7 +218,7 @@ def test_a_pilot_runs_the_two_q4_0s_and_the_sentinel_cell_once():
     p = e3.build_plan(PINS, pinned(), platform="macos-metal", mode="pilot")
     assert [(j["size"], j["quant"]) for j in p["jobs"][1:-1]] == [("4B", "Q4_0"), ("9B", "Q4_0"), ("4B", "Q4_K_M")]
     with pytest.raises(e3.StageE3Error, match="4B-Q4_0"):
-        e3.build_plan(PINS, CFG, platform="macos-metal", mode="pilot")                  # new GGUFs not pinned yet
+        e3.build_plan(PINS, UNPINNED, platform="macos-metal", mode="pilot")             # new GGUFs not pinned
 
 
 def test_formal_plans_need_their_platforms_freeze_and_pilot(frozen_root, tmp_path):

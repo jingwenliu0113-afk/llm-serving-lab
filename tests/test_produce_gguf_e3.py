@@ -130,8 +130,10 @@ def test_a_failed_quantize_leaves_no_output(tmp_path):
 
 def test_only_pinned_q4_0s_are_synced():
     cfg = tomllib.loads((ROOT / "configs" / "stage_e3.toml").read_text())
+    assert [n for n, _, _ in pe.pinned_files(cfg)] == ["Qwen3.5-4B-Q4_0.gguf", "Qwen3.5-9B-Q4_0.gguf"]
+    blank = {**cfg["e3"]["files"], "9B-Q4_0": {**cfg["e3"]["files"]["9B-Q4_0"], "sha256": ""}}
     with pytest.raises(pe.ProduceE3Error, match="not pinned"):
-        pe.pinned_files(cfg)
+        pe.pinned_files({**cfg, "e3": {**cfg["e3"], "files": blank}})
     files = {**cfg["e3"]["files"]}
     files["4B-Q4_0"] = {**files["4B-Q4_0"], "sha256": "a" * 64, "size_bytes": 10}
     files["9B-Q4_0"] = {**files["9B-Q4_0"], "sha256": "b" * 64, "size_bytes": 20}

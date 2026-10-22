@@ -59,7 +59,8 @@
   - [ ] E1-D 取回（**等 GPU 空閒**：Stage D 的鏈結束、`tools/rtx/gpu_status.sh` 為 FREE）：
         `python benchmarks/stage_e1.py fetch-list | while read -r args; do tools/rtx/fetch_raw.sh $args; done`
         → `python benchmarks/stage_e1.py analyze --out results/stage_e/e1-<date>/e1.json` → 結果文件（描述，不是檢定）。
-  - [ ] E3：Mac lock 釋放後 `produce_gguf_e3.py produce --size 4B / 9B` → pin 輸出的條目 → `produce_gguf_e3.py sync` → 兩個平台的 pilot → 凍結 → 正式（每個平台最多兩次嘗試）。
+  - [x] E3 的兩個 Q4_0 已產生並 pin（2026-10-23，Mac lock 下；4B `ee05b023…` 2,543,899,584 B，9B `2dfcbfd3…` 5,313,356,768 B）。
+  - [ ] E3：`produce_gguf_e3.py sync` 傳到 WSL（約 7.9 GB，**等 GPU 空閒**，不在正式 session 期間讀寫 WSL）→ 兩個平台的 pilot → 凍結 → 正式（每個平台最多兩次嘗試）。
   - [ ] E2：WSL 原始碼核對（prefix caching、warmup 來源、計數器名稱）→ 共享前綴 dataset → smoke（GPU）→ 凍結 → 正式（約 4.2 h）。
   - [ ] E1-P：等 A1。
 
