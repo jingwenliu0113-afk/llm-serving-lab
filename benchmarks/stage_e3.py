@@ -7,12 +7,18 @@ with every comparison inside it.
   E3:<platform>")) order; n_thr / poll are Core A's (Mac FORMAL_MAC; RTX pins [stage_b]). A pilot runs the two Q4_0s
   and the sentinel cell once.
 - configs/stage_e3.toml freezes each platform on its own (freeze.e3_metal / e3_cuda) with its passed pilot (mode
-  pilot, its platform's host, build_plan's pilot plan, every job ok, this harness); formal plans need both.
+  pilot, finished, its platform's host, build_plan's pilot plan, every job ok, env valid with the Mac's 140W adapter
+  and its watts or the RTX's undrifted B, all eight GGUFs' sha256 and headers verified, this harness); formal plans
+  need both.
 - The runner: the Mac under the Mac heavy lock (owner verified) with 037 §4's rules (the Apple 140W adapter, one
   powermode, AC, battery, thermal; run_core_a's 70 W rule does not apply to Phase 3), the RTX under the GPU lock
-  (verified) with the session-start B (stage_b.measure_baseline); every GGUF's sha256 against its pin before the
-  first job; Core A's 30 s idle between jobs, charge gate (Mac), env capture around each job and
-  core_a_parse.classify_bench; sentinel drift > 3 % marks the session; the platform's time cap skips what is left.
+  (verified) with the session-start B (stage_b.measure_baseline, before the session directory exists). Before the
+  first job: all eight GGUFs' sha256 against their pins and their headers (produce_gguf_e3.header_facts) against
+  configs/stage_e3.toml; a formal run also needs at most one earlier void attempt on its platform (a session.json stub
+  is written first, so an interrupted run counts). Core A's 30 s idle between jobs, charge gate (Mac, also once
+  before the clock starts), env capture around each job, core_a_parse.classify_bench and each row's model_filename /
+  model_size / model_type against the config; sentinel drift > 3 % marks the session. The time cap counts
+  measurement only (from the first job, charge pauses subtracted); it skips what is left, never the end sentinel.
 
 Usage:
     python benchmarks/stage_e3.py plan --platform macos-metal --mode pilot --out plan.json
@@ -40,6 +46,9 @@ sys.path.insert(0, str(ROOT / "benchmarks"))
 sys.path.insert(0, str(ROOT / "scripts"))
 import core_a_parse as cap  # noqa: E402
 import core_a_plan as ap  # noqa: E402
+import gguf_tensors  # noqa: E402
+import produce_gguf_e3 as pe  # noqa: E402
+import stage_b  # noqa: E402
 from run_core_a import (POWERMODES_ALLOWED, SENTINEL_DRIFT_PCT, _sentinel_summary, charge_gate,  # noqa: E402
                         default_run_proc, env_problems, mac_config_problems, make_env_capture, provenance_problems,
                         read_mac_power, sha256_json, write_raw_manifest)
@@ -60,7 +69,12 @@ HARNESS_FILES = ("benchmarks/stage_e3.py", "benchmarks/stage_e3_analysis.py", "s
 MAC_ADAPTER_REQUIRED = {"manufacturer": "Apple Inc.", "name": "140W USB-C Power Adapter"}   # 037 §4
 MAC_LOCK_DIR = "/tmp/ai-portfolio-mac-heavy.lock"
 CONFIG_KEYS = {"schema_version": None, "freeze": {"e3_metal", "e3_cuda", "pilot_e3_metal", "pilot_e3_cuda"},
-               "e3": {"seed", "L", "reps", "sentinel", "sentinel_drift_max", "cap_hours", "files"}}
+               "e3": {"seed", "L", "reps", "sentinel", "sentinel_drift_max", "cap_hours", "n_params", "files"}}
+HEADER_KEYS = ("token_embd_bytes", "token_embd_type", "tied", "output_type", "tensor_types", "model_size")
+FILE_KEYS = {"filename", "model_type", *HEADER_KEYS}                  # an old config (sha256 / size from pins)
+NEW_FILE_KEYS = FILE_KEYS | {"sha256", "size_bytes"}
+CAP_HOURS = {"macos-metal": 1.5, "wsl2-cuda": 1.0}                    # 041 v3 §3.6
+CAP_MARGIN_S = 600                                                     # a job's timeout past the cap
 
 
 class StageE3Error(RuntimeError):
@@ -99,11 +113,19 @@ def config_problems(cfg: dict) -> list:
     if (e["seed"], e["L"], e["reps"], e["sentinel"], e["sentinel_drift_max"]) != \
             (ap.FORMAL_SEED, 2048, ap.REPS, {"size": "4B", "quant": "Q4_K_M"}, SENTINEL_DRIFT_PCT / 100):
         problems.append("e3 seed / L / reps / sentinel / drift are not 041 v3 §3.2's (20261008, 2048, 3, 4B-Q4_K_M, 3 %)")
-    if set(e["cap_hours"]) != set(PLATFORMS):
-        problems.append(f"e3.cap_hours must name {list(PLATFORMS)}")
+    if e["cap_hours"] != CAP_HOURS:
+        problems.append(f"e3.cap_hours {e['cap_hours']} are not 041 v3 §3.6's {CAP_HOURS}")
+    if set(e["n_params"]) != set(SIZES) or not all(isinstance(v, int) and v > 0 for v in e["n_params"].values()):
+        problems.append("e3.n_params must give 4B's and 9B's parameter counts")
     want = {f"{s}-{q}" for s in SIZES for q in QUANTS}
     if set(e["files"]) != want:
         return problems + [f"e3.files {sorted(e['files'])} are not the eight configs {sorted(want)}"]
+    for key, c in sorted(e["files"].items()):
+        keys = NEW_FILE_KEYS if key in NEW else FILE_KEYS
+        if set(c) != keys:
+            problems.append(f"e3.files.{key} keys {sorted(c)} are not {sorted(keys)}")
+        elif key not in NEW and not _file_complete(c):
+            problems.append(f"e3.files.{key} is incomplete (every header value is pinned)")
     frozen = any(f[k] is True for k in FREEZE_KEYS.values())
     for platform, key in FREEZE_KEYS.items():
         if not isinstance(f[key], bool) or not isinstance(f[f"pilot_{key}"], str):
@@ -115,18 +137,24 @@ def config_problems(cfg: dict) -> list:
     return problems
 
 
+def _file_complete(c: dict) -> bool:
+    filled = all(c.get(k) for k in ("filename", "token_embd_bytes", "token_embd_type", "tensor_types", "model_size",
+                                    "model_type"))
+    return filled and isinstance(c.get("tied"), bool) and c["tied"] == (c.get("output_type") == "")
+
+
 def new_file_problems(cfg: dict) -> list:
     out = []
     for key in NEW:
         f = cfg["e3"]["files"][key]
-        if len(str(f.get("sha256") or "")) != 64 or not f.get("size_bytes") or not f.get("token_embd_bytes") \
-                or not f.get("tensor_types"):
-            out.append(f"e3.files.{key} is not pinned yet (scripts/produce_gguf_e3.py prints its entry)")
+        if len(str(f.get("sha256") or "")) != 64 or not f.get("size_bytes") or not _file_complete(f):
+            out.append(f"e3.files.{key} is not pinned yet (scripts/produce_gguf_e3.py produce prints its entry)")
     return out
 
 
 def config_files(pins: dict, cfg: dict) -> dict:
-    """{"<size>-<quant>": {filename, sha256, size_bytes, token_embd_bytes, tied}}: pins core_a for the six old ones."""
+    """{"<size>-<quant>": {filename, sha256, size_bytes, model_type, header values}}: sha256 and size from pins core_a
+    for the six old ones."""
     out = {}
     for m in pins["core_a"]["models"]:
         for q, f in m["files"].items():
@@ -134,11 +162,10 @@ def config_files(pins: dict, cfg: dict) -> dict:
             c = cfg["e3"]["files"][key]
             if c["filename"] != f["filename"]:
                 raise StageE3Error(f"e3.files.{key} is {c['filename']}, pins core_a has {f['filename']}")
-            out[key] = {"filename": f["filename"], "sha256": f["sha256"], "size_bytes": f["size_bytes"],
-                        "token_embd_bytes": c["token_embd_bytes"], "tied": c["tied"]}
+            out[key] = {"sha256": f["sha256"], "size_bytes": f["size_bytes"], **{k: c[k] for k in sorted(FILE_KEYS)}}
     for key in NEW:
         c = cfg["e3"]["files"][key]
-        out[key] = {k: c.get(k) for k in ("filename", "sha256", "size_bytes", "token_embd_bytes", "tied")}
+        out[key] = {k: c.get(k) for k in sorted(NEW_FILE_KEYS)}
     return out
 
 
@@ -182,7 +209,7 @@ def build_plan(pins: dict, cfg: dict, *, platform: str, mode: str, pins_sha256: 
             "pins_sha256": pins_sha256, "stage_e3_sha256": stage_e3_sha256, "harness_sha256": harness_sha256(),
             "files": files, "params": {"n_thr": n_thr, "poll": poll, "reps": e["reps"], "bench_r": ap.BENCH_R,
                                        "delay_s": ap.DELAY_S, "idle_s": ap.IDLE_S},
-            "cap_s": e["cap_hours"][platform] * 3600,
+            "cap_s": e["cap_hours"][platform] * 3600, "n_params": e["n_params"],
             "expect": {"build_number": pins["llama_cpp"]["build_number"], "build_commit": pins["llama_cpp"]["commit"],
                        "frozen_b_mib": frozen_b},
             "jobs": jobs}
@@ -208,17 +235,31 @@ def pilot_problems(path, platform: str, pins: dict, cfg: dict) -> list:
     except (OSError, ValueError) as exc:
         return [f"{path.name}: no readable session.json / plan.json ({exc})"]
     problems = []
-    if (s.get("stage"), s.get("mode"), s.get("platform")) != (STAGE, "pilot", platform):
-        problems.append(f"{path.name}: not a {platform} E3 pilot")
+    if (s.get("stage"), s.get("mode"), s.get("platform"), s.get("status")) != (STAGE, "pilot", platform, "finished"):
+        problems.append(f"{path.name}: not a finished {platform} E3 pilot")
     problems += [f"{path.name}: {p}" for p in host_problems(s.get("host"), platform)]
     if s.get("plan_sha256") != sha256_json(plan):
         problems.append(f"{path.name}: plan.json is not the plan the pilot ran (plan_sha256)")
     want = build_plan(pins, cfg, platform=platform, mode="pilot")
-    if any(plan.get(k) != want[k] for k in ("files", "params", "expect", "jobs")):
+    if any(plan.get(k) != want[k] for k in ("files", "params", "expect", "jobs", "cap_s", "n_params")):
         problems.append(f"{path.name}: the pilot's plan is not build_plan's {platform} pilot plan under this config")
     out = s.get("outcomes") or {}
     if out.get("ok") != len(plan.get("jobs") or [None]) or any(out.get(k) for k in ("oom", "error", "skipped")):
         problems.append(f"{path.name}: not every job ok ({out})")
+    if s.get("env_valid") is not True:
+        problems.append(f"{path.name}: env not valid ({s.get('env_flags')})")
+    if platform == "macos-metal":
+        adapter = s.get("ac_adapter") or {}
+        w = adapter.get("wattage_w")
+        if {k: adapter.get(k) for k in MAC_ADAPTER_REQUIRED} != MAC_ADAPTER_REQUIRED or \
+                not (isinstance(w, int) and not isinstance(w, bool) and w > 0):
+            problems.append(f"{path.name}: the pilot's adapter {adapter} is not the Apple 140W with its watts recorded")
+    elif not (isinstance(s.get("session_b"), dict) and s["session_b"].get("drift") is False):
+        problems.append(f"{path.name}: no undrifted session B ({s.get('session_b')})")
+    if s.get("ggufs_sha256") != {f["filename"]: f["sha256"] for f in want["files"].values()}:
+        problems.append(f"{path.name}: not all eight GGUFs were verified against their pins")
+    if s.get("header_verified") != {k: True for k in want["files"]}:
+        problems.append(f"{path.name}: not all eight GGUF headers matched configs/stage_e3.toml")
     if s.get("harness_sha256") != harness_sha256():
         problems.append(f"{path.name}: ran another harness (harness_sha256)")
     return problems
@@ -297,11 +338,57 @@ def default_lock_check(platform: str) -> Callable:  # pragma: no cover - /proc o
 
 
 def output_problems(out_dir, *, repo_root=ROOT) -> list:
+    """A session directory is exactly results/stage_e/<session id> (no nesting: every attempt is visible)."""
     root = Path(repo_root).resolve().joinpath(*RESULTS)
-    out = Path(out_dir).resolve()
-    if out == root or root not in out.parents:
-        return [f"{out_dir} is not a session directory under results/stage_e/ (041)"]
+    if Path(out_dir).resolve().parent != root:
+        return [f"{out_dir} is not results/stage_e/<session id> (041)"]
     return []
+
+
+def formal_attempts(repo_root, platform: str) -> list:
+    """Every formal E3 session.json of the platform under results/stage_e (final or the running stub), oldest first,
+    except runs refused before their first job; valid = finished, env valid and no sentinel drift."""
+    out = []
+    for f in Path(repo_root).joinpath(*RESULTS).rglob("session.json"):
+        try:
+            s = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if (s.get("stage"), s.get("mode"), s.get("platform")) != (STAGE, "formal", platform) or \
+                s.get("status") == "refused":
+            continue
+        valid = s.get("status") == "finished" and s.get("env_valid") is True and s.get("sentinel_ok") is True
+        out.append({"dir": f.parent, "started_at": s.get("started_at") or "", "valid": valid})
+    return sorted(out, key=lambda a: (a["started_at"], str(a["dir"])))
+
+
+def header_problems(files: dict, models_dir, read_header: Callable) -> tuple:
+    """({config: header matches}, problems): each GGUF's header against its pinned values."""
+    verified, bad = {}, []
+    for key, f in sorted(files.items()):
+        try:
+            got = pe.header_facts(read_header(Path(str(models_dir)) / f["filename"]))
+        except (OSError, ValueError) as exc:
+            verified[key] = False
+            bad.append(f"{key}: header unreadable ({exc})")
+            continue
+        diff = {k: (got[k], f[k]) for k in HEADER_KEYS if got[k] != f[k]}
+        verified[key] = not diff
+        if diff:
+            bad.append(f"{key}: header (got, pinned) {diff}")
+    return verified, bad
+
+
+def identity_problems(stdout: str, job: dict, files: dict) -> list:
+    """041 v3 §3.6: the llama-bench row's model_filename, model_size and model_type are the config's."""
+    rows = cap.parse_bench_jsonl(stdout)
+    if len(rows) != 1:
+        return [f"{len(rows)} result rows"]
+    r, f = rows[0], files[f"{job['size']}-{job['quant']}"]
+    got = {"model_filename": Path(str(r.get("model_filename") or "")).name, "model_size": r.get("model_size"),
+           "model_type": r.get("model_type")}
+    want = {"model_filename": job["model"], "model_size": f["model_size"], "model_type": f["model_type"]}
+    return [f"{k} {got[k]!r} is not {want[k]!r}" for k in want if got[k] != want[k]]
 
 
 # ---------------------------------------------------------------- the runner
@@ -309,8 +396,8 @@ def output_problems(out_dir, *, repo_root=ROOT) -> list:
 def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, session_id: str, lock_held: bool,
            pins: dict, cfg: dict, lock_check: Callable | None = None, run_proc: Callable = default_run_proc,
            sleep: Callable = time.sleep, read_power: Callable = read_mac_power, measure_b: Callable | None = None,
-           hash_file: Callable = file_sha256, expected_plan: dict | None = None, repo_root=ROOT,
-           clock: Callable = time.monotonic, timeout_s: float = 7200,
+           hash_file: Callable = file_sha256, read_header: Callable = gguf_tensors.read_header,
+           expected_plan: dict | None = None, repo_root=ROOT, clock: Callable = time.monotonic, timeout_s: float = 7200,
            now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat()) -> dict:
     platform, mode = plan.get("platform"), plan.get("mode")
     if plan.get("stage") != STAGE or platform not in PLATFORMS:
@@ -331,44 +418,61 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
     out = Path(out_dir)
     if out.exists():
         raise StageE3Error(f"{out} exists; sessions are never resumed or overwritten")
-    used = sorted({j["model"] for j in plan["jobs"]})
-    by_name = {f["filename"]: f for f in plan["files"].values()}
-    bad = []
-    for name in used:
-        try:
-            got = hash_file(Path(str(models_dir)) / name)
-        except OSError as exc:
-            bad.append(f"{name}: unreadable ({exc})")
-            continue
-        if got != by_name[name]["sha256"]:
-            bad.append(f"{name}: sha256 {got} is not the pinned {by_name[name]['sha256']}")
-    if bad:
-        raise StageE3Error("GGUF check failed before the session: " + "; ".join(bad))
-    for sub in ("raw", "env"):
-        (out / sub).mkdir(parents=True)
-    (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
-    bin_dir, models_dir = str(bin_dir), str(models_dir)
-    llama_bin = f"{bin_dir}/llama-bench"
-    pre = capture_env(llama_bin=llama_bin, out_path=out / "env" / "preflight.json", gpu_lock_held=not mac)
-    lc = (pre.get("runtime") or {}).get("llama_cpp") or {}
-    want = plan["expect"]
-    if lc.get("build_number") != want["build_number"] or lc.get("commit") != want["build_commit"]:
-        raise StageE3Error(f"llama.cpp build mismatch: {lc} vs {want}")
     if formal:
-        refuse = platform_problems(pre, platform) + provenance_problems(pre, pre) + host_problems(host_of(pre), platform)
-        if refuse:
-            raise StageE3Error("formal E3 run refused before it starts: " + "; ".join(refuse))
+        prior = formal_attempts(repo_root, platform)
+        if len(prior) >= 2 or any(a["valid"] for a in prior):
+            raise StageE3Error(f"{platform} already has formal E3 attempts {[a['dir'].name for a in prior]}: one valid "
+                               "session, or one void attempt and its rerun, at most (041 v3 §3.6)")
+    shas, bad = {}, []
+    for f in plan["files"].values():                        # all eight, used or not (041 v3 §3.6)
+        try:
+            shas[f["filename"]] = hash_file(Path(str(models_dir)) / f["filename"])
+        except OSError as exc:
+            bad.append(f"{f['filename']}: unreadable ({exc})")
+            continue
+        if shas[f["filename"]] != f["sha256"]:
+            bad.append(f"{f['filename']}: sha256 {shas[f['filename']]} is not the pinned {f['sha256']}")
+    verified, header_bad = header_problems(plan["files"], models_dir, read_header)
+    if bad or header_bad:
+        raise StageE3Error("GGUF check failed before the session: " + "; ".join(bad + header_bad))
+    want = plan["expect"]
     session_b = None
     if not mac:
         if measure_b is None:
             raise StageE3Error("E3 on the RTX measures B at the session start (§4; stage_b.measure_baseline)")
-        session_b = measure_b(want["frozen_b_mib"])
-    powermode = ((pre.get("power") or {}).get("powermode")) if mac else None
+        try:
+            session_b = measure_b(want["frozen_b_mib"])
+        except stage_b.StageBError as exc:
+            raise StageE3Error(f"session B not measured, nothing started: {exc}") from exc
+    for sub in ("raw", "env"):
+        (out / sub).mkdir(parents=True)
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "stage": STAGE, "platform": platform,
                "mode": mode, "seed": plan["seed"], "plan_sha256": sha256_json(plan),
-               "pins_sha256": plan.get("pins_sha256"), "harness_sha256": harness_sha256(), "host": host_of(pre),
-               "lock_held": lock_held, "ggufs_verified": used, "session_b": session_b, "powermode": powermode,
-               "ac_adapter": ((pre.get("power") or {}).get("ac_adapter")) if mac else None, "started_at": now()}
+               "pins_sha256": plan.get("pins_sha256"), "harness_sha256": harness_sha256(), "status": "running",
+               "lock_held": lock_held, "ggufs_sha256": shas, "header_verified": verified, "session_b": session_b,
+               "started_at": now()}
+
+    def write_session():
+        (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
+
+    write_session()                                         # the stub: an interrupted run is still an attempt
+    (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
+    bin_dir, models_dir = str(bin_dir), str(models_dir)
+    llama_bin = f"{bin_dir}/llama-bench"
+    pre = capture_env(llama_bin=llama_bin, out_path=out / "env" / "preflight.json", gpu_lock_held=not mac)
+    session.update({"host": host_of(pre), "powermode": ((pre.get("power") or {}).get("powermode")) if mac else None,
+                    "ac_adapter": ((pre.get("power") or {}).get("ac_adapter")) if mac else None})
+    lc = (pre.get("runtime") or {}).get("llama_cpp") or {}
+    refuse = [] if lc.get("build_number") == want["build_number"] and lc.get("commit") == want["build_commit"] else \
+        [f"llama.cpp build mismatch: {lc} vs {want}"]
+    if formal:
+        refuse += platform_problems(pre, platform) + provenance_problems(pre, pre) + \
+            host_problems(host_of(pre), platform)
+    if refuse:
+        session.update({"status": "refused", "refused": refuse})
+        write_session()
+        raise StageE3Error("E3 run refused before its first job: " + "; ".join(refuse))
+    powermode = session["powermode"]
     params = plan["params"]
     bench_expect = {"build_commit": want["build_commit"], "n_threads": params["n_thr"], "poll": params["poll"],
                     "reps": params["bench_r"]}
@@ -376,29 +480,37 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
     if session_b and session_b.get("drift"):
         env_flags.append({"job_id": None, "phase": "preflight",
                           "reason": f"session B {session_b.get('b_mib')} MiB drifted from the frozen B (§4)"})
-    t0, cap_reached = clock(), False
+    if mac:
+        pause = charge_gate(read_power, sleep)              # before the clock starts
+        if pause:
+            charge_pauses.append({"job_id": None, **pause})
+    t0, paused, cap_reached = clock(), 0.0, False
     with open(out / "rows.jsonl", "w") as fh:
         for i, job in enumerate(plan["jobs"]):
-            jid = job["id"]
+            jid, end = job["id"], job.get("position") == "end"
             base = {"job_id": jid, "kind": job["kind"], "position": job.get("position"), "size": job["size"],
                     "quant": job["quant"], "L": job["L"], "rep": job["rep"], "model": job["model"]}
-            if job.get("position") != "end" and (cap_reached or clock() - t0 > plan["cap_s"]):
-                cap_reached = True                         # the end sentinel always runs: the drift is measured
+            if not (cap_reached and not end):
+                if i:
+                    sleep(params["idle_s"])
+                if mac:
+                    pause = charge_gate(read_power, sleep)
+                    if pause:
+                        charge_pauses.append({"job_id": jid, **pause})
+                        paused += pause["waited_s"]
+                elapsed = clock() - t0 - paused             # measurement time: charge pauses do not count
+                cap_reached = cap_reached or (not end and elapsed > plan["cap_s"])
+            if cap_reached and not end:                     # the end sentinel always runs: the drift is measured
                 row = {**base, "outcome": "skipped", "reason": f"time cap {plan['cap_s']:.0f} s reached (041 v3 §3.6)"}
                 rows.append(row)
                 fh.write(json.dumps(row) + "\n")
                 continue
-            if i:
-                sleep(params["idle_s"])
+            job_timeout = timeout_s if end else min(timeout_s, max(plan["cap_s"] - elapsed, 0) + CAP_MARGIN_S)
             argv = [a.replace("{bin}", bin_dir).replace("{models}", models_dir) for a in job["argv"]]
             rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
                    "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json"}
-            if mac:
-                pause = charge_gate(read_power, sleep)
-                if pause:
-                    charge_pauses.append({"job_id": jid, **pause})
             env_before = capture_env(llama_bin=llama_bin, out_path=out / rel["env_before"], gpu_lock_held=not mac)
-            code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
+            code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], job_timeout)
             env_after = capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=not mac)
             for phase, rec in (("before", env_before), ("after", env_after)):
                 why = platform_problems(rec, platform)
@@ -408,12 +520,17 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
                     why.append(f"powermode {(rec.get('power') or {}).get('powermode')!r} != preflight {powermode!r} "
                                "(one powermode per session, §4)")
                 env_flags.extend({"job_id": jid, "phase": phase, "reason": w} for w in why)
-            result = cap.classify_bench(code, (out / rel["stdout"]).read_text(errors="replace"),
-                                        (out / rel["stderr"]).read_text(errors="replace"),
+            stdout = (out / rel["stdout"]).read_text(errors="replace")
+            result = cap.classify_bench(code, stdout, (out / rel["stderr"]).read_text(errors="replace"),
                                         {**bench_expect, **job["expect"]})
-            row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, "outcome": result["outcome"],
-                   "stage": result["stage"], "reason": result["reason"], "evidence": result["evidence"],
-                   "metrics": result.get("metrics"), "summary": result.get("summary"), **rel}
+            if result["outcome"] == "ok":
+                wrong = identity_problems(stdout, job, plan["files"])
+                if wrong:
+                    result = {**result, "outcome": "error", "stage": "identity", "reason": "; ".join(wrong)}
+            row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, "timeout_s": job_timeout,
+                   "outcome": result["outcome"], "stage": result["stage"], "reason": result["reason"],
+                   "evidence": result["evidence"], "metrics": result.get("metrics"), "summary": result.get("summary"),
+                   **rel}
             rows.append(row)
             fh.write(json.dumps(row) + "\n")
             fh.flush()
@@ -421,11 +538,12 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
     for r in rows:
         outcomes[r["outcome"]] += 1
     sentinel = _sentinel_summary([r for r in rows if r["outcome"] != "skipped"])
-    session.update({"finished_at": now(), "outcomes": outcomes, "sentinel": sentinel,
+    session.update({"status": "finished", "finished_at": now(), "outcomes": outcomes, "sentinel": sentinel,
                     "sentinel_ok": sentinel.get("drift") is False, "cap_reached": cap_reached,
-                    "env_flags": env_flags, "env_valid": not env_flags, "charge_pauses": charge_pauses})
+                    "measured_s": clock() - t0 - paused, "env_flags": env_flags, "env_valid": not env_flags,
+                    "charge_pauses": charge_pauses})
     write_raw_manifest(out)
-    (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
+    write_session()
     return session
 
 

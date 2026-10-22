@@ -290,7 +290,9 @@
 - 只量 L 2048，3 次重複，前後各一個 sentinel（4B-Q4_K_M，漂移 ≤ 3%）。8K、32K 不服務任何 hypothesis，刪除。
 - 其他沿用 Core A 的 decode 協定（llama.cpp b11146、005 的 flag set、`core_a_plan._bench_job`）；順序 `Random(sha256(f"20261008:stage_e:E3:{platform}"))`。
 - **GGUF 產生**（Mac lock 下）：從 pins 的 BF16 GGUF 以 `llama-quantize` 產生 Q4_0，預設配方、不加 `--pure`；9B 沒有 tie，`output.weight` 留在 Q6_K（和 9B-Q4_K_M 相同），照實揭露；4B 有 tie，token_embd 以實際產物為準。
-  sha256、大小、tensor 類型分布、token_embd 的 bytes 與類型、是否 tie 都 pin 在該部分的設定檔；磁碟保留 50 GiB；以 `sync_gguf_to_wsl.copy_one` 傳到 WSL 並驗證 sha256。
+  sha256、大小、tensor 類型分布、token_embd 的 bytes 與類型、是否 tie、`output.weight` 的類型、model_size 與 model_type 都 pin 在該部分的設定檔（`produce_gguf_e3.header_facts` 從 header 讀出；6 個舊檔也一樣 pin，並以本機 header 測試）；磁碟保留 50 GiB；以 `produce_gguf_e3.py sync`（`sync_gguf_to_wsl` 的 receiver 與 `copy_one`，sha256 與大小取自設定檔）傳到 WSL 並驗證 sha256。
+  - model_size 是 header 中所有 tensor 的 bytes 總和，等於 llama-bench 列中的 `model_size`（6 個舊檔都核對過）；檔案大小多出 metadata（tokenizer 等），所以列的核對不用 size_bytes。x_c 照 Core A 仍用檔案大小。model_type 是 llama-bench 的「架構 size ftype」字串（例如 `qwen35 9B Q4_0`），由 `general.file_type` 對應；對應錯誤時 pilot 會失敗，要在凍結前修正。
+  - 參數數 P_4B = 4,205,751,296、P_9B = 8,953,803,264：BF16 header 的元素總數（等於 llama-bench 的 `model_n_params`），pin 在設定檔，用在 3.5 的共用斜率擬合。
 
 ### 3.3 量的定義（單位 ms/token）
 
@@ -326,20 +328,28 @@
 | H-E3a not supported，其他 | 兩個候選都沒有被支持；H-A2 的偏差未被解釋 |
 
 - 兩個平台落在同一列，才寫成一般結論；否則報告「原因依平台而異」。
-- 描述量：a、b、s 與全部殘差（ms 與 %）；各格式 a_f 的差距與截距同質性 χ²；兩個 size 的共用斜率擬合（a0 與每十億參數的成本 c，沒有自由度）；H-A2 配對的偏差中 affine 模型能解釋的份額 φ。
+- 兩個平台都有明確的列（含「前提不成立」）才比較；任一平台為 incomplete 或缺少時寫「incomplete」。
+- 描述量：
+  - a、b、s 與全部殘差（ms 與 %）；
+  - 各格式 a_f（含可用時的 Q4_0）的兩兩差距，SE = √(SE_1² + SE_2²)（不同的格，獨立），以及 3 個舊格式的截距同質性 χ²；
+  - 共用斜率擬合：6 個舊設定擬合 t = a_size + b·x（每個 size 一個截距、共同斜率，3 df）；再由 a_size = a0 + c·P_size / 10⁹ 解出 a0 與每十億參數的成本 c（沒有自由度），P 為 3.2 pin 的參數數；
+  - φ = (R_bytes − R_affine) / (R_bytes − R_obs)，H-A2 配對的偏差中 affine 模型能解釋的份額；兩種都報：in-sample（6 個設定的全域擬合）與 leave-pair-out（只用配對以外的 4 個設定，2 df）。設計前的 tally 用 leave-pair-out（Phase 1：Mac 0.455、RTX 0.730；in-sample 為 0.91、0.94）。
 
 ### 3.6 有效性與停止規則
 
 - Mac：Mac lock、Apple 140W adapter（記錄名稱與協商瓦數）、同一 session 一個電力模式、012 的電量與 thermal 規則與充電閘門；凍結的 `run_core_a` 要求 70W，所以 E3 有自己的 runner（重用 job 格式、解析與 env capture）。
 - RTX：session 開始時量 B（`stage_b.measure_baseline`）；只套用 spill 的速度判定（E3 不跑 fit run，記憶體判定不適用，揭露）。
-- 每次 session 前驗證 8 個 GGUF 的 sha256；每列 llama-bench 結果的 model_filename、model_size、model_type 都要和 `configs/stage_e3.toml` 一致。
-- sentinel 漂移 > 3% 或 env 無效：session 作廢，可重跑一次；只分析第一個有效的 session。
-- 任一格少於 3 個 ok 的 process 或有 spill：依賴該格的 hypothesis 為 NT（H-E3a 需要 6 個舊設定；H-E3b 需要兩個 size 的 Q4_0、Q4_K_M、Q6_K）。不改設定重試。
-- 上限：Mac session 1.5 h，RTX 1.0 h；到上限時停止，未完成的格為 NT。
+- 每次 session 前驗證 8 個 GGUF 的 sha256 與 header（token_embd 的 bytes 與類型、tie、`output.weight` 的類型、tensor 類型分布、model_size），任一不符就不開始；每列 llama-bench 結果的 model_filename、model_size、model_type 都要和 `configs/stage_e3.toml` 一致，不符的列記為 error。
+- RTX 的 B 在建立 session 目錄之前量；量不到時什麼都不開始。
+- sentinel 漂移 > 3% 或 env 無效：session 作廢，可重跑一次；只分析第一個有效的 session。具體規則：
+  - session 目錄只能是 `results/stage_e/<id>`（不可巢狀），第一個 job 之前先寫 `session.json`（status running），所以中斷的 session 也是一次嘗試；在第一個 job 之前就被拒絕的（status refused，例如 adapter 或 build 不符）不算。
+  - 同一平台已有一個有效的正式 session，或已有兩次嘗試時，runner 拒絕再開始；分析也拒絕「之前有兩次以上嘗試，或之前已有有效 session」的 session。
+- 任一格少於 3 個 ok 的 process 或有 spill：依賴該格的 hypothesis 為 NT（H-E3a 需要 6 個舊設定；H-E3b 需要 6 個舊設定（全域擬合與 κ）加兩個 size 的 Q4_0）。不改設定重試。
+- 上限：Mac session 1.5 h，RTX 1.0 h，只計量測時間：從第一個 job 開始，扣掉 session 中的充電暫停；開始前的雜湊、header 檢查、B、preflight 與 Mac 在開始前的一次充電閘門都不計。到上限時跳過剩下的 job（未完成的格為 NT），但 end sentinel 一定執行（漂移要量）。每個 job 的 timeout 為 min(7,200 s, 剩餘上限 + 600 s)，end sentinel 為 7,200 s。
 
 ### 3.7 凍結證據
 
-每個平台一次 pilot：兩個 Q4_0 加 4B-Q4_K_M，L 2048，各 1 次，加 sentinel；結果遮蔽。通過條件：每個 job ok、模型身分與 sha256 相符、tensor 分布和 pin 相符、env 有效（Mac 為 140W 加協商瓦數；RTX 已量 B）、記錄 `harness_sha256`。
+每個平台一次 pilot：兩個 Q4_0 加 4B-Q4_K_M，L 2048，各 1 次，加 sentinel；結果遮蔽。通過條件（`stage_e3.pilot_problems`）：session 跑完；每個 job ok（含每列的模型身分）；8 個 GGUF 的 sha256 與 header 都相符；env 有效（Mac 為 Apple 140W 並記錄協商瓦數；RTX 已量 B 且沒有 drift）；plan 是 build_plan 在此設定下的 pilot plan（含上限與參數數）；記錄的 `harness_sha256` 等於目前的 harness。
 
 ## 4. 時數
 
@@ -413,3 +423,10 @@
   - `freeze.e1_harness_sha256` 與 `[e1]` 的值固定；`fetch-list` 也受凍結限制；取回只在 GPU 空閒時；輸出限制在 `results/stage_e/<session>/` 的新檔並記錄輸入的 sha256（1.7）。
   - 1.2 的數字更正：C0 前兆組的 min_j 是 −335.4 至 −330.8 ms（原文的 −322.2 是全部 offset 的上界）。
   - 鏈的判定只用 B0、G、K3 是範圍上的選擇；T、TG 的尖峰率另列，並寫明把它們計入時 L1 的誤報率約 5.9%（1.5）。
+- E3 的處理：
+  - 8 個設定的 header 值（token_embd bytes 與類型、tie、`output.weight` 類型、tensor 類型分布、model_size）、model_type 與參數數都 pin 在設定檔；session 前核對 8 個檔的 sha256 與 header，每列核對模型身分（3.2、3.6）。
+  - 上限只算量測時間，充電暫停扣除，每個 job 的 timeout 受剩餘上限限制；B 在建立目錄之前量（3.6）。
+  - 重跑上限可以強制：先寫 session.json stub、目錄不可巢狀、runner 與分析都數嘗試次數（3.6）。
+  - pilot 證據加上 env 有效、Mac adapter 與瓦數、RTX 的 B drift、8 個檔與 header、上限與參數數（3.7）。
+  - 分析補上共用斜率擬合、a_f 兩兩差距、兩種 φ 的定義（3.5）；任一平台 incomplete 時不寫一般結論；H-E3b 的 NT 依賴改寫為 6 個舊設定加兩個 Q4_0（3.6）。
+  - `produce_gguf_e3.py` 驗證 Mac lock 的擁有者，並加上把兩個 Q4_0 傳到 WSL 的 `sync`。

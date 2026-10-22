@@ -17,45 +17,86 @@ L = 2048                                                  # 041 v3 §3.2: L 2048
 reps = 3
 sentinel = { size = "4B", quant = "Q4_K_M" }              # Core A's sentinel cell
 sentinel_drift_max = 0.03
-cap_hours = { "macos-metal" = 1.5, "wsl2-cuda" = 1.0 }
+cap_hours = { "macos-metal" = 1.5, "wsl2-cuda" = 1.0 }    # measurement time only (041 v3 §3.6)
+n_params = { "4B" = 4205751296, "9B" = 8953803264 }      # the BF16 headers' element counts (= llama-bench model_n_params)
 
-# The eight configs: the six of pins core_a (sha256 / size from pins) and the two new Q4_0s. token_embd bytes and tie
-# are read from each GGUF header (scripts/gguf_tensors.py); tied files keep token_embd in the decode bytes.
+# The eight configs: the six of pins core_a (sha256 / size from pins) and the two new Q4_0s. Every value below is read
+# from the GGUF header (produce_gguf_e3.header_facts; model_size = the tensors' bytes = llama-bench's model_size;
+# model_type = llama-bench's "<arch> <size> <ftype>") and checked by stage_e3.run_e3 before a session and per row;
+# tied files keep token_embd in the decode bytes.
 [e3.files.4B-Q8_0]
 filename = "Qwen3.5-4B-Q8_0.gguf"
 token_embd_bytes = 675430400
+token_embd_type = "Q8_0"
 tied = true
+output_type = ""
+tensor_types = { F32 = 177, Q8_0 = 249 }
+model_size = 4471435264
+model_type = "qwen35 4B Q8_0"
 [e3.files.4B-Q6_K]
 filename = "Qwen3.5-4B-Q6_K.gguf"
 token_embd_bytes = 521472000
+token_embd_type = "Q6_K"
 tied = true
+output_type = ""
+tensor_types = { F32 = 177, Q6_K = 249 }
+model_size = 3453087744
+model_type = "qwen35 4B Q6_K"
 [e3.files.4B-Q4_K_M]
 filename = "Qwen3.5-4B-Q4_K_M.gguf"
 token_embd_bytes = 521472000
+token_embd_type = "Q6_K"
 tied = true
+output_type = ""
+tensor_types = { F32 = 177, Q4_K = 216, Q6_K = 33 }
+model_size = 2697836544
+model_type = "qwen35 4B Q4_K - Medium"
 [e3.files.9B-Q8_0]
 filename = "Qwen3.5-9B-Q8_0.gguf"
 token_embd_bytes = 1080688640
+token_embd_type = "Q8_0"
 tied = false
+output_type = "Q8_0"
+tensor_types = { F32 = 177, Q8_0 = 250 }
+model_size = 9516533760
+model_type = "qwen35 9B Q8_0"
 [e3.files.9B-Q6_K]
 filename = "Qwen3.5-9B-Q6_K.gguf"
 token_embd_bytes = 834355200
+token_embd_type = "Q6_K"
 tied = false
+output_type = "Q6_K"
+tensor_types = { F32 = 177, Q6_K = 250 }
+model_size = 7348291584
+model_type = "qwen35 9B Q6_K"
 [e3.files.9B-Q4_K_M]
 filename = "Qwen3.5-9B-Q4_K_M.gguf"
 token_embd_bytes = 572129280
+token_embd_type = "Q4_K"
 tied = false
+output_type = "Q6_K"
+tensor_types = { F32 = 177, Q4_K = 217, Q6_K = 33 }
+model_size = 5618141184
+model_type = "qwen35 9B Q4_K - Medium"
 [e3.files.4B-Q4_0]
 filename = "Qwen3.5-4B-Q4_0.gguf"
-sha256 = ""                                               # pinned after scripts/produce_gguf_e3.py
+sha256 = ""                                               # pinned from produce_gguf_e3.py produce
 size_bytes = 0
 token_embd_bytes = 0
+token_embd_type = ""
 tied = true
+output_type = ""
 tensor_types = {}
+model_size = 0
+model_type = ""
 [e3.files.9B-Q4_0]
 filename = "Qwen3.5-9B-Q4_0.gguf"
 sha256 = ""
 size_bytes = 0
 token_embd_bytes = 0
+token_embd_type = ""
 tied = false
+output_type = ""
 tensor_types = {}
+model_size = 0
+model_type = ""
