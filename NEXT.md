@@ -2,9 +2,27 @@
 
 ## 目前位置
 
-**Phase 2 已結案（使用者 2026-10-19 決定，decision 036）**：接受正式研究結果，封版。
-- 不再追加正式 GPU 實驗，不修改已封存的結果，不放寬 SLO。
-- 後續的產品化或研究由使用者另外決定，目前沒有待辦。
+**Phase 3 進行中（使用者 2026-10-22 決定，decision 037）**：執行 036 列出的後續，SPEC 的 Optional 除外。
+- **使用者的子決定（2026-10-23）**：
+  - 服務常駐：先做功能，研究期間不常駐；研究的 GPU 工作結束後，等使用者同意才常駐。
+  - thinking：gateway 預設關閉，client 可以開啟。
+  - Mac 重負載：可以跑，取得 Mac lock，接 Apple 140W adapter（019 的 70W 規定只適用於 Phase 1 的 session）。
+- **範圍**：
+  - Research：Stage D（容量的延伸：D1 O-32K、D2 O-T、D3 輸出長度、D4 開放迴路、D5 開場湧入、D6 class 內 prompt 長度不一、D7 經過 gateway）；
+    Stage E（E1 8K 滑移觸發點與雙模式、E2 2K 的 H-B4 成因、E3 H-A2）；Stage Q（Q1 Metal、Q2 長 context、Q3 W4A16）。
+  - Engineering（capserve v1）：thinking、內建 tokenizer、adaptive Retry-After、quota、TLS、常駐功能、IT-3 的決定性證據；
+    多 class 准入等 Stage D 的結果。
+- **順序**：產品 v1 中不依賴研究的項目（Mac，TDD）與 Stage D 的事先登記並行 → Stage D 正式 session → Stage Q / E → 結案。
+- **不變**：Phase 1、Phase 2 的結果與凍結；正式設定仍釘住 `verified-formal-20261017-c1b.json`，改變釘選需要使用者決定。
+- **使用者端**：正式 session 之前，建議使用者停用 BingWallpaper 的自動啟動（Windows 系統設定，我不修改）。
+
+### 下一步
+
+1. 產品 v1：thinking 預設關閉（TDD）。
+2. Stage D 的事先登記草稿。
+
+## Phase 2 結案時的狀態（2026-10-19，decision 036）
+
 - **正式成果**：`service/profiles/verified-formal-20261017-c1b.json`（decision 035）。
   - C_PROD：uniform 2K 32、uniform 8K 8、mixed 2K / 8K 2。
   - 適用條件、IT-3 的限制與正式 profile 的保護見 036。
@@ -31,7 +49,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–036（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果；036 是 Phase 2 結案）。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–037（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果；036 是 Phase 2 結案；037 是 Phase 3 的範圍）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 
@@ -207,15 +225,13 @@
 
 ## 建議（非 blocker）
 
-- 2026-10-10 20:14 起，`/usr/bin/git`（Xcode shim）因 `libxcrun` 架構不相容而失敗，可能是 Xcode 更新所致。
-  目前改用 `/Library/Developer/CommandLineTools/usr/bin/git`，不修改 xcode-select 等系統設定。
-  `scripts/deploy_bundle.py` 內部呼叫 `git`；下次部署前要先確認 PATH，或由使用者修復 Xcode。
-
 - 正式 Mac run 期間盡量少開前景程式。
   - 前景負載不會讓 session 作廢，但會增加 noise。
   - 4B pilot 時前景 loadavg 為 6–9，CV 5.9%；9B pilot 在深夜，CV 1.0%。
 
 ## 已解決
+
+- 2026-10-23：`/usr/bin/git`（Xcode shim）從 2026-10-10 起因 `libxcrun` 架構不相容而失敗；2026-10-23 檢查已恢復正常（`git version 2.54.0 (Apple Git-157)`），不再需要改用 CommandLineTools 的 git。
 
 - 2026-10-11：
   - 下一步方向：使用者決定收尾，不新增 Advanced 項目；8K uniform 的雙模式記入 Future Work（026）。

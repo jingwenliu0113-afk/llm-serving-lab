@@ -264,3 +264,31 @@ Phase 2 分成兩條線，可以並行開發；正式 GPU 實驗必須獨占共�
 - **Research**：C0 為分支 A（032）。C1 的最終結果見 035：C_PROD 為 uniform 2K 32、uniform 8K 8、mixed 2K / 8K 2。
 - **Engineering**：capserve MVP 完成。正式設定 `service/deploy/rtx-verified.toml` 只服務 verified profile `verified-formal-20261017-c1b.json`。
 - 適用條件、IT-3 的限制與後續項目見 036。後續的產品化或研究由使用者另外決定。
+
+---
+
+# Phase 3（2026-10-22 起，使用者決定；decision 037）
+
+上文 Phase 1、Phase 2 的 SPEC 原文不改，結果與判定都保留。Phase 3 執行 036 列出的後續，**SPEC 的 Optional 除外**。
+
+## Research
+
+- **Stage D：容量的延伸**：O-32K、O-T（030 定義的選項）、其他輸出長度、開放迴路（Poisson 到達）、開場湧入，
+  以及產品文件中兩個未驗證的假設（class 內 prompt 長度不一、經過 gateway）。
+- **Stage E：機制**：8K 延遲滑移的觸發點與雙模式、2K 的 H-B4 成因（chunk threshold、KV 劑量、allocator、prefix caching）、H-A2 被推翻的原因。
+- **Stage Q：quality 的缺口**：Metal 上、長 context（> 512）、Core B 的 W4A16 checkpoint。
+- 每個 study 都在 PREREGISTRATION 新增獨立的一節，正式數據之前凍結。容量類的 study 沿用 S2。
+- 平台、模型與 runtime 沿用 Core B（或 Core A / quality 的設定），只有被操弄的變因可以不同。
+
+## Engineering：capserve v1
+
+- thinking 預設關閉、client 可開啟；gateway 內建 tokenizer；依負載調整的 Retry-After；per-key quota；TLS；
+  常駐需要的功能（研究期間不常駐）；IT-3 在正式設定下的決定性證據。
+- 多 class 或依 token 加權的准入：依 Stage D 的結果設計，驗證後才上線。
+- 正式設定的 profile 釘選不變；改變它需要使用者決定。
+
+## 不做什麼（Phase 3）
+
+- Optional（TensorRT-LLM、speculative decoding、更大的模型、功耗量測、serving 成本模型、多 GPU）。
+- 寫新的推論引擎或 scheduler、修改 vLLM。
+- 不使用付費 API；不影響其他專案；GitHub 維持 private。

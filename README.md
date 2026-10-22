@@ -5,7 +5,8 @@
 這是一個事先登記（pre-registered）的實驗：hypothesis、門檻、metric 與 protocol 都在看到正式數據之前寫定並凍結，
 之後的任何變更都有 decision log。結論只來自有效的正式 session，失敗、OOM、not testable 的單位照實報告。
 
-> **狀態（2026-10-19）：Phase 2 已結案**（使用者決定，decision 036）。後續的產品化或研究由使用者另外決定。
+> **狀態（2026-10-23）：Phase 3 進行中**（使用者決定，decision 037）：執行 036 列出的後續研究與產品 v1，SPEC 的 Optional 除外。
+> 下文 Phase 1、Phase 2 的結果都已定案，不因 Phase 3 而改變；正式產品 profile 的釘選也不變。
 > - **Phase 1 已完成**，結果保留、不重新分析：
 >   - Core：A（macos-metal、wsl2-cuda）、B（uniform、mixed）、quality、deployment decision table。
 >   - Advanced：隔離 H-B4 的成因（事先登記與凍結見 024，結果見 025）。
@@ -49,12 +50,13 @@
 - [SPEC.md](SPEC.md)：研究問題與範圍。
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
   分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
-- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–036）。
+- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–037）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
   - 023 是 Gate 的決定，024 是 Advanced 的事先登記（凍結 commit `97a948c`），025 是 Advanced 的結果，026 是 Phase 1 收尾的決定，027 是 Phase 2 的兩條線與治理規則。
   - Phase 2：
     - 028 / 032 是 C0；029 是 capserve 的架構與實作補記；030 是 Stage C 的事先登記（凍結 commit `b3c9109`）；031 是 GPU 閒置判定；
     - 033 是第一個 C1 session（已被取代），034 是重跑的取捨規則，035 是最終結果，036 是 Phase 2 結案（含適用條件、IT 的限制與正式 profile 的保護）。
+  - Phase 3：037 是範圍、順序與共通規則。
 - [docs/EXPERIMENT_RULES.md](docs/EXPERIMENT_RULES.md)、[docs/RESULTS_FORMAT.md](docs/RESULTS_FORMAT.md)、[docs/STORAGE_PLAN.md](docs/STORAGE_PLAN.md)。
 - [MACHINE_POLICY.md](MACHINE_POLICY.md)：兩台機器的分工與 lock。
 - [configs/pins.toml](configs/pins.toml)：所有 pin。
@@ -348,6 +350,7 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 
 以下都沒有在 Phase 1 中回答。Phase 2（027）只處理其中的 fixed-SLO 最大並發，以及 8K 雙模式的有限度排查；其餘仍要使用者另外決定。
 Phase 2 結案後的後續項目（產品化 v1、開放迴路容量、其他輸出長度、開場湧入、O-32K / O-T 等）見 decision 036。
+使用者 2026-10-22 決定在 Phase 3 執行這些後續與下列各項，SPEC 的 Optional 除外（decision 037）。
 
 - **8K uniform 的雙模式**：短類 P95 在 boot 之間落在約 2.48 秒或約 2.82 秒，成因未知（025「限制」）。
   它使 8K 的 noise 偏大；事後把模式拉齊重算，8K 的類別與判讀列都不變，也不影響既有的部署結論，所以目前不追查。
