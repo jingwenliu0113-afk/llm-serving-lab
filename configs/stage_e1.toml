@@ -6,8 +6,9 @@
 schema_version = 1
 
 [freeze]
-e1 = false
-e1_harness_sha256 = ""                                    # stage_e1.harness_sha256() at the freeze; analyze and
+e1 = true                                                 # FROZEN 2026-10-23 (041 v3 §1.7), before any fetch
+e1_harness_sha256 = "87b937d12799853b50745bc4430de5c26f8b9db71cd6726aebb78466a656c00d"
+                                                          # stage_e1.harness_sha256() at the freeze; analyze and
                                                           # fetch-list refuse a harness that differs
 
 [e1]

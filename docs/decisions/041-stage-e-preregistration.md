@@ -1,6 +1,6 @@
 # 041 — Stage E 事先登記（DRAFT，第 3 版）：三個機制問題
 
-- 狀態：**DRAFT**。寫在任何 Stage E 數據之前；各部分在 smoke / pilot 與審查後各自凍結。
+- 狀態：**DRAFT**，**E1-D 已凍結（2026-10-23，見 1.7）**；E1-P、E2、E3 仍為 DRAFT。寫在任何 Stage E 數據之前；各部分在 smoke / pilot 與審查後各自凍結。
   - 第 3 版有四個相對 037 範圍的決定（第 6 節 A1–A4）**等使用者決定**；本文先照建議的選項寫。
 - 日期：2026-10-23。第 1 版 → 第 2 版 → 第 3 版都在同一天，三版之間沒有任何 Stage E 數據。修訂經過見文末。
 - 對應：037（Phase 3 範圍）、024 / 025（Advanced）、028 / 032（C0）、030 / 039（逾時）、031（閒置與 spill）、PREREGISTRATION §2（H-A2）與 §11（本文摘要）。
@@ -125,6 +125,8 @@
   - `capacity explore-c0-20261016`：b*-n*.bench.json。
   - 取回會讀 WSL 的磁碟與網路，只在 `tools/rtx/gpu_status.sh` 印出 FREE 時進行（不拿、不等 lock），排在 GPU 正式 session 之外。
   - 輸出只能是 `results/stage_e/<session>/` 下的新檔，記錄每個輸入（derived 與 raw）的 sha256、harness 與 `configs/stage_e1.toml` 的 sha256。
+- **E1-D 已凍結（2026-10-23）**：`configs/stage_e1.toml` 的 `freeze.e1 = true`，`e1_harness_sha256 = 87b937d12799853b50745bc4430de5c26f8b9db71cd6726aebb78466a656c00d`（`benchmarks/stage_e1.py` 與 `benchmarks/c0_analysis.py`）。凍結時清單中的檔一個都還沒取回。`tests/test_stage_e1.py` 檢查設定檔的 pin 等於目前的 harness，所以兩個檔都不再修改；E1-D 的規則之後只能以新的 decision log 修訂。輸出寫在 `results/stage_e/<新的 session>/`。
+  - 取回：`python benchmarks/stage_e1.py fetch-list | while read -r args; do tools/rtx/fetch_raw.sh $args; done`，只在 `tools/rtx/gpu_status.sh` 印出 FREE 時執行。
 - **`freeze.e1p`**：smoke 1 次 boot、2 個 bench（seed A、B 各一，N 16）。通過條件：每個主 id 都有 span、F 算得出來、時間窗內有 step 紀錄、seed B 的 input_lens 全部 8,064、derived schema 正確；延遲遮蔽，不看。
 
 ### 1.8 能交付與不能交付
@@ -442,3 +444,9 @@
   - §1.2 的 Q 更正為每個 request +347–351 ms（每段平均 ΔQ 348.8–349.6 ms），和 028 一致。
   - T、TG 缺 steps 時的 blocked 標籤不再寫 L2；測試的 spans 改用 receiver 的實際格式並加入 warmup span。
   - 其餘：1.2 的 21 段、起始 idx、F、間隔、n_dec、送出延遲、C0 的 L3 全部重現；取回檔案的格式假設（span id、e2e 單位、warmup span、bench.json 的 start_times 與 latencies、manifest 鍵名、fetch_raw.sh 的路徑）都成立。
+- E1-D 凍結前的最後一輪覆核（新的錨點在 T、TG 上是否穩健；以真實格式的替身檔跑完整的 analyze 與 CLI）：沒有阻擋凍結的問題；確認 2 項 minor，凍結前處理：
+  - `--out` 只接受新的 session 目錄（原本可以把檔寫進既有的目錄）；
+  - `fetch-list` 改為每個 session 一行、可直接當 `fetch_raw.sh` 的參數。
+  - 另外加上兩個描述欄位：g 1–23 的計數分布與「最近時間戳減 s」的範圍，讓 T、TG 的時序是否和 B0、G、K3 相同可以直接看出。
+  - 覆核確認：下一個時間戳至少在 s 之後 44 ms（不會多算下一個 step）；position 0 的 Q 在 15 個 run 都 ≤ 0.015 ms；T、TG 正常組的 F 為 24.8–29.1 ms，和 B0 相同。
+- 之後凍結 E1-D（1.7）。

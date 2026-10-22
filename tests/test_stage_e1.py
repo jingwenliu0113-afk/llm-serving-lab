@@ -13,6 +13,7 @@ import stage_e1 as e1
 
 ROOT = Path(__file__).resolve().parent.parent
 CFG = tomllib.loads((ROOT / "configs" / "stage_e1.toml").read_text())
+DRAFT = {**CFG, "freeze": {"e1": False, "e1_harness_sha256": ""}}
 FROZEN = {**CFG, "freeze": {"e1": True, "e1_harness_sha256": e1.harness_sha256()}}
 PERIOD = 0.416
 EPOCH = 1.79e9                                   # server clock (spans, steps, derived arrival)
@@ -50,7 +51,7 @@ def synth(slips=(5,), n=200, spike=True, extra_step=True, spikes=(), shifts=(0.3
 
 
 def run(d, **kw):
-    args = dict(lat_ms=d["lat"], times_s=d["arrival"], cfg=CFG, F_ms=d["f"], Q_ms=d["q"], steps=d["steps"],
+    args = dict(lat_ms=d["lat"], times_s=d["arrival"], cfg=DRAFT, F_ms=d["f"], Q_ms=d["q"], steps=d["steps"],
                 arrivals_s=d["arrival"])
     args.update(kw)
     return e1.bench_episodes(d["ttft"], **args)
@@ -206,41 +207,44 @@ def test_the_window_absorbs_the_stamps_logging_delay_around_s():
     assert {g: v["n"] for g, v in nd["spikes"].items()} == {6: 3, 14: 3}
     assert (nd["spikes_at_median_plus_1"], nd["spikes_at_median_plus_1_unambiguous"]) == (2, 2)
     assert nd["spikes"][14]["nearest_stamp_minus_s_ms"] == pytest.approx(offsets[14 % 4], abs=1e-3)
+    assert nd["n_counts_g1_23"] == {2: 21, 3: 2}
+    assert nd["nearest_stamp_minus_s_ms_range_g1_23"] == pytest.approx([-0.9, 3.1], abs=1e-3)
 
 
-def test_the_config_is_041s_values_and_unfrozen():
-    assert e1.config_problems(CFG) == [] and CFG["freeze"] == {"e1": False, "e1_harness_sha256": ""}
+def test_the_repo_config_is_frozen_on_this_harness_with_041s_values():
+    """E1-D is frozen (041 v3 §1.7): any change to stage_e1.py or c0_analysis.py breaks this pin."""
+    assert CFG["freeze"] == {"e1": True, "e1_harness_sha256": e1.harness_sha256()}
+    assert e1.config_problems(CFG) == [] and e1.gate_problems(CFG) == []
     for k, v in (("slip_ms", 150.0), ("f_spike_ms", 30.0), ("gap_ms", 250.0), ("chain_tolerance", 2),
                  ("l1_false_max", 0.05), ("chain_tolerance", 1.0)):
         assert e1.config_problems({**CFG, "e1": {**CFG["e1"], k: v}}), k
     assert e1.config_problems({**CFG, "freeze": {"e1": True, "e1_harness_sha256": ""}})
     assert e1.config_problems({**CFG, "freeze": {"e1": False, "e1_harness_sha256": "a" * 64}})
-    assert e1.config_problems(FROZEN) == []
+    assert e1.config_problems(DRAFT) == []
     assert {Path(f).name for f in e1.HARNESS_FILES} == {"stage_e1.py", "c0_analysis.py"}
 
 
 def test_fetch_list_and_analyze_need_the_frozen_harness(tmp_path):
-    assert "freeze.e1 must be true" in e1.gate_problems(CFG)[0]
+    assert "freeze.e1 must be true" in e1.gate_problems(DRAFT)[0]
     wrong = {**CFG, "freeze": {"e1": True, "e1_harness_sha256": "0" * 64}}
     assert e1.gate_problems(wrong) == ["the harness differs from freeze.e1_harness_sha256"]
     assert e1.gate_problems(FROZEN) == []
     root = synthetic_repo(tmp_path / "repo")
     with pytest.raises(e1.StageE1Error, match="freeze.e1"):
-        e1.analyze(root, CFG, config_sha256="x")
+        e1.analyze(root, DRAFT, config_sha256="x")
     with pytest.raises(e1.StageE1Error, match="harness"):
         e1.analyze(root, wrong, config_sha256="x")
 
 
-def test_the_output_is_a_new_file_under_results_stage_e(tmp_path):
+def test_the_output_is_a_file_in_a_new_session_directory_under_results_stage_e(tmp_path):
     base = tmp_path / "results" / "stage_e"
     assert e1.out_problems(base / "e1-20261101" / "e1.json", root=tmp_path) == []
     assert e1.out_problems(base / "e1.json", root=tmp_path)
     assert e1.out_problems(tmp_path / "results" / "capacity" / "x" / "e1.json", root=tmp_path)
     assert e1.out_problems(base / "a" / ".." / ".." / "x" / "e1.json", root=tmp_path)
-    (base / "e1-20261101").mkdir(parents=True)
-    (base / "e1-20261101" / "e1.json").write_text("{}")
-    assert e1.out_problems(base / "e1-20261101" / "e1.json", root=tmp_path) == [
-        f"{(base / 'e1-20261101' / 'e1.json').resolve()} already exists"]
+    (base / "prereg-tally").mkdir(parents=True)                                     # an existing session, no e1.json
+    assert e1.out_problems(base / "prereg-tally" / "e1.json", root=tmp_path) == [
+        f"{(base / 'prereg-tally').resolve()} already exists (a new session directory only)"]
 
 
 def test_the_fetch_list_is_what_041_names():

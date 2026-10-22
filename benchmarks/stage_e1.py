@@ -33,13 +33,15 @@ A dataset's chain holds when at most chain_tolerance evaluable, counted episodes
 at most l1_false_max of the non-slipped groups; the three datasets are reported separately.
 
 Usage:
-    python benchmarks/stage_e1.py fetch-list        # after the freeze: the files fetch_raw.sh still has to fetch
+    python benchmarks/stage_e1.py fetch-list | while read -r args; do tools/rtx/fetch_raw.sh $args; done
+                                                    # after the freeze, only while gpu_status.sh prints FREE
     python benchmarks/stage_e1.py analyze --out results/stage_e/e1-<date>/e1.json      # a new file, after the freeze
 """
 
 from __future__ import annotations
 
 import argparse
+import collections
 import hashlib
 import json
 import statistics
@@ -111,11 +113,12 @@ def config_problems(cfg: dict) -> list:
 
 
 def out_problems(out: Path, root=ROOT) -> list:
-    """--out must be a new file results/stage_e/<session>/<name> (041 v3 §1.7)."""
+    """--out is a file in a new session directory results/stage_e/<session>/ (041 v3 §0, 1.7: no existing session is
+    changed)."""
     out = Path(out).resolve()
     if out.parent.parent != Path(root).joinpath(*RESULTS).resolve():
         return [f"{out} is not results/stage_e/<session>/<file>"]
-    return [f"{out} already exists"] if out.exists() else []
+    return [f"{out.parent} already exists (a new session directory only)"] if out.parent.exists() else []
 
 
 # ---------------------------------------------------------------- per-bench quantities (pure)
@@ -242,8 +245,8 @@ def admission_s(row: dict) -> float:
 
 
 def n_dec_anchored(steps: list, row: dict) -> dict:
-    """Steps stamped in (arrival, s + ANCHOR_TAU_MS] (T / TG chunks can make some of them mixed) and how many of them
-    are decode-only. The distance from each window edge to the nearest stamp on either side shows how close the count
+    """The step count n stamped in (arrival, s + ANCHOR_TAU_MS] and its decode-only part (T / TG chunks can make some
+    of them mixed). The distance from each window edge to the nearest stamp on either side shows how close the count
     is to gaining or losing one step; below the stamps' resolution (1 ms) the count is ambiguous."""
     a, s = row["arrival"], admission_s(row)
     end = s + ANCHOR_TAU_MS / 1000
@@ -278,7 +281,10 @@ def f_spikes(rows: list, steps: list | None, cfg: dict) -> dict:
         nd = {g: n_dec_anchored(st, rows[C * g]) for g in groups}
         med = statistics.median(nd[g]["n"] for g in in_base)
         plus1 = [g for g in spikes if nd[g]["n"] == med + 1]
+        near = [nd[g]["nearest_stamp_minus_s_ms"] for g in in_base if nd[g]["nearest_stamp_minus_s_ms"] is not None]
         out["n_dec_anchor"] = {"median_g1_23": med, "spikes": {g: nd[g] for g in spikes},
+                               "n_counts_g1_23": dict(sorted(collections.Counter(nd[g]["n"] for g in in_base).items())),
+                               "nearest_stamp_minus_s_ms_range_g1_23": [min(near), max(near)] if near else None,
                                "spikes_at_median_plus_1": len(plus1),
                                "spikes_at_median_plus_1_unambiguous": sum(not nd[g]["ambiguous"] for g in plus1),
                                "ambiguous_groups_g1_23": sum(nd[g]["ambiguous"] for g in in_base)}
@@ -454,9 +460,10 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
             return 2
         print("stage_e1: fetch only while tools/rtx/gpu_status.sh prints FREE (041 v3 §1.7: never during a GPU "
               "session; the fetch takes no lock)", file=sys.stderr)
-        for sub_dir, session, names in FETCH:
+        for sub_dir, session, names in FETCH:                 # one fetch_raw.sh argument line per session left
             missing = [n for n in names if not (ROOT / COPIES / session / n).exists()]
-            print(json.dumps({"subdir": sub_dir, "session": session, "files": missing}))
+            if missing:
+                print(" ".join([sub_dir, session, *missing]))
         return 0
     out = Path(args.out)
     problems = out_problems(out)
