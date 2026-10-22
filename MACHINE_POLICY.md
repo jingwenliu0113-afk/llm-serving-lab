@@ -80,6 +80,7 @@ ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "<command>"'
 - NVIDIA-specific 工作標記 `blocked`；若確實造成 blocker，再記錄到 `NEXT.md`。
 - 繼續 Mac benchmark harness、quality、Apple Silicon benchmark、分析。
   〔020：正式 quality 改在 RTX 執行。遠端不可用時，正式 quality 只標記 blocked；Mac 只做 quality 的程式與分析，不跑正式 quality。〕
+  〔037 §4 / 040（2026-10-23）：例外是 Phase 3 Stage Q 的 Q1 Metal 部分（`q1-metal`），它本來就是要量 Mac 上的 quality，在 Mac 執行；取得 Mac Hard Lock，接 Apple 140W adapter。其他正式 quality 仍在 RTX。〕
 
 ## Credential 安全
 
@@ -116,6 +117,7 @@ ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "flock -n /tmp/ai-portfolio-
 - 不收正式 NVIDIA performance numbers。
 - 可繼續 Mac 端分析、code、tests、quality eval。
   〔020 之後，這裡的 quality eval 只指程式與分析。正式 quality 需要這把 GPU lock；lock 被占用時標記 blocked，不改到 Mac 跑。〕
+  〔040：Stage Q 的 CUDA 部分（`q1-cuda`、`q2`、Q3）同樣只在 GPU lock 下執行，不改到 Mac 跑；`q1-metal` 是 Mac 的量測，不是替代。〕
 - 不得搶鎖或終止對方 process。
 
 ## Mac Hard Lock
@@ -128,6 +130,8 @@ ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "flock -n /tmp/ai-portfolio-
 
 - 適用：Core A Apple Silicon 正式 benchmark、正式 quality 評測（約 19.5 小時）。
   〔020：正式 quality 不再在 Mac 執行，改用 GPU Hard Lock。〕
+  〔037 §4（使用者 2026-10-23）：Phase 3 的 Mac 重負載可以執行，條件是取得這把 lock 並接 Apple 140W adapter（Phase 1 的 70W 規定只適用於 Phase 1 的 session）。
+  適用：Stage Q 的 `q1-metal`（前 200 chunks 的 KLD 與完整 PPL）、Stage E 的 GGUF 產生與 E3 的 decode 量測。〕
 - GGUF 產出（`scripts/produce_gguf.py produce`：BF16 轉換 + 量化，每個 size 約 20–40 分鐘的 CPU / IO 重負載）
   也經 `tools/with-mac-lock` 執行，避免在其他專案正式量測期間跑重負載（2026-10-08）。
 - 使用本 Project 的 `tools/with-mac-lock <heavy-command>`。它與 Incident Investigator / Rust HNSW 共用同一個 lock path

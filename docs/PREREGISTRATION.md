@@ -504,4 +504,23 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
 - **Q3（W4A16）**：vLLM 中 W4A16 對 BF16 的 PPL 與配對 ΔNLL；H-Q3：PPL 比 − 1 ≤ 2%。BF16 checkpoint 需要下載（約 19.3 GB），等使用者同意。
   - Q3 有自己的設定檔與凍結（`configs/stage_q3.toml`、`freeze.stage_q3`）；chunk 檔的 sha256 在凍結前 pin 住。
 - **凍結的證據**：每個部分（q1-metal、q1-cuda、q2）一個通過的 pilot（每個 job 10 chunks、全部 ok），而且是同一個 harness（`harness_sha256`）。
+- **判定**：順序沿用 005（缺格為 NT；全部顯著且方向正確為 supported；其他為 not supported）；界線以超出優先（任一超出為 not supported，否則缺格為 NT）。
+- **揭露**：Phase 1 的 pilot 已在前 20 chunks 比較過 Metal 與 CUDA（9B 的 KLD 比值 0.32–0.68，9B Q4_K_M 的 PPL 比值 1.025）；界線與預測不因此修改（040「揭露」）。
+- **每個部分只分析第一個正式 session**；正式 run 前核對輸入檔的 sha256，pilot 與正式 session 都記錄並檢查執行的平台。
 - **輸出**：`results/stage_q/<session>/` 與 `results/stage_q/analysis.json`；尚未執行的部分，其 hypothesis 為 NT。
+
+## 11. Stage E addendum：機制（decision 037、041）
+
+**狀態：DRAFT**（041 第 2 版）。三個部分各自凍結（`configs/stage_e.toml` 的 `freeze.e1`、`freeze.e2`、`freeze.e3`）；凍結前沒有任何 Stage E 數據。
+本節只摘要；完整規則、揭露與修訂紀錄見 decision 041。第 1–10 節不變，H-A2、H-B4 與 Advanced 的判定不受影響。
+
+- **E1（探索性，桌面分析，不用 GPU）**：8K 滑移的觸發點。第 1 版的 client / server 問題已由既有數據回答（全部是 server）；
+  第 2 版用 Advanced、C0 與 Core 的既有數據往前追溯前一組的不同步從哪裡開始，以事先寫定的三類事件描述，不是檢定。
+- **E2（正式，RTX）**：2K 的 H-B4 成因。024 的規則全部沿用，所有因果對比都以同一 session、同一 C 的 B0 為參照；
+  - 格子：B0 / T 在 C 8 與 C 25，T256、K35、K3 在 C 25，uniform 與 mixed 各 3 次 restart；另加共享前綴的 PC 開 / 關（C 25，只有 uniform）。
+  - H-E2a：C 8 時 T 的類別 ∈ {M, P}；H-E2b：C 25 時 T 為 N（重現 025）；H-E2c：C 25 時 T256 ∈ {M, P}（預測不成立）；
+    H-E2d：ρ 隨 KV 減少而增加（不預測方向）；H-E2e：PC 開時短類 P95 TTFT ≤ 0.8 倍且超出 noise。
+  - H-E2a、H-E2c、H-E2d 的組合依 041 的解讀表判讀；C 8 同時降低 KV 壓力，這個混淆已揭露。
+- **E3（正式，Mac 與 RTX）**：由 pins 的 BF16 GGUF 量化出 9B-Q4_0 與 4B-Q5_K_M；每個平台在同一 session 量 8 個設定，以 6 個舊設定擬合 t = a + b × bytes。
+  - H-E3a：4B-Q5_K_M 的預測誤差 ≤ 樣本內最大殘差加 2 SE；H-E3b：9B-Q4_0 的殘差比 9B-Q4_K_M 更負，且超出 noise（不預測）。
+- **輸出**：`results/stage_e/<session>/`；新的結果不改變任何既有判定。

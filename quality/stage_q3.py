@@ -2,25 +2,30 @@
 """Stage Q3 (decision 040): the quality of Core B's W4A16 checkpoint against its BF16 base in one runtime (vLLM
 0.30.0), on WikiText-2 test cut and scored as llama-perplexity cuts and scores it (005).
 
-- chunks (WSL, project venv, offline HF cache): the pinned tokenizer encodes wiki.test.raw without special tokens;
-  floor(n / 512) chunks of 512 ids in order (llama-perplexity: tokens // n_ctx; Qwen3.5 adds no BOS) are written as
-  {"i", "ids"} JSONL. Its sha256 and chunk count are pinned in configs/stage_q3.toml before the freeze.
+- chunks (WSL, project venv, offline HF cache): the tokenizer whose tokenizer.json is the cross-checked one (005's
+  quality/subsets/tokenizer-crosscheck.json) encodes the pinned wiki.test.raw without special tokens; it must give
+  llama-perplexity's 297,194 tokens, cut into floor(n / 512) = 580 chunks of 512 ids in order (Qwen3.5 adds no BOS),
+  written as {"i", "ids"} JSONL with a .meta.json of its sources. The file's sha256 is pinned in configs/stage_q3.toml
+  before the pilot.
 - Scoring: each chunk is one prompt (TokensPrompt) with SamplingParams(max_tokens 1, temperature 0, prompt_logprobs
   1). The scored tokens are positions FIRST + 1 .. N_CTX - 1 (llama-perplexity scores logits [n_ctx / 2, n_ctx - 1),
-  255 tokens per chunk); for each, the logprob of the actual token and the id of the rank-1 token.
+  255 tokens per chunk); for each, the logprob of the actual token and the rank-1 id (ties: the smallest id).
 - plan: two jobs, W4A16 (pins core_b) and BF16 (pins core_a 9B source, cpu_offload_gb from the config), with Core B's
-  engine settings (language model only, bfloat16, pins stage_b GPU memory utilization and GDN prefill backend, no
-  prefix caching); a pilot scores PILOT_CHUNKS chunks, a formal plan every chunk and needs freeze.stage_q3.
-- run (WSL, GPU lock): per job, the 031 idle window, env capture, one child process (`score`) in the vLLM venv, env
-  capture, and the output checked against the chunks. Token-level scores stay in raw/ (the top-1 ids can echo the
-  text, 005: no item text in git); each row commits the per-chunk NLL. An OOM is outcome oom (040: NT, no rerun with
-  other settings).
+  engine where it bears on the numbers (language model only, bfloat16, FLASH_ATTN, pins stage_b GPU memory
+  utilization and GDN prefill backend, no prefix caching); a pilot scores PILOT_CHUNKS chunks, a formal plan all of
+  them and needs freeze.stage_q3 and the passed pilot.
+- run (WSL, GPU lock verified): Core B's server env (core_b_plan.server_env) and toolchain check, then per job the 031
+  idle window, env capture, one child process (`score`) in its own process group, env capture, and the output checked
+  against the chunks and the engine facts in its log (coreb_smoke.parse_server_log). Token-level scores stay in raw/
+  (the top-1 ids can echo the text, 005: no item text in git); each row commits the per-chunk NLL. An out-of-memory
+  failure is outcome oom (040: NT, no rerun with other settings); a timeout is an error.
 - analyze: PPL of each checkpoint, the paired per-chunk delta NLL (W4A16 - BF16) with a chunk bootstrap
-  (quality_analysis's frozen helpers), top-1 agreement; H-Q3: PPL(W4A16) / PPL(BF16) - 1 <= 2 %.
+  (quality_analysis's frozen helpers), top-1 agreement; H-Q3: PPL(W4A16) / PPL(BF16) - 1 <= 2 %. Only the first
+  formal Q3 session is analyzed.
 
 Usage:
-    .venv/bin/python quality/stage_q3.py chunks --tokenizer <snapshot dir> --text data/datasets/wiki.test.raw \\
-        --out data/stage_q/q3-chunks-512.jsonl                                           # WSL
+    .venv/bin/python quality/stage_q3.py chunks --tokenizer <dir with tokenizer.json> \\
+        --text data/datasets/wiki.test.raw --out data/stage_q/q3-chunks-512.jsonl        # WSL
     python quality/stage_q3.py plan --mode pilot --out plan.json
     flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python quality/stage_q3.py run --plan plan.json --data data \\
         --out results/stage_q/<session> --gpu-lock-held                                  # WSL
@@ -35,6 +40,7 @@ import hashlib
 import json
 import math
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -45,6 +51,8 @@ from typing import Callable
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "benchmarks"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import core_b_plan as bp  # noqa: E402
+import coreb_smoke as cs  # noqa: E402
 import gpu_idle as gi  # noqa: E402
 import quality_analysis as qa  # noqa: E402
 from run_core_a import env_problems, provenance_problems, sha256_json, write_raw_manifest  # noqa: E402
@@ -54,20 +62,26 @@ STAGE, PART, PLATFORM = "Q", "q3", "wsl2-cuda"
 N_CTX = 512
 FIRST = N_CTX // 2                                       # llama-perplexity: first = n_ctx / 2
 SCORED = N_CTX - FIRST - 1                               # 255 tokens per chunk
+WIKITEXT_TOKENS = 297_194                                # llama-perplexity's count (pins: 580 chunks of 512)
+CHUNKS = WIKITEXT_TOKENS // N_CTX
 PILOT_CHUNKS = 10
 MAX_MODEL_LEN = 1024                                     # a 512-token chunk and the one generated token
 MAX_NUM_SEQS = 4
+ATTENTION_BACKEND = "FLASH_ATTN"                         # core_b_plan.server_argv (003: pinned, never auto)
 H_Q3_MAX = 0.02                                          # 040: PPL(W4A16) / PPL(BF16) - 1 <= 2 %
 CHUNKS_PATH = "{data}/stage_q/q3-chunks-512.jsonl"
 CONFIG = ROOT / "configs" / "stage_q3.toml"
-HARNESS_FILES = ("quality/stage_q3.py",)
+CROSSCHECK = ROOT / "quality" / "subsets" / "tokenizer-crosscheck.json"
+HARNESS_FILES = ("quality/stage_q3.py",)                 # every module it imports is pinned by a guard test
 RESULTS = ("results", "stage_q")
 JOBS = ("w4a16", "bf16")
 CONFIG_KEYS = {"schema_version": None, "freeze": {"stage_q3", "pilot_q3"},
                "stage_q3": {"chunks_sha256", "chunks", "bf16_cpu_offload_gb", "max_num_batched_tokens", "pin_memory",
                             "n_boot", "seed"}}
-OOM_MARKERS = ("CUDA out of memory", "OutOfMemoryError")
-CHILD_ENV_DROP = ("VLLM_", "CAPSERVE_", "HF_HUB_OFFLINE", "CUDA_VISIBLE_DEVICES")
+# torch's allocator and vLLM's KV sizing (kv_cache_utils.py); matched only in the log's last OOM_TAIL lines
+OOM_MARKERS = ("CUDA out of memory", "OutOfMemoryError", "No available memory for the cache blocks",
+               "larger than the available KV cache memory")
+OOM_TAIL = 60
 
 
 class StageQ3Error(RuntimeError):
@@ -75,7 +89,11 @@ class StageQ3Error(RuntimeError):
 
 
 def file_sha256(path) -> str:
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 24), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def harness_sha256(root=ROOT) -> str:
@@ -86,6 +104,21 @@ def harness_sha256(root=ROOT) -> str:
     return h.hexdigest()
 
 
+def host_of(rec: dict) -> dict:
+    os_info = (rec or {}).get("os") or {}
+    return {"system": os_info.get("system"), "wsl": os_info.get("wsl"),
+            "nvidia": bool(((rec or {}).get("gpu") or {}).get("nvidia"))}
+
+
+def host_problems(host: dict | None) -> list:
+    want = {"system": "Linux", "wsl": True, "nvidia": True}
+    return [] if host == want else [f"ran on {host!r}, not a {PLATFORM} host {want}"]
+
+
+def vllm_version(rec: dict):
+    return (((rec or {}).get("runtime") or {}).get("vllm") or {}).get("vllm")
+
+
 # ---------------------------------------------------------------- config and freeze
 
 def _is_int(v) -> bool:
@@ -93,7 +126,7 @@ def _is_int(v) -> bool:
 
 
 def config_problems(cfg: dict) -> list:
-    """configs/stage_q3.toml: exactly its keys and types; once frozen, the pilot and the chunk file pinned."""
+    """configs/stage_q3.toml: exactly its keys and types; once frozen, the pilot and the 580-chunk file pinned."""
     if set(cfg) != set(CONFIG_KEYS):
         return [f"top-level keys {sorted(cfg)} are not {sorted(CONFIG_KEYS)}"]
     problems = []
@@ -107,12 +140,12 @@ def config_problems(cfg: dict) -> list:
     f, q = cfg["freeze"], cfg["stage_q3"]
     if not isinstance(f["stage_q3"], bool) or not isinstance(f["pilot_q3"], str):
         problems.append("freeze.stage_q3 must be a bool and freeze.pilot_q3 a string")
-    if not isinstance(q["chunks_sha256"], str) or not _is_int(q["chunks"]) or q["chunks"] < 0:
-        problems.append("stage_q3.chunks_sha256 must be a string and stage_q3.chunks a count")
+    if not isinstance(q["chunks_sha256"], str) or not _is_int(q["chunks"]) or q["chunks"] not in (0, CHUNKS):
+        problems.append(f"stage_q3.chunks_sha256 must be a string and stage_q3.chunks 0 (not yet) or {CHUNKS}")
     if f["stage_q3"] is True:
         if not f["pilot_q3"]:
             problems.append("freeze.pilot_q3 must name the passed pilot once freeze.stage_q3 is true")
-        if len(str(q["chunks_sha256"])) != 64 or not q["chunks"]:
+        if len(str(q["chunks_sha256"])) != 64 or q["chunks"] != CHUNKS:
             problems.append("stage_q3.chunks_sha256 / chunks must be pinned once freeze.stage_q3 is true")
     if not isinstance(q["bf16_cpu_offload_gb"], (int, float)) or isinstance(q["bf16_cpu_offload_gb"], bool) \
             or q["bf16_cpu_offload_gb"] < 0:
@@ -126,25 +159,42 @@ def config_problems(cfg: dict) -> list:
     return problems
 
 
-def freeze_evidence_problems(cfg: dict, root) -> list:
-    """Once freeze.stage_q3 is true: pilot_q3 is a q3 pilot under root/results/stage_q with both jobs ok and the
-    current harness_sha256. [] before the freeze."""
+def pilot_problems(path, pins: dict, cfg: dict) -> list:
+    """A passed Q3 pilot (040 凍結): mode pilot on a WSL CUDA host with the pinned vLLM, plan.json the pilot ran and equal
+    to build_plan's pilot plan under this config (engine, offload, env), both jobs ok, the pinned chunk file, and the
+    current harness."""
+    path = Path(path)
+    try:
+        s = json.loads((path / "session.json").read_text())
+        plan = json.loads((path / "plan.json").read_text())
+    except (OSError, ValueError) as exc:
+        return [f"{path.name}: no readable session.json / plan.json ({exc})"]
+    out, problems = s.get("outcomes") or {}, []
+    if (s.get("mode"), s.get("part"), s.get("platform")) != ("pilot", PART, PLATFORM):
+        problems.append(f"{path.name}: not a q3 pilot (mode / part / platform)")
+    problems += [f"{path.name}: {p}" for p in host_problems(s.get("host"))]
+    if s.get("vllm_version") != pins["vllm"]["version"]:
+        problems.append(f"{path.name}: vLLM {s.get('vllm_version')!r}, not the pinned {pins['vllm']['version']}")
+    if s.get("plan_sha256") != sha256_json(plan):
+        problems.append(f"{path.name}: plan.json is not the plan the pilot ran (plan_sha256)")
+    if plan.get("jobs") != build_plan(pins, cfg, mode="pilot")["jobs"]:
+        problems.append(f"{path.name}: the pilot's jobs are not build_plan's pilot jobs under this config")
+    if out.get("ok") != len(JOBS) or out.get("oom") or out.get("error"):
+        problems.append(f"{path.name}: not a passed q3 pilot (both jobs ok; outcomes {out})")
+    if s.get("chunks_sha256") != cfg["stage_q3"]["chunks_sha256"]:
+        problems.append(f"{path.name}: scored another chunk file than the pinned one (chunks_sha256)")
+    if s.get("harness_sha256") != harness_sha256():
+        problems.append(f"{path.name}: ran another harness (harness_sha256 {s.get('harness_sha256')!r})")
+    return problems
+
+
+def freeze_evidence_problems(cfg: dict, root, pins: dict) -> list:
+    """Once freeze.stage_q3 is true: pilot_q3 under root/results/stage_q passes pilot_problems. [] before the freeze."""
     freeze = cfg.get("freeze") or {}
     if freeze.get("stage_q3") is not True:
         return []
-    sid = freeze.get("pilot_q3")
-    path = Path(root).joinpath(*RESULTS, str(sid), "session.json")
-    try:
-        s = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return [f"freeze.pilot_q3: no readable {path}"]
-    out = s.get("outcomes") or {}
-    if (s.get("mode"), s.get("part")) != ("pilot", PART) or out.get("ok") != len(JOBS) or out.get("oom") or \
-            out.get("error"):
-        return [f"freeze.pilot_q3: {sid} is not a passed q3 pilot (both jobs ok)"]
-    if s.get("harness_sha256") != harness_sha256():
-        return [f"freeze.pilot_q3: {sid} ran another harness (harness_sha256 {s.get('harness_sha256')!r})"]
-    return []
+    path = Path(root).joinpath(*RESULTS, str(freeze.get("pilot_q3")))
+    return [f"freeze.pilot_q3: {p}" for p in pilot_problems(path, pins, cfg)]
 
 
 # ---------------------------------------------------------------- chunks and scores
@@ -154,13 +204,36 @@ def cut_chunks(ids: list, n_ctx: int = N_CTX) -> list:
     return [list(ids[i * n_ctx:(i + 1) * n_ctx]) for i in range(len(ids) // n_ctx)]
 
 
-def build_chunks(text: str, encode: Callable, out) -> dict:
-    ids = list(encode(text))
+def chunk_source_problems(*, text_sha256: str, tokenizer_sha256: str, tokens: int, pins: dict,
+                          crosscheck: dict) -> list:
+    """The chunk file's sources: the pinned wiki.test.raw, the cross-checked HF tokenizer (005) and llama-perplexity's
+    token count, so both checkpoints are scored on the chunks 005's KLD / PPL use."""
+    problems = []
+    want_text = pins["quality"]["files"]["wiki_test_raw"]["sha256"]
+    if text_sha256 != want_text:
+        problems.append(f"wiki.test.raw sha256 {text_sha256} is not the pinned {want_text}")
+    if tokenizer_sha256 != crosscheck["hf_tokenizer_sha256"]:
+        problems.append(f"tokenizer.json sha256 {tokenizer_sha256} is not the cross-checked "
+                        f"{crosscheck['hf_tokenizer_sha256']} (005)")
+    if WIKITEXT_TOKENS // N_CTX != pins["quality"]["expected"]["wikitext_chunks"]:
+        problems.append(f"{WIKITEXT_TOKENS // N_CTX} chunks disagree with pins quality.expected.wikitext_chunks")
+    if tokens != WIKITEXT_TOKENS:
+        problems.append(f"the tokenizer gives {tokens} tokens, not llama-perplexity's {WIKITEXT_TOKENS} "
+                        "(the chunks would not be 005's; decide in a decision log)")
+    return problems
+
+
+def build_chunks(ids: list, out, *, sources: dict) -> dict:
+    """Write the chunk file and its .meta.json (sources: text and tokenizer sha256, token count)."""
     chunks = cut_chunks(ids)
     data = "".join(json.dumps({"i": i, "ids": c}) + "\n" for i, c in enumerate(chunks)).encode()
-    Path(out).parent.mkdir(parents=True, exist_ok=True)
-    Path(out).write_bytes(data)
-    return {"tokens": len(ids), "chunks": len(chunks), "sha256": hashlib.sha256(data).hexdigest(), "path": str(out)}
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    info = {**sources, "tokens": len(ids), "chunks": len(chunks), "sha256": hashlib.sha256(data).hexdigest(),
+            "path": str(out)}
+    out.with_suffix(".meta.json").write_text(json.dumps(info, indent=1) + "\n")
+    return info
 
 
 def load_jsonl(path) -> list:
@@ -177,7 +250,7 @@ def _field(entry, name):
 
 def scored(ids: list, prompt_logprobs: list) -> dict:
     """vLLM prompt logprobs (per position: {token id (int or str): Logprob or {"logprob", "rank"}}) -> the actual
-    token's logprob and the rank-1 id at every scored position."""
+    token's logprob and the rank-1 id at every scored position (tied rank-1 ids: the smallest, for both checkpoints)."""
     logprobs, top1 = [], []
     for p in scored_positions():
         d = prompt_logprobs[p] or {}
@@ -185,10 +258,10 @@ def scored(ids: list, prompt_logprobs: list) -> dict:
         if entry is None:
             raise StageQ3Error(f"position {p}: no logprob for the prompt token {ids[p]}")
         best = [int(k) for k, v in d.items() if _field(v, "rank") == 1]
-        if len(best) != 1:
-            raise StageQ3Error(f"position {p}: {len(best)} rank-1 tokens")
+        if not best:
+            raise StageQ3Error(f"position {p}: no rank-1 token")
         logprobs.append(float(_field(entry, "logprob")))
-        top1.append(best[0])
+        top1.append(min(best))
     return {"logprobs": logprobs, "top1": top1}
 
 
@@ -213,6 +286,25 @@ def chunk_nll(rows: list) -> list:
     return [-sum(r["logprobs"]) / len(r["logprobs"]) for r in rows]
 
 
+def engine_problems(log_text: str, pins: dict) -> tuple:
+    """(facts, problems): the child's log must show Core B's attention backend, text-only mode and GDN prefill kernel."""
+    facts = cs.parse_server_log(log_text)
+    want_gdn = cs.GDN_KERNEL_NAMES[pins["stage_b"]["gdn_prefill_backend"]]
+    problems = []
+    if facts.get("attention_backend") != ATTENTION_BACKEND:
+        problems.append(f"attention backend {facts.get('attention_backend')!r}, not {ATTENTION_BACKEND}")
+    if not facts.get("text_only"):
+        problems.append("no text-only line (language_model_only)")
+    if facts.get("gdn_prefill_kernel") != want_gdn:
+        problems.append(f"GDN prefill kernel {facts.get('gdn_prefill_kernel')!r}, not {want_gdn}")
+    keep = ("attention_backend", "text_only", "gdn_prefill_kernel", "gdn_decode_kernel", "kv_cache_tokens")
+    return {k: facts.get(k) for k in keep}, problems
+
+
+def oom_in(text: str) -> bool:
+    return any(m in line for line in text.splitlines()[-OOM_TAIL:] for m in OOM_MARKERS)
+
+
 # ---------------------------------------------------------------- plans
 
 def model_spec(pins: dict, which: str) -> dict:
@@ -226,7 +318,7 @@ def engine(pins: dict, cfg: dict, which: str) -> dict:
     """Core B's engine (core_b_plan.server_argv) where it bears on the numbers; the sizes fit a 512-token chunk."""
     sb, cb, q = pins["stage_b"], pins["core_b"], cfg["stage_q3"]
     return {"language_model_only": True, "dtype": cb["dtype"], "kv_cache_dtype": cb["kv_cache_dtype"],
-            "max_model_len": MAX_MODEL_LEN, "max_num_seqs": MAX_NUM_SEQS,
+            "attention_backend": ATTENTION_BACKEND, "max_model_len": MAX_MODEL_LEN, "max_num_seqs": MAX_NUM_SEQS,
             "max_num_batched_tokens": q["max_num_batched_tokens"],
             "gpu_memory_utilization": float(sb["gpu_memory_utilization"]), "enable_prefix_caching": False,
             "gdn_prefill_backend": sb["gdn_prefill_backend"], "seed": 0,
@@ -234,7 +326,8 @@ def engine(pins: dict, cfg: dict, which: str) -> dict:
 
 
 def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = None,
-               stage_q3_sha256: str | None = None) -> dict:
+               stage_q3_sha256: str | None = None, root=ROOT) -> dict:
+    """Pilot plans need a well-formed config; formal plans need freeze.stage_q3 and the passed pilot under root."""
     if mode not in ("pilot", "formal"):
         raise StageQ3Error(f"unknown mode {mode!r}")
     problems = config_problems(cfg)
@@ -244,6 +337,10 @@ def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = No
     if problems:
         raise StageQ3Error("configs/stage_q3.toml: " + "; ".join(problems))
     formal = mode == "formal"
+    if formal:
+        evidence = freeze_evidence_problems(cfg, root, pins)
+        if evidence:
+            raise StageQ3Error("formal Q3 plans need the passed pilot first (040 凍結): " + "; ".join(evidence))
     n = cfg["stage_q3"]["chunks"] if formal else PILOT_CHUNKS
     env = {"HF_HUB_OFFLINE": "1", "VLLM_WSL2_ENABLE_PIN_MEMORY": cfg["stage_q3"]["pin_memory"]}
     jobs = [{"id": f"score-{w}", "which": w, "model": model_spec(pins, w), "engine": engine(pins, cfg, w),
@@ -258,24 +355,69 @@ def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = No
 # ---------------------------------------------------------------- the runner (WSL)
 
 def default_run_proc(argv: list, out, err, timeout_s: float, env: dict) -> tuple:
+    """(exit code, wall s); None on a timeout. The child gets its own process group, killed whole on a timeout or an
+    interrupt, so vLLM's EngineCore never outlives it (as run_adv / run_c0_probe)."""
     t0 = time.monotonic()
     with open(out, "w") as fo, open(err, "w") as fe:
+        proc = subprocess.Popen(argv, stdout=fo, stderr=fe, env=env, start_new_session=True)
         try:
-            code = subprocess.run(argv, stdout=fo, stderr=fe, env=env, timeout=timeout_s).returncode
+            code = proc.wait(timeout=timeout_s)
         except subprocess.TimeoutExpired:
-            code = -9
+            code = None
+        except BaseException:
+            _kill_group(proc)
+            raise
+        if code is None:
+            _kill_group(proc)
     return code, round(time.monotonic() - t0, 3)
 
 
+def _kill_group(proc) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    proc.wait()
+
+
 def child_env(job: dict, base: dict | None = None) -> dict:
-    base = dict(os.environ if base is None else base)
-    env = {k: v for k, v in base.items() if not k.startswith(CHILD_ENV_DROP)}
-    return {**env, **job["env"]}
+    """Core B's server env (drops inherited VLLM_* / CUDA_* / GGML_*; CUDA_HOME shim, venv bin first on PATH, the GDN
+    decode kernel, 014) without CAPSERVE_*, plus the job's own variables."""
+    env = bp.server_env(dict(os.environ if base is None else base), pin_memory=job["env"]["VLLM_WSL2_ENABLE_PIN_MEMORY"])
+    return {**{k: v for k, v in env.items() if not k.startswith("CAPSERVE_")}, **job["env"]}
 
 
-def default_wait_idle(pins: dict) -> Callable:
+def default_wait_idle(pins: dict) -> Callable:  # pragma: no cover - nvidia-smi (WSL)
     bound = gi.headroom_bound(pins["stage_b"]["v_total_mib"])
     return lambda: gi.wait_idle(gi.nvidia_sample, gi.nvidia_compute_apps, bound_mib=bound)
+
+
+def default_lock_check() -> bool:  # pragma: no cover - /proc (WSL)
+    import run_adv
+    return run_adv.held_gpu_lock()
+
+
+def shard_problems(snapshot: Path, want: dict, hash_file: Callable = file_sha256) -> list:
+    problems = []
+    for name, sha in sorted(want.items()):
+        try:
+            got = hash_file(snapshot / name)
+        except OSError as exc:
+            problems.append(f"{snapshot / name}: unreadable ({exc})")
+            continue
+        if got != sha:
+            problems.append(f"{snapshot / name}: sha256 {got} is not the pinned {sha}")
+    return problems
+
+
+def default_checkpoint_problems(plan: dict, pins: dict) -> list:  # pragma: no cover - the HF cache (WSL)
+    """The BF16 shards against pins core_a 9B source_shards (the W4A16 repo is pinned by revision only)."""
+    from huggingface_hub import snapshot_download
+
+    job = next(j for j in plan["jobs"] if j["which"] == "bf16")
+    snap = Path(snapshot_download(job["model"]["repo"], revision=job["model"]["revision"], local_files_only=True))
+    shards = next(m for m in pins["core_a"]["models"] if m["size"] == "9B")["source_shards"]
+    return shard_problems(snap, shards)
 
 
 def output_dir_problems(out_dir, *, repo_root=ROOT) -> list:
@@ -287,19 +429,27 @@ def output_dir_problems(out_dir, *, repo_root=ROOT) -> list:
 
 
 def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: str, gpu_lock_held: bool,
-           wait_idle: Callable, repo_root=ROOT, run_proc: Callable = default_run_proc,
+           wait_idle: Callable, pins: dict, repo_root=ROOT, run_proc: Callable = default_run_proc,
            vllm_python: str = ".venv/bin/python", timeout_s: float = 4 * 3600,
-           now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat()) -> dict:
-    """One Q3 session: both score jobs in order under the GPU lock."""
+           now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(), expected_plan: dict | None = None,
+           lock_check: Callable | None = None, base_env: dict | None = None, toolchain_check: Callable | None = None,
+           checkpoint_problems: Callable | None = None) -> dict:
+    """One Q3 session: both score jobs in order under the GPU lock. A formal plan must equal build_plan's
+    (expected_plan); a formal session also needs the pinned vLLM, a clean env and the pinned BF16 shards."""
     if (plan.get("stage"), plan.get("part"), plan.get("platform")) != (STAGE, PART, PLATFORM):
         raise StageQ3Error(f"not a Q3 plan ({plan.get('stage')!r}, {plan.get('part')!r}, {plan.get('platform')!r})")
     problems = output_dir_problems(out_dir, repo_root=repo_root)
     if problems:
         raise StageQ3Error("; ".join(problems))
-    if not gpu_lock_held:
-        raise StageQ3Error("Q3 runs vLLM: hold the GPU lock (flock -n /tmp/ai-portfolio-gpu.lock ... --gpu-lock-held)")
-    if plan["mode"] == "formal" and plan.get("harness_sha256") != harness_sha256():
+    if not (gpu_lock_held and (lock_check or default_lock_check)()):
+        raise StageQ3Error("Q3 runs vLLM: hold the GPU lock (flock -n /tmp/ai-portfolio-gpu.lock ... --gpu-lock-held; "
+                           "the flag alone is never trusted)")
+    formal = plan["mode"] == "formal"
+    if formal and plan.get("harness_sha256") != harness_sha256():
         raise StageQ3Error("the formal plan was built by another harness (harness_sha256); rebuild it with this one")
+    if formal and (expected_plan is None or plan != expected_plan):
+        raise StageQ3Error("a formal plan must be exactly build_plan's for these pins and configs/stage_q3.toml "
+                           "(040 凍結); rebuild it with stage_q3.py plan --mode formal")
     out = Path(out_dir)
     if out.exists():
         raise StageQ3Error(f"{out} exists; sessions are never resumed or overwritten")
@@ -311,21 +461,30 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
         raise StageQ3Error(f"no readable chunks file {chunks_path}: {exc}") from exc
     if plan["chunks"]["sha256"] is not None and chunks_sha != plan["chunks"]["sha256"]:
         raise StageQ3Error(f"the chunks file {chunks_path} is not the pinned one (sha256 {chunks_sha})")
-    if any(len(c["ids"]) != N_CTX for c in chunks) or len(chunks) < max(j["n_chunks"] for j in plan["jobs"]):
+    if any(len(c["ids"]) != N_CTX for c in chunks) or len(chunks) < max(j["n_chunks"] for j in plan["jobs"]) or \
+            (formal and {len(chunks), plan["chunks"]["chunks"]} != {j["n_chunks"] for j in plan["jobs"]}):
         raise StageQ3Error(f"the chunks file {chunks_path} does not hold the planned {N_CTX}-token chunks")
+    envs = {j["id"]: child_env(j, base_env) for j in plan["jobs"]}
+    tool = (toolchain_check or bp.toolchain_problems)(envs[plan["jobs"][0]["id"]])
+    if tool:
+        raise StageQ3Error("the vLLM toolchain is incomplete (014): " + "; ".join(tool))
     for sub in ("raw", "env"):
         (out / sub).mkdir(parents=True)
     (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
     pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held)
-    formal = plan["mode"] == "formal"
     if formal:
-        bad = env_problems(pre, PLATFORM) + provenance_problems(pre, pre)
+        bad = env_problems(pre, PLATFORM) + provenance_problems(pre, pre) + host_problems(host_of(pre))
+        if vllm_version(pre) != pins["vllm"]["version"]:
+            bad.append(f"vLLM {vllm_version(pre)!r}, not the pinned {pins['vllm']['version']} (040: one runtime)")
+        if not bad:
+            bad = (checkpoint_problems or default_checkpoint_problems)(plan, pins)
         if bad:
             raise StageQ3Error("formal Q3 run refused before it starts: " + "; ".join(bad))
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "stage": STAGE, "part": PART,
                "mode": plan["mode"], "platform": PLATFORM, "plan_sha256": sha256_json(plan),
                "pins_sha256": plan.get("pins_sha256"), "gpu_lock_held": gpu_lock_held,
-               "harness_sha256": harness_sha256(), "chunks_sha256": chunks_sha, "started_at": now()}
+               "harness_sha256": harness_sha256(), "chunks_sha256": chunks_sha, "host": host_of(pre),
+               "vllm_version": vllm_version(pre), "inputs_verified": formal, "started_at": now()}
     rows, env_flags = [], []
     with open(out / "rows.jsonl", "w") as fh:
         for job in plan["jobs"]:
@@ -334,7 +493,7 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
                    "stderr": f"raw/{jid}.stderr.txt", "env_before": f"env/{jid}.before.json",
                    "env_after": f"env/{jid}.after.json"}
             base = {"job_id": jid, "kind": "score", "which": job["which"], "model": job["model"],
-                    "n_chunks": job["n_chunks"], "chunks_sha256": chunks_sha}
+                    "n_chunks": job["n_chunks"], "chunks_sha256": chunks_sha, "env": bp.recorded_env(envs[jid])}
             idle, report = wait_idle()
             if not idle:
                 row = {**base, "outcome": "error", "reason": f"gpu_not_idle (031): {report}"}
@@ -343,25 +502,28 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
                 env_before = capture_env(out_path=out / rel["env_before"], gpu_lock_held=gpu_lock_held)
                 argv = [vllm_python, str(Path(repo_root) / "quality" / "stage_q3.py"), "score", "--job",
                         str(out / rel["job"]), "--chunks", str(chunks_path), "--out", str(out / rel["scores"])]
-                code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s, child_env(job))
+                code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s, envs[jid])
                 env_after = capture_env(out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
                 if formal:
                     for phase, rec in (("before", env_before), ("after", env_after)):
                         env_flags.extend({"job_id": jid, "phase": phase, "reason": why}
                                          for why in env_problems(rec, PLATFORM) + provenance_problems(rec, pre))
-                text = (out / rel["stdout"]).read_text(errors="replace") + (out / rel["stderr"]).read_text(
+                text = (out / rel["stdout"]).read_text(errors="replace") + "\n" + (out / rel["stderr"]).read_text(
                     errors="replace")
+                facts, engine_bad = engine_problems(text, pins)
                 scores = load_jsonl(out / rel["scores"]) if code == 0 and (out / rel["scores"]).is_file() else None
                 bad = output_problems(scores, chunks, job["n_chunks"]) if scores is not None else None
-                if scores is not None and not bad:
+                if code is None:
+                    row = {**base, "outcome": "error", "reason": f"timeout after {timeout_s} s (process group killed)"}
+                elif scores is not None and not bad and not engine_bad:
                     row = {**base, "outcome": "ok", "reason": None, "chunk_nll": chunk_nll(scores),
                            "n_tokens": SCORED * len(scores)}
-                elif any(m in text for m in OOM_MARKERS):
+                elif scores is None and oom_in(text):
                     row = {**base, "outcome": "oom", "reason": "out of memory (040: NT, no rerun with other settings)"}
                 else:
-                    row = {**base, "outcome": "error",
-                           "reason": "; ".join(bad) if bad else f"exit {code} without a score file"}
-                row.update(argv=argv, exit_code=code, wall_s=wall, **rel)
+                    why = (bad or []) + engine_bad if scores is not None else [f"exit {code} without a score file"]
+                    row = {**base, "outcome": "error", "reason": "; ".join(why)}
+                row.update(argv=argv, exit_code=code, wall_s=wall, engine_facts=facts, **rel)
             rows.append(row)
             fh.write(json.dumps(row) + "\n")
             fh.flush()
@@ -413,8 +575,21 @@ def analyze(w4a16: list | None, bf16: list | None, *, n_boot: int = qa.N_BOOT, s
                      "prediction": "supported"}}
 
 
-def session_problems(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str) -> list:
-    """A formal, env-valid q3 session of the frozen harness, configs/stage_q3.toml, pins.toml and pinned chunks."""
+def _formal_sessions(root) -> list:
+    out = []
+    for f in sorted(Path(root).joinpath(*RESULTS).glob("*/session.json")):
+        try:
+            m = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if m.get("mode") == "formal" and m.get("part") == PART:
+            out.append((f.parent, m))
+    return out
+
+
+def session_problems(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, pins: dict, root=ROOT) -> list:
+    """A formal, env-valid q3 session on a WSL CUDA host with the pinned vLLM, its plan.json exactly build_plan's,
+    the pinned chunks and the first formal q3 session under root."""
     path = Path(path)
     try:
         meta = json.loads((path / "session.json").read_text())
@@ -439,6 +614,23 @@ def session_problems(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str)
         problems.append(f"{path.name}: planned with another configs/pins.toml (pins_sha256)")
     if meta.get("chunks_sha256") != pinned or (plan.get("chunks") or {}).get("sha256") != pinned:
         problems.append(f"{path.name}: scored another chunk file (chunks_sha256)")
+    problems += [f"{path.name}: {p}" for p in host_problems(meta.get("host"))]
+    if meta.get("vllm_version") != pins["vllm"]["version"] or meta.get("inputs_verified") is not True:
+        problems.append(f"{path.name}: not the pinned vLLM with verified checkpoints (vllm_version / inputs_verified)")
+    if not problems:
+        try:
+            want = build_plan(pins, cfg, mode="formal", pins_sha256=pins_sha256, stage_q3_sha256=stage_q3_sha256,
+                              root=root)
+        except StageQ3Error as exc:
+            want = None
+            problems.append(f"{path.name}: build_plan refuses its formal plan ({exc})")
+        if want is not None and plan != want:
+            problems.append(f"{path.name}: plan.json is not build_plan's formal q3 plan")
+        earlier = [d.name for d, m in _formal_sessions(root)
+                   if d.resolve() != path.resolve() and (m.get("started_at") or "") < (meta.get("started_at") or "")]
+        if earlier:
+            problems.append(f"{path.name}: earlier formal q3 sessions {earlier} exist (040: the first formal session "
+                            "is the one analyzed; another needs its own decision log)")
     return problems
 
 
@@ -454,7 +646,7 @@ def _scores(path: Path, row: dict, manifest: dict) -> list:
     return rows
 
 
-def analyze_session(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, root=ROOT,
+def analyze_session(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, pins: dict, root=ROOT,
                     n_boot: int | None = None) -> dict:
     """H-Q3 of a formal session (040 凍結): the frozen config and its pilot, the session's provenance, and the raw
     scores checked against raw_manifest.json and the committed per-chunk NLL. An oom or error leaves H-Q3 NT."""
@@ -463,8 +655,8 @@ def analyze_session(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, 
         problems = ["freeze.stage_q3 is not true in configs/stage_q3.toml (040 凍結: no Q3 analysis before it)"]
     if problems:
         raise StageQ3Error("; ".join(problems))
-    problems = freeze_evidence_problems(cfg, root) + session_problems(path, cfg=cfg, stage_q3_sha256=stage_q3_sha256,
-                                                                      pins_sha256=pins_sha256)
+    problems = freeze_evidence_problems(cfg, root, pins) + session_problems(
+        path, cfg=cfg, stage_q3_sha256=stage_q3_sha256, pins_sha256=pins_sha256, pins=pins, root=root)
     if problems:
         raise StageQ3Error("; ".join(problems))
     path = Path(path)
@@ -507,33 +699,41 @@ def main(argv: list | None = None) -> int:
     p = sub.add_parser("analyze")
     p.add_argument("--session", required=True, help="results/stage_q/<formal q3 session>, raw/ fetched")
     args = parser.parse_args(argv)
+    raw, cfg_raw = (ROOT / "configs" / "pins.toml").read_bytes(), CONFIG.read_bytes()
+    pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(cfg_raw.decode())
+    pins_sha, cfg_sha = hashlib.sha256(raw).hexdigest(), hashlib.sha256(cfg_raw).hexdigest()
     try:
         if args.cmd == "chunks":  # pragma: no cover - WSL
-            print(json.dumps(build_chunks(Path(args.text).read_text(), _hf_encoder(args.tokenizer), args.out)))
+            text = Path(args.text).read_bytes()
+            tok_sha = file_sha256(Path(args.tokenizer) / "tokenizer.json")
+            ids = _hf_encoder(args.tokenizer)(text.decode())
+            sources = {"text_sha256": hashlib.sha256(text).hexdigest(), "tokenizer_json_sha256": tok_sha,
+                       "tokenizer": str(args.tokenizer)}
+            bad = chunk_source_problems(text_sha256=sources["text_sha256"], tokenizer_sha256=tok_sha, tokens=len(ids),
+                                        pins=pins, crosscheck=json.loads(CROSSCHECK.read_text()))
+            if bad:
+                raise StageQ3Error("no chunk file written: " + "; ".join(bad))
+            print(json.dumps(build_chunks(ids, args.out, sources=sources)))
         elif args.cmd == "plan":
-            raw, cfg_raw = (ROOT / "configs" / "pins.toml").read_bytes(), CONFIG.read_bytes()
-            plan = build_plan(tomllib.loads(raw.decode()), tomllib.loads(cfg_raw.decode()), mode=args.mode,
-                              pins_sha256=hashlib.sha256(raw).hexdigest(),
-                              stage_q3_sha256=hashlib.sha256(cfg_raw).hexdigest())
+            plan = build_plan(pins, cfg, mode=args.mode, pins_sha256=pins_sha, stage_q3_sha256=cfg_sha)
             Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
         elif args.cmd == "analyze":
-            raw, cfg_raw = (ROOT / "configs" / "pins.toml").read_bytes(), CONFIG.read_bytes()
             session = Path(args.session)
             if output_dir_problems(session):
                 raise StageQ3Error("; ".join(output_dir_problems(session)))
-            result = analyze_session(session, cfg=tomllib.loads(cfg_raw.decode()),
-                                     stage_q3_sha256=hashlib.sha256(cfg_raw).hexdigest(),
-                                     pins_sha256=hashlib.sha256(raw).hexdigest())
+            result = analyze_session(session, cfg=cfg, stage_q3_sha256=cfg_sha, pins_sha256=pins_sha, pins=pins)
             (session / "analysis.json").write_text(json.dumps(result, indent=1) + "\n")
             print(json.dumps({"H-Q3": result["H-Q3"]["verdict"]}))
         elif args.cmd == "run":  # pragma: no cover - WSL
             import run_core_b as rb
-            pins = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
-            s = run_q3(json.loads(Path(args.plan).read_text()), data_dir=Path(args.data).resolve(), out_dir=args.out,
-                       capture_env=rb.make_vllm_env_capture(ROOT / "scripts" / "env_capture.py",
-                                                            str(ROOT / ".venv" / "bin" / "python")),
+            plan = json.loads(Path(args.plan).read_text())
+            expected = build_plan(pins, cfg, mode="formal", pins_sha256=pins_sha, stage_q3_sha256=cfg_sha) \
+                if plan.get("mode") == "formal" else None
+            python = str(ROOT / ".venv" / "bin" / "python")
+            s = run_q3(plan, data_dir=Path(args.data).resolve(), out_dir=args.out,
+                       capture_env=rb.make_vllm_env_capture(ROOT / "scripts" / "env_capture.py", python),
                        session_id=Path(args.out).name, gpu_lock_held=args.gpu_lock_held,
-                       wait_idle=default_wait_idle(pins), vllm_python=str(ROOT / ".venv" / "bin" / "python"))
+                       wait_idle=default_wait_idle(pins), pins=pins, vllm_python=python, expected_plan=expected)
             print(json.dumps(s["outcomes"]))
         else:  # pragma: no cover - the child process in the vLLM venv
             score(json.loads(Path(args.job).read_text()), args.chunks, args.out)
