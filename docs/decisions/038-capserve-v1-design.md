@@ -266,3 +266,18 @@
   gateway 在 local 模式下實際啟動並服務，IT-6 確認研究目錄與共用快取沒有新寫入的檔案。
 - **常駐檢查沒有執行**：`deploy up` 的 `--profile` 原本是必填，常駐腳本沒有給，所以 argparse 直接結束，沒有啟動任何東西。
   修正：設定有釘選時，`up` 沒給 `--profile` 就使用釘選的 profile（和 itest 相同）；沒有釘選的設定仍然必須給。已補測試。
+
+**常駐模式的 RTX 產品測試**（release `4711390`，2026-10-23 01:28–01:30，時間有界）
+- 以 `tools/rtx/capserve_resident.sh` 啟動，腳本自己以 `flock -n` 取得 GPU lock。82 s 就緒，mode 為 `resident`。
+- 一個 chat request（thinking 預設關閉）直接回答「Hi」，生成 2 個 token，沒有停在思考之中。
+- **模擬當機**：以 SIGKILL 結束 vLLM。
+  - supervisor 偵測到 vLLM 結束，完成 teardown；
+  - state.json 為 `restarting`（restart_in_s 5，failures 1）；
+  - 5 s 後重新 preflight 並啟動，76 s 後再度就緒，vLLM pid 不同，`/readyz` 為 200。
+- **停止**：`capserve.deploy stop` 結束 supervisor（exit 143，phase stopped），沒有再重啟。GPU memory 回到 714 MiB，和開始前相同。
+- 這是產品測試，結束後服務沒有常駐（037：研究期間不常駐）。
+
+**後續的小變更（039 D-C 需要）**：vLLM 0.30.0 的 bench client 每個 request 都送 `repetition_penalty: 1.0`。
+- gateway 把 1.0 視為預設值並忽略，和 `logprobs: false` 的處理方式相同；
+- 其他值仍回 400；
+- 已補測試。

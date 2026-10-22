@@ -26,8 +26,14 @@
   - [x] quota（§5）。
   - [x] TLS（§6；Mac 上以真正的 uvicorn 與自簽測試憑證驗證；正式設定仍只綁 loopback）。
   - [x] 常駐功能（§7；研究期間不常駐）。
-  - 全部完成後，在 GPU 空檔跑一次 RTX 產品測試（IT-0 至 IT-6，verified 與 provisional）。正式研究 session 進行中不跑。
-- Stage D 的事先登記草稿。
+  - RTX 產品測試都已完成（release `c9202c5`、`f670c22`、`4711390`）：
+    - verified 與 provisional 的 IT-0 至 IT-6 通過；
+    - local tokenizer 下的正式設定通過；
+    - 常駐模式的自動重啟與停止正常。
+  - 多 class 准入與開場湧入的處理：等 Stage D 的結果。
+- **Stage D**（decision 039，DRAFT）：
+  - 範圍：D-A 封閉迴路延伸（U32K、T、輸出 512）、D-B 開放迴路、D-C 固定點驗證（prompt 長度不一、經過 gateway）、D5 開場湧入的描述。
+  - 下一步：harness（重用凍結的 Stage C 狀態機與搜尋函式）→ mini smoke → 審查 → 凍結 → 正式 session。
 
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
 
@@ -57,7 +63,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–038（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果；036 是 Phase 2 結案；037 是 Phase 3 的範圍；038 是 capserve v1 的設計）。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–039（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果；036 是 Phase 2 結案；037 是 Phase 3 的範圍；038 是 capserve v1 的設計；039 是 Stage D 的事先登記草稿）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 

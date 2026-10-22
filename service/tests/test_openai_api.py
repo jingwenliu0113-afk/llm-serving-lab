@@ -130,6 +130,16 @@ def test_everything_else_is_unsupported_parameter(route, extra):
                                                   next(iter(extra)))
 
 
+@pytest.mark.parametrize("route", ["chat", "completions"])
+def test_a_neutral_repetition_penalty_is_ignored_and_any_other_is_unsupported(route):
+    """039 D-C: vLLM 0.30.0's bench client sends repetition_penalty 1.0 (no penalty) with every request; that value is
+    the default and is dropped, any other changes sampling the research never measured and stays a 400."""
+    body = (chat if route == "chat" else comp)(repetition_penalty=1.0)
+    assert "repetition_penalty" not in parse(route, body).body
+    e = error_of(route, (chat if route == "chat" else comp)(repetition_penalty=1.1))
+    assert (e.status, e.code, e.param) == (400, "unsupported_parameter", "repetition_penalty")
+
+
 def test_nulls_and_off_defaults_are_ignored():
     fwd = parse("chat", chat(tools=None, logprobs=False, max_tokens=None, temperature=None))
     assert fwd.body == {"model": M, "messages": [{"role": "user", "content": "hi"}], "max_completion_tokens": MAX_OUT,

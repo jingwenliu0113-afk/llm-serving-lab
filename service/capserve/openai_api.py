@@ -10,7 +10,8 @@ echo, best_of, beam search, chat_template, truncate_prompt_tokens, vLLM sampling
   enable_thinking only (decision 038 §1; any other template argument changes the prompt the research never measured);
 - completions: prompt (exactly one: a string, a token-id list, or a one-element list of either), ignore_eos,
   min_tokens (<= max_tokens).
-A field sent as null is ignored, as are logprobs / echo / use_beam_search sent as false (their defaults).
+A field sent as null is ignored, as are logprobs / echo / use_beam_search sent as false and repetition_penalty sent as
+1.0 (their defaults; vLLM's bench client sends repetition_penalty 1.0, 039).
 A body vLLM could not be sent is 400 too: non-finite numbers, lone surrogates, JSON nested deeper than the parser.
 
 Thinking (038 §1, user decision 037): every chat request reaches vLLM with chat_template_kwargs.enable_thinking set,
@@ -38,7 +39,9 @@ from starlette.responses import JSONResponse
 
 ROUTES = ("chat", "completions")
 THINKING_DEFAULT = False          # 038 §1: thinking off unless the client turns it on
-_OFF_DEFAULTS = {"logprobs": False, "echo": False, "use_beam_search": False}
+# fields sent as their default (no effect) are dropped; repetition_penalty 1.0 (no penalty) is what vLLM 0.30.0's
+# bench client sends with every request (039 D-C)
+_OFF_DEFAULTS = {"logprobs": False, "echo": False, "use_beam_search": False, "repetition_penalty": 1.0}
 
 
 class ApiError(Exception):
@@ -157,7 +160,8 @@ def _translate(err: ValidationError) -> ApiError:
 
 def _drop_defaults(doc: dict) -> dict:
     return {k: v for k, v in doc.items()
-            if v is not None and not (k in _OFF_DEFAULTS and type(v) is bool and v is _OFF_DEFAULTS[k])}
+            if v is not None and not (k in _OFF_DEFAULTS and type(v) is type(_OFF_DEFAULTS[k])
+                                      and v == _OFF_DEFAULTS[k])}
 
 
 def _check_text_only(messages) -> None:
