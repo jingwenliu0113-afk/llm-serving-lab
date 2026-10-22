@@ -23,8 +23,9 @@ class Runner:
     def __init__(self):
         self.calls = []
 
-    def __call__(self, settings, profile, *, api_key):
+    def __call__(self, settings, profile, *, api_key, local_tokenizer=None):
         self.calls.append((settings, profile, api_key))
+        self.local_tokenizer = local_tokenizer
 
 
 @pytest.fixture
@@ -170,3 +171,32 @@ def test_module_entry_point_refuses_provisional(cfg):
     r = subprocess.run([sys.executable, "-m", "capserve"], capture_output=True, text=True, env=env, cwd=ROOT,
                        timeout=60)
     assert r.returncode == 2
+
+
+def test_a_local_tokenizer_that_cannot_load_exits_2(tmp_path, capsys):
+    path = tmp_path / "gw.toml"
+    path.write_text(f'active_class = "dev-2k"\ntokenizer = "local"\ntokenizer_path = "{tmp_path / "none"}"\n')
+    run = Runner()
+    assert main(["serve", "--config", str(path), "--profile", DEV, "--allow-provisional"], env={}, run=run) == 2
+    assert run.calls == [] and "tokenizer" in capsys.readouterr().err
+
+
+def test_a_local_tokenizer_is_loaded_before_serving(tmp_path, monkeypatch):
+    from capserve import tokens
+    loaded = object()
+    monkeypatch.setattr(tokens.LocalTokenizer, "load", classmethod(lambda cls, p: (p, loaded)))
+    path = tmp_path / "gw.toml"
+    path.write_text('active_class = "dev-2k"\ntokenizer = "local"\ntokenizer_path = "/snap"\n')
+    run = Runner()
+    assert main(["serve", "--config", str(path), "--profile", DEV, "--allow-provisional"], env={}, run=run) == 0
+    assert run.local_tokenizer == ("/snap", loaded)
+    run = Runner()
+    assert main(["serve", "--config", str(cfg_path(tmp_path)), "--profile", DEV, "--allow-provisional"], env={},
+                run=run) == 0
+    assert run.local_tokenizer is None
+
+
+def cfg_path(tmp_path):
+    path = tmp_path / "plain.toml"
+    path.write_text('active_class = "dev-2k"\n')
+    return path

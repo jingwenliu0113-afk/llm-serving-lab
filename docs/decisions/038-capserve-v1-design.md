@@ -168,3 +168,28 @@
 - `openai_api.retry_headers` 接受小數：`Retry-After` 取 `ceil`，`retry-after-ms` 取 `round`。整數輸入的結果和 MVP 相同。
 - **設定**：`[retry_after_s]` 加上 `mode`（預設 adaptive）、`min_s`（1）、`max_s`（60），`min_s ≤ max_s`。
 - MVP 的超載測試在任何 request 完成之前就觸發 429，所以仍得到固定值 2，不需要修改。
+
+**4. 內建 tokenizer（2026-10-23）**
+- **RTX 上的事實**（唯讀檢查）：
+  - vLLM 0.30.0 的 `/tokenize` 對 chat 走 `online_renderer.preprocess_chat`，也就是 chat template 加上 `chat_template_kwargs`；
+  - 服務的 snapshot（`a398088c`）的 `chat_template.jinja` 和 Mac 上 Qwen3.5-9B 基礎模型的檔案位元組相同，但 `tokenizer.json` 不同；
+  - 所以 Mac 上不能用基礎模型代替做一致性測試。計數是否一致只由 RTX 的 IT-4 判定。
+  - research venv 有 transformers 5.16.1 與 tokenizers 0.23.1。Mac 的 venv 沒有，也不為此新增套件。
+- **text parts**：gateway 一律把 text parts 接成字串再送出，兩種 tokenizer 模式都一樣。
+  - 這樣 vLLM 不必判斷 content 的格式（string 或 openai），vLLM 與本地 tokenizer 看到的 messages 完全相同。
+  - 接法是不加分隔字元，和 Qwen3.5 的 template 渲染列表的方式相同。
+  - 這是 MVP 行為的小改變：原本列表原樣送給 vLLM，由 vLLM 決定怎麼接。
+- **`LocalTokenizer`**：
+  - chat：`apply_chat_template(messages, tokenize=False, add_generation_prompt=True, **chat_template_kwargs)`，再用 `encode(add_special_tokens=False)` 計數；
+  - completions：`encode(add_special_tokens=True)`；token id 的 prompt 直接計數。
+  - template 丟出錯誤時回 400 `invalid_value`（param `messages`）。vLLM 模式則是原樣轉傳 vLLM 的 400。
+  - 載入時：snapshot 目錄不存在、沒有 transformers、或無法載入，都會讓 `capserve serve` exit 2（`create_app` 則是丟出 ConfigError）。
+- **設定**：`tokenizer` 為 `vllm`（預設）或 `local`。`tokenizer_path` 只能和 `local` 一起出現。
+  - deploy 擁有 `tokenizer_path`，值為 `core_b_plan.snapshot_dir(pins)`；`[gateway]` 不得自己設定。
+  - gateway 的環境加上 `HF_HUB_OFFLINE=1`。
+- **IT-0**：載入服務的 tokenizer，並計數一次（不需要 GPU）。
+- **IT-4**：
+  - 每個 completion 與 chat 案例（thinking 開與關）都要求本地計數等於 vLLM 的計數；
+  - completion 加上 n = 1,920，chat 加上「' the' × 1,900」，都在 uniform-2k 的上限附近；
+  - tokenizer 無法載入時 IT-4 不通過。
+- **正式設定仍是 `tokenizer = "vllm"`**：RTX 的 IT-4 通過之後，另外 commit 切換。

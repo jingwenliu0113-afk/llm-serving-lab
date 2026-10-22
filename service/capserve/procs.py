@@ -113,7 +113,8 @@ def gateway_env(base: Mapping[str, str], cfg, *, release_root: Path) -> dict:
     keep = {k: v for k, v in base.items() if k not in SCRUBBED}
     root = Path(release_root)
     return {**keep, "PYTHONPATH": os.pathsep.join([str(root / "service"), str(root / "benchmarks")]),
-            "PYTHONDONTWRITEBYTECODE": "1", "HOME": str(home_dir(cfg)), "TMPDIR": str(tmp_dir(cfg))}
+            "PYTHONDONTWRITEBYTECODE": "1", "HOME": str(home_dir(cfg)), "TMPDIR": str(tmp_dir(cfg)),
+            "HF_HUB_OFFLINE": "1"}   # 038 §4: a local tokenizer loads from the snapshot, never the Hub
 
 
 # ---------------------------------------------------------------- the GPU lock, ports

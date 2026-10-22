@@ -5,7 +5,8 @@ sequences vLLM serves and the research never measured it (tools, response_format
 echo, best_of, beam search, chat_template, truncate_prompt_tokens, vLLM sampling extensions, ...):
 - common: model, stream, stream_options (include_usage), max_tokens, temperature, top_p, stop, seed,
   presence_penalty, frequency_penalty, user, n (1 only);
-- chat: messages (system / user / assistant, text only), max_completion_tokens, and chat_template_kwargs with
+- chat: messages (system / user / assistant, text only; text parts are joined into one string, without a separator,
+  as Qwen3.5's template renders them: 038 §4), max_completion_tokens, and chat_template_kwargs with
   enable_thinking only (decision 038 §1; any other template argument changes the prompt the research never measured);
 - completions: prompt (exactly one: a string, a token-id list, or a one-element list of either), ignore_eos,
   min_tokens (<= max_tokens).
@@ -171,6 +172,10 @@ def _check_text_only(messages) -> None:
                                    param=f"messages[{i}].content[{j}].type")
 
 
+def _joined(content) -> str:
+    return content if isinstance(content, str) else "".join(part["text"] for part in content)
+
+
 def _one_prompt(prompt):
     """A string or a non-empty token list; a one-element list is unwrapped; anything else is a batch (400)."""
     if isinstance(prompt, list) and prompt and not isinstance(prompt[0], int):
@@ -215,6 +220,7 @@ def parse_request(route: str, raw: bytes, *, served_model: str, max_output_token
     if route == "completions":
         body["prompt"] = _one_prompt(body["prompt"])
     else:
+        body["messages"] = [{**m, "content": _joined(m["content"])} for m in body["messages"]]
         thinking = (body.pop("chat_template_kwargs", None) or {}).get("enable_thinking")
         body["chat_template_kwargs"] = {"enable_thinking": THINKING_DEFAULT if thinking is None else thinking}
     key, max_tokens = next(iter(given.items())) if given else (out_key, max_output_tokens)

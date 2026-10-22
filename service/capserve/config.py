@@ -68,6 +68,10 @@ class TokenOverheads(_Strict):
 
 class Settings(_Strict):
     active_class: str
+    # 038 §4: "vllm" asks vLLM's /tokenize under a permit (029); "local" counts in the gateway from tokenizer_path,
+    # the snapshot vLLM serves (the deploy sets it), before admission.
+    tokenizer: Literal["vllm", "local"] = "vllm"
+    tokenizer_path: str | None = None
     backend_url: str = "http://127.0.0.1:8100"
     host: str = "127.0.0.1"
     port: int = Field(8080, ge=0, le=65535)
@@ -83,6 +87,12 @@ class Settings(_Strict):
     monitor_fail_threshold: int = Field(3, ge=1)
     retry_after_s: RetryAfter = RetryAfter()
     tokens: TokenOverheads = TokenOverheads()
+
+    @model_validator(mode="after")
+    def _tokenizer(self):
+        if (self.tokenizer == "local") != (self.tokenizer_path is not None):
+            raise ValueError('tokenizer_path is required with tokenizer = "local" and allowed only with it')
+        return self
 
     def max_pending(self, cls: WorkloadClass) -> int:
         """Requests the guard lets in before reading a body: running + queued + pre-admission slots."""

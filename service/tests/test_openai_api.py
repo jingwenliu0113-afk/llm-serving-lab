@@ -91,7 +91,16 @@ def test_allowlisted_fields_pass_through():
     body = chat(stream=False, temperature=0.5, stop="x", messages=[
         {"role": "system", "content": "s"}, {"role": "user", "content": [{"type": "text", "text": "a"}]},
         {"role": "assistant", "content": "b"}])
-    assert parse("chat", body).body == {**body, "max_completion_tokens": MAX_OUT, **THINK_OFF}
+    joined = [{"role": "system", "content": "s"}, {"role": "user", "content": "a"}, {"role": "assistant", "content": "b"}]
+    assert parse("chat", body).body == {**body, "messages": joined, "max_completion_tokens": MAX_OUT, **THINK_OFF}
+
+
+def test_text_parts_are_joined_without_a_separator():
+    """038 §4: the gateway sends string content only, joined as Qwen3.5's template renders a list of text parts, so
+    vLLM and the gateway's own tokenizer render the very same messages (no content-format detection in between)."""
+    body = chat(messages=[{"role": "user", "content": [{"type": "text", "text": "hello"},
+                                                       {"type": "text", "text": " world"}]}])
+    assert parse("chat", body).body["messages"] == [{"role": "user", "content": "hello world"}]
 
 
 @pytest.mark.parametrize("route, extra", [

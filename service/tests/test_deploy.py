@@ -1192,3 +1192,16 @@ def test_the_rtx_profile_is_provisional_conservative_and_for_this_server():
     assert prof.server.fingerprint_sha256 == stage_b_fingerprint(PINS)
     assert (prof.server.num_gpu_blocks, prof.server.block_size) == (SB["num_gpu_blocks"], SB["block_size"])
     assert deploy.profile_server_problems(prof, pins=PINS, fingerprint=stage_b_fingerprint(PINS)) == []
+
+
+def test_a_local_tokenizer_gets_the_served_snapshot(world):
+    """038 §4: with [gateway] tokenizer = "local" the deploy sets tokenizer_path to the pinned snapshot vLLM serves
+    (core_b_plan.snapshot_dir); [gateway] may not set it itself."""
+    cfg = world.cfg(gateway={"active_class": "test", "tokenizer": "local"})
+    doc = deploy.gateway_settings(cfg)
+    assert doc["tokenizer_path"] == bp.snapshot_dir(bp.load_pins())
+    Settings.model_validate(doc)
+    assert "tokenizer_path" not in deploy.gateway_settings(world.cfg(gateway={"active_class": "test"}))
+    with pytest.raises(deploy.DeployError, match="tokenizer_path"):
+        deploy.DeployConfig.checked({"service_root": str(world.svc), "gateway": {
+            "active_class": "test", "tokenizer": "local", "tokenizer_path": "/elsewhere"}})

@@ -6,7 +6,7 @@ import json
 import httpx
 import pytest
 
-from capserve.tokens import PromptBudget, TokenizeError
+from capserve.tokens import LocalTokenizer, PromptBudget, TemplateRejected, TokenizeError, TokenizerLoadError
 
 M = "m"
 
@@ -90,3 +90,72 @@ async def test_a_tokenize_error_keeps_the_upstream_response():
     with pytest.raises(TokenizeError) as exc:
         await b.count("chat", {"model": M, "messages": [{"role": "user", "content": "x"}]})
     assert exc.value.status == 400 and exc.value.response.json() == shaped
+
+
+# ------------------------------------------------------------------ local tokenizer (038 §4) --
+
+class FakeHF:
+    """An HF tokenizer stand-in: the template is '<' + contents joined by '|' + a thinking marker; one token per
+    character, plus one special token when asked."""
+
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.calls = []
+
+    def apply_chat_template(self, messages, **kw):
+        self.calls.append(("template", messages, kw))
+        if self.fail:
+            raise ValueError("System message must be at the beginning.")
+        return "<" + "|".join(m["content"] for m in messages) + ("T" if kw.get("enable_thinking", True) else "N")
+
+    def encode(self, text, *, add_special_tokens):
+        self.calls.append(("encode", text, add_special_tokens))
+        return [0] * (len(text) + int(add_special_tokens))
+
+
+def test_local_chat_count_renders_the_template_like_vllm():
+    hf = FakeHF()
+    body = {"model": M, "messages": [{"role": "user", "content": "abc"}], "chat_template_kwargs":
+            {"enable_thinking": False}, "max_completion_tokens": 5}
+    assert LocalTokenizer(hf).count("chat", body) == len("<abcN")
+    assert hf.calls == [("template", body["messages"], {"tokenize": False, "add_generation_prompt": True,
+                                                        "enable_thinking": False}),
+                        ("encode", "<abcN", False)]   # vLLM's chat requests: add_special_tokens false
+
+
+def test_local_completion_count_adds_special_tokens_like_vllm():
+    hf = FakeHF()
+    assert LocalTokenizer(hf).count("completions", {"model": M, "prompt": "abcd"}) == 5
+    assert hf.calls == [("encode", "abcd", True)]
+    assert LocalTokenizer(hf).count("completions", {"model": M, "prompt": [7, 8, 9]}) == 3
+
+
+def test_a_template_that_raises_is_a_rejected_template():
+    with pytest.raises(TemplateRejected, match="System message"):
+        LocalTokenizer(FakeHF(fail=True)).count("chat", {"model": M, "messages": [{"role": "user", "content": "x"}]})
+
+
+def test_loading_needs_transformers_and_the_snapshot(tmp_path, monkeypatch):
+    import builtins
+    real_import = builtins.__import__
+
+    def no_transformers(name, *args, **kw):
+        if name == "transformers":
+            raise ImportError("No module named 'transformers'")
+        return real_import(name, *args, **kw)
+
+    monkeypatch.setattr(builtins, "__import__", no_transformers)
+    with pytest.raises(TokenizerLoadError, match="transformers"):
+        LocalTokenizer.load(str(tmp_path))
+    monkeypatch.setattr(builtins, "__import__", real_import)
+    with pytest.raises(TokenizerLoadError, match="no tokenizer"):
+        LocalTokenizer.load(str(tmp_path / "missing"))
+
+
+@pytest.mark.anyio
+async def test_a_local_budget_never_calls_vllm():
+    b, seen = budget(local=LocalTokenizer(FakeHF()))
+    assert b.local is not None
+    assert await b.count("chat", {"model": M, "messages": [{"role": "user", "content": "ab"}]}) == len("<abT")
+    assert await b.count("completions", {"model": M, "prompt": "xyz"}) == 4
+    assert seen == []

@@ -16,7 +16,8 @@ A completion request, after the guard (request id, pending cap):
     all before the body is read and never queued;
  4. body: at most max_body_bytes (413) within body_read_timeout_s (408);
  5. validation (openai_api): allowlist, served model, exactly one prompt, max_tokens injected / bounded;
- 6. byte fast path (tokens): whether /tokenize is needed at all;
+ 6. byte fast path (tokens): whether a count is needed at all; with the local tokenizer (038 §4) the count happens
+    here, before admission and without vLLM: too long -> 400 context_length_exceeded, a template error -> 400;
  7. admission: the gate is checked again (the backend may have gone down while the body arrived), then a FIFO permit
     raced against a client-disconnect watcher; the release is registered on the scope at once;
  8. /tokenize only if needed, under the permit; too long -> 400 context_length_exceeded and release; a 4xx from
@@ -45,14 +46,14 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from capserve.admission import NOT_SERVICEABLE, STATUS, AdmissionController, Rejection
-from capserve.config import Settings
+from capserve.config import ConfigError, Settings
 from capserve.guard import RECORD_KEY, Guard, on_cleanup
 from capserve.metrics import Metrics
 from capserve.openai_api import ApiError, openai_error, parse_request
 from capserve.profile import CapacityProfile
 from capserve.proxy import ClientDisconnected, ProxyStream, cancel_on_disconnect, passthrough, read_capped
 from capserve.retry import RetryAfterPolicy
-from capserve.tokens import PromptBudget, TokenizeError
+from capserve.tokens import LocalTokenizer, PromptBudget, TemplateRejected, TokenizeError, TokenizerLoadError
 from capserve.upstream import BackendMonitor, data_client
 
 UPSTREAM_PATHS = {"chat": "/v1/chat/completions", "completions": "/v1/completions"}
@@ -80,7 +81,7 @@ class Gateway:
     """The ASGI app plus its state (admission, backend monitor, clients, metrics)."""
 
     def __init__(self, settings: Settings, profile: CapacityProfile, *, api_key: bytes | None = None,
-                 clock: Callable[[], float] = time.monotonic):
+                 clock: Callable[[], float] = time.monotonic, local_tokenizer: LocalTokenizer | None = None):
         self.settings = settings
         self.profile = profile
         self.cls = profile.serving_class(settings.active_class)   # ProfileError for an unavailable class (030 8.7)
@@ -98,7 +99,13 @@ class Gateway:
         self.monitor = BackendMonitor(settings.backend_url, self.served_model, interval_s=settings.monitor_interval_s,
                                       timeout_s=settings.monitor_timeout_s,
                                       fail_threshold=settings.monitor_fail_threshold, on_down=self._backend_down)
-        self.budget = PromptBudget(self.client, **settings.tokens.model_dump())
+        local = None
+        if settings.tokenizer == "local":
+            try:
+                local = local_tokenizer or LocalTokenizer.load(settings.tokenizer_path)
+            except TokenizerLoadError as exc:
+                raise ConfigError(str(exc)) from exc
+        self.budget = PromptBudget(self.client, **settings.tokens.model_dump(), local=local)
         self.metrics = Metrics(profile, self.cls, in_flight=lambda: self.ctrl.in_flight,
                                queued=lambda: self.ctrl.queued, pending=lambda: self.guard.pending,
                                backend_ready=lambda: self.monitor.ready)
@@ -166,6 +173,11 @@ class Gateway:
     def _client_error(self, rec, status: int, code: str, message: str, *, param: str | None = None) -> Response:
         rec.outcome, rec.error_code = "client_error", code
         return openai_error(status, "invalid_request_error", code, message, param=param)
+
+    def _too_long(self, rec, route: str, n: int) -> Response:
+        return self._client_error(rec, 400, "context_length_exceeded",
+                                  f"the prompt has {n} tokens; this server accepts at most {self.cls.max_prompt_tokens}",
+                                  param="messages" if route == "chat" else "prompt")
 
     def _upstream_error(self, rec, status: int, kind: str, code: str, message: str,
                         outcome: str = "upstream_error") -> Response:
@@ -289,6 +301,15 @@ class Gateway:
         rec.stream = fwd.stream
         needs_count = not self.budget.fast_fits(route, fwd.body, cls.max_prompt_tokens)
         deadline = rec.arrival + self.settings.request_deadline_s
+        if needs_count and self.budget.local is not None:   # 038 §4: no vLLM call, so no permit
+            try:
+                n = await self.budget.count(route, fwd.body)
+            except TemplateRejected:
+                return self._client_error(rec, 400, "invalid_value", "the chat template rejected these messages",
+                                          param="messages")
+            if n > cls.max_prompt_tokens:
+                return self._too_long(rec, route, n)
+            needs_count = False
 
         if reason := self._unavailable():   # again: the backend may have gone down while the body arrived
             return self._reject(rec, reason)
@@ -315,9 +336,7 @@ class Gateway:
                     on_cleanup(scope, upstream.aclose)
         except _TooLong as exc:
             permit.release()
-            return self._client_error(rec, 400, "context_length_exceeded",
-                                      f"the prompt has {exc.n} tokens; this server accepts at most "
-                                      f"{cls.max_prompt_tokens}", param="messages" if route == "chat" else "prompt")
+            return self._too_long(rec, route, exc.n)
         except TimeoutError:
             permit.release()
             return self._upstream_error(rec, 504, "timeout", "deadline_exceeded", "the request deadline passed",
@@ -360,5 +379,5 @@ class Gateway:
 
 
 def create_app(settings: Settings, profile: CapacityProfile, *, api_key: bytes | None = None,
-               clock: Callable[[], float] = time.monotonic) -> Gateway:
-    return Gateway(settings, profile, api_key=api_key, clock=clock)
+               clock: Callable[[], float] = time.monotonic, local_tokenizer: LocalTokenizer | None = None) -> Gateway:
+    return Gateway(settings, profile, api_key=api_key, clock=clock, local_tokenizer=local_tokenizer)

@@ -144,6 +144,14 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
   - `chat_template_kwargs` 只接受 `enable_thinking`，其他 key 回 400 `unsupported_parameter`。
   - 沒有啟用 vLLM 的 reasoning parser，因為那會改變啟動參數。thinking 開啟時，思考內容留在 `content` 中。
   - completions 不經過 chat template，不受影響。
+- **text parts 合併成字串**（038 §4）：chat message 的 `content` 若是 text parts 的列表，gateway 會先接成一個字串，中間不加分隔字元，和 Qwen3.5 的 template 處理列表的方式相同，再送給 vLLM。
+- **prompt 長度的計算**（038 §4）：
+  - 預設 `tokenizer = "vllm"`：超過 byte 快速路徑時，持有 permit 呼叫 vLLM 的 `/tokenize`（MVP 的做法）。
+  - `tokenizer = "local"`：
+    - gateway 從 vLLM 服務的同一份 snapshot 載入 tokenizer，在准入之前自己計數，不呼叫 vLLM；
+    - 部署時由 deploy 填入 snapshot 路徑；
+    - 載入失敗時 gateway 拒絕啟動。
+  - 正式設定目前仍是 `vllm`。IT-4 證明兩者的計數在 RTX 上完全相等之後，才會切換。
 
 ## 執行
 

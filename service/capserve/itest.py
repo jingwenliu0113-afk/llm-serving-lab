@@ -5,7 +5,8 @@ Each test is a deterministic pass / fail check; the results go to <service_root>
 (meta.json: purpose product-test, formal false, research_valid false).
 
 - IT-0 (no lock, no boot): imports, and a read-only look at the installed vLLM 0.30.0 sources (located with
-  importlib, never imported): the /tokenize route and its request fields (add_generation_prompt, add_special_tokens,
+  importlib, never imported), and the local tokenizer loaded from the served snapshot (038 §4; transformers from
+  the research venv, no GPU): the /tokenize route and its request fields (add_generation_prompt, add_special_tokens,
   chat_template_kwargs), max_completion_tokens and chat_template_kwargs on chat requests (038 §1: the gateway sends
   enable_thinking with every chat request), and the HTTP keep-alive default, which must outlive the gateway pool's
   keepalive_expiry (upstream.KEEPALIVE_EXPIRY_S) so a pooled connection is never reused just as vLLM closes it.
@@ -28,7 +29,9 @@ Each test is a deterministic pass / fail check; the results go to <service_root>
        settings [tokens]: chat_overhead + sum(per_message + role bytes). The byte bound alone cannot catch a constant
        that is too small (" the" leaves 4 bytes per token of slack); an empty message and a many-message case
        expose chat_overhead and per_message. Every chat case runs with thinking off (the gateway default) and on,
-       because enable_thinking changes the generation prompt (038 §1);
+       because enable_thinking changes the generation prompt (038 §1), with text parts joined as the gateway sends
+       them. Every count must equal the local tokenizer's (038 §4: settings tokenizer "local" counts in the gateway
+       from the served snapshot), which is loaded once per itest run; one that cannot load fails IT-4;
   IT-5 stop under load: limit + queue clients, `capserve.deploy stop` once the gateway is saturated; the running
        requests drain with 200, queued ones get 503 with Retry-After, nothing is cut, the supervisor exits 143 with
        a clean teardown and GPU memory back <= the supervisor run's pre-boot baseline + 64 MiB within 60 s
@@ -74,7 +77,7 @@ import run_core_b as rb
 from capserve import deploy, loadtest, procs, runs
 from capserve.config import API_KEY_ENV, Settings, allow_provisional, load_settings
 from capserve.proxy import SSEFramer, has_content, is_error
-from capserve.tokens import PromptBudget, TokenizeError
+from capserve.tokens import LocalTokenizer, PromptBudget, TemplateRejected, TokenizeError
 from capserve.upstream import KEEPALIVE_EXPIRY_S
 
 TESTS = ("IT-0", "IT-1", "IT-2", "IT-3", "IT-4", "IT-5", "IT-6")
@@ -96,6 +99,7 @@ CHAT_CASES = (
     ("multi-turn", [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hello."},
                     {"role": "user", "content": PROMPT_UNIT * 16}]),
     ("long user message (' the' x 1000)", [{"role": "user", "content": PROMPT_UNIT * 1000}]),
+    ("near the 2k bound (' the' x 1900)", [{"role": "user", "content": PROMPT_UNIT * 1900}]),
     ("non-ASCII (CJK)", [{"role": "user", "content": "測試" * 50}]),
     ("text parts", [{"role": "user", "content": [{"type": "text", "text": "hello"},
                                                  {"type": "text", "text": " world"}]}]),
@@ -103,7 +107,7 @@ CHAT_CASES = (
     ("many messages (8)", [{"role": "system", "content": "Be brief."}]      # per_message, 8 times over
      + [{"role": r, "content": "Hi"} for r in ("user", "assistant") * 3] + [{"role": "user", "content": "Hi"}]),
 )
-COMPLETION_NS = (1, 16, 256, 1000)
+COMPLETION_NS = (1, 16, 256, 1000, 1920)   # 1920: the uniform-2k class bound
 
 
 class Checks:
@@ -180,9 +184,20 @@ def keep_alive_default(pkg: Path) -> tuple:
     return None, "timeout_keep_alive is set but its default could not be read"
 
 
-def it0(*, locate: Callable = locate_vllm, pins: dict | None = None) -> dict:
+def load_served_tokenizer(pins: dict | None = None) -> LocalTokenizer:
+    """038 §4: the tokenizer of the snapshot vLLM serves (core_b_plan.snapshot_dir), as the gateway loads it."""
+    return LocalTokenizer.load(bp.snapshot_dir(bp.load_pins() if pins is None else pins))
+
+
+def it0(*, locate: Callable = locate_vllm, pins: dict | None = None, load_local: Callable | None = None) -> dict:
     pins = bp.load_pins() if pins is None else pins
     c = Checks()
+    try:
+        tok = (load_local or (lambda: load_served_tokenizer(pins)))()
+        n = tok.count("completions", {"prompt": PROMPT_UNIT * 16})
+        c.add("the local tokenizer loads from the served snapshot", True, f"' the' x 16 -> {n} tokens")
+    except Exception as exc:  # noqa: BLE001 - a load failure is the finding
+        c.add("the local tokenizer loads from the served snapshot", False, f"{type(exc).__name__}: {exc}")
     for mod in IMPORTS:
         try:
             importlib.import_module(mod)
@@ -236,6 +251,8 @@ class Ctx:
     idle_wait_s: float = 30.0
     token_watch: tuple = (1.0, 3.0)   # seconds after the disconnect: generation tokens must not grow between them
     hold_before_close_s: float = 0.5
+    local_tokenizer: LocalTokenizer | None = None   # 038 §4: IT-4 compares it with vLLM's /tokenize
+    local_error: str | None = None                  # why it could not be loaded
 
     @property
     def gateway_url(self) -> str:
@@ -458,6 +475,19 @@ async def it4(ctx: Ctx) -> dict:
     tokens = ctx.settings.tokens.model_dump()
     model = bp.load_pins()["core_b"]["repo"]
     measured_completion, measured_chat = [], []
+    local = ctx.local_tokenizer
+    if local is None:
+        c.add("the local tokenizer is available", False, ctx.local_error)
+
+    def same_as_local(name: str, route: str, body: dict, count: int) -> None:
+        if local is None:
+            return
+        try:
+            mine = local.count(route, body)
+        except TemplateRejected as exc:
+            mine = f"template rejected: {exc}"
+        c.add(f"local tokenizer equals vLLM: {name}", mine == count, f"local {mine}, vLLM {count}")
+
     async with ctx.vllm_client() as vc:
         budget = PromptBudget(vc, **tokens)
         for n in COMPLETION_NS:
@@ -470,8 +500,10 @@ async def it4(ctx: Ctx) -> dict:
             bound = budget.upper_bound("completions", body)
             c.add(f"' the' x {n} is {n} tokens", count == n, count)
             c.add(f"completion bound holds at n={n}", count <= bound, f"{count} <= {bound}")
+            same_as_local(f"' the' x {n}", "completions", body, count)
             measured_completion.append({"n": n, "count": count, "bound": bound})
-        for case, messages in CHAT_CASES:
+        for case, given in CHAT_CASES:
+            messages = [{**m, "content": _message_text(m["content"])} for m in given]   # as the gateway sends them
             content = None
             for thinking in (False, True):   # 038 §1: the gateway sends enable_thinking with every chat request
                 name = f"{case}, thinking {'on' if thinking else 'off'}"
@@ -485,6 +517,7 @@ async def it4(ctx: Ctx) -> dict:
                     continue
                 bound = budget.upper_bound("chat", body)
                 c.add(f"chat bound holds: {name}", count <= bound, f"{count} <= {bound}")
+                same_as_local(name, "chat", body, count)
                 # 029 IT-4: the template's own tokens within the constants, whatever the text's bytes per token
                 template = count - content
                 allowed = budget.chat_overhead + sum(budget.per_message + len(m["role"].encode("utf-8"))
@@ -616,6 +649,7 @@ class Effects:
     start_group: Callable = procs.start_group
     held_gpu_lock: Callable = run_adv.held_gpu_lock
     lock_fd: Callable = procs.lock_fd
+    load_local: Callable = load_served_tokenizer
     python: str = sys.executable
     wall: Callable = deploy.utcnow
     now: Callable = time.monotonic
@@ -694,9 +728,14 @@ def run_booted(tests: list, cfg, args, run_dir: Path, lock_fd: int, fx: Effects,
             for t in tests:
                 results[t] = _failed(t, f"{why}; see {run_dir / 'supervisor.log'} and the supervisor run's meta.json")
         else:
+            try:
+                local, local_error = fx.load_local(), None
+            except Exception as exc:  # noqa: BLE001 - IT-4 reports it
+                local, local_error = None, f"{type(exc).__name__}: {exc}"
             ctx = Ctx(cfg=cfg, settings=load_settings(Path(state["run_dir"]) / "gateway.toml"), run_dir=run_dir,
                       vllm_pid=state.get("vllm_pid"), gateway_pid=state.get("gateway_pid"), lock_path=fx.lock_path,
-                      proc_root=fx.proc_root, api_key=fx.base_env.get(API_KEY_ENV) or None)
+                      proc_root=fx.proc_root, api_key=fx.base_env.get(API_KEY_ENV) or None,
+                      local_tokenizer=local, local_error=local_error)
             for t in tests:
                 kw = {"stop": stop_and_wait} if t == "IT-5" else {}
                 results[t] = _guarded(t, lambda: asyncio.run(fx.checks[t](ctx, **kw)))

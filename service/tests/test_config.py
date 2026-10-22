@@ -82,3 +82,17 @@ def test_without_a_key_only_loopback_binds():
         with pytest.raises(cfg.ConfigError):
             cfg.check_bind(host, None)
         cfg.check_bind(host, b"k")
+
+
+def test_the_local_tokenizer_needs_its_snapshot_path(tmp_path):
+    """038 §4: tokenizer "local" counts prompts in the gateway from the served model's snapshot; "vllm" (default)
+    asks vLLM's /tokenize. A path without local mode, or local mode without a path, is refused."""
+    path = tmp_path / "c.toml"
+    path.write_text('active_class = "2k"\n')
+    assert (cfg.load_settings(path).tokenizer, cfg.load_settings(path).tokenizer_path) == ("vllm", None)
+    path.write_text('active_class = "2k"\ntokenizer = "local"\ntokenizer_path = "/snap"\n')
+    assert cfg.load_settings(path).tokenizer_path == "/snap"
+    for text in ('tokenizer = "local"\n', 'tokenizer_path = "/snap"\n', 'tokenizer = "hf"\n'):
+        path.write_text('active_class = "2k"\n' + text)
+        with pytest.raises(cfg.ConfigError):
+            cfg.load_settings(path)

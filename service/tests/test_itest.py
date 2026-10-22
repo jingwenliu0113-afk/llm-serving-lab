@@ -21,6 +21,8 @@ import coreb_smoke as smoke
 import gpu_idle as gi
 from capserve import deploy, itest, runs
 from capserve.config import Settings
+from capserve.tokens import LocalTokenizer, TokenizerLoadError
+from fakes.fake_tokenizer import WordsHF
 from fakes.fake_vllm import FakeConfig
 from fakes.servers import make_profile, stack
 
@@ -80,6 +82,10 @@ def fake_vllm_tree(root: Path, *, protocol=PROTOCOL, mixin=MIXIN, envs=ENVS, lau
     return pkg
 
 
+def fake_local():
+    return LocalTokenizer(WordsHF())
+
+
 def check(result, name):
     (item,) = [c for c in result["checks"] if c["name"] == name]
     return item
@@ -88,7 +94,7 @@ def check(result, name):
 # ------------------------------------------------------------------ IT-0 --
 
 def test_it0_passes_on_the_expected_sources(tmp_path):
-    res = itest.it0(locate=lambda: (fake_vllm_tree(tmp_path), "0.30.0"), pins=PINS)
+    res = itest.it0(load_local=fake_local, locate=lambda: (fake_vllm_tree(tmp_path), "0.30.0"), pins=PINS)
     assert res["ok"] is True, [c for c in res["checks"] if not c["ok"]]
     assert res["data"]["keep_alive_s"] == 5 and res["data"]["vllm_version"] == "0.30.0"
     assert set(res["data"]["tokenize_chat_fields"]) >= {"messages", "add_generation_prompt", "add_special_tokens"}
@@ -110,34 +116,35 @@ def test_it0_passes_on_the_expected_sources(tmp_path):
     (dict(envs="x = 1\n"), "vLLM keep-alive outlives the gateway pool's keepalive_expiry"),
 ])
 def test_it0_fails_when_vllm_differs(tmp_path, change, failing):
-    res = itest.it0(locate=lambda: (fake_vllm_tree(tmp_path, **change), "0.30.0"), pins=PINS)
+    res = itest.it0(load_local=fake_local, locate=lambda: (fake_vllm_tree(tmp_path, **change), "0.30.0"), pins=PINS)
     assert res["ok"] is False and check(res, failing)["ok"] is False
 
 
 def test_it0_keep_alive_falls_back_to_uvicorn_when_vllm_never_sets_it(tmp_path):
-    res = itest.it0(locate=lambda: (fake_vllm_tree(tmp_path, envs="x = 1\n", launcher="pass\n"), "0.30.0"),
+    res = itest.it0(load_local=fake_local, locate=lambda: (fake_vllm_tree(tmp_path, envs="x = 1\n", launcher="pass\n"), "0.30.0"),
                     pins=PINS)
     assert res["data"]["keep_alive_s"] == 5 and res["data"]["keep_alive_source"] == "uvicorn default"
     assert check(res, "vLLM keep-alive outlives the gateway pool's keepalive_expiry")["ok"]
 
 
 def test_it0_version_and_missing_vllm(tmp_path):
-    res = itest.it0(locate=lambda: (fake_vllm_tree(tmp_path), "0.29.1"), pins=PINS)
+    res = itest.it0(load_local=fake_local, locate=lambda: (fake_vllm_tree(tmp_path), "0.29.1"), pins=PINS)
     assert check(res, "vLLM version is the pinned 0.30.0")["ok"] is False
-    res = itest.it0(locate=lambda: (None, None), pins=PINS)
+    res = itest.it0(load_local=fake_local, locate=lambda: (None, None), pins=PINS)
     assert res["ok"] is False and check(res, "vLLM sources found")["ok"] is False
 
 
 # ------------------------------------------------------------------ booted checks against the fake stack --
 
-def ctx_for(st, tmp_path, *, lock=None, vllm_pid=None, gateway_pid=None):
+def ctx_for(st, tmp_path, *, lock=None, vllm_pid=None, gateway_pid=None, local=None, local_error=None):
     vport = int(st.gateway.settings.backend_url.rsplit(":", 1)[1])
     gport = int(st.url.rsplit(":", 1)[1])
     cfg = deploy.DeployConfig.model_validate({"service_root": str(tmp_path / "svc"), "vllm_port": vport,
                                               "gateway_port": gport, "gateway": {"active_class": "test"}})
     return itest.Ctx(cfg=cfg, settings=st.gateway.settings, run_dir=tmp_path, vllm_pid=vllm_pid,
                      gateway_pid=gateway_pid, lock_path=str(lock or tmp_path / "gpu.lock"),
-                     proc_root=str(tmp_path / "proc"), poll_s=0.01, idle_wait_s=5.0, token_watch=(0.2, 0.6))
+                     proc_root=str(tmp_path / "proc"), poll_s=0.01, idle_wait_s=5.0, token_watch=(0.2, 0.6),
+                     local_tokenizer=local if local is not None or local_error else fake_local(), local_error=local_error)
 
 
 def fake_proc(tmp_path, pid, lock: Path):
@@ -278,8 +285,8 @@ async def it4_with_template(tmp_path, monkeypatch, template: int) -> dict:
         return await orig(self, route, body) + (template if route == "chat" else 0)
 
     monkeypatch.setattr(itest.PromptBudget, "count", with_template)
-    async with stack() as st:
-        return await itest.it4(ctx_for(st, tmp_path))
+    async with stack() as st:   # a local tokenizer that agrees with this vLLM
+        return await itest.it4(ctx_for(st, tmp_path, local=LocalTokenizer(WordsHF(extra=template))))
 
 
 @pytest.mark.anyio
@@ -755,3 +762,54 @@ def test_deploy_render_and_itest_it0_run_as_modules(tmp_path):
     r = subprocess.run([sys.executable, "-m", "capserve.itest", "IT-1", "--config", str(cfg)], capture_output=True,
                        text=True, env=_module_env(), cwd=tmp_path, timeout=120)
     assert r.returncode == 2 and "flock" in r.stderr     # no GPU lock on the Mac: nothing starts
+
+
+# ------------------------------------------------------------------ local tokenizer parity (038 §4) --
+
+def test_it0_loads_the_local_tokenizer(tmp_path):
+    res = itest.it0(load_local=fake_local, locate=lambda: (fake_vllm_tree(tmp_path), "0.30.0"), pins=PINS)
+    assert check(res, "the local tokenizer loads from the served snapshot")["ok"]
+
+    def broken():
+        raise TokenizerLoadError("/snap: no tokenizer snapshot directory")
+
+    res = itest.it0(load_local=broken, locate=lambda: (fake_vllm_tree(tmp_path / "b"), "0.30.0"), pins=PINS)
+    item = check(res, "the local tokenizer loads from the served snapshot")
+    assert res["ok"] is False and item["ok"] is False and "no tokenizer" in item["detail"]
+
+
+@pytest.mark.anyio
+async def test_it4_local_counts_equal_vllm_counts(tmp_path):
+    async with stack() as st:
+        res = await itest.it4(ctx_for(st, tmp_path))
+    assert res["ok"] is True, [c for c in res["checks"] if not c["ok"]]
+    parity = [c for c in res["checks"] if c["name"].startswith("local tokenizer equals vLLM")]
+    assert len(parity) == len(itest.COMPLETION_NS) + 2 * len(itest.CHAT_CASES) and all(c["ok"] for c in parity)
+    assert 1920 in itest.COMPLETION_NS
+
+
+@pytest.mark.anyio
+async def test_it4_fails_when_the_local_count_differs(tmp_path):
+    async with stack() as st:
+        res = await itest.it4(ctx_for(st, tmp_path, local=LocalTokenizer(WordsHF(extra=1))))
+    assert res["ok"] is False
+    failing = {c["name"] for c in res["checks"] if not c["ok"]}
+    assert "local tokenizer equals vLLM: empty user message, thinking off" in failing
+    assert not any(n.startswith("local tokenizer equals vLLM: ' the' x") for n in failing)   # completions agree
+
+
+@pytest.mark.anyio
+async def test_it4_fails_without_a_local_tokenizer(tmp_path):
+    async with stack() as st:
+        res = await itest.it4(ctx_for(st, tmp_path, local_error="TokenizerLoadError: no transformers"))
+    item = check(res, "the local tokenizer is available")
+    assert res["ok"] is False and item["ok"] is False and "no transformers" in item["detail"]
+
+
+@pytest.mark.anyio
+async def test_it4_sends_text_parts_joined_like_the_gateway(tmp_path):
+    async with stack() as st:
+        await itest.it4(ctx_for(st, tmp_path))
+        chats = [s.body["messages"] for s in st.fake.seen if s.path == "/tokenize" and "messages" in s.body]
+    assert all(isinstance(m["content"], str) for msgs in chats for m in msgs)
+    assert [{"role": "user", "content": "hello world"}] in chats

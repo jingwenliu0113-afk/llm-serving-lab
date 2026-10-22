@@ -163,6 +163,7 @@ def test_gateway_env_imports_the_release_and_keeps_the_api_key(tmp_path):
     assert env["PYTHONDONTWRITEBYTECODE"] == "1" and env["CAPSERVE_API_KEY"] == "k"
     assert env["HOME"] == str(tmp_path / "svc" / ".home") and env["TMPDIR"] == str(tmp_path / "svc" / ".tmp")
     assert "XDG_CACHE_HOME" not in env and env["PATH"] == "/usr/bin"
+    assert env["HF_HUB_OFFLINE"] == "1"     # 038 §4: a local tokenizer loads from the snapshot, never the Hub
 
 
 # ------------------------------------------------------------------ lock descriptors, ports --

@@ -16,6 +16,8 @@ import pytest
 from capserve.app import create_app
 from capserve.profile import CapacityProfile, ProfileError
 from capserve.proxy import ClientDisconnected
+from capserve.tokens import LocalTokenizer
+from fakes.fake_tokenizer import WordsHF
 from fakes.fake_vllm import MODEL, FakeConfig
 from fakes.profiles import verified_class, verified_doc
 from fakes.servers import gateway_settings, make_profile, stack
@@ -633,3 +635,53 @@ async def test_a_disconnect_noticed_after_the_upstream_answered_closes_it_before
     assert metric(gw, "capserve_client_disconnects_total", phase="waiting_response") == 1
     await gw.client.aclose()
     await gw.monitor.aclose()
+
+
+# ------------------------------------------------------------------ local tokenizer (038 §4) --
+
+def local_stack(prof, hf=None, **kw):
+    return stack(FakeConfig(), prof, tokenizer="local", tokenizer_path="/fake-snapshot",
+                 local_tokenizer=LocalTokenizer(hf or WordsHF()), **kw)
+
+
+async def test_a_local_tokenizer_counts_before_admission_and_never_calls_vllm():
+    prof = make_profile(max_concurrency=1, max_queue=0, max_prompt_tokens=60)
+    hf = WordsHF()
+    async with local_stack(prof, hf) as st, st.client() as c:
+        r = await c.post("/v1/completions", json={"model": MODEL, "prompt": "w " * 50})   # 100 bytes, 50 tokens
+        assert r.status_code == 200 and [s.path for s in st.fake.seen] == ["/v1/completions"] and hf.calls == 1
+        r = await c.post("/v1/chat/completions", json={"model": MODEL, "messages": [
+            {"role": "user", "content": [{"type": "text", "text": "w " * 30}, {"type": "text", "text": "w " * 20}]}]})
+        assert r.status_code == 200 and [s.path for s in st.fake.seen] == ["/v1/completions", "/v1/chat/completions"]
+        assert st.fake.seen[-1].body["messages"] == [{"role": "user", "content": "w " * 50}]
+
+
+async def test_a_local_tokenizer_rejects_too_long_prompts_without_a_permit():
+    prof = make_profile(max_concurrency=1, max_queue=0, max_prompt_tokens=60)
+    async with stack(FakeConfig(hang=True), prof, tokenizer="local", tokenizer_path="/fake-snapshot",
+                     local_tokenizer=LocalTokenizer(WordsHF())) as st, st.client() as c:
+        running = asyncio.create_task(c.post("/v1/completions", json=COMP))   # holds the only slot
+        await asyncio.wait_for(st.fake.started.wait(), 5)
+        r = await c.post("/v1/completions", json={"model": MODEL, "prompt": "w " * 70})
+        assert r.status_code == 400 and error(r)["code"] == "context_length_exceeded" and error(r)["param"] == "prompt"
+        assert [s.path for s in st.fake.seen] == ["/v1/completions"]           # no /tokenize, no second request
+        st.fake.release.set()
+        assert (await running).status_code == 200
+
+
+async def test_a_template_the_local_tokenizer_rejects_is_400():
+    prof = make_profile(max_prompt_tokens=60)
+    async with local_stack(prof, WordsHF(fail=True)) as st, st.client() as c:
+        r = await c.post("/v1/chat/completions", json={"model": MODEL, "messages": [
+            {"role": "user", "content": "w " * 50}]})
+        assert r.status_code == 400 and (error(r)["code"], error(r)["param"]) == ("invalid_value", "messages")
+        assert st.fake.seen == []
+        assert metric(st.gateway, "capserve_client_errors_total", code="invalid_value") == 1
+
+
+def test_local_mode_needs_a_tokenizer(tmp_path):
+    """create_app loads settings.tokenizer_path when no tokenizer is given; a missing snapshot is a ConfigError."""
+    from capserve.config import ConfigError
+    settings = gateway_settings("http://127.0.0.1:9", tokenizer="local", tokenizer_path=str(tmp_path / "none"))
+    with pytest.raises(ConfigError, match="tokenizer"):
+        create_app(settings, make_profile())

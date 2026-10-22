@@ -22,6 +22,7 @@ from pathlib import Path
 
 from capserve.config import ConfigError, allow_provisional, api_key_from_env, check_bind, load_settings
 from capserve.profile import ProfileError, parse_profile
+from capserve.tokens import LocalTokenizer, TokenizerLoadError
 
 PROFILES_DIR = Path(__file__).resolve().parents[1] / "profiles"   # service/profiles of this checkout or release
 
@@ -62,7 +63,9 @@ def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_
         if profile.verified and (problems := committed_profile_problems(data, profiles_dir)):
             raise ProfileError(f"{args.profile}: " + "; ".join(problems))
         cls = profile.serving_class(settings.active_class)   # an unavailable class: refused, no flag overrides it
-    except (ConfigError, ProfileError) as exc:
+        # 038 §4: a local tokenizer is loaded before serving; one that cannot load is a configuration error
+        local = LocalTokenizer.load(settings.tokenizer_path) if settings.tokenizer == "local" else None
+    except (ConfigError, ProfileError, TokenizerLoadError) as exc:
         print(f"capserve: {exc}", file=sys.stderr)
         return 2
     if not profile.verified:
@@ -75,7 +78,7 @@ def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_
     if run is None:
         from capserve.server import run
         logging.basicConfig(level=logging.INFO, format="%(message)s")
-    run(settings, profile, api_key=api_key)
+    run(settings, profile, api_key=api_key, local_tokenizer=local)
     return 0
 
 

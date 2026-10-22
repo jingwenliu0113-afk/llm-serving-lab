@@ -101,7 +101,7 @@ RESEARCH_PORT = run_core_b.PORT
 RELEASE_ROOT = runs.REPO_ROOT          # the release this module runs from: releases/<sha>/ on WSL
 DEFAULT_CONFIG = RELEASE_ROOT / "service" / "deploy" / "rtx.toml"
 STATE_FILE = "state.json"
-OWNED_GATEWAY_KEYS = ("backend_url", "host", "port", "drain_timeout_s")
+OWNED_GATEWAY_KEYS = ("backend_url", "host", "port", "drain_timeout_s", "tokenizer_path")
 LOOPBACK = "127.0.0.1"
 HTTP_TIMEOUT_S = 5.0
 HEALTH_POLL_S = 2.0
@@ -217,9 +217,13 @@ def load_config(path) -> DeployConfig:
 
 
 def gateway_settings(cfg: DeployConfig) -> dict:
-    """The gateway's settings: rtx.toml [gateway] plus what the deploy owns (loopback only: no API key needed)."""
-    return {**cfg.gateway, "backend_url": cfg.vllm_url, "host": LOOPBACK, "port": cfg.gateway_port,
-            "drain_timeout_s": cfg.drain_timeout_s}
+    """The gateway's settings: rtx.toml [gateway] plus what the deploy owns (loopback only: no API key needed; with
+    tokenizer = "local", tokenizer_path = the pinned snapshot vLLM serves, 038 §4)."""
+    doc = {**cfg.gateway, "backend_url": cfg.vllm_url, "host": LOOPBACK, "port": cfg.gateway_port,
+           "drain_timeout_s": cfg.drain_timeout_s}
+    if cfg.gateway.get("tokenizer") == "local":
+        doc["tokenizer_path"] = bp.snapshot_dir(bp.load_pins())
+    return doc
 
 
 def _toml_key(key: str) -> str:
