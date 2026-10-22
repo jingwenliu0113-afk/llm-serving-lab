@@ -260,3 +260,9 @@
 - **設定**：`[deploy] max_restarts`（≥ 1，預設 5）、`restart_window_s`（> 0，預設 3,600）。
 - **`tools/rtx/capserve_resident.sh`**：`exec flock -n` 加上正式設定，不帶 `--allow-provisional`。
   Windows 工作排程器的註冊寫在腳本的註解中，由使用者自己做；有測試檢查腳本中沒有 `schtasks` 與 `sudo`。
+
+**RTX 產品測試（release `f670c22`，2026-10-23 01:22 起，同一次 GPU lock）**
+- **`rtx-verified.toml`，`tokenizer = "local"`**（`pt-20261022T172249Z-itest`）：IT-0 至 IT-6 全部通過。
+  gateway 在 local 模式下實際啟動並服務，IT-6 確認研究目錄與共用快取沒有新寫入的檔案。
+- **常駐檢查沒有執行**：`deploy up` 的 `--profile` 原本是必填，常駐腳本沒有給，所以 argparse 直接結束，沒有啟動任何東西。
+  修正：設定有釘選時，`up` 沒給 `--profile` 就使用釘選的 profile（和 itest 相同）；沒有釘選的設定仍然必須給。已補測試。

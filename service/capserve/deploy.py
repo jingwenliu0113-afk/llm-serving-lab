@@ -1099,7 +1099,8 @@ def _build_parser() -> tuple:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--config", default=str(DEFAULT_CONFIG), help="deploy config (TOML)")
         subs[name] = p
-    subs["up"].add_argument("--profile", required=True, help="capacity profile (JSON)")
+    subs["up"].add_argument("--profile", help="capacity profile (JSON; default: the config's production_profile, which "
+                                              "a config without one must be given)")
     subs["up"].add_argument("--allow-provisional", action="store_true",
                             help="allow a provisional profile (integration / product tests; not product limits)")
     mode = subs["up"].add_mutually_exclusive_group()
@@ -1141,6 +1142,11 @@ def main(argv: list | None = None, *, env: Mapping[str, str] | None = None) -> i
     for sig in (signal.SIGTERM, signal.SIGHUP):   # SystemExit(128 + signum): the finally tears down
         signal.signal(sig, smoke._exit_on_signal)
     allowed = allow_provisional(args.allow_provisional, env)
+    if args.profile is None:   # 038 §7: a production config serves the profile it pins (as capserve.itest)
+        if cfg.production_profile is None:
+            print("capserve.deploy: up needs --profile (this config pins no production_profile)", file=sys.stderr)
+            return 2
+        args.profile = str(RELEASE_ROOT / cfg.production_profile)
     if args.resident:
         return resident(cfg, args.profile, allow_provisional=allowed)
     return up(cfg, args.profile, allow_provisional=allowed, loadtest=args.loadtest)

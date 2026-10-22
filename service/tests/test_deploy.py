@@ -1347,3 +1347,19 @@ def test_the_resident_script_takes_the_lock_without_waiting_and_serves_the_produ
     assert "exec flock -n /tmp/ai-portfolio-gpu.lock" in text and "capserve.deploy up --resident" in text
     assert "--config service/deploy/rtx-verified.toml" in text and "--allow-provisional" not in text
     assert "sudo" not in text and "schtasks" not in text.lower()     # the Windows task is the user's to register
+
+
+def test_up_defaults_to_the_pinned_profile_and_needs_one_otherwise(monkeypatch, tmp_path, capsys):
+    """038 §7 (found on the RTX: capserve_resident.sh gives no --profile): a production config's `up` serves its
+    pinned profile by default, as capserve.itest does; a config that pins nothing still needs --profile."""
+    seen = {}
+    monkeypatch.setattr(deploy, "up", lambda cfg, profile, **kw: seen.update(profile=profile) or 0)
+    monkeypatch.setattr(deploy, "resident", lambda cfg, profile, **kw: seen.update(resident=profile) or 0)
+    monkeypatch.setattr(deploy.signal, "signal", lambda *a: None)
+    config = str(ROOT / "service" / "deploy" / "rtx-verified.toml")
+    pinned = str(deploy.RELEASE_ROOT / "service" / "profiles" / "verified-formal-20261017-c1b.json")
+    assert deploy.main(["up", "--config", config], env={}) == 0 and seen["profile"] == pinned
+    assert deploy.main(["up", "--config", config, "--resident"], env={}) == 0 and seen["resident"] == pinned
+    seen.clear()
+    assert deploy.main(["up", "--config", str(ROOT / "service" / "deploy" / "rtx.toml")], env={}) == 2
+    assert seen == {} and "--profile" in capsys.readouterr().err
