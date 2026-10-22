@@ -1,0 +1,15 @@
+# Stage E1-D settings: decision 041 v3 §1 (the 8K slip chain, an exploratory desk analysis on existing data),
+# PREREGISTRATION §11 (DRAFT). benchmarks/stage_e1.py reads no real input until freeze.e1 is true; the module, its
+# synthetic-fixture tests and the fetch list (stage_e1.FETCH) are committed first, then raw/ is fetched read-only
+# (tools/rtx/fetch_raw.sh) and checked against each session's raw_manifest.json. The output is descriptive only.
+schema_version = 1
+
+[freeze]
+e1 = false
+
+[e1]
+f_spike_ms = 35.0                                         # L1: F of position 0 of the slipped group (seen gap 29.1-39.2)
+slip_ms = 170.0                                           # L3 / L5 and the slip rule: 028's SLIP_MS
+gap_ms = 200.0                                            # L4: arrival gap of 8k -> 8k+1
+chain_tolerance = 1                                       # at most this many evaluable episodes with a failing link
+l1_false_max = 0.02                                       # L1 among non-slipped groups (g 1-23)

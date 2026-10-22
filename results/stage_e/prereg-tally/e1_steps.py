@@ -1,5 +1,5 @@
 import json, glob, os, sys, bisect, statistics as st
-ROOT = "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab"
+ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[3])
 sys.path.insert(0, ROOT + "/benchmarks")
 import c0_analysis as ca
 res = {"slip": [], "normal": []}

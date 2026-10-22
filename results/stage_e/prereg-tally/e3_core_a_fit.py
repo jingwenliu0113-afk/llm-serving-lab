@@ -1,5 +1,5 @@
 import json, math, sys
-ROOT = "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab"
+ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[3])
 sys.path.insert(0, ROOT + "/benchmarks")
 import core_a_analysis as an
 files = {'4B-Q4_K_M': 2708804544, '4B-Q6_K': 3464055744, '4B-Q8_0': 4482403264,
