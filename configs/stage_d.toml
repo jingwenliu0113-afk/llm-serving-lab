@@ -8,10 +8,10 @@ schema_version = 1
 # stage_d_datasets and their tests together, then set true, then collect Stage D data. stage_d_plan refuses true
 # unless every evidence below names a passed mini smoke session (results/stage_d/<id>/session.json, formal false,
 # smoke.ok true) of that kind.
-stage_d = false
-mini_closed = ""                                          # session id of the passed D-A mini smoke
-mini_open = ""                                            # session id of the passed D-B mini smoke
-mini_verify = ""                                          # session id of the passed D-C mini smoke
+stage_d = true
+mini_closed = "smoke-d-closed-20261023b"                  # session id of the passed D-A mini smoke
+mini_open = "smoke-d-open-20261023b"                      # session id of the passed D-B mini smoke
+mini_verify = "smoke-d-verify-20261023b"                  # session id of the passed D-C mini smoke
 
 [stage_d]
 seed = 20261008                                           # Core B seed (the 030 shuffles and the var datasets)

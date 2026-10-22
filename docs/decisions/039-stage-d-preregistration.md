@@ -1,6 +1,6 @@
-# 039 — Stage D 事先登記（DRAFT）：容量的延伸
+# 039 — Stage D 事先登記（FROZEN）：容量的延伸
 
-- 狀態：**DRAFT**。harness、smoke 與審查完成後凍結；凍結前不收任何 Stage D 的正式數據。
+- 狀態：**FROZEN**（2026-10-23）。三個 mini smoke 與兩輪審查之後凍結，見文末「凍結」；凍結前沒有任何 Stage D 的正式數據。
 - 日期：2026-10-23
 - 對應：037（Phase 3 範圍）、030（Stage C 的規則，本文沿用）、035（c1b 的結果）、036（適用條件中「不涵蓋」的項目）、038（capserve v1）
 - 時點：任何 Stage D 數據之前。設計者看過 Core、Advanced、Stage C 的全部結果，用到的地方在「揭露」一節寫明。
@@ -299,4 +299,15 @@ harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_sta
 | 6 | port 8080 被佔用時記為無效 run，經跳過規則讓該點整個 session 為 NT | 中止 session（實作補記 7） |
 | 7 | gateway 的停止問題記錄時 boot 為 None | 帶上 boot 的 tag |
 | 8 | WSL 的 research dir 沒有 `results/`，開放迴路的 plan 無法重算 λ_ref | λ_ref pin 在設定檔，由 Mac 上的測試比對（實作補記 13） |
+
+## 凍結（2026-10-23）
+
+- **證據**：三個 mini smoke 都以修正後的 harness（`91e6e73` 部署到 WSL，`harness_sha256` `2b85155d…`）在 GPU lock 下通過，結果已 commit：
+  - `smoke-d-closed-20261023b`：8 次 boot、16 個 run，14 個有效，另 2 個是刻意的逾時（U2K-O512 在 C 3），replay 乾淨；
+  - `smoke-d-open-20261023b`：5 次 boot、9 個 run 全部有效（U2K-P 在 0.4、1.1、1.5 λ_ref），replay 乾淨；
+  - `smoke-d-verify-20261023b`：8 次 boot、8 個 run 全部有效（U2K-var、U2K-gw、U8K-gw），gateway 檢查通過。
+  - mini 結束後依 030 8.6 丟棄延遲數值（`mask_smoke`），沒有任何 Stage D 的正式數據。
+- **ssh 斷線**：open mini 開始時 Mac 端的 ssh 逾時，但 WSL 上的程序沒有中斷，三個 mini 都正常完成。正式 session 改在 WSL 上以 `nohup` 執行並寫 log，不依賴 ssh 連線。
+- **凍結的內容**：`configs/stage_d.toml`（`freeze.stage_d = true` 與三個 mini id）與 `HARNESS_FILES` 的五個模組，由 `tests/test_stage_d_frozen.py` 以 sha256 鎖住。
+  之後任何修改都需要新的 decision log 與新的 session。capserve 不在凍結範圍內，D-C 的 session 記錄它的 `capserve_sha256`（審查第 13 項）。
 

@@ -1,0 +1,69 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/b000-sentinel-start-U2K.server.log": {
+   "sha256": "53e48cdbd1758d81bbb5572da987de2912d88ba5099d60bb336954f3f6dc7d53",
+   "size_bytes": 30730
+  },
+  "raw/b001-fs-U2K-var.server.log": {
+   "sha256": "280384e04dfef96b509c551e2e6597ca2cb90cb395b1875b6ba9b4af8bfa6d4d",
+   "size_bytes": 29458
+  },
+  "raw/b002-fs-U2K-gw.gateway.log": {
+   "sha256": "5fafa77468298d03f8aede45f076b31934b8ccb022ba29f5e0ec5ff97bdbc309",
+   "size_bytes": 12591
+  },
+  "raw/b002-fs-U2K-gw.gateway.toml": {
+   "sha256": "dbea11df016afaae06f2efd15d53860bf5d84dff65fceaf13bfda5890e2a88d0",
+   "size_bytes": 290
+  },
+  "raw/b002-fs-U2K-gw.server.log": {
+   "sha256": "d6e44de81de163ec8a406f42dd228c0ccf2e05dcc5f388409dc60194fb0a5785",
+   "size_bytes": 31208
+  },
+  "raw/b003-fs-U8K-gw.gateway.log": {
+   "sha256": "d945e3499d68d71d15a153d8ed667857a4b35d576f2e544647e1c5dfcc439c43",
+   "size_bytes": 13663
+  },
+  "raw/b003-fs-U8K-gw.gateway.toml": {
+   "sha256": "57644a9a991f00963153127e7f7b18e19c43b8cd3b677a31f0480f12a1835159",
+   "size_bytes": 290
+  },
+  "raw/b003-fs-U8K-gw.server.log": {
+   "sha256": "bc5126f25e52c484b04ce64a0cda87cb5cc150e86bc67f3df1d3ef998389020f",
+   "size_bytes": 35521
+  },
+  "raw/b004-fs-U8K-gw.gateway.log": {
+   "sha256": "3775b4c30d567e1baf191f9608735089c69e611197910f6be697c02e23e6c26d",
+   "size_bytes": 13741
+  },
+  "raw/b004-fs-U8K-gw.gateway.toml": {
+   "sha256": "57644a9a991f00963153127e7f7b18e19c43b8cd3b677a31f0480f12a1835159",
+   "size_bytes": 290
+  },
+  "raw/b004-fs-U8K-gw.server.log": {
+   "sha256": "88eb0a91dc169ec98a8b6b2e4dc49287e826ae67a77b33b5782037df047fc753",
+   "size_bytes": 35705
+  },
+  "raw/b005-fs-U2K-var.server.log": {
+   "sha256": "85045e65a5fe3bb4ccc1ebe78fc50373a137e455bba5497551f04bb812cbbe02",
+   "size_bytes": 29461
+  },
+  "raw/b006-fs-U2K-gw.gateway.log": {
+   "sha256": "a63d0edbf7b794b6ffba42015277123ff648d867e3866fe5f4b9205ef733cf68",
+   "size_bytes": 12606
+  },
+  "raw/b006-fs-U2K-gw.gateway.toml": {
+   "sha256": "dbea11df016afaae06f2efd15d53860bf5d84dff65fceaf13bfda5890e2a88d0",
+   "size_bytes": 290
+  },
+  "raw/b006-fs-U2K-gw.server.log": {
+   "sha256": "cb634a5da7e96cef23078f12f33fc8cd0883ceb2dc479fa3e149c5a2c079e508",
+   "size_bytes": 31300
+  },
+  "raw/b007-sentinel-end-U2K.server.log": {
+   "sha256": "02f1f7205acaf012a55c9c670bfd0d900f3bfcbb12a3fcbf29781f3b8a8e2014",
+   "size_bytes": 30822
+  }
+ }
+}

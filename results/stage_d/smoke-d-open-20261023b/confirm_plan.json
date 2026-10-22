@@ -1,0 +1,58 @@
+{
+ "schema_version": 1,
+ "seed": 20261008,
+ "blocks": 2,
+ "block_orders": {
+  "1": [
+   "U2K-P"
+  ],
+  "2": [
+   "U2K-P"
+  ]
+ },
+ "workloads": {
+  "U2K-P": {
+   "c_hat": 3,
+   "c_hat_g": null,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 3,
+     "pass": true,
+     "within_band": true
+    }
+   ],
+   "points": [
+    {
+     "C": 2,
+     "role": "near",
+     "n": 2
+    },
+    {
+     "C": 3,
+     "role": "near",
+     "n": 2
+    }
+   ],
+   "orders": {
+    "1": [
+     2,
+     3
+    ],
+    "2": [
+     2,
+     3
+    ]
+   }
+  }
+ }
+}

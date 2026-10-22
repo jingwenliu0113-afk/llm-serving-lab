@@ -28,6 +28,12 @@ def cfg(**stage_d):
     return c
 
 
+def unfrozen():
+    c = copy.deepcopy(CFG)
+    c["freeze"] = {"stage_d": False, "mini_closed": "", "mini_open": "", "mini_verify": ""}
+    return c
+
+
 def plan(session, c=None, formal=False):
     return sd.build_plan(c or CFG, PINS, session_name=session, uniform_plan=UNIFORM_PLAN, pins_sha256="p" * 64,
                          stage_d_sha256="s" * 64, formal=formal)
@@ -35,10 +41,12 @@ def plan(session, c=None, formal=False):
 
 # ------------------------------------------------------------------ stage_d.toml --
 
-def test_the_repo_config_is_the_039_draft():
+def test_the_repo_config_is_the_frozen_039_config():
     assert sd.stage_d_problems(CFG, PINS) == []
     assert all(len(v) == 64 for v in CFG["stage_d"]["var_dataset_sha256"].values())   # generated on WSL, pinned
-    assert CFG["freeze"]["stage_d"] is False and CFG["slo"] == cp.SLO_S2
+    assert CFG["freeze"] == {"stage_d": True, "mini_closed": "smoke-d-closed-20261023b",
+                             "mini_open": "smoke-d-open-20261023b", "mini_verify": "smoke-d-verify-20261023b"}
+    assert CFG["slo"] == cp.SLO_S2
     assert CFG["stage_d"]["sessions"] == sd.SESSIONS and CFG["stage_d"]["sentinel"] == sd.SENTINEL
 
 
@@ -65,7 +73,7 @@ def test_the_slo_is_s2_and_unknown_keys_are_refused():
 
 
 def test_the_freeze_needs_three_mini_smokes_and_the_var_datasets(tmp_path):
-    c = copy.deepcopy(CFG)
+    c = unfrozen()
     c["freeze"]["stage_d"] = True
     c["stage_d"]["var_dataset_sha256"] = {"2048": "", "8192": ""}
     problems = sd.stage_d_problems(c, PINS)
@@ -86,7 +94,7 @@ def test_the_freeze_needs_three_mini_smokes_and_the_var_datasets(tmp_path):
     (tmp_path.joinpath(*sd.RESULTS, "smoke-d-b", "session.json")).write_text(json.dumps(
         {"mode": "mini", "kind": "open", "formal": False, "smoke": {"ok": True}, "harness_sha256": "0" * 64}))
     assert any("another harness" in p for p in sd.freeze_evidence_problems(c, tmp_path))
-    assert sd.freeze_evidence_problems(CFG, tmp_path) == []             # before the freeze
+    assert sd.freeze_evidence_problems(unfrozen(), tmp_path) == []      # before the freeze
 
 
 # ------------------------------------------------------------------ C_KV, cap, tau1 --
@@ -262,7 +270,7 @@ def test_plans_refuse_a_bad_config_an_unknown_session_and_an_unfrozen_formal():
     with pytest.raises(sd.PlanError, match="unknown session"):
         plan("D-Z")
     with pytest.raises(sd.PlanError, match="freeze.stage_d"):
-        plan("D-A1", formal=True)
+        plan("D-A1", c=unfrozen(), formal=True)
     with pytest.raises(sd.PlanError, match="num_gpu_blocks"):
         sd.build_plan(CFG, PINS, session_name="D-A1", uniform_plan={"num_gpu_blocks": 186, "block_size": 528},
                       pins_sha256="p", stage_d_sha256="s")

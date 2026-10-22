@@ -1,0 +1,105 @@
+{
+ "schema_version": 1,
+ "seed": 20261008,
+ "blocks": 2,
+ "block_orders": {
+  "1": [
+   "U2K-O512",
+   "M8K-T"
+  ],
+  "2": [
+   "U2K-O512",
+   "M8K-T"
+  ]
+ },
+ "workloads": {
+  "U2K-O512": {
+   "c_hat": 2,
+   "c_hat_g": 2,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 3,
+     "pass": false,
+     "within_band": false
+    }
+   ],
+   "points": [
+    {
+     "C": 1,
+     "role": "near",
+     "n": 2
+    },
+    {
+     "C": 2,
+     "role": "near",
+     "n": 2
+    },
+    {
+     "C": 3,
+     "role": "near",
+     "n": 2
+    }
+   ],
+   "orders": {
+    "1": [
+     2,
+     1,
+     3
+    ],
+    "2": [
+     3,
+     1,
+     2
+    ]
+   }
+  },
+  "M8K-T": {
+   "c_hat": 2,
+   "c_hat_g": 2,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    }
+   ],
+   "points": [
+    {
+     "C": 1,
+     "role": "near",
+     "n": 2
+    },
+    {
+     "C": 2,
+     "role": "near",
+     "n": 2
+    }
+   ],
+   "orders": {
+    "1": [
+     2,
+     1
+    ],
+    "2": [
+     1,
+     2
+    ]
+   }
+  }
+ }
+}

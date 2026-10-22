@@ -1,0 +1,25 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/b000-sentinel-start-U2K.server.log": {
+   "sha256": "fe52a2f9db517cd41e1867570a386ed6e100b6b990a345d73d0cb0ea7530cbbc",
+   "size_bytes": 30885
+  },
+  "raw/b001-S-U2K-P-a1.server.log": {
+   "sha256": "a433b6c4448ce1cd9fc9a19d8ffd45f2e709413af98411126a0d9d40c4f0ddcd",
+   "size_bytes": 44934
+  },
+  "raw/b002-C-U2K-P-r1.server.log": {
+   "sha256": "9b80f09b862ee1ee67d99ba44b2dab460d81acc8cfe3a4a54dacb3859e47b75b",
+   "size_bytes": 37155
+  },
+  "raw/b003-C-U2K-P-r2.server.log": {
+   "sha256": "fd816627eefe99f52dbf94111d222a43af62872abc8345e00c89309cbb3adc84",
+   "size_bytes": 36808
+  },
+  "raw/b004-sentinel-end-U2K.server.log": {
+   "sha256": "1d36235ee12e16bb56a9a5ea11db7e336d46850ad8e9ade8ff1204f930e04c6a",
+   "size_bytes": 30989
+  }
+ }
+}

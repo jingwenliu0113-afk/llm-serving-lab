@@ -1,0 +1,20 @@
+{
+ "ok": true,
+ "kind": "closed",
+ "checks": {
+  "replay_clean": true,
+  "other_runs_valid": true,
+  "forced_timeouts_hit": true,
+  "derived_schema": true,
+  "boots_passed_checks": true,
+  "clean_teardowns": true
+ },
+ "replay_problems": [],
+ "invalid_runs": [],
+ "timeouts": [
+  [
+   "U2K-O512",
+   3
+  ]
+ ]
+}

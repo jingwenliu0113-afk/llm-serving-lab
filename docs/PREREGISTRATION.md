@@ -456,7 +456,7 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
 
 ## 9. Stage D addendum：容量的延伸（decision 037、039）
 
-**狀態：DRAFT**。harness、三個 mini smoke 與審查完成後，連同 `configs/stage_d.toml` 一起凍結（`freeze.stage_d = true`）。在那之前沒有任何 Stage D 數據。
+**狀態：FROZEN**（2026-10-23）。三個 mini smoke 與審查之後，連同 `configs/stage_d.toml` 一起凍結（`freeze.stage_d = true`，`tests/test_stage_d_frozen.py`）。凍結前沒有任何 Stage D 數據。
 本節只摘要；完整規則、揭露與依據見 decision 039。第 1–8 節不變，Phase 1、Phase 2 的判定不受影響。
 
 - **沿用 §8（030）的規則**：
