@@ -484,3 +484,23 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
   - Hypotheses：H-D6（長度不一）、H-D7（經過 gateway）為 PASS。
 - **D5**：開場湧入，只用 c1b 的數據作事後描述，不是檢定。
 - **輸出**：`results/stage_d/<session>/analysis.json`。新的 verified profile 不會自動取代正式設定的釘選（037 §2）。
+
+## 10. Stage Q addendum：quality 的三個缺口（decision 037、040）
+
+**狀態：DRAFT**。harness、pilot 與審查完成後，連同 `configs/stage_q.toml` 一起凍結（`freeze.stage_q = true`）。在那之前沒有任何 Stage Q 的正式數據。
+本節只摘要；完整規則與揭露見 decision 040。第 1–9 節不變，H-A5 與 Core A 的判定不受影響。
+
+- **沿用 §3（005）的規則**：WikiText-2 test、llama.cpp b11146、005 的 flag set、KLD 的流程（BF16 base → self-KLD → 3 個 quant → 刪除 base）、
+  以正向標記與預期數量判定成功、KLD 的 z 檢定與 Holm 校正。程式上直接 import 凍結的 `run_quality` / `quality_parse` / `quality_analysis`。
+- **Q1（Metal 與 CUDA）**：
+  - Mac（Mac lock、Apple 140W adapter、同一 session 一個電力模式）：前 200 chunks 的 KLD，與 8 個設定的完整 PPL；
+  - RTX：同樣前 200 chunks 的 KLD；完整 PPL 的對照是 Phase 1 的 `formal-20261010-quality`。
+  - H-Q1a：Metal 上 KLD(Q8_0) < KLD(Q6_K) < KLD(Q4_K_M)（4 個檢定，Holm）；
+  - H-Q1b：KLD_Metal ÷ KLD_CUDA 在 [0.8, 1.25]；
+  - H-Q1c：PPL_Metal ÷ PPL_CUDA 在 [0.995, 1.005]。
+- **Q2（長 context）**：RTX，`-c 2048` 與 `-c 8192`，完整的 test set。
+  - H-Q2a：兩個 context、兩個 size 的 KLD 順序（8 個檢定，Holm）；
+  - H-Q2b：KLD(c) ÷ KLD(512) 在 [0.5, 2.0]。
+- **Q3（W4A16）**：vLLM 中 W4A16 對 BF16 的 PPL 與配對 ΔNLL；H-Q3：PPL 比 − 1 ≤ 2%。BF16 checkpoint 需要下載（約 19.3 GB），等使用者同意。
+- **凍結的證據**：每個部分（q1-metal、q1-cuda、q2）一個通過的 pilot（每個 job 10 chunks、全部 ok），而且是同一個 harness（`harness_sha256`）。
+- **輸出**：`results/stage_q/<session>/` 與 `results/stage_q/analysis.json`；尚未執行的部分，其 hypothesis 為 NT。

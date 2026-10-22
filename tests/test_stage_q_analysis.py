@@ -65,3 +65,110 @@ def test_h_q2_compares_each_context_with_phase1_at_512():
     assert h["H-Q2b"]["verdict"] == "supported"
     rows[0] = kld_row("4B", "Q8_0", BASE_KLD[("4B", "Q8_0")] * 2.5, ctx=2048)
     assert qa2.h_q2(rows, PHASE1)["H-Q2b"]["verdict"] == "not supported"
+
+
+# ---------------------------------------------------------------- the analysis of formal sessions (040 凍結)
+
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import tomllib  # noqa: E402
+
+import stage_q as sq  # noqa: E402
+from run_core_a import sha256_json  # noqa: E402
+
+CFG_RAW = (ROOT / "configs" / "stage_q.toml").read_bytes()
+CFG_SHA = hashlib.sha256(CFG_RAW).hexdigest()
+PINS_SHA = hashlib.sha256((ROOT / "configs" / "pins.toml").read_bytes()).hexdigest()
+PILOTS = {"pilot_q1_metal": "pilot-q1m", "pilot_q1_cuda": "pilot-q1c", "pilot_q2": "pilot-q2"}
+
+
+def frozen(tmp_path):
+    root = tmp_path / "repo"
+    cfg = tomllib.loads(CFG_RAW.decode())
+    cfg["freeze"] = {"stage_q": True, **PILOTS}
+    for key, part in sq.FREEZE_EVIDENCE.items():
+        d = root / "results" / "stage_q" / PILOTS[key]
+        d.mkdir(parents=True)
+        (d / "session.json").write_text(json.dumps({"mode": "pilot", "part": part, "harness_sha256": sq.harness_sha256(),
+                                                    "outcomes": {"ok": 5, "oom": 0, "error": 0, "skipped": 0}}))
+    (root / "results" / "quality").mkdir(parents=True)
+    (root / "results" / "quality" / "formal-20261010-quality").symlink_to(
+        ROOT / "results" / "quality" / "formal-20261010-quality")
+    return root, cfg
+
+
+def formal_session(root, part, rows, plan_over=None, session_over=None):
+    d = root / "results" / "stage_q" / f"formal-{part}"
+    d.mkdir(parents=True)
+    plan = {"stage": "Q", "part": part, "mode": "formal", "platform": sq.PARTS[part], "pins_sha256": PINS_SHA,
+            "stage_q_sha256": CFG_SHA, "harness_sha256": sq.harness_sha256(), "jobs": [], **(plan_over or {})}
+    session = {"stage": "Q", "part": part, "mode": "formal", "platform": sq.PARTS[part], "env_valid": True,
+               "plan_sha256": sha256_json(plan), "harness_sha256": sq.harness_sha256(), **(session_over or {})}
+    (d / "plan.json").write_text(json.dumps(plan))
+    (d / "session.json").write_text(json.dumps(session))
+    (d / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    return d
+
+
+def sessions(root):
+    cuda = [kld_row(s, q, v, ctx=512) for (s, q), v in BASE_KLD.items()]
+    q2 = [kld_row(s, q, v * 1.4, ctx=c) for c in (2048, 8192) for (s, q), v in BASE_KLD.items()]
+    return {"q1-metal": formal_session(root, "q1-metal", metal()), "q1-cuda": formal_session(root, "q1-cuda", cuda),
+            "q2": formal_session(root, "q2", q2)}
+
+
+def analyze(root, cfg, paths, **kw):
+    return qa2.analyze_sessions(paths, cfg=cfg, stage_q_sha256=CFG_SHA, pins_sha256=PINS_SHA, root=root, **kw)
+
+
+def test_the_formal_sessions_give_every_hypothesis(tmp_path):
+    root, cfg = frozen(tmp_path)
+    out = analyze(root, cfg, sessions(root))
+    assert {k: v["verdict"] for k, v in out["hypotheses"].items()} == {
+        "H-Q1a": "supported", "H-Q1b": "supported", "H-Q1c": "supported", "H-Q2a": "supported", "H-Q2b": "supported"}
+    assert out["sessions"]["q2"] == "formal-q2" and out["phase1_session"] == "formal-20261010-quality"
+    assert out["harness_sha256"] == sq.harness_sha256() and out["stage_q_sha256"] == CFG_SHA
+
+
+def test_a_part_not_yet_run_leaves_its_hypotheses_nt(tmp_path):
+    root, cfg = frozen(tmp_path)
+    paths = sessions(root)
+    out = analyze(root, cfg, {"q2": paths["q2"]})
+    v = {k: h["verdict"] for k, h in out["hypotheses"].items()}
+    assert v == {"H-Q1a": "NT", "H-Q1b": "NT", "H-Q1c": "NT", "H-Q2a": "supported", "H-Q2b": "supported"}
+    assert out["sessions"]["q1-metal"] is None
+    v = {k: h["verdict"] for k, h in analyze(root, cfg, {"q1-metal": paths["q1-metal"]})["hypotheses"].items()}
+    assert (v["H-Q1a"], v["H-Q1b"], v["H-Q1c"]) == ("supported", "NT", "supported")      # Q1c reads Phase 1
+
+
+@pytest.mark.parametrize("plan_over, session_over, why", [
+    ({}, {"mode": "pilot"}, "not formal"),
+    ({}, {"env_valid": False}, "env-invalid"),
+    ({"part": "q1-cuda"}, {}, "part"),
+    ({}, {"harness_sha256": "0" * 64}, "another harness"),
+    ({"harness_sha256": "0" * 64}, {}, "another harness"),
+    ({"stage_q_sha256": "0" * 64}, {}, "configs/stage_q.toml"),
+    ({"pins_sha256": "0" * 64}, {}, "pins.toml"),
+    ({}, {"plan_sha256": "0" * 64}, "plan.json"),
+])
+def test_a_session_that_is_not_a_frozen_formal_one_is_refused(tmp_path, plan_over, session_over, why):
+    root, cfg = frozen(tmp_path)
+    d = formal_session(root, "q2", [], plan_over, session_over)
+    with pytest.raises(qa2.AnalysisError, match=why):
+        analyze(root, cfg, {"q2": d})
+
+
+def test_no_analysis_before_the_freeze_or_without_its_evidence(tmp_path):
+    root, cfg = frozen(tmp_path)
+    paths = sessions(root)
+    with pytest.raises(qa2.AnalysisError, match="freeze.stage_q"):
+        analyze(root, {**cfg, "freeze": {**cfg["freeze"], "stage_q": False}}, paths)
+    (root / "results" / "stage_q" / "pilot-q2" / "session.json").unlink()
+    with pytest.raises(qa2.AnalysisError, match="pilot_q2"):
+        analyze(root, cfg, paths)
+
+
+def test_the_cli_refuses_the_unfrozen_repo_config(tmp_path, capsys):
+    assert qa2.main(["--q2", str(tmp_path / "x"), "--out", str(ROOT / "results" / "stage_q" / "analysis.json")]) == 2
+    assert "freeze.stage_q" in capsys.readouterr().err
+    assert not (ROOT / "results" / "stage_q" / "analysis.json").exists()

@@ -81,8 +81,36 @@ README「證據不支持的部分」列出三個缺口，本 stage 依序回答�
 - **作為依據**：Core A 的 quality 結果（KLD 0.002–0.057、PPL 8.19–10.39）只用於 H-Q1b、H-Q1c、H-Q2b 的界線尺度，以及確認 KLD 大小的量級。
 - **不重新分析**：H-A5 與 Core A 的判定不變。Stage Q 的結果只是新的、平台與 context 範圍的證據。
 
-## 尚未決定（凍結前定案）
+## 原本尚未決定的項目（已在實作補記中定案）
 
 - harness 的切分：凍結的 `run_quality` / `quality_parse` / `quality_analysis` 只 import，不修改。
-- pilot 的內容：每一種 job 各一個（少量 chunks），確認標記、chunk 數、時間與磁碟用量。
-- Q3 的 BF16 checkpoint 是否需要傳到 WSL（約 18 GB；pins 已有 sha256，屬於已記錄的檔案）。
+- pilot 的內容：見實作補記 5。
+- Q3 的 BF16 checkpoint：見實作補記 7。
+
+## 實作補記（2026-10-23，凍結前；沒有任何 Stage Q 數據）
+
+harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`quality/stage_q_analysis.py`（hypothesis）與 `configs/stage_q.toml`。
+本文沒有寫死、實作時決定的細節如下，凍結時一併凍結。
+
+1. **重用的範圍**：
+   - job 的格式、flag、成功判定與每個 job 前後的 env capture 都沿用 `run_quality`（import `_flags` 與 `quality_parse.classify`）；
+   - z 檢定與 Holm 用 `quality_analysis` 的 `kld_test` 與 `holm`；
+   - 三個凍結模組都沒有修改。
+2. **chunk 數**：
+   - Q1 的 KLD base 以 `--chunks 200` 產生，之後的 self-KLD 與 quant 的 KLD 讀同一個 base，chunk 數由 base 決定；
+   - Q1 的完整 PPL 不加 `--chunks`，預期 580；
+   - Q2 的 chunk 數 = WikiText 的 297,194 token ÷ context：2K 為 145，8K 為 36。
+3. **磁碟**：base 的大小依計分的 token 數換算（005 / 008：580 chunks 的 base 為 73.5 GB），加 10%，由 `disk_guard` 在每個 base 之前檢查。
+4. **CUDA 的 BF16 PPL**（H-Q1c 的對照）：取 Phase 1 self-KLD row 的 PPL(Q)，和各 quant 取 KLD row 的 PPL(Q) 是同一種評估（README 的 9.945 / 8.186）。
+5. **pilot**：
+   - 每個部分（q1-metal、q1-cuda、q2）一個 pilot session，執行完整的 job 清單，但每個 job 只跑 10 chunks；
+   - 用來確認標記、chunk 數、時間與磁碟用量，結果不分析（和 005 的 pilot 相同）。
+6. **凍結的檢查**：
+   - `configs/stage_q.toml` 的 `freeze.stage_q` 為 true 之前，`stage_q.py plan --mode formal` 拒絕；
+   - 凍結的證據是三個通過的 pilot（每個 job 都 ok），而且 session 記錄的 `harness_sha256`（`stage_q.py` 與 `stage_q_analysis.py`）等於目前的 harness；
+   - 正式 plan 記錄 `harness_sha256` 與 `stage_q_sha256`，runner 拒絕由其他 harness 建立的正式 plan；
+   - `stage_q_analysis` 只接受正式、env 有效、部分正確、harness 與設定檔都相同的 session，並重新檢查凍結的證據；
+   - 尚未執行的部分，其 hypothesis 為 NT（Q1 的 Mac 部分可能因為 Mac lock 較晚執行）。
+7. **Q3 的 BF16 checkpoint**：
+   - Mac 沒有保留 9B 的 safetensors（`models/hf` 只有 tokenizer 與設定），所以需要從 HF 下載 `Qwen/Qwen3.5-9B@c2022362`（19,329,393,661 B，pins 有每個 shard 的 sha256）。
+   - 下載量大，先取得使用者同意。Q3 的 harness 可以先寫，pilot 與正式數據在下載之後。

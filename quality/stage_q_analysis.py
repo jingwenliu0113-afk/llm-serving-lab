@@ -13,17 +13,29 @@ kld_test and holm (imported, never changed).
 - H-Q2b: KLD(ctx) / KLD(512, Phase 1) in [0.5, 2.0] for each size, quant and context.
 - Bounds (Q1b, Q1c, Q2b): supported when every ratio is inside, not supported when one is outside, NT when one is
   missing. They are 040's substantive thresholds, not statistical tests.
+
+Formal sessions only (040 凍結): configs/stage_q.toml frozen with its pilot evidence, and each session formal, env-valid,
+of its part, run by the frozen harness (harness_sha256) with this configs/stage_q.toml and configs/pins.toml. A part
+not yet run leaves its hypotheses NT.
+
+Usage:
+    python quality/stage_q_analysis.py --q1-metal results/stage_q/<id> --q1-cuda results/stage_q/<id> \
+        --q2 results/stage_q/<id> --out results/stage_q/analysis.json
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import sys
+import tomllib
 from fractions import Fraction
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import quality_analysis as qa  # noqa: E402
+import stage_q as sq  # noqa: E402
 
 QUANTS = ("Q8_0", "Q6_K", "Q4_K_M")
 SIZES = ("4B", "9B")
@@ -125,3 +137,103 @@ def h_q2(q2_rows: list, phase1_rows: list) -> dict:
 
 def load_rows(path) -> list:
     return [json.loads(x) for x in (Path(path) / "rows.jsonl").read_text().splitlines() if x.strip()]
+
+
+class AnalysisError(RuntimeError):
+    pass
+
+
+def session_problems(path, part: str, *, stage_q_sha256: str, pins_sha256: str) -> list:
+    """A formal, env-valid session of this part that ran the frozen harness, configs/stage_q.toml and pins.toml."""
+    path = Path(path)
+    try:
+        meta = json.loads((path / "session.json").read_text())
+        plan = json.loads((path / "plan.json").read_text())
+    except (OSError, ValueError) as exc:
+        return [f"{path}: no readable session.json / plan.json ({exc})"]
+    harness = sq.harness_sha256()
+    problems = []
+    if meta.get("mode") != "formal" or plan.get("mode") != "formal":
+        problems.append(f"{path.name}: mode {meta.get('mode')!r} is not formal (pilots stay masked, 040)")
+    if meta.get("env_valid") is not True:
+        problems.append(f"{path.name}: the session is env-invalid (rerun it under a new id, 012)")
+    if (meta.get("stage"), meta.get("part"), plan.get("part"), meta.get("platform")) != \
+            (sq.STAGE, part, part, sq.PARTS[part]):
+        problems.append(f"{path.name}: not a {part} session (stage / part / platform)")
+    if meta.get("plan_sha256") != sq.sha256_json(plan):
+        problems.append(f"{path.name}: plan.json is not the plan the session ran (plan_sha256)")
+    if meta.get("harness_sha256") != harness or plan.get("harness_sha256") != harness:
+        problems.append(f"{path.name}: ran another harness (harness_sha256; 040 凍結 freezes it)")
+    if plan.get("stage_q_sha256") != stage_q_sha256:
+        problems.append(f"{path.name}: planned with another configs/stage_q.toml (stage_q_sha256)")
+    if plan.get("pins_sha256") != pins_sha256:
+        problems.append(f"{path.name}: planned with another configs/pins.toml (pins_sha256)")
+    return problems
+
+
+def phase1_problems(path) -> list:
+    """Phase 1's formal quality session (005 / 020): formal, env-valid, on wsl2-cuda."""
+    path = Path(path)
+    try:
+        meta = json.loads((path / "session.json").read_text())
+    except (OSError, ValueError) as exc:
+        return [f"{path}: no readable session.json ({exc})"]
+    if (meta.get("mode"), meta.get("env_valid"), meta.get("platform"), meta.get("session_id")) != \
+            ("formal", True, "wsl2-cuda", path.name):
+        return [f"{path.name}: not Phase 1's formal, env-valid wsl2-cuda quality session"]
+    return []
+
+
+def analyze_sessions(paths: dict, *, cfg: dict, stage_q_sha256: str, pins_sha256: str, root=sq.ROOT) -> dict:
+    """paths: {part: session dir} of the parts run so far. Refuses (AnalysisError) unless 040 凍結 holds."""
+    problems = [f"configs/stage_q.toml: {p}" for p in sq.config_problems(cfg)]
+    if not problems and cfg["freeze"]["stage_q"] is not True:
+        problems.append("freeze.stage_q is not true in configs/stage_q.toml (040 凍結: no Stage Q analysis before it)")
+    if problems:
+        raise AnalysisError("; ".join(problems))
+    problems += [f"freeze evidence: {p}" for p in sq.freeze_evidence_problems(cfg, root)]
+    paths = {k: v for k, v in paths.items() if v is not None}
+    if set(paths) - set(sq.PARTS):
+        problems.append(f"unknown parts {sorted(set(paths) - set(sq.PARTS))}; 040 defines {sorted(sq.PARTS)}")
+    for part, path in sorted(paths.items()):
+        if part in sq.PARTS:
+            problems += session_problems(path, part, stage_q_sha256=stage_q_sha256, pins_sha256=pins_sha256)
+    phase1 = Path(root) / "results" / "quality" / cfg["stage_q"]["phase1_session"]
+    problems += phase1_problems(phase1)
+    if problems:
+        raise AnalysisError("; ".join(problems))
+    rows = {part: load_rows(paths[part]) if part in paths else [] for part in sq.PARTS}
+    base = load_rows(phase1)
+    return {"stage": sq.STAGE, "sessions": {part: Path(paths[part]).name if part in paths else None for part in sq.PARTS},
+            "phase1_session": phase1.name, "harness_sha256": sq.harness_sha256(), "stage_q_sha256": stage_q_sha256,
+            "pins_sha256": pins_sha256,
+            "hypotheses": {**h_q1(rows["q1-metal"], rows["q1-cuda"], base), **h_q2(rows["q2"], base)}}
+
+
+def main(argv: list | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Stage Q hypotheses (040) from its formal sessions")
+    for part in sq.PARTS:
+        parser.add_argument(f"--{part}", dest=part, help=f"results/stage_q/<{part} session>")
+    parser.add_argument("--out", required=True, help="results/stage_q/<name>.json")
+    args = vars(parser.parse_args(argv))
+    out = Path(args.pop("out")).resolve()
+    paths = {part: Path(v) for part, v in args.items() if v}
+    cfg_raw, pins_raw = sq.CONFIG.read_bytes(), (sq.ROOT / "configs" / "pins.toml").read_bytes()
+    try:
+        if out.parent != sq.ROOT.joinpath(*sq.RESULTS).resolve() or out.suffix != ".json":
+            raise AnalysisError(f"--out {out} is not a .json file directly under results/stage_q/")
+        if not paths:
+            raise AnalysisError("give at least one formal session (--q1-metal, --q1-cuda, --q2)")
+        result = analyze_sessions(paths, cfg=tomllib.loads(cfg_raw.decode()),
+                                  stage_q_sha256=hashlib.sha256(cfg_raw).hexdigest(),
+                                  pins_sha256=hashlib.sha256(pins_raw).hexdigest())
+    except AnalysisError as exc:
+        print(f"stage_q_analysis: {exc}", file=sys.stderr)
+        return 2
+    out.write_text(json.dumps(result, indent=1) + "\n")
+    print(json.dumps({k: v["verdict"] for k, v in result["hypotheses"].items()}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

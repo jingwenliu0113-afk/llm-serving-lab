@@ -1,0 +1,17 @@
+# Stage Q settings: decision 040, PREREGISTRATION §10 (DRAFT). quality/stage_q.py refuses a formal plan until
+# freeze.stage_q is true; quality/stage_q_analysis.py refuses formal sessions unless every pilot below is a passed
+# pilot of the same harness (harness_sha256) and each session ran this file (stage_q_sha256). Like the other stages,
+# Stage Q never writes configs/pins.toml; the models, flags and llama.cpp build are read from it read-only.
+schema_version = 1
+
+[freeze]
+# 040 凍結: commit and push §10, 040, this file, stage_q / stage_q_analysis and their tests together, then set true,
+# then collect Stage Q data. stage_q_analysis refuses formal sessions unless every pilot below exists under
+# results/stage_q/<id> with its part, mode pilot, every job ok and the current harness_sha256.
+stage_q = false
+pilot_q1_metal = ""                                       # session id of the passed q1-metal pilot (Mac)
+pilot_q1_cuda = ""                                        # session id of the passed q1-cuda pilot (RTX)
+pilot_q2 = ""                                             # session id of the passed q2 pilot (RTX)
+
+[stage_q]
+phase1_session = "formal-20261010-quality"                # 005 / 020: the CUDA PPL and the KLD at -c 512

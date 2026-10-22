@@ -57,10 +57,68 @@ POLL = {"macos-metal": 0, "wsl2-cuda": None}
 KLD_GB_PER_CHUNK_512 = 73.5 / 580
 MAC_ADAPTER_REQUIRED = {"manufacturer": "Apple Inc.", "name": "140W USB-C Power Adapter"}   # 037 §4
 RESULTS = ("results", "stage_q")
+CONFIG = ROOT / "configs" / "stage_q.toml"
+HARNESS_FILES = ("quality/stage_q.py", "quality/stage_q_analysis.py")
+FREEZE_EVIDENCE = {"pilot_q1_metal": "q1-metal", "pilot_q1_cuda": "q1-cuda", "pilot_q2": "q2"}
+CONFIG_KEYS = {"schema_version": None, "freeze": {"stage_q", *FREEZE_EVIDENCE}, "stage_q": {"phase1_session"}}
 
 
 class StageQError(RuntimeError):
     pass
+
+
+def harness_sha256(root=ROOT) -> str:
+    """sha256 over HARNESS_FILES (path and bytes): the harness a pilot or a formal session ran."""
+    h = hashlib.sha256()
+    for rel in HARNESS_FILES:
+        h.update(rel.encode() + b"\0" + (Path(root) / rel).read_bytes() + b"\0")
+    return h.hexdigest()
+
+
+def config_problems(cfg: dict) -> list:
+    """configs/stage_q.toml: exactly its keys; once frozen, every pilot named."""
+    problems = []
+    if set(cfg) != set(CONFIG_KEYS):
+        problems.append(f"top-level keys {sorted(cfg)} are not {sorted(CONFIG_KEYS)}")
+        return problems
+    if cfg["schema_version"] != 1:
+        problems.append(f"schema_version {cfg['schema_version']!r} is not 1")
+    for table, keys in CONFIG_KEYS.items():
+        if keys is not None and set(cfg[table]) != keys:
+            problems.append(f"[{table}] keys {sorted(cfg[table])} are not {sorted(keys)}")
+    if problems:
+        return problems
+    freeze = cfg["freeze"]
+    if not isinstance(freeze["stage_q"], bool):
+        problems.append("freeze.stage_q is not a bool")
+    for key in FREEZE_EVIDENCE:
+        if not isinstance(freeze[key], str) or (freeze["stage_q"] is True and not freeze[key]):
+            problems.append(f"freeze.{key} must name the passed pilot once freeze.stage_q is true")
+    return problems
+
+
+def freeze_evidence_problems(cfg: dict, root) -> list:
+    """Once freeze.stage_q is true: each named pilot exists under root/results/stage_q with its part, mode pilot, every
+    job ok and the current harness_sha256. [] before the freeze."""
+    freeze = cfg.get("freeze") or {}
+    if freeze.get("stage_q") is not True:
+        return []
+    problems = []
+    for key, part in sorted(FREEZE_EVIDENCE.items()):
+        sid = freeze.get(key)
+        path = Path(root).joinpath(*RESULTS, str(sid), "session.json")
+        try:
+            s = json.loads(path.read_text())
+        except (OSError, ValueError):
+            problems.append(f"freeze.{key}: no readable {path}")
+            continue
+        out = s.get("outcomes") or {}
+        if (s.get("mode"), s.get("part")) != ("pilot", part) or not out.get("ok") or \
+                any(out.get(k) for k in ("oom", "error", "skipped")):
+            problems.append(f"freeze.{key}: {sid} is not a passed {part} pilot (every job ok)")
+        elif s.get("harness_sha256") != harness_sha256():
+            problems.append(f"freeze.{key}: {sid} ran another harness (harness_sha256 {s.get('harness_sha256')!r})")
+    return problems
 
 
 def flags(n_thr: int, poll: int, ctx: int = 512) -> list:
@@ -85,7 +143,8 @@ def kld_need_gib(chunks: int, ctx: int) -> float:
     return round(gb * 1.1 * 1e9 / disk_guard.GiB, 1)
 
 
-def build_plan(pins: dict, *, part: str, mode: str, pins_sha256: str | None = None) -> dict:
+def build_plan(pins: dict, *, part: str, mode: str, pins_sha256: str | None = None, cfg: dict | None = None,
+               stage_q_sha256: str | None = None) -> dict:
     if part not in PARTS:
         raise StageQError(f"unknown part {part!r}; 040 defines {sorted(PARTS)}")
     if mode not in ("pilot", "formal"):
@@ -93,6 +152,9 @@ def build_plan(pins: dict, *, part: str, mode: str, pins_sha256: str | None = No
     platform = PARTS[part]
     if mode == "formal" and not pins["freeze"]["nvidia"]:
         raise StageQError("formal Stage Q plans need pins freeze.nvidia = true (as run_quality, 020)")
+    if mode == "formal" and (cfg is None or config_problems(cfg) or cfg["freeze"]["stage_q"] is not True):
+        raise StageQError("formal Stage Q plans need freeze.stage_q = true in configs/stage_q.toml (040 凍結)"
+                          + (f": {'; '.join(config_problems(cfg))}" if cfg is not None and config_problems(cfg) else ""))
     sb = pins.get("stage_b") or {}
     n_thr = N_THR[platform] or sb.get("rtx_n_thr")
     poll = POLL[platform] if POLL[platform] is not None else sb.get("rtx_poll")
@@ -134,7 +196,8 @@ def build_plan(pins: dict, *, part: str, mode: str, pins_sha256: str | None = No
                         [exe, *model(point), "-f", "{data}/datasets/wiki.test.raw", "--ppl-output-type", "1",
                          *(["--chunks", str(n_ppl)] if pilot else []), *f], {"n_chunks": n_ppl})
     return {"schema_version": SCHEMA_VERSION, "stage": STAGE, "part": part, "mode": mode, "platform": platform,
-            "pins_sha256": pins_sha256, "params": {"n_thr": n_thr, "poll": poll},
+            "pins_sha256": pins_sha256, "stage_q_sha256": stage_q_sha256, "harness_sha256": harness_sha256(),
+            "params": {"n_thr": n_thr, "poll": poll},
             "expect_build": {"build_number": pins["llama_cpp"]["build_number"],
                              "build_commit": pins["llama_cpp"]["commit"]},
             "jobs": jobs}
@@ -181,6 +244,8 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
     mac = platform == "macos-metal"
     if plan.get("stage") != STAGE or part not in PARTS or PARTS[part] != platform:
         raise StageQError(f"not a Stage Q plan ({plan.get('stage')!r}, {part!r}, {platform!r})")
+    if plan["mode"] == "formal" and plan.get("harness_sha256") != harness_sha256():
+        raise StageQError("the formal plan was built by another harness (harness_sha256); rebuild it with this one")
     problems = output_problems(out_dir, repo_root=repo_root)
     if problems:
         raise StageQError("; ".join(problems))
@@ -210,7 +275,7 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "stage": STAGE, "part": part,
                "mode": plan["mode"], "platform": platform, "plan_sha256": sha256_json(plan),
                "pins_sha256": plan.get("pins_sha256"), "mac_lock_held": mac_lock_held, "gpu_lock_held": gpu_lock_held,
-               "powermode": powermode, "started_at": now()}
+               "powermode": powermode, "harness_sha256": harness_sha256(), "started_at": now()}
     rows, by_id, skipped, env_flags, charge_pauses = [], {}, set(), [], []
     resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace("{data}", data_dir)  # noqa: E731
     with open(out / "rows.jsonl", "w") as fh:
@@ -289,9 +354,14 @@ def main(argv: list | None = None) -> int:
     p_run.add_argument("--gpu-lock-held", action="store_true")
     args = parser.parse_args(argv)
     if args.cmd == "plan":
-        raw = (ROOT / "configs" / "pins.toml").read_bytes()
-        plan = build_plan(tomllib.loads(raw.decode()), part=args.part, mode=args.mode,
-                          pins_sha256=hashlib.sha256(raw).hexdigest())
+        raw, cfg_raw = (ROOT / "configs" / "pins.toml").read_bytes(), CONFIG.read_bytes()
+        try:
+            plan = build_plan(tomllib.loads(raw.decode()), part=args.part, mode=args.mode,
+                              pins_sha256=hashlib.sha256(raw).hexdigest(), cfg=tomllib.loads(cfg_raw.decode()),
+                              stage_q_sha256=hashlib.sha256(cfg_raw).hexdigest())
+        except StageQError as exc:
+            print(f"stage_q: {exc}", file=sys.stderr)
+            return 2
         Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
         return 0
     plan = json.loads(Path(args.plan).read_text())
