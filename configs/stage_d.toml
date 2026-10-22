@@ -27,6 +27,13 @@ server_ready_timeout_s = 1800                             # 030 8.4
 mix_dataset_sha256 = { "8192" = "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2" }  # M8K-T: the 007 8K mix (pins)
 var_dataset_sha256 = { "2048" = "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1", "8192" = "d550acc8d25984c2885174e62aa2326004d67fcfddc7fc2bd1f8272c305f2220" }  # D-C: stage_d_datasets on WSL (2026-10-23; 352 / 208 rows, lengths 64-1920 / 86-8015), pinned before the freeze
 
+[stage_d.lambda_ref]
+# 039 D-B: C_PROD / mean e2e latency over W of the c1b Phase C runs at C_PROD (stage_d_plan.lambda_ref of the committed
+# c1b files; lambda_ref_problems recomputes it in the Mac tests and the report). Pinned here because a WSL deploy never
+# carries results/.
+U2K = { c_prod = 32, requests = 768, mean_latency_s = 12.56945, lambda_ref = 2.545855 }
+U8K = { c_prod = 8, requests = 920, mean_latency_s = 12.705468, lambda_ref = 0.62965 }
+
 [stage_d.sessions]
 # 039: the workloads of each session, in Phase S order
 D-A1 = ["U32K", "U8K-T", "M8K-T"]

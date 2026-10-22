@@ -96,6 +96,8 @@ def _config_problems(cap: dict, cfg: dict, pins: dict, repo_root) -> list:
         problems.append("freeze.stage_d is not true in configs/stage_d.toml (039 凍結: no Stage D report before it)")
     problems += [f"stage_d.toml: {p}" for p in sd.stage_d_problems(cfg, pins)]
     problems += [f"freeze evidence: {p}" for p in sd.freeze_evidence_problems(cfg, repo_root)]
+    if not problems:
+        problems += [f"stage_d.toml: {p}" for p in sd.lambda_ref_problems(cfg, repo_root)]
     return problems
 
 
@@ -179,7 +181,8 @@ def _argv_problems(cap: dict, pins: dict) -> list:
             problems.append(f"boot {b.get('tag')}: server env is not the Core B one (engine / OTEL variables)")
         gw = rec.get("gateway")
         is_gw = b["workload"] in plan["workloads"] and plan["workloads"][b["workload"]].get("via") == "gateway"
-        if is_gw and b.get("reached_first_bench"):
+        has_valid = any(r.get("boot") == b.get("boot") and r.get("valid") is True for r in cap["rows"])
+        if is_gw and (b.get("reached_first_bench") or has_valid):
             want_settings = rd.gateway_settings(plan, pins, b["workload"])
             if not gw or gw.get("settings") != want_settings or gw.get("profile") != plan["verify"]["gateway_profile"]:
                 problems.append(f"boot {b.get('tag')}: the gateway is not the one 039 runs (settings / profile)")
@@ -190,6 +193,11 @@ def _argv_problems(cap: dict, pins: dict) -> list:
     datasets = s.get("datasets") or {}
     for r in cap["rows"]:
         if r.get("argv") is None:
+            if r.get("valid") is True:
+                problems.append(f"{r.get('tag')}: a valid run without its bench argv (039)")
+            continue
+        if plan["kind"] == "open" and r.get("phase") in ("S", "C") and r.get("rate") is None:
+            problems.append(f"{r.get('tag')}: an open-loop run without its rate (039 D-B)")
             continue
         x = sda.spec(plan, r["workload"])
         dataset = datasets.get(f"{x['mix']}:{x['tier']}") if x["mix"] in ("mixed", "var") else None

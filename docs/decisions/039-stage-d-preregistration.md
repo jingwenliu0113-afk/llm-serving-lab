@@ -112,7 +112,7 @@ S1、S3 只作為描述性的界線報告，和 030 相同。
   - 這個逐 run 的檢查取代 030 的 FS-order smoke。
 - **參考到達率** λ_ref(w) = C_PROD(w) ÷ T̄(w)。
   - T̄ 是 c1b 中 C_PROD 點所有有效階段 C run 在 W 內 request 的平均 e2e 延遲。
-  - 由 plan 從已 commit 的 c1b 逐 request 檔重算，不手寫。
+  - 由已 commit 的 c1b 逐 request 檔重算，不手寫：數值 pin 在 `configs/stage_d.toml`，Mac 上的測試每次都重算並比對（實作補記 13）。
   - 依 Little's law，這是平均並發等於 C_PROD 的到達率。
 - **格點**：G(w) = λ_ref × {0.4, 0.55, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5}。
 - **搜尋與確認**：
@@ -219,11 +219,14 @@ harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_sta
    - 設定為 127.0.0.1:8080 → vLLM 8000、`tokenizer = "local"`、`tokenizer_path` = 服務的 snapshot、該 workload 的 class；
    - profile 為 `verified-formal-20261017-c1b.json`；
    - gateway 的環境移除所有 `CAPSERVE_*`，並設 `HF_HUB_OFFLINE=1`。
-   - 啟動前 port 8080 必須沒有人在 listen，否則可能由上次留下的 gateway 回答；
+   - 啟動 vLLM 之前 port 8080 必須沒有人在 listen，否則可能由上次留下的 gateway 回答。
+     被佔用時整個 session 中止（`gateway_port_busy`，換新 id 重跑），和 031 的 gpu_not_idle 同類，不把該點記成 NT；
    - `/readyz` 必須是正式 profile 的 id、verified、class 正確，而且 max_concurrency 等於 class 的正式上限，否則該 boot 在第一個 bench 之前就失敗；
    - 就緒後與每個 bench 前後都檢查 gateway 是否還在；結束了的話，該 run 無效，之後的 run 不跑；
    - gateway 一律先停，再進行 server 的 teardown：SIGTERM，30 s 後 SIGKILL，並確認整個 process group 已結束；
      停止的過程在 `run_adv.DeferredSignals` 之下，ssh 斷線不會讓 gateway 留在 8080。
+   - gateway 的 process 一建立就交給 boot 的 finally，所以等待 `/readyz` 時被中斷，gateway 也會被停止。
+   - 停止時的問題記在 `teardown_problems`，帶該 boot 的 tag。
 8. **結果檢查**：
    - 每個 run 都要求 N 個完成、輸出都等於該 workload 的長度；
    - uniform 的 prompt 長度都等於設定值，mixed 符合 007 的數量，var 落在 [64, tier − 128]。
@@ -244,8 +247,20 @@ harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_sta
       gateway 仍服務 class 的正式上限（`class_limit`），所以 `/readyz` 比對的是正式上限。
       U8K-gw 的 prompt 是 8,064 token，剛好等於 uniform-8k 的上限，可以在正式 session 之前驗證 local tokenizer 的邊界。
 11. **vLLM 的 bench client 每個 request 都送 `repetition_penalty: 1.0`**：gateway 把這個中性值視為預設值並忽略（038 的後續變更）。否則 D-C 經過 gateway 的每個 request 都會是 400。
-
 12. **C_KV 的來源**：report 從 `--uniform-session` 的 plan.json 取 block 數，並要求該 session 是 `derived_from`、formal、env 有效，和 030 的 report 相同。runner 用 pins 的值（`build_plan` 本來就拒絕和 pins 不同的 block 數）。
+13. **λ_ref 寫在設定檔**（和本文原本「由 plan 重算」的字面不同，先記錄差異）：
+    - research dir（WSL）只部署程式，不部署 `results/`，所以 runner 無法在 WSL 上讀 c1b 的逐 request 檔。
+    - 因此 λ_ref 的數值（C_PROD、request 數、平均延遲、λ_ref）pin 在 `[stage_d.lambda_ref]`：
+      U2K 為 32 ÷ 12.56945 s = 2.545855 req/s（768 個 request），U8K 為 8 ÷ 12.705468 s = 0.62965 req/s（920 個）。
+    - `lambda_ref_problems` 從已 commit 的 c1b 重算並逐欄比對，report 與 Mac 上的測試都會執行；不一致就拒絕。
+    - 數值仍然完全由 c1b 決定，只是重算的地點從 runner 移到 Mac。
+14. **送出順序以累計的最大值檢查**：每個 request 都和所有序號較小的 request 的最晚送出時間比較，連續幾次小幅倒序累加超過 50 ms 也會被抓到。
+15. **凍結證據綁定 harness**：mini 的 session.json 記錄 `harness_sha256`（`HARNESS_FILES` 五個模組的路徑與內容）。
+    凍結時要求它等於目前的 harness，所以舊版 harness 跑的 mini 不能當證據。
+16. **report 與 replay 的補強**：
+    - 有效 row 一定要有 argv；開放迴路 S / C 的有效 row 一定要有到達率。
+    - gateway boot 只要到了第一個 bench 或有任何有效 run，就檢查 gateway 的設定與 profile。
+    - 在第一個 bench 之前失敗的 boot（sentinel、V、C）不能有有效 run，replay 會檢查。
 
 ## 凍結前的審查（2026-10-23）
 
@@ -268,3 +283,20 @@ harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_sta
 | 13 | capserve 不在凍結範圍內 | session 記錄 `capserve_sha256`，report 寫進 provenance；不凍結 capserve |
 
 - 處理之前跑的三個 mini smoke 用的是舊版 harness，不作為凍結的證據；修正後重跑。
+
+### 第二輪審查（2026-10-23）
+
+一個 workflow（3 個審查者，每項發現再由獨立的 agent 嘗試反駁）對修正後的 harness 再審一次。去重後 7 項，全部確認，全部在凍結前處理。
+另外，在 WSL 上建立開放迴路的 plan 時發現 runner 讀不到 c1b（第 8 項）。
+
+| # | 發現 | 處理 |
+|---|---|---|
+| 1 | 送出順序只比相鄰兩個 idx，比本文的規則弱（每步 40 ms、累計 160 ms 的倒序會被當成有效） | 改為累計最大值（實作補記 14） |
+| 2 | 等待 gateway 的 `/readyz` 時被中斷，gateway 會留在 8080 | process 一建立就交給 finally |
+| 3 | 凍結證據接受任何通過的 `smoke-d-*`，包括舊版 harness 的 mini | `harness_sha256`（實作補記 15） |
+| 4 | 沒有 argv 的有效 row 會跳過 argv、到達率與 seed 的檢查 | 有效 row 沒有 argv 即為問題 |
+| 5 | 標為未到第一個 bench 的 gateway boot 跳過 gateway 檢查，replay 也不檢查它的有效 run | 實作補記 16 |
+| 6 | port 8080 被佔用時記為無效 run，經跳過規則讓該點整個 session 為 NT | 中止 session（實作補記 7） |
+| 7 | gateway 的停止問題記錄時 boot 為 None | 帶上 boot 的 tag |
+| 8 | WSL 的 research dir 沒有 `results/`，開放迴路的 plan 無法重算 λ_ref | λ_ref pin 在設定檔，由 Mac 上的測試比對（實作補記 13） |
+

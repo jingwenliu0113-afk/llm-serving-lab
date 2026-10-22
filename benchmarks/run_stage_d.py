@@ -17,12 +17,14 @@ session of stage_d_plan (D-A1, D-A2, D-B or D-C). Core and Stage C modules are i
   rule: a point leaves later blocks after a valid FAIL or an invalid run; sentinel.
 - D-C gateway (U2K-gw, U8K-gw): after the server's checks, `python -m capserve serve` from this checkout (a subprocess:
   research code never imports capserve) with the production settings that matter (127.0.0.1:8080 -> vLLM 8000,
-  tokenizer local from the served snapshot, the class of the workload) and the verified profile of the plan, only
-  when port 8080 is free (a leftover gateway would answer for it); its /readyz must name that profile (id and
+  tokenizer local from the served snapshot, the class of the workload) and the verified profile of the plan. Port
+  8080 must be free before the boot (a leftover gateway would answer for it): a busy port aborts the session
+  (gateway_port_busy), as 031's gpu_not_idle does, before vLLM starts. Its /readyz must name that profile (id and
   status) and class with max_concurrency = the class's verified limit, else the boot fails before its first bench.
-  A gateway that exits while serving makes the run invalid (and the boot's later runs not run). It is stopped
-  (SIGTERM, SIGKILL after 30 s, then the group must be gone) under run_adv.DeferredSignals, before the server's
-  teardown. session.json records the sha256 of service/capserve and the profile (capserve_sha256): H-D7 measures
+  A gateway that exits while serving makes the run invalid (and the boot's later runs not run). The process is the
+  boot's to stop from the moment it exists (self.gw, set right after popen, so an interrupt during its readiness
+  wait stops it too): SIGTERM, SIGKILL after 30 s, then the group must be gone, under run_adv.DeferredSignals, before
+  the server's teardown. session.json records harness_sha256 (stage_d_plan.HARNESS_FILES; the freeze evidence). session.json records the sha256 of service/capserve and the profile (capserve_sha256): H-D7 measures
   that gateway.
 
 Refusals before any server starts, as run_capacity: the output is not results/stage_d/<session> (or exists), no held
@@ -221,11 +223,17 @@ class StageDHarness(rc._Harness):
     # ---------------------------------------------------------- boot
     def boot(self, boot: dict, next_point: Callable, planned: list | None = None) -> list | None:
         tag, w = boot["tag"], boot["workload"]
+        if sd.workload(w)["via"] == "gateway":
+            port = self.plan["verify"]["gateway_port"]
+            if not self.port_free(port):
+                self.session["gateway_port_busy"] = {"boot": tag, "port": port}
+                raise RunError(f"gateway_port_busy before {tag}: port {port} is in use (a leftover gateway would "
+                               "answer for this boot's); stopping before vLLM starts, rerun under a new id (039 D-C)")
         idle = self.pre_boot(tag)
         self.snap(f"{tag}.before.json")
         argv, env = sd.server_argv_for(self.pins, w, port=PORT, vllm_bin=self.vllm_bin, base_env=self.base_env)
         record = self.session["runs"][tag] = {"argv": argv, "env": ra.recorded_server_env(env), "idle": idle}
-        proc = gw = None
+        proc = None
         rows = []
         try:
             proc = self.popen(argv, env, self.raw / f"{tag}.server.log")
@@ -242,8 +250,7 @@ class StageDHarness(rc._Harness):
                 if entry["spilled"]:
                     problems = [rc.spill_reason(entry, self.guard) + "; no bench runs on this boot"]
             if not problems and sd.workload(w)["via"] == "gateway":
-                gw, problems = self.gateway_up(boot, record)
-                self.gw = gw
+                problems = self.gateway_up(boot, record)        # sets self.gw as soon as the process exists
             boot["problems"], boot["reached_first_bench"] = problems, not problems
             if problems:
                 for C in planned or []:
@@ -253,8 +260,8 @@ class StageDHarness(rc._Harness):
                     rows.append(self.run_point(boot, proc, C))
         finally:
             try:
-                if gw is not None:
-                    self.gateway_down(gw, record)
+                if self.gw is not None:
+                    self.gateway_down(self.gw, record, tag)
             finally:
                 self.gw = None
                 record["spill"] = self.guard.record()
@@ -265,15 +272,15 @@ class StageDHarness(rc._Harness):
             return None
         return rows
 
-    def gateway_up(self, boot: dict, record: dict) -> tuple:
-        """(proc or None, problems): `python -m capserve serve` with the plan's verified profile, ready and serving
-        the workload's class at the point's C."""
+    def gateway_up(self, boot: dict, record: dict) -> list:
+        """Problems of `python -m capserve serve` with the plan's verified profile ([] when ready and serving the
+        workload's class at its verified limit); self.gw holds the process from popen on."""
         w, tag = boot["workload"], boot["tag"]
         settings = gateway_settings(self.plan, self.pins, w)
         record["gateway"] = {"settings": settings, "profile": self.plan["verify"]["gateway_profile"]}
-        if not self.port_free(settings["port"]):
-            return None, [f"port {settings['port']} is in use before the gateway started (a leftover gateway would "
-                          "answer for it) (039 D-C)"]
+        if not self.port_free(settings["port"]):          # checked before the boot too; a race is still fatal
+            self.session["gateway_port_busy"] = {"boot": tag, "port": settings["port"]}
+            raise RunError(f"gateway_port_busy in {tag}: port {settings['port']} is in use (039 D-C)")
         cfg_path = self.raw / f"{tag}.gateway.toml"
         cfg_path.write_text(_toml(settings))
         profile = ROOT / self.plan["verify"]["gateway_profile"]
@@ -282,7 +289,7 @@ class StageDHarness(rc._Harness):
                "PYTHONPATH": os.pathsep.join([str(ROOT / "service"), str(ROOT / "benchmarks")]),
                "PYTHONDONTWRITEBYTECODE": "1", "HF_HUB_OFFLINE": "1"}
         record["gateway"]["argv"] = argv
-        gw = self.popen(argv, env, self.raw / f"{tag}.gateway.log")
+        gw = self.gw = self.popen(argv, env, self.raw / f"{tag}.gateway.log")
         base = f"http://127.0.0.1:{settings['port']}"
         t0, status, body = self.now(), 0, ""
         while self.now() - t0 < GATEWAY_READY_S and gw.poll() is None:
@@ -291,7 +298,7 @@ class StageDHarness(rc._Harness):
                 break
             self.sleep(2)
         if status != 200:
-            return gw, [f"gateway not ready within {GATEWAY_READY_S} s (status {status}; exit {gw.poll()!r}) (039 D-C)"]
+            return [f"gateway not ready within {GATEWAY_READY_S} s (status {status}; exit {gw.poll()!r}) (039 D-C)"]
         try:
             ready = json.loads(body)
         except ValueError:
@@ -305,12 +312,12 @@ class StageDHarness(rc._Harness):
                                        "limits": ready.get("limits")}
         want = (want_id, "verified", settings["active_class"], want_c)
         if got != want:
-            return gw, [f"gateway serves {got}, not {want} (039 D-C)"]
+            return [f"gateway serves {got}, not {want} (039 D-C)"]
         if gw.poll() is not None:
-            return gw, [f"the gateway exited (code {gw.poll()!r}) right after it was ready (039 D-C)"]
-        return gw, []
+            return [f"the gateway exited (code {gw.poll()!r}) right after it was ready (039 D-C)"]
+        return []
 
-    def gateway_down(self, gw, record: dict) -> None:
+    def gateway_down(self, gw, record: dict, tag: str) -> None:
         """SIGTERM the gateway's group, SIGKILL after GATEWAY_STOP_S, then the group must be gone; interrupts wait
         until it is (run_adv.DeferredSignals), so an ssh hang-up never leaves a gateway on 8080."""
         problems = []
@@ -333,7 +340,8 @@ class StageDHarness(rc._Harness):
                 problems.append("gateway log reader still open after its stop")
         record["gateway"]["stop_problems"] = problems
         if problems:
-            self.session.setdefault("teardown_problems", []).append({"boot": record.get("tag"), "reasons": problems})
+            self.session.setdefault("teardown_problems", []).append({"boot": tag, "reasons": ["gateway: " + x
+                                                                                              for x in problems]})
 
     # ---------------------------------------------------------- run
     def _x(self, w: str) -> dict:
@@ -592,12 +600,8 @@ def expected_plan(cfg: dict, pins: dict, *, session_name: str, pins_sha256: str,
     """stage_d_plan.build_plan of these bytes; C_KV's block pool from uniform_plan (the report passes the derived_from
     session's) or pins [stage_b] (the runner: build_plan refuses a pool other than the pins' anyway)."""
     sb = pins["stage_b"]
-    refs = None
-    if sd.KINDS.get(session_name) == "open":
-        c1b = Path(repo_root) / "results" / "capacity" / cfg["stage_d"]["c1b_session"]
-        refs = {w: sd.lambda_ref(c1b, w) for w in sorted(set(sd.OPEN_BASE.values()))}
     pool = uniform_plan or {"num_gpu_blocks": sb["num_gpu_blocks"], "block_size": sb["block_size"]}
-    return sd.build_plan(cfg, pins, session_name=session_name, uniform_plan=pool, refs=refs, pins_sha256=pins_sha256,
+    return sd.build_plan(cfg, pins, session_name=session_name, uniform_plan=pool, pins_sha256=pins_sha256,
                          stage_d_sha256=stage_d_sha256, formal=formal)
 
 
@@ -712,6 +716,7 @@ def run_session(plan: dict, *, cfg: dict, pins: dict, pins_sha256: str, stage_d_
                "server_env": ra.recorded_server_env(server_env), "inherited_unlisted": bp.inherited_unlisted(base_env),
                "gpu_idle": gi.criterion(sb["v_total_mib"]), "boots": [], "runs": {}, "derived_sha256": {},
                "out": str(out), "result_dir": str(out / "raw"), "gateway_python": gateway_python,
+               "harness_sha256": sd.harness_sha256(ROOT),
                "capserve_sha256": capserve_sha256(ROOT, (plan.get("verify") or {}).get("gateway_profile"))
                if plan["kind"] == "verify" else None}
     fh = open(out / "rows.jsonl", "w")

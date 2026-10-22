@@ -40,7 +40,7 @@ STAGE = sd.STAGE
 WINDOWS = ca.WINDOWS
 C1B_C_PROD = {"M8K": 2, "U8K": 8}          # 035, the c1b values H-D2a / H-D2b compare with (never re-estimated)
 NO_CKV = 10 ** 9                           # D-B: a grid index has no C_KV, so ABOVE_CKV never applies
-ORDER_TOL_S = 0.05                         # D-B: send-order slack between consecutive idx (asyncio task start jitter)
+ORDER_TOL_S = 0.05                         # D-B: how much earlier than any lower idx a request may be sent
 NOT_SUPPORTED = (
     "Stage D measures one machine, one model and Core B's server (or T); open loop is vLLM's own capacity without the "
     "gateway's admission; D-C checks only C_PROD itself; mixed open loop, other output lengths and T on other "
@@ -109,7 +109,9 @@ def derived_problems(reqs, *, x: dict, c: int, n: int, ordered: bool = False) ->
         if not all(ca._num(t) for t in starts):
             problems.append("start_s missing: the send order cannot be checked (039 D-B)")
         else:
-            late = max((a - b for a, b in zip(starts, starts[1:])), default=0.0)
+            late, peak = 0.0, starts[0]                  # against every lower idx: the running maximum
+            for t in starts[1:]:
+                late, peak = max(late, peak - t), max(peak, t)
             if late > ORDER_TOL_S:
                 problems.append(f"a request was sent {late:.3f} s before a lower idx: idx is not the send order "
                                 "(039 D-B window)")
@@ -214,9 +216,15 @@ def replay_problems(plan: dict, confirm_plan, boots: list, rows: list, requests:
         cursor[0] += 1
         return b
 
+    def no_valid_on_failed_boot(b: dict, rows_b: list) -> None:
+        if b.get("reached_first_bench") is not True and any(r.get("valid") is True for r in rows_b):
+            problems.append(f"boot {b['boot']} failed before its first bench but holds a valid run")
+            raise _Stop
+
     def sentinel(position: str) -> None:
         s = plan["sentinel"]
         b = take("sentinel", s["workload"], position=position)
+        no_valid_on_failed_boot(b, by_boot.get(b["boot"], []))
         got = [(r.get("phase"), r.get("workload"), r.get("C"), r.get("position")) for r in by_boot.get(b["boot"], [])]
         if got != [("sentinel", s["workload"], s["C"], position)]:
             problems.append(f"{position} sentinel boot holds {got}, not one {s['workload']} C {s['C']} run")
@@ -259,6 +267,7 @@ def replay_problems(plan: dict, confirm_plan, boots: list, rows: list, requests:
                 x = plan["workloads"][w]
                 b = take("V", w, block=r)
                 rows_b = by_boot.get(b["boot"], [])
+                no_valid_on_failed_boot(b, rows_b)
                 got = [(row.get("phase"), row.get("workload"), row.get("block"), row.get("C")) for row in rows_b]
                 if got != [("V", w, r, x["C"])]:
                     problems.append(f"D-C block {r} {w} ran {got}; 039 runs one V run at C {x['C']}")
@@ -294,6 +303,7 @@ def replay_problems(plan: dict, confirm_plan, boots: list, rows: list, requests:
                 for w, points in cp.phase_c_boots(confirm, r, outcomes):
                     b = take("C", w, block=r)
                     rows_b = by_boot.get(b["boot"], [])
+                    no_valid_on_failed_boot(b, rows_b)
                     got = [(row.get("phase"), row.get("workload"), row.get("block"), row.get("C")) for row in rows_b]
                     if got != [("C", w, r, C) for C in points]:
                         problems.append(f"Phase C block {r} {w} ran {[x[3] for x in got]}; the 030 order is {points}")

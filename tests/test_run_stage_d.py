@@ -197,7 +197,7 @@ def frozen(root, sha):
         d = root.joinpath(*sd.RESULTS, c["freeze"][key])
         d.mkdir(parents=True)
         (d / "session.json").write_text(json.dumps({"mode": "mini", "kind": kind, "formal": False,
-                                                    "smoke": {"ok": True}}))
+                                                    "smoke": {"ok": True}, "harness_sha256": sd.harness_sha256()}))
     return c, p
 
 
@@ -366,11 +366,37 @@ def test_the_runner_never_imports_capserve():
     assert "import capserve" not in text and "from capserve" not in text
 
 
-def test_a_busy_gateway_port_fails_the_boot_without_starting_a_gateway(tmp_path):
-    out, s, w = session(tmp_path, "D-C", port_free=lambda port: port != 8080)
-    gw_boots = [b for b in s["boots"] if b["workload"].endswith("-gw")]
-    assert gw_boots and all("port 8080 is in use" in b["problems"][0] for b in gw_boots)
-    assert w.gateway_argvs == []
+def test_a_busy_gateway_port_aborts_the_session_before_vllm_starts(tmp_path):
+    """A leftover gateway on 8080 is an environment fault, as 031's gpu_not_idle: the session stops (rerun under a
+    new id) instead of the point becoming NT (039 D-C)."""
+    world = World(tmp_path)
+    with pytest.raises(rd.RunError, match="gateway_port_busy"):
+        session(tmp_path, "D-C", world=world, port_free=lambda port: port != 8080)
+    out = tmp_path / "repo" / "results" / "stage_d" / "t-D-C"
+    s = json.loads((out / "session.json").read_text())
+    assert s["gateway_port_busy"]["port"] == 8080 and "gateway_port_busy" in s["aborted"]
+    assert w_gateway_started(world) is False
+    gw_boot = s["boots"][-1]
+    assert gw_boot["workload"].endswith("-gw") and f"server:{gw_boot['tag'].split('-', 1)[1]}" not in world.events
+
+
+def w_gateway_started(world):
+    return bool(world.gateway_argvs)
+
+
+def test_an_interrupt_while_the_gateway_starts_still_stops_it(tmp_path):
+    class Hangup(World):
+        def http_get(self, url):
+            if ":8080/readyz" in url:
+                raise SystemExit(129)
+            return super().http_get(url)
+
+    world = Hangup(tmp_path)
+    with pytest.raises(SystemExit):
+        session(tmp_path, "D-C", world=world)
+    ev = [e for e in world.events if e.startswith(("gateway", "server:signal"))]
+    i = ev.index("gateway:start")
+    assert ev[i + 1] == f"gateway:signal:{int(signal.SIGTERM)}" and ev[i + 2].startswith("server:signal")
 
 
 def test_a_gateway_that_dies_during_a_bench_invalidates_the_run(tmp_path):

@@ -7,6 +7,8 @@ functions (search_next, bracket_points, build_confirm_plan, phase_c_boots), so D
   n_near 5, n_low 3, C_cap = min(128, 2 C_KV), the 030 tau1 table, the sessions and their workloads, the D-B grid and
   window, the D-C points, the sentinel (U2K at C 25 on the Core B server) and the pinned datasets. freeze.stage_d =
   true needs the three passed mini smokes (freeze_evidence_problems) and every var dataset's sha256.
+- Freeze evidence: each mini smoke's session.json records harness_sha256 (HARNESS_FILES), which must equal the
+  current files' (an earlier harness's smoke is no evidence for this one).
 - Workloads (WORKLOADS): tier (the S2 TTFT tier of the prompt class), prompt (tokens; None for a mixed or var mix),
   out (output tokens), mix ("uniform", the 007 "mixed" mix, or "var": a pinned dataset of prompt lengths uniform on
   [64, tier - 128]), server ("B0": core_b_plan.server_argv with the Stage B values, as 030; "T": B0 plus
@@ -18,7 +20,9 @@ functions (search_next, bracket_points, build_confirm_plan, phase_c_boots), so D
   128 for longer outputs. Closed loop: ceil60(2 N tau1 + 60 s) with N = core_b_plan.num_prompts(C), as 030; open
   loop: the same serial bound with the point's own N.
 - D-B (open loop): lambda_ref(w) = C_PROD(w) / mean e2e latency over W = [C, N - C) of the c1b Phase C runs at C_PROD
-  that capacity_analysis.run_valid accepts (lambda_ref, from the committed c1b files: U2K 2.5459, U8K 0.6297 req/s);
+  that capacity_analysis.run_valid accepts (U2K 2.545855, U8K 0.62965 req/s). It is pinned in stage_d.toml
+  [stage_d.lambda_ref], because a WSL deploy never carries results/; lambda_ref_problems recomputes it from the
+  committed c1b files (the Mac tests and the report);
   point i (1-based) of the grid has rate round(grid[i - 1] x lambda_ref, 4) and N = max(min_n, ceil(min_duration_s x
   rate)). The index i plays 030's "C" (c_cap = len(grid)), but 039 scans it: Phase S runs i = 1, 2, ... up to the
   first fail (open_search_next, not 030's bracket and bisection), K = {i^ - 1, i^, i^ + 1} with n_near each and no
@@ -96,7 +100,10 @@ VERIFY = {"n": 5, "points": {"U2K-var": 32, "U8K-var": 8, "U2K-gw": 32, "U8K-gw"
 SENTINEL = {"workload": "U2K", "C": 25, "tolerance": 0.03}
 FREEZE_EVIDENCE = {"mini_closed": "closed", "mini_open": "open", "mini_verify": "verify"}
 TOP_KEYS = {"schema_version", "freeze", "stage_d", "slo", "secondary_slo"}
-STAGE_D_KEYS = {"seed", "derived_from", "c1b_session", "guard_band", "n_near", "n_low", "c_cap", "tau1_s",
+HARNESS_FILES = ("benchmarks/stage_d_plan.py", "benchmarks/stage_d_analysis.py", "benchmarks/run_stage_d.py",
+                 "benchmarks/stage_d_report.py", "benchmarks/stage_d_datasets.py")
+LAMBDA_REF_KEYS = {"c_prod", "requests", "mean_latency_s", "lambda_ref"}
+STAGE_D_KEYS = {"lambda_ref", "seed", "derived_from", "c1b_session", "guard_band", "n_near", "n_low", "c_cap", "tau1_s",
                 "t_tau_factor", "server_ready_timeout_s", "mix_dataset_sha256", "var_dataset_sha256", "sessions",
                 "open_loop", "verify", "sentinel"}
 PHASES = ("sentinel", "S", "C", "V")
@@ -138,6 +145,16 @@ def stage_d_problems(cfg: dict, pins: dict) -> list:
                 "mix_dataset_sha256": {"8192": ((pins.get("core_b") or {}).get("mix_dataset_sha256") or {}).get("8192")}}
         for key, value in want.items():
             cp._expect(problems, key, d.get(key), value, "039")
+        refs = d.get("lambda_ref")
+        if not (isinstance(refs, dict) and set(refs) == set(OPEN_BASE.values())
+                and all(isinstance(r, dict) and set(r) == LAMBDA_REF_KEYS for r in refs.values())):
+            problems.append(f"lambda_ref {refs!r} must give {sorted(LAMBDA_REF_KEYS)} for {sorted(set(OPEN_BASE.values()))}")
+        else:
+            for w, r in sorted(refs.items()):
+                if not (type(r["c_prod"]) is int and type(r["requests"]) is int and r["c_prod"] > 0
+                        and r["requests"] > 0 and isinstance(r["mean_latency_s"], float) and r["mean_latency_s"] > 0
+                        and r["lambda_ref"] == round(r["c_prod"] / r["mean_latency_s"], 6)):
+                    problems.append(f"lambda_ref.{w} {r!r} is not C_PROD / mean latency (039 D-B)")
         var = d.get("var_dataset_sha256")
         if not (isinstance(var, dict) and set(var) == {"2048", "8192"}
                 and all(v == "" or (isinstance(v, str) and _HEX64.fullmatch(v)) for v in var.values())):
@@ -155,9 +172,33 @@ def stage_d_problems(cfg: dict, pins: dict) -> list:
     return problems
 
 
+def harness_sha256(root=ROOT) -> str:
+    """sha256 over HARNESS_FILES (path and bytes): the harness a mini smoke ran."""
+    h = hashlib.sha256()
+    for rel in HARNESS_FILES:
+        h.update(rel.encode() + b"\0" + (Path(root) / rel).read_bytes() + b"\0")
+    return h.hexdigest()
+
+
+def lambda_ref_problems(cfg: dict, root) -> list:
+    """stage_d.toml's pinned lambda_ref against stage_d_plan.lambda_ref of root's committed c1b files."""
+    c1b = Path(root) / "results" / "capacity" / cfg["stage_d"]["c1b_session"]
+    problems = []
+    for w, pinned in sorted(cfg["stage_d"]["lambda_ref"].items()):
+        try:
+            got = lambda_ref(c1b, w)
+        except (OSError, ValueError, KeyError, PlanError) as exc:
+            problems.append(f"lambda_ref.{w}: cannot recompute from {c1b}: {exc}")
+            continue
+        want = {k: got[k] for k in LAMBDA_REF_KEYS}
+        if pinned != want:
+            problems.append(f"lambda_ref.{w} {pinned!r} != {want!r} recomputed from {c1b.name} (039 D-B)")
+    return problems
+
+
 def freeze_evidence_problems(cfg: dict, root) -> list:
     """Once freeze.stage_d is true: each named mini smoke exists under root/results/stage_d with its kind, mode mini,
-    formal false and smoke.ok true. [] before the freeze."""
+    formal false, smoke.ok true and the current harness_sha256. [] before the freeze."""
     freeze = cfg.get("freeze") or {}
     if freeze.get("stage_d") is not True:
         return []
@@ -173,6 +214,8 @@ def freeze_evidence_problems(cfg: dict, root) -> list:
         if (s.get("mode"), s.get("kind"), s.get("formal"), (s.get("smoke") or {}).get("ok")) != ("mini", kind, False,
                                                                                                 True):
             problems.append(f"freeze.{key}: {sid} is not a passed non-formal {kind} mini smoke")
+        elif s.get("harness_sha256") != harness_sha256():      # the code running now, wherever root is
+            problems.append(f"freeze.{key}: {sid} ran another harness (harness_sha256 {s.get('harness_sha256')!r})")
     return problems
 
 
@@ -369,9 +412,9 @@ def run_tag(phase: str, w: str, x: int, *, block: int | None = None, position: s
 
 # ---------------------------------------------------------------- plan
 
-def build_plan(cfg: dict, pins: dict, *, session_name: str, uniform_plan: dict, refs: dict | None, pins_sha256: str,
+def build_plan(cfg: dict, pins: dict, *, session_name: str, uniform_plan: dict, pins_sha256: str,
                stage_d_sha256: str, formal: bool = False) -> dict:
-    """The plan of one Stage D session (D-A1, D-A2, D-B or D-C). refs: lambda_ref of OPEN_BASE's workloads (D-B)."""
+    """The plan of one Stage D session (D-A1, D-A2, D-B or D-C); D-B's lambda_ref from stage_d.toml."""
     problems = stage_d_problems(cfg, pins)
     if problems:
         raise PlanError("stage_d.toml: " + "; ".join(problems))
@@ -393,9 +436,7 @@ def build_plan(cfg: dict, pins: dict, *, session_name: str, uniform_plan: dict, 
             x.update(c_cap=cap, n_near=d["n_near"], bracket=cp.bracket_points(cap),
                      timeouts_s={str(C): timeout_s(tau1(cfg, w), bp.num_prompts(C)) for C in range(1, cap + 1)})
         elif kind == "open":
-            ref = (refs or {}).get(OPEN_BASE[w])
-            if not ref:
-                raise PlanError(f"{w} needs lambda_ref of {OPEN_BASE[w]} from {d['c1b_session']} (039 D-B)")
+            ref = {"workload": OPEN_BASE[w], **d["lambda_ref"][OPEN_BASE[w]]}
             grid = d["open_loop"]["grid"]
             x.update(c_cap=len(grid), n_near=d["n_near"], scan=list(range(1, len(grid) + 1)), lambda_ref=ref,
                      points=open_points(cfg, w, ref))
@@ -439,14 +480,10 @@ def main(argv: list | None = None) -> int:
     cfg_raw, pins_raw = load_stage_d_bytes(), cp.load_pins_bytes()
     cfg, pins = tomllib.loads(cfg_raw.decode()), tomllib.loads(pins_raw.decode())
     sb = pins["stage_b"]
-    refs = None
-    if KINDS[args.session] == "open":
-        c1b = ROOT / "results" / "capacity" / cfg["stage_d"]["c1b_session"]
-        refs = {w: lambda_ref(c1b, w) for w in sorted(set(OPEN_BASE.values()))}
     try:
         plan = build_plan(cfg, pins, session_name=args.session,
                           uniform_plan={"num_gpu_blocks": sb["num_gpu_blocks"], "block_size": sb["block_size"]},
-                          refs=refs, pins_sha256=hashlib.sha256(pins_raw).hexdigest(),
+                          pins_sha256=hashlib.sha256(pins_raw).hexdigest(),
                           stage_d_sha256=hashlib.sha256(cfg_raw).hexdigest(), formal=args.formal)
     except PlanError as e:
         parser.error(str(e))

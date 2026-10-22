@@ -28,11 +28,9 @@ def cfg(**stage_d):
     return c
 
 
-def plan(session, c=None, refs=None, formal=False):
-    if refs is None and sd.KINDS.get(session) == "open":
-        refs = {w: sd.lambda_ref(C1B, w) for w in ("U2K", "U8K")}
-    return sd.build_plan(c or CFG, PINS, session_name=session, uniform_plan=UNIFORM_PLAN, refs=refs,
-                         pins_sha256="p" * 64, stage_d_sha256="s" * 64, formal=formal)
+def plan(session, c=None, formal=False):
+    return sd.build_plan(c or CFG, PINS, session_name=session, uniform_plan=UNIFORM_PLAN, pins_sha256="p" * 64,
+                         stage_d_sha256="s" * 64, formal=formal)
 
 
 # ------------------------------------------------------------------ stage_d.toml --
@@ -80,11 +78,14 @@ def test_the_freeze_needs_three_mini_smokes_and_the_var_datasets(tmp_path):
         d = tmp_path.joinpath(*sd.RESULTS, c["freeze"][key])
         d.mkdir(parents=True)
         (d / "session.json").write_text(json.dumps({"mode": "mini", "kind": kind, "formal": False,
-                                                    "smoke": {"ok": True}}))
+                                                    "smoke": {"ok": True}, "harness_sha256": sd.harness_sha256()}))
     assert sd.freeze_evidence_problems(c, tmp_path) == []
     (tmp_path.joinpath(*sd.RESULTS, "smoke-d-b", "session.json")).write_text(json.dumps(
-        {"mode": "mini", "kind": "open", "formal": False, "smoke": {"ok": False}}))
+        {"mode": "mini", "kind": "open", "formal": False, "smoke": {"ok": False}, "harness_sha256": sd.harness_sha256()}))
     assert len(sd.freeze_evidence_problems(c, tmp_path)) == 1
+    (tmp_path.joinpath(*sd.RESULTS, "smoke-d-b", "session.json")).write_text(json.dumps(
+        {"mode": "mini", "kind": "open", "formal": False, "smoke": {"ok": True}, "harness_sha256": "0" * 64}))
+    assert any("another harness" in p for p in sd.freeze_evidence_problems(c, tmp_path))
     assert sd.freeze_evidence_problems(CFG, tmp_path) == []             # before the freeze
 
 
@@ -245,8 +246,6 @@ def test_the_open_plan_maps_the_grid_onto_030s_search():
     assert (x["c_cap"], x["scan"], x["lambda_ref"]["c_prod"]) == (9, list(range(1, 10)), 32) and "bracket" not in x
     assert x["points"]["6"]["rate"] == round(x["lambda_ref"]["lambda_ref"], 4)
     assert p["open_loop"] == sd.OPEN_LOOP
-    with pytest.raises(sd.PlanError, match="lambda_ref"):
-        plan("D-B", refs={})
 
 
 def test_the_verify_plan_runs_n_times_at_c_prod():
@@ -266,7 +265,7 @@ def test_plans_refuse_a_bad_config_an_unknown_session_and_an_unfrozen_formal():
         plan("D-A1", formal=True)
     with pytest.raises(sd.PlanError, match="num_gpu_blocks"):
         sd.build_plan(CFG, PINS, session_name="D-A1", uniform_plan={"num_gpu_blocks": 186, "block_size": 528},
-                      refs=None, pins_sha256="p", stage_d_sha256="s")
+                      pins_sha256="p", stage_d_sha256="s")
 
 
 def test_the_open_scan_runs_up_the_grid_to_the_first_fail():
@@ -301,3 +300,20 @@ def test_every_open_loop_run_has_its_own_seed():
     assert argv[argv.index("--seed") + 1] == "123"
     with pytest.raises(sd.PlanError, match="Core B seed"):
         sd.bench_argv_for(PINS, "U2K", C=2, seed=123, **kw)
+
+
+def test_lambda_ref_is_pinned_and_equals_the_committed_c1b_recomputation():
+    assert sd.lambda_ref_problems(CFG, ROOT) == []
+    assert CFG["stage_d"]["lambda_ref"]["U2K"] == {"c_prod": 32, "requests": 768, "mean_latency_s": 12.56945,
+                                                   "lambda_ref": 2.545855}
+    bad = cfg(lambda_ref={**CFG["stage_d"]["lambda_ref"], "U8K": {**CFG["stage_d"]["lambda_ref"]["U8K"],
+                                                                  "lambda_ref": 0.7}})
+    assert any("lambda_ref.U8K" in p for p in sd.stage_d_problems(bad, PINS))
+    drift = cfg(lambda_ref={**CFG["stage_d"]["lambda_ref"], "U2K": {"c_prod": 32, "requests": 768,
+                                                                    "mean_latency_s": 12.0, "lambda_ref": 2.666667}})
+    assert sd.stage_d_problems(drift, PINS) == [] and any("U2K" in p for p in sd.lambda_ref_problems(drift, ROOT))
+
+
+def test_the_harness_fingerprint_covers_every_stage_d_module():
+    assert len(sd.harness_sha256()) == 64 and all((ROOT / f).is_file() for f in sd.HARNESS_FILES)
+    assert {Path(f).name for f in sd.HARNESS_FILES} == {p.name for p in (ROOT / "benchmarks").glob("*stage_d*.py")}

@@ -118,3 +118,40 @@ def test_a_verify_report_names_the_measured_gateway(tmp_path):
 
     with pytest.raises(sr.ReportError, match="capserve_sha256"):
         report(out, tmp_path / "repo", change=no_hash)
+
+
+def test_a_valid_run_needs_its_argv_and_an_open_loop_run_its_rate(tmp_path):
+    out, s, w = t.session(tmp_path, "D-B")
+    root = tmp_path / "repo"
+
+    def no_argv(cap):
+        next(r for r in cap["rows"] if r.get("valid") is True)["argv"] = None
+
+    def no_rate(cap):
+        next(r for r in cap["rows"] if r.get("valid") is True and r["phase"] in ("S", "C"))["rate"] = None
+
+    for change, match in ((no_argv, "a valid run without its bench argv"), (no_rate, "without its rate")):
+        with pytest.raises(sr.ReportError, match=match):
+            report(out, root, change=change)
+
+
+def test_a_gateway_boot_with_a_valid_run_is_checked_even_if_marked_as_failed_early(tmp_path):
+    out, s, w = t.session(tmp_path, "D-C")
+
+    def hide(cap):
+        b = next(b for b in cap["session"]["boots"] if b["workload"].endswith("-gw"))
+        b["reached_first_bench"] = False
+        cap["session"]["runs"][b["tag"]]["gateway"]["profile"] = "some-other-profile"
+
+    with pytest.raises(sr.ReportError, match="the gateway is not the one 039 runs"):
+        report(out, tmp_path / "repo", change=hide)
+
+
+def test_a_lambda_ref_that_c1b_does_not_give_is_refused(tmp_path):
+    out, s, w = t.session(tmp_path, "D-B")
+    c, p = configs(tmp_path / "repo")
+    c["stage_d"]["lambda_ref"]["U2K"] = {"c_prod": 32, "requests": 768, "mean_latency_s": 12.0,
+                                         "lambda_ref": 2.666667}
+    with pytest.raises(sr.ReportError, match="lambda_ref.U2K"):
+        sr.report(cr.load_session(out), cfg=c, pins=p, stage_d_sha256=t.SD_SHA, pins_sha256=t.PINS_SHA,
+                  uniform=cr.load_uniform(UNIFORM), advanced_runs=None, repo_root=tmp_path / "repo")

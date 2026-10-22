@@ -21,12 +21,10 @@ PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
 CFG = tomllib.loads((ROOT / "configs" / "stage_d.toml").read_text())
 C1B = ROOT / "results" / "capacity" / "formal-20261017-c1b"
 UNIFORM_PLAN = {"num_gpu_blocks": PINS["stage_b"]["num_gpu_blocks"], "block_size": PINS["stage_b"]["block_size"]}
-REFS = {"U2K": {"workload": "U2K", "c_prod": 32, "lambda_ref": 2.5, "mean_latency_s": 12.8, "runs": [], "requests": 0},
-        "U8K": {"workload": "U8K", "c_prod": 8, "lambda_ref": 0.6, "mean_latency_s": 13.3, "runs": [], "requests": 0}}
 
 
 def plan(session):
-    return sd.build_plan(CFG, PINS, session_name=session, uniform_plan=UNIFORM_PLAN, refs=REFS, pins_sha256="p",
+    return sd.build_plan(CFG, PINS, session_name=session, uniform_plan=UNIFORM_PLAN, pins_sha256="p",
                          stage_d_sha256="s")
 
 
@@ -218,7 +216,7 @@ def test_an_open_session_reports_rates_and_h_d4(limit, rate_factor, verdict):
     a = sda.analyze(cap, reqs)
     assert a["replay"]["ok"]
     u = a["workloads"]["U2K-P"]
-    assert u["c_prod"]["value"] == limit and u["rate_prod"] == pytest.approx(round(rate_factor * 2.5, 4))
+    assert u["c_prod"]["value"] == limit and u["rate_prod"] == round(rate_factor * 2.545855, 4)
     assert a["hypotheses"]["H-D4"]["U2K-P"]["verdict"] == verdict
     assert "ABOVE_CKV" not in u["flags"]
     if limit == 9:
@@ -306,6 +304,32 @@ def test_a_verify_point_stops_after_an_invalid_run():
     v_rows = [r for r in cap["rows"] if r["workload"] == "U2K-gw"]
     assert a["replay"]["ok"] and len(v_rows) == 1 and a["workloads"]["U2K-gw"]["class"] == "NT"
     assert a["hypotheses"]["H-D7"]["U2K-gw"]["verdict"] == "NT"
+
+
+def test_the_send_order_is_checked_against_every_lower_idx():
+    """039: no request may be sent more than 50 ms before ANY lower idx (a running maximum), so small steps back that
+    add up are caught too."""
+    p = plan("D-B")
+    x = p["workloads"]["U2K-P"]
+    n = x["points"]["1"]["N"]
+    row = {"phase": "S", "workload": "U2K-P", "C": 1, "N": n, "valid": True, "reasons": []}
+    reqs = requests(x, n, ttft=500.0, tpot=50.0)
+    for k in range(1, 6):
+        reqs[100 + k]["start_s"] = reqs[100]["start_s"] - 0.04 * k     # 40 ms per step, 200 ms in all
+    assert any("send order" in r for r in sda.evaluate(row, reqs, p)[1])
+    for k in range(1, 6):
+        reqs[100 + k]["start_s"] = reqs[100]["start_s"] - 0.01           # within 50 ms of every lower idx
+    assert sda.evaluate(row, reqs, p)[0]
+
+
+def test_a_failed_boot_cannot_hold_a_valid_run():
+    p = plan("D-C")
+    cap, reqs = simulate(p, lambda w, c: (500.0, 50.0, None))
+    bad = copy.deepcopy(cap)
+    boot = next(b for b in bad["session"]["boots"] if b["workload"] == "U2K-gw")
+    boot["reached_first_bench"] = False
+    assert any("failed before its first bench but holds a valid run" in x for x in
+               sda.replay_problems(p, None, bad["session"]["boots"], bad["rows"], reqs))
 
 
 def test_open_loop_runs_must_be_sent_in_idx_order():

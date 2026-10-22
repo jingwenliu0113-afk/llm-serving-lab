@@ -475,7 +475,7 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
     - H-D3：輸出 512 時 C_SLO ≤ C_KV。
 - **D-B（開放迴路）**：U2K-P、U8K-P，Poisson 到達，不限制並發。
   - 時間窗為 [⌈0.1 N⌉, N − ⌈0.1 N⌉)；
-  - 格點為 λ_ref 的 0.4–1.5 倍，λ_ref 由 c1b 已 commit 的數據重算；
+  - 格點為 λ_ref 的 0.4–1.5 倍，λ_ref 由 c1b 已 commit 的數據重算（數值 pin 在設定檔，測試比對；039 實作補記 13）；
   - 搜尋與確認在格點的索引上進行；
   - H-D4：λ_PROD ≤ 0.9 λ_ref（依格點的倍率判定）。
 - **D-C（固定點驗證）**：每個點在 C_PROD 各 5 次 boot：
