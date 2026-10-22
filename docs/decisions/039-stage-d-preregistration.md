@@ -153,3 +153,52 @@ S1、S3 只作為描述性的界線報告，和 030 相同。
 - `configs/stage_d.toml` 的格式。
 - harness 的模組切分。凍結的 Stage C 模組只能 import，不能修改。
 - smoke 的內容：mini（走過每一種 workload 與 gateway 路徑）與 FS-order（只對新的 client 設定）。
+
+## 實作補記（2026-10-23，凍結前；沒有任何 Stage D 數據）
+
+harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_stage_d`、`stage_d_report`、`stage_d_datasets` 與 `configs/stage_d.toml`。
+凍結的 Stage C 模組只被 import 或繼承，沒有修改，`test_stage_c_frozen` 仍然通過。
+本文沒有寫死、實作時決定的細節如下，凍結時一併凍結。
+
+1. **重用的範圍**：
+   - D-A 與 D-B 直接執行 `run_capacity` 的狀態機，以及 `capacity_plan` 的 `search_next`、`build_confirm_plan`、`phase_c_boots`；
+   - 每個 run 的統計量、分類、估計量、旗標、sentinel 閘門與跨 session 偏移，都用 `capacity_analysis` 的凍結函式；
+   - `StageDHarness` 繼承 `run_capacity._Harness`，只覆寫 server、client、結果檢查、逐 request 檔、tag 與 gateway。
+2. **開放迴路的時間窗**：把 `run_eval` 的 C 設為 ⌈0.1 N⌉，它的穩態時間窗 [C, N − C) 就是本文的 [⌈0.1 N⌉, N − ⌈0.1 N⌉)。
+   「開場湧入」欄位因此是前 10% 的 request，只作描述。
+3. **H-D4 依格點的倍率判定**：
+   - 格點的到達率是倍率 × λ_ref 再四捨五入到 4 位，所以 0.9 倍那一點的到達率可能略高於 0.9 λ_ref；
+   - 改依格點的倍率判定：λ_PROD 的倍率 ≤ 0.9 而且 EXACT 或 INFEASIBLE 為 supported；倍率 ≥ 1 為 not supported；其他為 inconclusive。
+   - INFEASIBLE（低於 0.4 λ_ref）也算 supported，因為它比 0.9 λ_ref 更低。
+4. **H-D2a / b 的規則**（本文只寫了不等式）：
+   - **大於**：值大於界線就是 supported，下界也算；EXACT 或 INFEASIBLE 而且不大於界線為 not supported；下界而且不大於界線為 inconclusive。
+   - **小於**：EXACT 或 INFEASIBLE 而且小於界線為 supported；任何不小於界線的值為 not supported，下界也算；下界而且小於界線為 inconclusive。
+   - NT 與 UNSTABLE 為 NT。
+5. **H-D1 / H-D3** 使用 `capacity_analysis.h_s2`。它的 "refuted" 在 Stage D 寫成 "not supported"，和本文的用詞一致。
+6. **D-C 不套用跳過規則**：每個點的 5 次都跑完。一次 FAIL 就足以判定，但跑完可以報告「5 次中幾次符合」。
+   順序是每個 block 以 `capacity_plan.block_order` 洗牌，每個點各 boot 一次。
+7. **D-C 的 gateway**：
+   - research runner 以 `python -m capserve serve` 啟動 gateway（子 process，不 import capserve；有測試檢查原始碼）；
+   - 設定為 127.0.0.1:8080 → vLLM 8000、`tokenizer = "local"`、`tokenizer_path` = 服務的 snapshot、該 workload 的 class；
+   - profile 為 `verified-formal-20261017-c1b.json`；
+   - gateway 的環境移除所有 `CAPSERVE_*`，並設 `HF_HUB_OFFLINE=1`。
+   - `/readyz` 必須是 verified、class 正確，而且 max_concurrency 等於該點的 C，否則該 boot 在第一個 bench 之前就失敗。
+   - gateway 一律先停（SIGTERM，30 s 後 SIGKILL），再進行 server 的 teardown。
+8. **結果檢查**：
+   - 每個 run 都要求 N 個完成、輸出都等於該 workload 的長度；
+   - uniform 的 prompt 長度都等於設定值，mixed 符合 007 的數量，var 落在 [64, tier − 128]。
+   - 逐 request 檔的 cls：mixed 的 32,640-token prompt 為 long，其他都是 short。
+9. **var dataset**：
+   - 長度以 sha256("<seed>:stage_d:var:<tier>") 為 seed，在 [64, tier − 128] 均勻抽樣；
+   - 每一列以 RandomDataset(seed + i) 產生；
+   - 列數 = N + warmup（2K 為 352，8K 為 208）。
+   - 2026-10-23 在 WSL 產生，每個 prompt 都重新 tokenize 到剛好目標長度：
+     - 2K 為 64–1,920，sha256 `358ae8da…`；
+     - 8K 為 86–8,015，sha256 `d550acc8…`。
+   - 兩者都 pin 在 `configs/stage_d.toml`，檔案不進 git（`data/` 依 005 不進 git）。
+10. **mini smoke**（凍結的證據，三個）：
+    - 和 Stage C 的 mini 相同：假的 SLO、N = 20、n_near 2、n_low 1、sentinel 在 C 2，跑完後丟棄所有延遲數值。
+    - **closed**：U2K-O512 上限 3，在 C 3 強制 5 s 逾時，以走過跳過規則；M8K-T 上限 2，走過 T 的 server 檢查與 mixed。
+    - **open**：U2K-P 只用前 3 個格點，每點 N = 20。
+    - **verify**：U2K-var 與 U2K-gw 在 C 4 各兩個 block。gateway 仍服務 class 的正式上限（`class_limit`），所以 `/readyz` 比對的是正式上限。
+11. **vLLM 的 bench client 每個 request 都送 `repetition_penalty: 1.0`**：gateway 把這個中性值視為預設值並忽略（038 的後續變更）。否則 D-C 經過 gateway 的每個 request 都會是 400。

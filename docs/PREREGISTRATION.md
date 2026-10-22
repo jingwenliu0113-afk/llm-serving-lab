@@ -453,3 +453,34 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
   - 有跳過規則；session 前後各一次 sentinel；replay 檢查。
 - **Hypotheses**：H-S1（mixed 降低容量）、H-S2（C_SLO ≤ C_KV）；只凍結選定 SLO 的預測。
 - **輸出**：`results/capacity/<session>/analysis.json`。verified profile 只能由產生器從這份 analysis 產生（029）。
+
+## 9. Stage D addendum：容量的延伸（decision 037、039）
+
+**狀態：DRAFT**。harness、三個 mini smoke 與審查完成後，連同 `configs/stage_d.toml` 一起凍結（`freeze.stage_d = true`）。在那之前沒有任何 Stage D 數據。
+本節只摘要；完整規則、揭露與依據見 decision 039。第 1–8 節不變，Phase 1、Phase 2 的判定不受影響。
+
+- **沿用 §8（030）的規則**：
+  - 估計量 C_SLO 與 C_PROD，guard band m = 5%，n_near = 5、n_low = 3；
+  - 穩態時間窗、搜尋與確認、跳過規則、有效性（含 031 的閒置判定與 spill 偵測）、sentinel 與 replay。
+  - 程式上直接 import 凍結的 Stage C 模組，不修改它們。
+- **SLO**：S2（037 §3），短類的 TTFT 門檻依 prompt 的長度等級。
+- **D-A（封閉迴路，兩個 session）**：
+  - U32K；
+  - U8K-T、M8K-T：`--long-prefill-token-threshold 512`；
+  - U2K-O512、U8K-O512：輸出 512 token。
+  - Hypotheses：
+    - H-D1：C_SLO(U32K) ≤ C_KV(32K)；
+    - H-D2a：C_PROD(M8K-T) > 2；
+    - H-D2b：C_PROD(U8K-T) < 8；
+    - H-D3：輸出 512 時 C_SLO ≤ C_KV。
+- **D-B（開放迴路）**：U2K-P、U8K-P，Poisson 到達，不限制並發。
+  - 時間窗為 [⌈0.1 N⌉, N − ⌈0.1 N⌉)；
+  - 格點為 λ_ref 的 0.4–1.5 倍，λ_ref 由 c1b 已 commit 的數據重算；
+  - 搜尋與確認在格點的索引上進行；
+  - H-D4：λ_PROD ≤ 0.9 λ_ref（依格點的倍率判定）。
+- **D-C（固定點驗證）**：每個點在 C_PROD 各 5 次 boot：
+  - U2K-var、U8K-var：prompt 長度均勻分布，dataset 已 pin sha256；
+  - U2K-gw、U8K-gw：經過 capserve gateway，使用正式設定的 local tokenizer。
+  - Hypotheses：H-D6（長度不一）、H-D7（經過 gateway）為 PASS。
+- **D5**：開場湧入，只用 c1b 的數據作事後描述，不是檢定。
+- **輸出**：`results/stage_d/<session>/analysis.json`。新的 verified profile 不會自動取代正式設定的釘選（037 §2）。
