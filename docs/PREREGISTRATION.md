@@ -502,5 +502,6 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
   - H-Q2a：兩個 context、兩個 size 的 KLD 順序（8 個檢定，Holm）；
   - H-Q2b：KLD(c) ÷ KLD(512) 在 [0.5, 2.0]。
 - **Q3（W4A16）**：vLLM 中 W4A16 對 BF16 的 PPL 與配對 ΔNLL；H-Q3：PPL 比 − 1 ≤ 2%。BF16 checkpoint 需要下載（約 19.3 GB），等使用者同意。
+  - Q3 有自己的設定檔與凍結（`configs/stage_q3.toml`、`freeze.stage_q3`）；chunk 檔的 sha256 在凍結前 pin 住。
 - **凍結的證據**：每個部分（q1-metal、q1-cuda、q2）一個通過的 pilot（每個 job 10 chunks、全部 ok），而且是同一個 harness（`harness_sha256`）。
 - **輸出**：`results/stage_q/<session>/` 與 `results/stage_q/analysis.json`；尚未執行的部分，其 hypothesis 為 NT。

@@ -114,3 +114,17 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 7. **Q3 的 BF16 checkpoint**：
    - Mac 沒有保留 9B 的 safetensors（`models/hf` 只有 tokenizer 與設定），所以需要從 HF 下載 `Qwen/Qwen3.5-9B@c2022362`（19,329,393,661 B，pins 有每個 shard 的 sha256）。
    - 下載量大，先取得使用者同意。Q3 的 harness 可以先寫，pilot 與正式數據在下載之後。
+8. **Q3 的 harness**（`quality/stage_q3.py`，`configs/stage_q3.toml`）：
+   - **獨立的凍結**：Q3 用另一個 runtime，又要等下載，所以有自己的 `freeze.stage_q3` 與 pilot，不拖住 Q1 / Q2 的凍結。
+   - **chunk 檔**：在 WSL 以 pin 住的 tokenizer 編碼 `wiki.test.raw`（不加 special token），切成 ⌊n ÷ 512⌋ 個 512-token chunk。
+     檔案的 sha256 與 chunk 數在凍結前 pin 在設定檔，兩個 checkpoint 讀同一份 token id。
+   - **計分**：每個 chunk 一個 prompt，`prompt_logprobs = 1`、`max_tokens = 1`、temperature 0。
+     計分位置是 257–511（和 llama-perplexity 相同的 255 個 token），記錄實際 token 的 logprob 與 rank-1 的 token。
+   - **engine**：沿用 Core B 和數值有關的設定（language model only、bfloat16、pins stage_b 的 GPU 記憶體比例與 GDN prefill backend、
+     不用 prefix caching）；`max_model_len` 1024、每個 step 最多 512 token（限制 prompt logprob 的 fp32 張量大小）；
+     BF16 另加 `cpu_offload_gb`（設定檔，pilot 確認）。
+   - **runner**：每個 job 之前做 031 的閒置判定，前後 env capture，子 process 在 vLLM 的 venv 中計分；OOM 記為 oom（本文：NT，不改設定重跑）。
+   - **資料的位置**：逐 token 的分數（含 rank-1 的 token id，可能部分還原原文）只放在 `raw/`，git 只有 sha256；
+     每個 row commit 每個 chunk 的 NLL，分析時核對 `raw/` 與 manifest、與 row 的 NLL 一致。
+   - **分析**：兩個 checkpoint 的 PPL、逐 chunk 配對的 ΔNLL（`quality_analysis` 的 bootstrap，10,000 次、Core B 的 seed）、top-1 一致率；
+     H-Q3 依 PPL 比判定，任一 checkpoint 不是 ok 時為 NT。

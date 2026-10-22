@@ -1,0 +1,20 @@
+# Stage Q3 settings: decision 040 Q3 (W4A16 against BF16 in vLLM 0.30.0), PREREGISTRATION §10 (DRAFT). Q3 has its own
+# freeze (040 implementation note 8): it runs another runtime and waits on the BF16 download, so it does not hold
+# Q1 / Q2 back. quality/stage_q3.py refuses a formal plan until freeze.stage_q3 is true, and its analysis refuses
+# formal sessions unless pilot_q3 is a passed pilot of the same harness. The checkpoints, dtype, GPU memory
+# utilization and GDN backend come from configs/pins.toml read-only (core_a 9B source, core_b, stage_b).
+schema_version = 1
+
+[freeze]
+# 040 凍結 (Q3): commit and push 040, this file, stage_q3 and its tests together, then set true, then collect Q3 data.
+stage_q3 = false
+pilot_q3 = ""                                             # session id of the passed Q3 pilot (RTX)
+
+[stage_q3]
+chunks_sha256 = ""                                        # data/stage_q/q3-chunks-512.jsonl (stage_q3.py chunks, WSL)
+chunks = 0                                                # its chunk count (llama-perplexity: 580 at 297,194 tokens)
+bf16_cpu_offload_gb = 8                                   # 040: 9B BF16 (17.9 GB language-only) needs offload on 16 GB
+max_num_batched_tokens = 512                              # one chunk per step: bounds the fp32 prompt-logprob tensor
+pin_memory = "0"                                          # VLLM_WSL2_ENABLE_PIN_MEMORY for both jobs (pins stage_b)
+n_boot = 10000                                            # 040: chunk bootstrap of the paired delta NLL
+seed = 20261008                                           # the bootstrap seed (Core B seed)

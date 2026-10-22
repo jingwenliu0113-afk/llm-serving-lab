@@ -33,7 +33,18 @@
   - 多 class 准入與開場湧入的處理：等 Stage D 的結果。
 - **Stage D**（decision 039，DRAFT）：
   - 範圍：D-A 封閉迴路延伸（U32K、T、輸出 512）、D-B 開放迴路、D-C 固定點驗證（prompt 長度不一、經過 gateway）、D5 開場湧入的描述。
-  - 下一步：harness（重用凍結的 Stage C 狀態機與搜尋函式）→ mini smoke → 審查 → 凍結 → 正式 session。
+  - [x] harness（`91e6e73`）：兩輪審查（13 + 8 項）全部處理；λ_ref pin 在設定檔、由 Mac 上的測試比對；凍結證據綁定 `harness_sha256`。
+  - [ ] 三個 mini smoke（`smoke-d-{closed,open,verify}-20261023b`，WSL 部署 `91e6e73`，GPU lock 下執行中）→ 取回並 commit。
+  - [ ] 凍結：`freeze.stage_d = true` 與三個 mini id、`tests/test_stage_d_frozen.py`（sha256 pin）、§9 改為 FROZEN。
+  - [ ] 正式 session D-A1、D-A2、D-B、D-C（約 30 h GPU）→ report → D5（`stage_d_analysis.py startup-wave`）。
+- **Stage Q**（decision 040，DRAFT；PREREGISTRATION §10）：
+  - [x] Q1 / Q2 harness 與凍結檢查（`f65c081`、`49b88af`）：`configs/stage_q.toml`，三個 pilot 是凍結的證據，分析只接受凍結後的正式 session。
+  - [x] Q3 harness（`quality/stage_q3.py`、`configs/stage_q3.toml`，獨立的凍結）。
+  - [ ] pilot：q1-cuda、q2（RTX，Stage D 的 mini 之後）；q1-metal（Mac，**blocked**：Mac heavy lock 由 incident-investigator 持有，不搶占）。
+  - [ ] Q3：需要下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**等使用者同意**；
+        之後在 WSL 產生 chunk 檔並 pin sha256 → pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性）→ 凍結。
+  - 觀察：Mac 的 140W adapter 目前只協商到 94 W（20 V × 4.69 A；名稱檢查會通過）。可能是線材或連接埠的限制，重負載時電池可能下降（016 的充電閘門會處理）。
+- **Stage E**（decision 041，DRAFT）：harness 設計中（先整理凍結的 Advanced、C0、Core A 模組的介面）。041 E3 寫「safetensors 已在 Mac」不正確，改由 pin 住的 BF16 GGUF 以 `llama-quantize` 產生，凍結前修正。
 
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
 
