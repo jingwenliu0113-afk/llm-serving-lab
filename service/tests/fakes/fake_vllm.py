@@ -5,11 +5,13 @@ Endpoints: /health, /v1/models, /tokenize (count = whitespace-separated words), 
 fail_status (+ fail_body), drop_after_chunks (the connection breaks inside the next event), split_events (each event
 in two writes), pause_after_chunks (the stream waits for `release` after that many events), hang (a generation
 waits for `release` before its first token), healthy / health_delay_s, model_id, tokenize_fail_status (/tokenize
-answers with vLLM's OpenAI-shaped error, as it does when the chat template raises) and tokenize_delay_s.
+answers with vLLM's OpenAI-shaped error, as it does when the chat template raises), tokenize_delay_s and
+honor_max_tokens (generate min(n_tokens, the request's max_tokens / max_completion_tokens), as vLLM does with
+ignore_eos; off by default, so n_tokens alone sets the length).
 
 /metrics exposes vllm:num_requests_running (generations in flight; /tokenize does not create an engine request),
 vllm:num_requests_waiting (always 0: the fake has no scheduler queue), vllm:generation_tokens_total (one per generated
-step) and vllm:cache_config_info at the Stage B values.
+token; a stream's role, finish and [DONE] events are not tokens) and vllm:cache_config_info at the Stage B values.
 
 It records peak_in_flight (generations and /tokenize calls together: every HTTP request that does model work),
 cancelled_ids (requests whose client disconnected before the end), the request bodies and headers, and exposes
@@ -56,6 +58,7 @@ class FakeConfig:
     health_delay_s: float = 0.0
     tokenize_fail_status: int | None = None
     tokenize_delay_s: float = 0.0
+    honor_max_tokens: bool = False
 
 
 @dataclass
@@ -158,7 +161,11 @@ class FakeVLLM:
                 {"error": {"message": "fake failure", "type": "BadRequestError", "param": None,
                            "code": self.cfg.fail_status}}).encode()
             return Response(content, status_code=self.cfg.fail_status, media_type="application/json")
-        return (_Stream if body.get("stream") else _NonStream)(self, chat)
+        n = self.cfg.n_tokens
+        bound = body.get("max_tokens") or body.get("max_completion_tokens")
+        if self.cfg.honor_max_tokens and isinstance(bound, int):
+            n = min(n, bound)
+        return (_Stream if body.get("stream") else _NonStream)(self, chat, n)
 
     async def first_token_wait(self) -> None:
         if self.cfg.hang:
@@ -192,8 +199,8 @@ def _events(chat: bool, rid: int, n: int) -> list:
 
 
 class _NonStream:
-    def __init__(self, fake: FakeVLLM, chat: bool):
-        self.fake, self.chat = fake, chat
+    def __init__(self, fake: FakeVLLM, chat: bool, n: int):
+        self.fake, self.chat, self.n = fake, chat, n
 
     async def __call__(self, scope, receive, send):
         fake = self.fake
@@ -210,7 +217,7 @@ class _NonStream:
 
                 tg.start_soon(watch)
                 await fake.first_token_wait()
-                for _ in range(fake.cfg.n_tokens):
+                for _ in range(self.n):
                     if fake.cfg.itl_s:
                         await asyncio.sleep(fake.cfg.itl_s)
                     fake.tokens_generated += 1
@@ -218,7 +225,7 @@ class _NonStream:
             if gone:
                 fake._cancel(rid)
                 return
-            text = "".join(f" t{i}" for i in range(fake.cfg.n_tokens))
+            text = "".join(f" t{i}" for i in range(self.n))
             await JSONResponse(_completion(self.chat, rid, text))(scope, receive, send)
             fake.completed_ids.append(rid)
         finally:
@@ -226,8 +233,8 @@ class _NonStream:
 
 
 class _Stream:
-    def __init__(self, fake: FakeVLLM, chat: bool):
-        self.fake, self.chat = fake, chat
+    def __init__(self, fake: FakeVLLM, chat: bool, n: int):
+        self.fake, self.chat, self.n = fake, chat, n
 
     async def __call__(self, scope, receive, send):
         fake = self.fake
@@ -247,7 +254,8 @@ class _Stream:
                 await send({"type": "http.response.start", "status": 200,
                             "headers": [(b"content-type", b"text/event-stream; charset=utf-8")]})
                 await fake.first_token_wait()
-                for i, event in enumerate(_events(self.chat, rid, cfg.n_tokens)):
+                first_token = 1 if self.chat else 0      # chat opens with a role-only delta
+                for i, event in enumerate(_events(self.chat, rid, self.n)):
                     if cfg.drop_after_chunks is not None and i == cfg.drop_after_chunks:
                         await send({"type": "http.response.body", "body": event[:len(event) // 2], "more_body": True})
                         raise _Drop("fake upstream crash")
@@ -255,7 +263,7 @@ class _Stream:
                         await fake.release.wait()
                     if i and cfg.itl_s:
                         await asyncio.sleep(cfg.itl_s)
-                    fake.tokens_generated += 1
+                    fake.tokens_generated += int(first_token <= i < first_token + self.n)
                     parts = [event[:len(event) // 2], event[len(event) // 2:]] if cfg.split_events else [event]
                     for part in parts:
                         await send({"type": "http.response.body", "body": part, "more_body": True})

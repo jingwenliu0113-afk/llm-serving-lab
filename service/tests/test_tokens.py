@@ -51,8 +51,10 @@ def test_chat_bound_counts_roles_texts_and_overheads():
 async def test_count_mirrors_the_chat_messages_with_the_generation_prompt():
     b, seen = budget()
     messages = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
-    assert await b.count("chat", {"model": M, "messages": messages, "max_completion_tokens": 5, "stream": True}) == 7
-    assert seen == [{"model": M, "messages": messages, "add_generation_prompt": True}]
+    kwargs = {"enable_thinking": False}     # 038 §1: /tokenize renders the same template as the generation request
+    assert await b.count("chat", {"model": M, "messages": messages, "max_completion_tokens": 5, "stream": True,
+                                  "chat_template_kwargs": kwargs}) == 7
+    assert seen == [{"model": M, "messages": messages, "add_generation_prompt": True, "chat_template_kwargs": kwargs}]
 
 
 @pytest.mark.anyio

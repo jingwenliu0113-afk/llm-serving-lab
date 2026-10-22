@@ -5,8 +5,9 @@ Each test is a deterministic pass / fail check; the results go to <service_root>
 (meta.json: purpose product-test, formal false, research_valid false).
 
 - IT-0 (no lock, no boot): imports, and a read-only look at the installed vLLM 0.30.0 sources (located with
-  importlib, never imported): the /tokenize route and its request fields (add_generation_prompt, add_special_tokens),
-  max_completion_tokens on chat requests, and the HTTP keep-alive default, which must outlive the gateway pool's
+  importlib, never imported): the /tokenize route and its request fields (add_generation_prompt, add_special_tokens,
+  chat_template_kwargs), max_completion_tokens and chat_template_kwargs on chat requests (038 §1: the gateway sends
+  enable_thinking with every chat request), and the HTTP keep-alive default, which must outlive the gateway pool's
   keepalive_expiry (upstream.KEEPALIVE_EXPIRY_S) so a pooled connection is never reused just as vLLM closes it.
 - IT-1..IT-5 (under the GPU lock): ONE boot for all of them. This process starts `python -m capserve.deploy up`
   (hold mode) as a child with the lock descriptor passed on (procs.start_group, PDEATHSIG), waits for state.json
@@ -15,14 +16,19 @@ Each test is a deterministic pass / fail check; the results go to <service_root>
        /proc/<vLLM pid>/fd and /proc/<gateway pid>/fd hold the lock file;
   IT-2 3x overload (capserve.loadtest overload): vLLM running + waiting never above max_concurrency; only 200 and
        429 with Retry-After; no 5xx;
-  IT-3 a stream and a non-stream client disconnect: vLLM running + waiting back to 0 within 2 s, no tokens generated
-       after the disconnect, and the request would otherwise have run well past the window (decisive);
+  IT-3 a stream and a non-stream client disconnect of a /v1/completions request with ignore_eos and max_tokens M
+       (the class bound): vLLM running + waiting back to 0 within 2 s, no tokens generated after the disconnect, and
+       (decisive, 038 §2) the request generated fewer than M tokens: vllm:generation_tokens_total grew by less than
+       M between the idle vLLM before the request and the quiet one after it. Without an abort ignore_eos makes it
+       exactly M, so the count decides even when M tokens take less than the 2 s window (036: 128 tokens did); the
+       generation time left at the disconnect is recorded, no longer a check;
   IT-4 /tokenize parity, with the gateway's own PromptBudget against vLLM: " the" x n is n tokens, every measured
        chat / completion count is within the byte fast-path bound, and every chat case's template overhead (its
        count minus the tokens of each message's text alone, add_special_tokens false) is within the constants in
        settings [tokens]: chat_overhead + sum(per_message + role bytes). The byte bound alone cannot catch a constant
        that is too small (" the" leaves 4 bytes per token of slack); an empty message and a many-message case
-       expose chat_overhead and per_message;
+       expose chat_overhead and per_message. Every chat case runs with thinking off (the gateway default) and on,
+       because enable_thinking changes the generation prompt (038 §1);
   IT-5 stop under load: limit + queue clients, `capserve.deploy stop` once the gateway is saturated; the running
        requests drain with 200, queued ones get 503 with Retry-After, nothing is cut, the supervisor exits 143 with
        a clean teardown and GPU memory back <= the supervisor run's pre-boot baseline + 64 MiB within 60 s
@@ -76,7 +82,7 @@ BOOTED = ("IT-1", "IT-2", "IT-3", "IT-4", "IT-5")
 DEFAULT_PROFILE = runs.REPO_ROOT / "service" / "profiles" / "provisional-rtx.json"
 PROMPT_UNIT = smoke.PROMPT_UNIT
 DISCONNECT_WINDOW_S = 2.0       # 029 IT-3: running + waiting drops within 2 s
-DECISIVE_FACTOR = 2.0           # the request must have had >= 2 x the window of generation left
+DECISIVE_FACTOR = 2.0           # before 038: the request had to have >= 2 x the window of generation left (now data)
 READ_EVENTS = 8                 # content events read before the stream client disconnects
 IT2_TIME_LIMIT_S = 900.0
 SATURATION_WAIT_S = 120.0
@@ -198,9 +204,13 @@ def it0(*, locate: Callable = locate_vllm, pins: dict | None = None) -> dict:
           {"messages", "add_generation_prompt", "add_special_tokens"} <= chat_fields, sorted(chat_fields))
     c.add("/tokenize completion request accepts add_special_tokens", {"prompt", "add_special_tokens"} <= comp_fields,
           sorted(comp_fields))
+    c.add("/tokenize chat request accepts chat_template_kwargs", "chat_template_kwargs" in chat_fields,
+          sorted(chat_fields))
     c.add("/tokenize response has count", "count" in class_fields(index, "TokenizeResponse"))
     c.add("chat completions accept max_completion_tokens",
           "max_completion_tokens" in class_fields(index, "ChatCompletionRequest"))
+    c.add("chat completions accept chat_template_kwargs",
+          "chat_template_kwargs" in class_fields(index, "ChatCompletionRequest"))
     seconds, source = keep_alive_default(pkg)
     c.add("vLLM keep-alive outlives the gateway pool's keepalive_expiry",
           seconds is not None and seconds > KEEPALIVE_EXPIRY_S,
@@ -368,6 +378,7 @@ async def _disconnect(ctx: Ctx, c: Checks, vc, gw, case: str, model: str, limits
     clock = loop.time
     idle = await _until_load(vc, lambda x: x == 0, ctx.idle_wait_s, ctx.poll_s)
     c.add(f"{case}: vLLM idle before the request", idle is not None)
+    _, g0 = await _vllm_load(vc)
     body = {"model": model, "prompt": PROMPT_UNIT * 16, "max_tokens": limits.max_output_tokens, "ignore_eos": True,
             "temperature": 0.0, "stream": case == "stream"}
     out = {"max_tokens": body["max_tokens"]}
@@ -400,9 +411,6 @@ async def _disconnect(ctx: Ctx, c: Checks, vc, gw, case: str, model: str, limits
     drop = await _until_load(vc, lambda x: x == 0, DISCONNECT_WINDOW_S, ctx.poll_s)
     c.add(f"{case}: vLLM running + waiting back to 0 within 2 s", drop is not None,
           None if drop is None else f"{drop:.2f} s")
-    c.add(f"{case}: the request would have run past the window (decisive)",
-          remaining is not None and remaining >= DECISIVE_FACTOR * DISCONNECT_WINDOW_S,
-          None if remaining is None else f"~{remaining:.1f} s of generation left at the disconnect")
     first, second = ctx.token_watch
     await asyncio.sleep(max(0.0, t_close + first - clock()))
     _, g1 = await _vllm_load(vc)
@@ -410,8 +418,13 @@ async def _disconnect(ctx: Ctx, c: Checks, vc, gw, case: str, model: str, limits
     _, g2 = await _vllm_load(vc)
     c.add(f"{case}: no tokens generated after the disconnect", g1 is not None and g1 == g2,
           f"generation_tokens_total {g1} at +{first:g} s, {g2} at +{second:g} s")
+    m = body["max_tokens"]
+    generated = None if g0 is None or g2 is None else round(g2 - g0)   # a Prometheus counter reads as a float
+    c.add(f"{case}: the generation was cut short (decisive)", generated is not None and 0 <= generated < m,
+          f"{generated} of {m} tokens generated (generation_tokens_total {g0} before, {g2} after; "
+          f"ignore_eos gives exactly {m} without an abort)")
     c.add(f"{case}: gateway in_flight back to 0", await _until_gateway_idle(gw, DISCONNECT_WINDOW_S, ctx.poll_s))
-    out.update(drop_s=drop, remaining_s=remaining)
+    out.update(drop_s=drop, remaining_s=remaining, tokens_generated=generated)
     return out
 
 
@@ -458,23 +471,29 @@ async def it4(ctx: Ctx) -> dict:
             c.add(f"' the' x {n} is {n} tokens", count == n, count)
             c.add(f"completion bound holds at n={n}", count <= bound, f"{count} <= {bound}")
             measured_completion.append({"n": n, "count": count, "bound": bound})
-        for name, messages in CHAT_CASES:
-            body = {"model": model, "messages": messages}
-            try:
-                count = await budget.count("chat", body)
-                content = sum([await _text_tokens(vc, model, _message_text(m["content"])) for m in messages])
-            except (TokenizeError, httpx.HTTPError) as exc:
-                c.add(f"chat bound holds: {name}", False, f"/tokenize failed: {exc}")
-                continue
-            bound = budget.upper_bound("chat", body)
-            c.add(f"chat bound holds: {name}", count <= bound, f"{count} <= {bound}")
-            # 029 IT-4: the template's own tokens within the constants, whatever the text's bytes per token
-            template = count - content
-            allowed = budget.chat_overhead + sum(budget.per_message + len(m["role"].encode("utf-8")) for m in messages)
-            c.add(f"chat template within the overhead constants: {name}", template <= allowed,
-                  f"{template} <= {allowed} (chat_overhead + per_message and role bytes per message)")
-            measured_chat.append({"name": name, "messages": len(messages), "count": count, "bound": bound,
-                                  "content_tokens": content, "template_tokens": template, "allowed": allowed})
+        for case, messages in CHAT_CASES:
+            content = None
+            for thinking in (False, True):   # 038 §1: the gateway sends enable_thinking with every chat request
+                name = f"{case}, thinking {'on' if thinking else 'off'}"
+                body = {"model": model, "messages": messages, "chat_template_kwargs": {"enable_thinking": thinking}}
+                try:
+                    count = await budget.count("chat", body)
+                    if content is None:
+                        content = sum([await _text_tokens(vc, model, _message_text(m["content"])) for m in messages])
+                except (TokenizeError, httpx.HTTPError) as exc:
+                    c.add(f"chat bound holds: {name}", False, f"/tokenize failed: {exc}")
+                    continue
+                bound = budget.upper_bound("chat", body)
+                c.add(f"chat bound holds: {name}", count <= bound, f"{count} <= {bound}")
+                # 029 IT-4: the template's own tokens within the constants, whatever the text's bytes per token
+                template = count - content
+                allowed = budget.chat_overhead + sum(budget.per_message + len(m["role"].encode("utf-8"))
+                                                     for m in messages)
+                c.add(f"chat template within the overhead constants: {name}", template <= allowed,
+                      f"{template} <= {allowed} (chat_overhead + per_message and role bytes per message)")
+                measured_chat.append({"name": case, "thinking": thinking, "messages": len(messages), "count": count,
+                                      "bound": bound, "content_tokens": content, "template_tokens": template,
+                                      "allowed": allowed})
     return c.result("IT-4", settings_tokens=tokens, completion=measured_completion, chat=measured_chat)
 
 

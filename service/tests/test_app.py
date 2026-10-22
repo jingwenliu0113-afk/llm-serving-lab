@@ -71,7 +71,8 @@ async def test_non_stream_chat_passes_through_with_the_bound_injected():
         assert r.headers["x-capserve-profile"] == "provisional-test; status=provisional"
         assert len(r.headers["x-request-id"]) == 32
         seen = st.fake.generations[0]
-        assert seen.path == "/v1/chat/completions" and seen.body == {**CHAT, "max_completion_tokens": 128}
+        assert seen.path == "/v1/chat/completions" and seen.body == {**CHAT, "max_completion_tokens": 128,
+                                                                    "chat_template_kwargs": {"enable_thinking": False}}
         assert "authorization" not in seen.headers
         assert [s.path for s in st.fake.seen] == ["/v1/chat/completions"]   # fast path: no /tokenize
         assert (st.gateway.ctrl.in_flight, st.gateway.guard.pending) == (0, 0)

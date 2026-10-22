@@ -9,6 +9,7 @@ from capserve import openai_api as api
 
 M = "RedHatAI/Qwen3.5-9B-quantized.w4a16"
 MAX_OUT = 128
+THINK_OFF = {"chat_template_kwargs": {"enable_thinking": False}}   # 038 §1: the gateway's default
 
 
 def parse(route, body):
@@ -34,7 +35,8 @@ def error_of(route, body):
 
 def test_chat_injects_the_class_output_bound():
     fwd = parse("chat", chat())
-    assert fwd.body == {"model": M, "messages": [{"role": "user", "content": "hi"}], "max_completion_tokens": MAX_OUT}
+    assert fwd.body == {"model": M, "messages": [{"role": "user", "content": "hi"}], "max_completion_tokens": MAX_OUT,
+                        **THINK_OFF}
     assert (fwd.stream, fwd.max_tokens) == (False, MAX_OUT)
 
 
@@ -89,7 +91,7 @@ def test_allowlisted_fields_pass_through():
     body = chat(stream=False, temperature=0.5, stop="x", messages=[
         {"role": "system", "content": "s"}, {"role": "user", "content": [{"type": "text", "text": "a"}]},
         {"role": "assistant", "content": "b"}])
-    assert parse("chat", body).body == {**body, "max_completion_tokens": MAX_OUT}
+    assert parse("chat", body).body == {**body, "max_completion_tokens": MAX_OUT, **THINK_OFF}
 
 
 @pytest.mark.parametrize("route, extra", [
@@ -99,7 +101,7 @@ def test_allowlisted_fields_pass_through():
     ("chat", {"logprobs": True}),
     ("chat", {"top_logprobs": 2}),
     ("chat", {"chat_template": "{{ x }}"}),
-    ("chat", {"chat_template_kwargs": {"enable_thinking": False}}),
+    ("completions", {"chat_template_kwargs": {"enable_thinking": False}}),
     ("chat", {"ignore_eos": True}),
     ("chat", {"min_tokens": 1}),
     ("completions", {"echo": True}),
@@ -121,9 +123,42 @@ def test_everything_else_is_unsupported_parameter(route, extra):
 
 def test_nulls_and_off_defaults_are_ignored():
     fwd = parse("chat", chat(tools=None, logprobs=False, max_tokens=None, temperature=None))
-    assert fwd.body == {"model": M, "messages": [{"role": "user", "content": "hi"}], "max_completion_tokens": MAX_OUT}
+    assert fwd.body == {"model": M, "messages": [{"role": "user", "content": "hi"}], "max_completion_tokens": MAX_OUT,
+                        **THINK_OFF}
     fwd = parse("completions", comp(echo=False, use_beam_search=False, logprobs=None, suffix=None))
     assert fwd.body == {"model": M, "prompt": "hi", "max_tokens": MAX_OUT}
+
+
+# ------------------------------------------------------------------ thinking (038 §1) --
+
+def test_chat_thinking_is_off_unless_the_client_turns_it_on():
+    assert parse("chat", chat()).body["chat_template_kwargs"] == {"enable_thinking": False}
+    on = parse("chat", chat(chat_template_kwargs={"enable_thinking": True}))
+    assert on.body["chat_template_kwargs"] == {"enable_thinking": True}
+    off = parse("chat", chat(chat_template_kwargs={"enable_thinking": False}))
+    assert off.body["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+@pytest.mark.parametrize("kwargs", [None, {}, {"enable_thinking": None}])
+def test_chat_template_kwargs_without_a_value_keep_the_default(kwargs):
+    assert parse("chat", chat(chat_template_kwargs=kwargs)).body["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+@pytest.mark.parametrize("kwargs, key", [({"foo": 1}, "foo"), ({"enable_thinking": True, "add_vision_id": True},
+                                                                "add_vision_id")])
+def test_other_chat_template_kwargs_are_unsupported(kwargs, key):
+    e = error_of("chat", chat(chat_template_kwargs=kwargs))
+    assert (e.status, e.code, e.param) == (400, "unsupported_parameter", f"chat_template_kwargs.{key}")
+
+
+@pytest.mark.parametrize("value", ["yes", 1, 0, [True]])
+def test_enable_thinking_must_be_a_boolean(value):
+    e = error_of("chat", chat(chat_template_kwargs={"enable_thinking": value}))
+    assert (e.status, e.code, e.param) == (400, "invalid_value", "chat_template_kwargs.enable_thinking")
+
+
+def test_completions_never_get_chat_template_kwargs():
+    assert "chat_template_kwargs" not in parse("completions", comp()).body
 
 
 def test_n_other_than_one_is_unsupported():

@@ -18,8 +18,12 @@
 
 ### 下一步
 
-1. 產品 v1：thinking 預設關閉（TDD）。
-2. Stage D 的事先登記草稿。
+- 產品 v1（decision 038）：
+  - [x] thinking 預設關閉、client 可開啟（§1）；
+  - [x] IT-3 改用 token 數判定，IT-4 測 thinking 開與關（§2）。RTX 上還沒執行。
+  - [ ] adaptive Retry-After（§3）、內建 tokenizer（§4）、quota（§5）、TLS（§6）、常駐功能（§7）。
+  - 全部完成後，在 GPU 空檔跑一次 RTX 產品測試（IT-0 至 IT-6，verified 與 provisional）。正式研究 session 進行中不跑。
+- Stage D 的事先登記草稿。
 
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
 
@@ -49,7 +53,7 @@
   - Core A：Qwen3.5 4B + 9B GGUF，BF16 / Q8_0 / Q6_K / Q4_K_M。
   - Core B：RedHatAI/Qwen3.5-9B-quantized.w4a16。
   - context：2K / 8K / 32K。
-- Decision log 001–037（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果；036 是 Phase 2 結案；037 是 Phase 3 的範圍）。細節以 decision log 為準，這裡只記現況與下一步。
+- Decision log 001–038（030 於 2026-10-17 凍結；033 是第一個 C1 session，已被取代；034 是重跑的取捨規則；035 是最終結果；036 是 Phase 2 結案；037 是 Phase 3 的範圍；038 是 capserve v1 的設計）。細節以 decision log 為準，這裡只記現況與下一步。
 - GitHub：`origin` 為 private repo。每個測試通過的 commit 都會自動 push；不 force push，不改寫 history。
   權重、GGUF、KLD、`results/**/raw/`、venv、credential 不進 git。
 

@@ -64,6 +64,11 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 - verified profile 的輸出上限是 128 token。斷線時只剩約 1.0–1.4 s 的生成量，少於 IT-3 要求的 4 s，所以無法區分「被 abort」和「本來就跑完」。
   - 第一次執行記為不通過。斷線後生成確實停止、vLLM 的 running 與 waiting 都回到 0，但這不構成決定性的證據。
 - 決定性的斷線驗證只來自 provisional-rtx（1,024 token 輸出上限）。斷線處理和 profile 無關，所以推論 verified 設定下也成立，但在 128 token 下沒有直接證據。
+- **038 §2 之後，IT-3 改用 token 數判定**：
+  - 斷線的 request 用 `ignore_eos` 與 class 的輸出上限 M；
+  - 比較 vLLM 的 `generation_tokens_total` 在 request 前後的差值。沒有 abort 時差值一定是 M，所以差值小於 M 就證明生成被截斷。
+  - 這個判定不依賴剩餘的生成時間，在 128 token 下也是決定性的。
+  - 上表是舊判定的結果。新判定還沒有在 RTX 上執行，在那之前 verified profile 下的 IT-3 仍然是「無法判定，不算通過」。
 - 以 verified profile 跑 IT 時用：
 
   ```bash
@@ -130,8 +135,12 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
 ## 與 vLLM 預設不同之處
 
 - 沒有給 `max_tokens` 時，補上 active class 的 `max_output_tokens`（vLLM 的預設是 context 剩下的長度）；超過時回 400。
-- Qwen3.5 的 chat 預設會 thinking；output 上限小時，多數 chat 回答會停在 `<think>` 之中。
-  是否開放 `chat_template_kwargs.enable_thinking` 是待決的產品決定，MVP 不開放。
+- **thinking 預設關閉**（使用者決定，037 / 038 §1）：
+  - gateway 送給 vLLM 的每個 chat request 都帶 `chat_template_kwargs: {"enable_thinking": false}`。Qwen3.5 的 template 因此以空的 think 區塊開頭，直接回答。
+  - client 可以用 `"chat_template_kwargs": {"enable_thinking": true}` 開啟。輸出仍受 class 的上限（128 token）限制，所以思考較長時，回答可能停在 `<think>` 之中。
+  - `chat_template_kwargs` 只接受 `enable_thinking`，其他 key 回 400 `unsupported_parameter`。
+  - 沒有啟用 vLLM 的 reasoning parser，因為那會改變啟動參數。thinking 開啟時，思考內容留在 `content` 中。
+  - completions 不經過 chat template，不受影響。
 
 ## 執行
 

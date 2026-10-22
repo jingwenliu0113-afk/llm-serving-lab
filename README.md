@@ -50,13 +50,13 @@
 - [SPEC.md](SPEC.md)：研究問題與範圍。
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
   分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
-- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–037）。
+- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–038）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
   - 023 是 Gate 的決定，024 是 Advanced 的事先登記（凍結 commit `97a948c`），025 是 Advanced 的結果，026 是 Phase 1 收尾的決定，027 是 Phase 2 的兩條線與治理規則。
   - Phase 2：
     - 028 / 032 是 C0；029 是 capserve 的架構與實作補記；030 是 Stage C 的事先登記（凍結 commit `b3c9109`）；031 是 GPU 閒置判定；
     - 033 是第一個 C1 session（已被取代），034 是重跑的取捨規則，035 是最終結果，036 是 Phase 2 結案（含適用條件、IT 的限制與正式 profile 的保護）。
-  - Phase 3：037 是範圍、順序與共通規則。
+  - Phase 3：037 是範圍、順序與共通規則；038 是 capserve v1 中不依賴研究結果的設計。
 - [docs/EXPERIMENT_RULES.md](docs/EXPERIMENT_RULES.md)、[docs/RESULTS_FORMAT.md](docs/RESULTS_FORMAT.md)、[docs/STORAGE_PLAN.md](docs/STORAGE_PLAN.md)。
 - [MACHINE_POLICY.md](MACHINE_POLICY.md)：兩台機器的分工與 lock。
 - [configs/pins.toml](configs/pins.toml)：所有 pin。
@@ -333,6 +333,7 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - **verified profile 下的 IT-3**：輸出上限 128 token，斷線時只剩約 1–1.4 s 的生成量，無法區分「被 abort」和「本來就跑完」。
   - 第一次執行記為不通過；斷線後生成確實停止，但這不構成決定性的證據。
   - 決定性的斷線驗證只來自 provisional-rtx（1,024 token）。斷線處理和 profile 無關，所以推論 verified 設定下也成立，但沒有直接證據。
+  - Phase 3 把 IT-3 改為以生成的 token 數判定，在 128 token 下也能決定（decision 038 §2）。新判定還沒有在 RTX 上執行，在那之前上表的結果不變。
 - **正式 profile 的保護**：`rtx-verified.toml` 以 `production_profile` 釘住 verified profile。
   - 部署與 IT 都會拒絕其他 profile，也拒絕任何允許 provisional 的執行（`--allow-provisional`、`CAPSERVE_ALLOW_PROVISIONAL=1`）。
   - provisional profile 不得使用 Stage C 的 class 名稱。

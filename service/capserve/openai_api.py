@@ -5,11 +5,16 @@ sequences vLLM serves and the research never measured it (tools, response_format
 echo, best_of, beam search, chat_template, truncate_prompt_tokens, vLLM sampling extensions, ...):
 - common: model, stream, stream_options (include_usage), max_tokens, temperature, top_p, stop, seed,
   presence_penalty, frequency_penalty, user, n (1 only);
-- chat: messages (system / user / assistant, text only), max_completion_tokens;
+- chat: messages (system / user / assistant, text only), max_completion_tokens, and chat_template_kwargs with
+  enable_thinking only (decision 038 §1; any other template argument changes the prompt the research never measured);
 - completions: prompt (exactly one: a string, a token-id list, or a one-element list of either), ignore_eos,
   min_tokens (<= max_tokens).
 A field sent as null is ignored, as are logprobs / echo / use_beam_search sent as false (their defaults).
 A body vLLM could not be sent is 400 too: non-finite numbers, lone surrogates, JSON nested deeper than the parser.
+
+Thinking (038 §1, user decision 037): every chat request reaches vLLM with chat_template_kwargs.enable_thinking set,
+to the client's value or to THINKING_DEFAULT (false); Qwen3.5's template then opens the answer with an empty
+think block instead of a thinking one. Completions never carry it (a raw prompt has no template).
 
 max_tokens: missing -> the active class's max_output_tokens is injected (vLLM's own default would be the rest of the
 context; documented in service/README.md); above it -> 400 max_tokens_exceeded. Chat forwards the bound as
@@ -30,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.responses import JSONResponse
 
 ROUTES = ("chat", "completions")
+THINKING_DEFAULT = False          # 038 §1: thinking off unless the client turns it on
 _OFF_DEFAULTS = {"logprobs": False, "echo": False, "use_beam_search": False}
 
 
@@ -78,6 +84,10 @@ class ChatMessage(_Strict):
     content: str | list[TextPart]
 
 
+class ChatTemplateKwargs(_Strict):
+    enable_thinking: bool | None = None
+
+
 class _Common(_Strict):
     model: str
     stream: bool = False
@@ -96,6 +106,7 @@ class _Common(_Strict):
 class ChatBody(_Common):
     messages: list[ChatMessage] = Field(min_length=1)
     max_completion_tokens: int | None = Field(None, ge=1)
+    chat_template_kwargs: ChatTemplateKwargs | None = None
 
 
 class CompletionBody(_Common):
@@ -105,7 +116,8 @@ class CompletionBody(_Common):
 
 
 _MODELS = {"chat": ChatBody, "completions": CompletionBody}
-_FIELD_NAMES = {name for m in (StreamOptions, TextPart, ChatMessage, ChatBody, CompletionBody) for name in m.model_fields}
+_FIELD_NAMES = {name for m in (StreamOptions, TextPart, ChatMessage, ChatTemplateKwargs, ChatBody, CompletionBody)
+                for name in m.model_fields}
 
 
 @dataclass(frozen=True)
@@ -198,6 +210,9 @@ def parse_request(route: str, raw: bytes, *, served_model: str, max_output_token
                        param="max_completion_tokens")
     if route == "completions":
         body["prompt"] = _one_prompt(body["prompt"])
+    else:
+        thinking = (body.pop("chat_template_kwargs", None) or {}).get("enable_thinking")
+        body["chat_template_kwargs"] = {"enable_thinking": THINKING_DEFAULT if thinking is None else thinking}
     key, max_tokens = next(iter(given.items())) if given else (out_key, max_output_tokens)
     if max_tokens > max_output_tokens:
         raise ApiError(400, "max_tokens_exceeded",

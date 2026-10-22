@@ -4,7 +4,8 @@
   the template overheads (settings [tokens]) is within max_prompt_tokens cannot exceed it; no tokenization needed.
   A token-id prompt is counted exactly. The chat overheads are deliberately generous constants until RTX IT-4
   measures them; an overhead that is too large only costs a /tokenize call.
-- Otherwise the gateway asks vLLM's /tokenize, with the same messages and add_generation_prompt (chat) or the same
+- Otherwise the gateway asks vLLM's /tokenize, with the same messages, add_generation_prompt and
+  chat_template_kwargs (chat; 038 §1: enable_thinking changes the generation prompt) or the same
   prompt with add_special_tokens (completions) that the generation request uses, while holding a permit, so
   /tokenize traffic counts against max_concurrency and never reaches vLLM for a request that is later rejected.
 """
@@ -55,6 +56,8 @@ class PromptBudget:
         """The prompt's token count from vLLM /tokenize (token-id prompts need no request)."""
         if route == "chat":
             payload = {"model": body["model"], "messages": body["messages"], "add_generation_prompt": True}
+            if "chat_template_kwargs" in body:   # 038 §1: the same template arguments as the generation request
+                payload["chat_template_kwargs"] = body["chat_template_kwargs"]
         elif isinstance(body["prompt"], list):
             return len(body["prompt"])
         else:

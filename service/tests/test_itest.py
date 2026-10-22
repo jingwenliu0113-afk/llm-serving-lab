@@ -38,6 +38,7 @@ class ChatCompletionRequest(OpenAIBaseModel):
     messages: list
     max_tokens: int | None = None
     max_completion_tokens: int | None = None
+    chat_template_kwargs: dict | None = None
 
 class TokenizeCompletionRequest(OpenAIBaseModel):
     model: str | None = None
@@ -57,6 +58,7 @@ MIXIN = '''
 class ChatTemplateMixin(OpenAIBaseModel):
     add_generation_prompt: bool = True
     continue_final_message: bool = False
+    chat_template_kwargs: dict | None = None
 '''
 ENVS = '''
 environment_variables = {
@@ -100,6 +102,10 @@ def test_it0_passes_on_the_expected_sources(tmp_path):
      "chat completions accept max_completion_tokens"),
     (dict(protocol=PROTOCOL.replace("    add_special_tokens: bool = True\n", "")),
      "/tokenize completion request accepts add_special_tokens"),
+    (dict(mixin=MIXIN.replace("    chat_template_kwargs: dict | None = None\n", "")),
+     "/tokenize chat request accepts chat_template_kwargs"),
+    (dict(protocol=PROTOCOL.replace("    chat_template_kwargs: dict | None = None\n", "")),
+     "chat completions accept chat_template_kwargs"),
     (dict(envs=ENVS.replace('"5"', '"1"')), "vLLM keep-alive outlives the gateway pool's keepalive_expiry"),
     (dict(envs="x = 1\n"), "vLLM keep-alive outlives the gateway pool's keepalive_expiry"),
 ])
@@ -182,22 +188,53 @@ async def test_it2_overload_against_the_fake(tmp_path):
 @pytest.mark.anyio
 async def test_it3_disconnects_free_vllm_within_2s(tmp_path):
     prof = make_profile(max_output_tokens=1024)
-    async with stack(FakeConfig(itl_s=0.01, n_tokens=1024), prof) as st:
+    async with stack(FakeConfig(itl_s=0.01, n_tokens=1024, honor_max_tokens=True), prof) as st:
         res = await itest.it3(ctx_for(st, tmp_path))
         assert st.fake.cancelled_ids                                  # both requests were cancelled upstream
     assert res["ok"] is True, [c for c in res["checks"] if not c["ok"]]
     for case in ("stream", "non-stream"):
         assert check(res, f"{case}: vLLM running + waiting back to 0 within 2 s")["ok"]
-        assert check(res, f"{case}: the request would have run past the window (decisive)")["ok"]
+        assert check(res, f"{case}: the generation was cut short (decisive)")["ok"]
         assert check(res, f"{case}: no tokens generated after the disconnect")["ok"]
+        data = res["data"][case.replace("-", "_")]
+        assert 0 < data["tokens_generated"] < data["max_tokens"] == 1024 and data["remaining_s"] is not None
 
 
 @pytest.mark.anyio
-async def test_it3_is_not_decisive_with_short_generations(tmp_path):
-    async with stack(FakeConfig(itl_s=0.001, n_tokens=200)) as st:       # 128 output tokens finish at once
+async def test_it3_is_decisive_within_a_128_token_bound(tmp_path):
+    """036's limitation: 128 tokens take ~2.6 s here, less than the old 4 s of remaining generation, so the time-based
+    check could never decide; the token count does (038 §2)."""
+    async with stack(FakeConfig(itl_s=0.02, n_tokens=1024, honor_max_tokens=True)) as st:   # profile bound: 128
+        res = await itest.it3(ctx_for(st, tmp_path))
+    assert res["ok"] is True, [c for c in res["checks"] if not c["ok"]]
+    for case in ("stream", "non_stream"):
+        assert res["data"][case]["max_tokens"] == 128 and res["data"][case]["tokens_generated"] < 128
+        assert res["data"][case]["remaining_s"] < itest.DECISIVE_FACTOR * itest.DISCONNECT_WINDOW_S
+
+
+@pytest.mark.anyio
+async def test_it3_fails_when_the_whole_output_was_generated(tmp_path):
+    """Delta = max_tokens: nothing shows the abort reached vLLM (too late, or never), so IT-3 fails (038 §2)."""
+    async with stack(FakeConfig(itl_s=0.0, n_tokens=1024, honor_max_tokens=True)) as st:    # 128 tokens at once
         res = await itest.it3(ctx_for(st, tmp_path))
     assert res["ok"] is False
-    assert check(res, "stream: the request would have run past the window (decisive)")["ok"] is False
+    for case in ("stream", "non-stream"):
+        item = check(res, f"{case}: the generation was cut short (decisive)")
+        assert item["ok"] is False and item["detail"].startswith("128 of 128 tokens")
+
+
+@pytest.mark.anyio
+async def test_it3_fails_when_generation_tokens_are_unreadable(tmp_path, monkeypatch):
+    orig = itest._vllm_load
+
+    async def no_tokens(vc):
+        load, _ = await orig(vc)
+        return load, None
+
+    monkeypatch.setattr(itest, "_vllm_load", no_tokens)
+    async with stack(FakeConfig(itl_s=0.01, n_tokens=1024, honor_max_tokens=True)) as st:
+        res = await itest.it3(ctx_for(st, tmp_path))
+    assert check(res, "stream: the generation was cut short (decisive)")["ok"] is False
 
 
 @pytest.mark.anyio
@@ -208,6 +245,11 @@ async def test_it4_tokenize_parity_against_the_fake(tmp_path):
     assert check(res, "' the' x 256 is 256 tokens")["ok"]
     assert any(c["name"].startswith("chat bound holds") for c in res["checks"])
     assert res["data"]["chat"] and all("count" in m and "bound" in m for m in res["data"]["chat"])
+    assert {m["thinking"] for m in res["data"]["chat"]} == {False, True}
+    assert len(res["data"]["chat"]) == 2 * len(itest.CHAT_CASES)
+    sent = [s.body for s in st.fake.seen if s.path == "/tokenize" and "messages" in s.body]
+    assert {json.dumps(b["chat_template_kwargs"]) for b in sent} == {'{"enable_thinking": false}',
+                                                                     '{"enable_thinking": true}'}
     assert res["data"]["settings_tokens"] == Settings.model_fields["tokens"].default.model_dump()
 
 
@@ -256,17 +298,21 @@ async def test_it4_fails_a_template_just_above_the_constants(tmp_path, monkeypat
     res = await it4_with_template(tmp_path, monkeypatch, tok.chat_overhead + tok.per_message + len("user") + 1)
     assert res["ok"] is False
     failing = {c["name"] for c in res["checks"] if not c["ok"]}
-    assert "chat template within the overhead constants: one user message (' the' x 16)" in failing
-    assert "chat template within the overhead constants: empty user message" in failing
-    assert "chat bound holds: one user message (' the' x 16)" not in failing   # the bound alone would have passed
-    (one,) = [m for m in res["data"]["chat"] if m["name"] == "one user message (' the' x 16)"]
-    assert (one["content_tokens"], one["template_tokens"], one["allowed"]) == (16, 53, 52)
+    for thinking in ("off", "on"):
+        assert f"chat template within the overhead constants: one user message (' the' x 16), thinking {thinking}" \
+            in failing
+        assert f"chat template within the overhead constants: empty user message, thinking {thinking}" in failing
+        # the bound alone would have passed
+        assert f"chat bound holds: one user message (' the' x 16), thinking {thinking}" not in failing
+    ones = [m for m in res["data"]["chat"] if m["name"] == "one user message (' the' x 16)"]
+    assert [(m["thinking"], m["content_tokens"], m["template_tokens"], m["allowed"]) for m in ones] == \
+        [(False, 16, 53, 52), (True, 16, 53, 52)]
 
 
 @pytest.mark.anyio
 async def test_it4_measures_per_message_with_many_messages(tmp_path, monkeypatch):
     res = await it4_with_template(tmp_path, monkeypatch, 0)
-    (many,) = [m for m in res["data"]["chat"] if m["name"].startswith("many messages")]
+    (many,) = [m for m in res["data"]["chat"] if m["name"].startswith("many messages") and not m["thinking"]]
     assert many["messages"] >= 8 and many["template_tokens"] == 0
     tok = Settings.model_fields["tokens"].default
     msgs = dict(itest.CHAT_CASES)[many["name"]]
