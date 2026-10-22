@@ -25,7 +25,7 @@ tau1_s = { "2048" = 1.845, "8192" = 2.95, "32768" = 7.92 }  # 030 8.4: Core C 1 
 t_tau_factor = 2                                          # 039 D-A: T workloads' tau1 = 2 x B0's (timeouts only)
 server_ready_timeout_s = 1800                             # 030 8.4
 mix_dataset_sha256 = { "8192" = "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2" }  # M8K-T: the 007 8K mix (pins)
-var_dataset_sha256 = { "2048" = "", "8192" = "" }         # D-C var workloads: stage_d_datasets output, pinned before the freeze
+var_dataset_sha256 = { "2048" = "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1", "8192" = "d550acc8d25984c2885174e62aa2326004d67fcfddc7fc2bd1f8272c305f2220" }  # D-C: stage_d_datasets on WSL (2026-10-23; 352 / 208 rows, lengths 64-1920 / 86-8015), pinned before the freeze
 
 [stage_d.sessions]
 # 039: the workloads of each session, in Phase S order
