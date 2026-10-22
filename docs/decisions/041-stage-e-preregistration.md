@@ -81,13 +81,13 @@
 - **L4**：gap(k) = 到達(8k+1) − 到達(8k) < 200 ms。
 - **L5**（Advanced）：ΔQ(k) = 8k+1…8k+7 的 Q 減同位置正常組 Q 的中位數，取平均；成立條件 > 170 ms。
 - **送出延遲**（Core；C0 與 Advanced 需取回 bench.json）：依時間排序，第 C + m 個送出減第 m 個完成（封閉迴路的 semaphore，與 idx 無關）；每段列出 8k+1…8k+7 的值與最大值。只用 client 的時鐘（start_times 與 latency），不和 server 的時鐘相減。
-- **F 尖峰的描述**（Advanced 全部 15 run；T、TG 只有這一項）：g 1–24 中 F(8g) > 35 ms 的組、F 的值、g 1–23 的尖峰率；有 step 紀錄時（T、TG 需取回），計 8g 到達之後、它自己的 prefill 開始 s = arrival + server_ttft − P 之前（含）結束的 step 數，與其中 decode-only 的數目，對照同一 run 的 g 1–23 中位數，並列出「尖峰而且多 1 個 step」的組數。step 的時間戳是 step 結束時，所以同時列出 s 減最後一個計入的時間戳（margin），margin 很小時計數可能差 1。這個錨點不用「第一個 ctx_tok > 0 的 step」，因為 T 的小 chunk 可能屬於別的 request。
+- **F 尖峰的描述**（Advanced 全部 15 run；T、TG 只有這一項）：g 1–24 中 F(8g) > 35 ms 的組、F 的值、g 1–23 的尖峰率；有 step 紀錄時（T、TG 需取回），計 8g 到達之後、它自己的 prefill 開始 s = arrival + server_ttft − P 之前（含）結束的 step 數，與其中 decode-only 的數目，對照同一 run 的 g 1–23 中位數，並列出「尖峰而且多 1 個 step」的組數。step 的時間戳是 step 結束時、精度 1 ms，所以列出兩個窗邊（arrival 與 s）各自到兩側最近時間戳的距離，取最小值為 margin；margin < 1 ms（低於時間戳的精度）時該組的計數標為 ambiguous，「尖峰而且多 1 個 step」另列不含 ambiguous 的組數。這個錨點不用「第一個 ctx_tok > 0 的 step」，因為 T 的小 chunk 可能屬於別的 request。
 
 ### 1.5 E1-D 的描述規則
 
 - 逐段列出：數據集、run 或 bench、k、起始 idx、是否連續、可得的 L1–L5、送出延遲。
 - 「鏈在該數據集成立」：可評估的段（g 1–23、非連續）中最多 1 段有某一環不成立，而且非滑移組中 L1 成立的比例 ≤ 2%；否則寫「鏈不完整」並列出例外。Advanced 的鏈只用 B0、G、K3；T、TG 的尖峰率另列在旁邊，結果文件明寫：若把 T、TG 的 20 次尖峰算進非滑移組，L1 的誤報率約 5.9%，超過 2%。
-- 缺少某個 raw 檔時，只把依賴它的量標 blocked（例如沒有 spans 時 L3 用代理量、沒有 bench.json 時沒有送出延遲）；raw 檔的 sha256 和 raw_manifest 不符時停止分析。
+- 缺少某個 raw 檔時，只把依賴它的量標 blocked（例如沒有 spans 時 L3 用代理量、沒有 bench.json 時沒有送出延遲）；raw 檔的 sha256 和 raw_manifest 不符時停止分析，包括取回時不符、被 `fetch_raw.sh` 改名為 `<file>.sha256-mismatch` 的檔（`fetch-list` 也拒絕）。
 - 三個數據集分開報告，不合併；起始 idx 的分布逐數據集列出。
 
 ### 1.6 E1-P：換 seed 的探針（A1 待決定）
@@ -120,7 +120,7 @@
 
 ### 1.7 E1 的凍結證據
 
-- **`freeze.e1`**：E1-D 的模組、合成 fixture 的測試（連續滑移、g 0 與 g 24 的排除、n = 192 的短 bench、時鐘不跨來源、亂序完成的送出延遲、e2e 與代理量不同、部分取回）與取回清單一起 commit，`freeze.e1_harness_sha256` 記下當時的 `harness_sha256()`；`[e1]` 的五個值固定為本節的值。`fetch-list` 與 `analyze` 在未凍結或 harness 不符時拒絕。之後才以 `tools/rtx/fetch_raw.sh` 唯讀取回（放進 `results/capacity/c0-step0/raw/<session>/`）並依 raw_manifest 驗證 sha256：
+- **`freeze.e1`**：E1-D 的模組、合成 fixture 的測試（連續滑移、g 0 與 g 24 的排除、n = 192 的短 bench、時鐘不跨來源（client 與 server 的時間刻意不同，送出延遲與 C0 的 L4 都核對數值）、亂序完成的送出延遲、e2e 與代理量不同（代理量的 index 也核對）、部分取回、取回時 sha256 不符、窗邊的 ambiguous）與取回清單一起 commit，`freeze.e1_harness_sha256` 記下當時的 `harness_sha256()`；`[e1]` 的五個值固定為本節的值。`fetch-list` 與 `analyze` 在未凍結或 harness 不符時拒絕。之後才以 `tools/rtx/fetch_raw.sh` 唯讀取回（放進 `results/capacity/c0-step0/raw/<session>/`）並依 raw_manifest 驗證 sha256：
   - `advanced formal-20261011-adv`：{B0,G,K3}-8192-uniform-r{1,2,3} 的 spans.jsonl 與 bench.json，以及 {T,TG} 的 steps.jsonl；
   - `capacity explore-c0-20261016`：b*-n*.bench.json。
   - 取回會讀 WSL 的磁碟與網路，只在 `tools/rtx/gpu_status.sh` 印出 FREE 時進行（不拿、不等 lock），排在 GPU 正式 session 之外。
@@ -342,7 +342,9 @@
 - 每次 session 前驗證 8 個 GGUF 的 sha256 與 header（token_embd 的 bytes 與類型、tie、`output.weight` 的類型、tensor 類型分布、model_size），任一不符就不開始；每列 llama-bench 結果的 model_filename、model_size、model_type 都要和 `configs/stage_e3.toml` 一致，不符的列記為 error。
 - RTX 的 B 在建立 session 目錄之前量；量不到時什麼都不開始。
 - sentinel 漂移 > 3% 或 env 無效：session 作廢，可重跑一次；只分析第一個有效的 session。具體規則：
-  - session 目錄只能是 `results/stage_e/<id>`（不可巢狀），第一個 job 之前先寫 `session.json`（status running），所以中斷的 session 也是一次嘗試；在第一個 job 之前就被拒絕的（status refused，例如 adapter 或 build 不符）不算。
+  - session 目錄只能是 `results/stage_e/<id>`（不可巢狀），第一個 job 之前先寫 `session.json`（status running；之後的覆寫是先寫暫存檔再 rename），所以中斷的 session 也是一次嘗試；`session.json` 讀不到時以 `plan.json` 判定，算一次作廢的嘗試（fail closed）。在第一個 job 之前就被拒絕的（status refused，例如 adapter 或 build 不符）不算。
+  - pilot 也只能執行 build_plan 的 pilot plan（mode 只有 pilot 與 formal，plan 與 harness 都要相符），所以完整設計不能標成 pilot 執行。
+  - plan 記錄的 `stage_e3_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊，所以一個平台先跑完正式 session、另一個平台之後才凍結，前者仍可分析；分析比對 plan 時不比 `pins_sha256`（pins 帶進 plan 的內容逐項比對）。
   - 同一平台已有一個有效的正式 session，或已有兩次嘗試時，runner 拒絕再開始；分析也拒絕「之前有兩次以上嘗試，或之前已有有效 session」的 session。
 - 任一格少於 3 個 ok 的 process 或有 spill：依賴該格的 hypothesis 為 NT（H-E3a 需要 6 個舊設定；H-E3b 需要 6 個舊設定（全域擬合與 κ）加兩個 size 的 Q4_0）。不改設定重試。
 - 上限：Mac session 1.5 h，RTX 1.0 h，只計量測時間：從第一個 job 開始，扣掉 session 中的充電暫停；開始前的雜湊、header 檢查、B、preflight 與 Mac 在開始前的一次充電閘門都不計。到上限時跳過剩下的 job（未完成的格為 NT），但 end sentinel 一定執行（漂移要量）。每個 job 的 timeout 為 min(7,200 s, 剩餘上限 + 600 s)，end sentinel 為 7,200 s。
@@ -430,3 +432,7 @@
   - pilot 證據加上 env 有效、Mac adapter 與瓦數、RTX 的 B drift、8 個檔與 header、上限與參數數（3.7）。
   - 分析補上共用斜率擬合、a_f 兩兩差距、兩種 φ 的定義（3.5）；任一平台 incomplete 時不寫一般結論；H-E3b 的 NT 依賴改寫為 6 個舊設定加兩個 Q4_0（3.6）。
   - `produce_gguf_e3.py` 驗證 Mac lock 的擁有者，並加上把兩個 Q4_0 傳到 WSL 的 `sync`。
+- 修正後的覆核（審查者加反駁者，確認 9 項，其中 1 項 must-fix）：
+  - E3（must-fix）：plan 原本記錄設定檔 bytes 的雜湊，另一個平台之後凍結會讓已完成的正式 session 無法分析，而重跑上限又讓它無法重跑；改為不含 `[freeze]` 的內容雜湊，分析不比 `pins_sha256`（3.6）。
+  - E3：pilot 也必須是 build_plan 的 pilot plan；嘗試次數在 `session.json` 讀不到時以 `plan.json` 判定；`session.json` 改為原子寫入（3.6）。
+  - E1-D：F 尖峰計數的 margin 改為兩個窗邊、兩側的距離，低於 1 ms 標 ambiguous（1.4）；取回時 sha256 不符（`.sha256-mismatch`）也停止分析（1.5）；測試改為 client 與 server 的時間不同、g 0 亂序完成，核對送出延遲、C0 的 L4 與代理量的 index，覆核者的 10 個突變全部被抓到（1.7）。

@@ -8,8 +8,9 @@ with every comparison inside it.
   and the sentinel cell once.
 - configs/stage_e3.toml freezes each platform on its own (freeze.e3_metal / e3_cuda) with its passed pilot (mode
   pilot, finished, its platform's host, build_plan's pilot plan, every job ok, env valid with the Mac's 140W adapter
-  and its watts or the RTX's undrifted B, all eight GGUFs' sha256 and headers verified, this harness); formal plans
-  need both.
+  and its watts or the RTX's undrifted B, all eight GGUFs' sha256 and headers verified, this harness); a formal plan
+  needs its own platform's freeze and pilot. A plan records stage_e3_sha256 = the config's content without [freeze],
+  so freezing the other platform later changes no plan.
 - The runner: the Mac under the Mac heavy lock (owner verified) with 037 §4's rules (the Apple 140W adapter, one
   powermode, AC, battery, thermal; run_core_a's 70 W rule does not apply to Phase 3), the RTX under the GPU lock
   (verified) with the session-start B (stage_b.measure_baseline, before the session directory exists). Before the
@@ -178,8 +179,13 @@ def _params(pins: dict, platform: str) -> tuple:
     return sb["rtx_n_thr"], sb["rtx_poll"], sb["b_mib"]
 
 
+def config_sha256(cfg: dict) -> str:
+    """configs/stage_e3.toml's content without [freeze] (comments and the freeze flags never change a plan)."""
+    return sha256_json({k: v for k, v in cfg.items() if k != "freeze"})
+
+
 def build_plan(pins: dict, cfg: dict, *, platform: str, mode: str, pins_sha256: str | None = None,
-               stage_e3_sha256: str | None = None, root=ROOT) -> dict:
+               root=ROOT) -> dict:
     """Pilot plans need the new GGUFs pinned; formal plans also need the platform's freeze and its passed pilot under
     root."""
     if platform not in PLATFORMS or mode not in ("pilot", "formal"):
@@ -206,7 +212,7 @@ def build_plan(pins: dict, cfg: dict, *, platform: str, mode: str, pins_sha256: 
         random.Random(int(hashlib.sha256(f"{e['seed']}:stage_e:E3:{platform}".encode()).hexdigest(), 16)).shuffle(body)
     jobs = [job("sentinel", s["size"], s["quant"], 1, "start"), *body, job("sentinel", s["size"], s["quant"], 1, "end")]
     return {"schema_version": SCHEMA_VERSION, "stage": STAGE, "platform": platform, "mode": mode, "seed": e["seed"],
-            "pins_sha256": pins_sha256, "stage_e3_sha256": stage_e3_sha256, "harness_sha256": harness_sha256(),
+            "pins_sha256": pins_sha256, "stage_e3_sha256": config_sha256(cfg), "harness_sha256": harness_sha256(),
             "files": files, "params": {"n_thr": n_thr, "poll": poll, "reps": e["reps"], "bench_r": ap.BENCH_R,
                                        "delay_s": ap.DELAY_S, "idle_s": ap.IDLE_S},
             "cap_s": e["cap_hours"][platform] * 3600, "n_params": e["n_params"],
@@ -345,20 +351,32 @@ def output_problems(out_dir, *, repo_root=ROOT) -> list:
     return []
 
 
+def _read_json(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
 def formal_attempts(repo_root, platform: str) -> list:
-    """Every formal E3 session.json of the platform under results/stage_e (final or the running stub), oldest first,
-    except runs refused before their first job; valid = finished, env valid and no sentinel drift."""
+    """Every formal E3 attempt of the platform under results/stage_e, oldest first: a directory whose session.json
+    (final or the running stub) or, when that is unreadable, plan.json is a formal E3 one for the platform; runs refused
+    before their first job are left out. valid = finished, env valid and no sentinel drift; an unreadable
+    session.json counts as a void attempt, oldest (fail closed)."""
     out = []
-    for f in Path(repo_root).joinpath(*RESULTS).rglob("session.json"):
-        try:
-            s = json.loads(f.read_text())
-        except (OSError, ValueError):
+    dirs = {f.parent for name in ("session.json", "plan.json")
+            for f in Path(repo_root).joinpath(*RESULTS).rglob(name)}
+    for d in sorted(dirs):
+        s = _read_json(d / "session.json")
+        head = s if isinstance(s, dict) else _read_json(d / "plan.json")
+        if not isinstance(head, dict) or (head.get("stage"), head.get("mode"), head.get("platform")) != \
+                (STAGE, "formal", platform):
             continue
-        if (s.get("stage"), s.get("mode"), s.get("platform")) != (STAGE, "formal", platform) or \
-                s.get("status") == "refused":
+        s = s if isinstance(s, dict) else {}
+        if s.get("status") == "refused":
             continue
         valid = s.get("status") == "finished" and s.get("env_valid") is True and s.get("sentinel_ok") is True
-        out.append({"dir": f.parent, "started_at": s.get("started_at") or "", "valid": valid})
+        out.append({"dir": d, "started_at": s.get("started_at") or "", "valid": valid})
     return sorted(out, key=lambda a: (a["started_at"], str(a["dir"])))
 
 
@@ -400,8 +418,8 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
            expected_plan: dict | None = None, repo_root=ROOT, clock: Callable = time.monotonic, timeout_s: float = 7200,
            now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat()) -> dict:
     platform, mode = plan.get("platform"), plan.get("mode")
-    if plan.get("stage") != STAGE or platform not in PLATFORMS:
-        raise StageE3Error(f"not an E3 plan ({plan.get('stage')!r}, {platform!r})")
+    if plan.get("stage") != STAGE or platform not in PLATFORMS or mode not in ("pilot", "formal"):
+        raise StageE3Error(f"not an E3 pilot or formal plan ({plan.get('stage')!r}, {platform!r}, {mode!r})")
     problems = output_problems(out_dir, repo_root=repo_root)
     if problems:
         raise StageE3Error("; ".join(problems))
@@ -410,11 +428,11 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
         raise StageE3Error("E3 on the Mac runs under the Mac heavy lock (tools/with-mac-lock)" if mac else
                            "E3 on the RTX holds the GPU lock (flock -n ... --gpu-lock-held; verified, not trusted)")
     formal = mode == "formal"
-    if formal and plan.get("harness_sha256") != harness_sha256():
-        raise StageE3Error("the formal plan was built by another harness (harness_sha256)")
-    if formal and (expected_plan is None or plan != expected_plan):
-        raise StageE3Error("a formal plan must be exactly build_plan's for this platform, pins and "
-                           "configs/stage_e3.toml (041 凍結)")
+    if plan.get("harness_sha256") != harness_sha256():
+        raise StageE3Error(f"the {mode} plan was built by another harness (harness_sha256)")
+    if expected_plan is None or plan != expected_plan:
+        raise StageE3Error(f"a {mode} plan must be exactly build_plan's for this platform, pins and "
+                           "configs/stage_e3.toml (041 v3 §3.6, 3.7)")
     out = Path(out_dir)
     if out.exists():
         raise StageE3Error(f"{out} exists; sessions are never resumed or overwritten")
@@ -452,8 +470,10 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
                "lock_held": lock_held, "ggufs_sha256": shas, "header_verified": verified, "session_b": session_b,
                "started_at": now()}
 
-    def write_session():
-        (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
+    def write_session():                                    # atomic: a torn write never hides the attempt
+        tmp = out / "session.json.tmp"
+        tmp.write_text(json.dumps(session, indent=1) + "\n")
+        os.replace(tmp, out / "session.json")
 
     write_session()                                         # the stub: an interrupted run is still an attempt
     (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
@@ -565,8 +585,7 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(cfg_raw.decode())
 
     def plan_for(platform: str, mode: str) -> dict:
-        return build_plan(pins, cfg, platform=platform, mode=mode, pins_sha256=hashlib.sha256(raw).hexdigest(),
-                          stage_e3_sha256=hashlib.sha256(cfg_raw).hexdigest())
+        return build_plan(pins, cfg, platform=platform, mode=mode, pins_sha256=hashlib.sha256(raw).hexdigest())
 
     try:
         if args.cmd == "plan":
@@ -584,7 +603,7 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
                    capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"), session_id=Path(args.out).name,
                    lock_held=(os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1") if platform == "macos-metal"
                    else args.gpu_lock_held, pins=pins, cfg=cfg, measure_b=measure_b,
-                   expected_plan=plan_for(platform, "formal") if plan.get("mode") == "formal" else None)
+                   expected_plan=plan_for(platform, plan.get("mode")))
     except StageE3Error as exc:
         print(f"stage_e3: {exc}", file=sys.stderr)
         return 2

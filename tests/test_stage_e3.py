@@ -116,7 +116,8 @@ def run(root, plan, sid, **kw):
                 capture_env=env(platform), lock_held=True, lock_check=lambda: True, run_proc=bench_output(),
                 sleep=lambda s: None, read_power=lambda: {"source": "AC", "battery_pct": 90}, hash_file=file_hash,
                 read_header=fake_header, measure_b=lambda frozen: {"b_mib": frozen, "ok": True, "drift": False},
-                pins=PINS, cfg=pinned(), repo_root=root, clock=iter(range(0, 10 ** 9, 10)).__next__)
+                pins=PINS, cfg=pinned(), repo_root=root, clock=iter(range(0, 10 ** 9, 10)).__next__,
+                expected_plan=plan)
     args.update(kw)
     return e3.run_e3(plan, **args)
 
@@ -356,6 +357,28 @@ def test_a_formal_rtx_session_measures_b_and_records_the_sentinel_drift(frozen_r
     assert s["sentinel_ok"] is False and s["sentinel"]["drift_pct"] == pytest.approx(20.0)
 
 
+def test_a_pilot_too_must_be_build_plans_and_only_pilot_or_formal_runs(frozen_root, tmp_path):
+    pilot = e3.build_plan(PINS, pinned(), platform="wsl2-cuda", mode="pilot")
+    full, _ = formal(frozen_root)
+    with pytest.raises(e3.StageE3Error, match="exactly build_plan's"):        # the whole design labelled a pilot
+        run(tmp_path, {**full, "mode": "pilot"}, "a", expected_plan=pilot)
+    with pytest.raises(e3.StageE3Error, match="pilot or formal"):
+        run(tmp_path, {**pilot, "mode": "smoke"}, "b")
+    with pytest.raises(e3.StageE3Error, match="another harness"):
+        run(tmp_path, {**pilot, "harness_sha256": "0" * 64}, "c")
+    assert e3.formal_attempts(tmp_path, "wsl2-cuda") == [] and not (tmp_path / "results" / "stage_e" / "a").exists()
+
+
+def test_a_plan_pins_the_configs_content_without_freeze():
+    a = e3.build_plan(PINS, pinned(), platform="wsl2-cuda", mode="pilot")
+    cfg = pinned()
+    cfg["freeze"] = {**cfg["freeze"], "e3_metal": True, "pilot_e3_metal": "p"}
+    assert e3.build_plan(PINS, cfg, platform="wsl2-cuda", mode="pilot") == a
+    other = pinned()
+    other["e3"] = {**other["e3"], "seed": 1}
+    assert e3.config_sha256(other) != a["stage_e3_sha256"] == e3.config_sha256(pinned())
+
+
 def test_a_session_directory_is_exactly_results_stage_e_id(tmp_path):
     plan = e3.build_plan(PINS, pinned(), platform="wsl2-cuda", mode="pilot")
     with pytest.raises(e3.StageE3Error, match="results/stage_e/<session id>"):
@@ -394,6 +417,17 @@ def test_one_valid_formal_session_or_one_void_attempt_and_its_rerun(frozen_root,
     assert run(root, plan, "i2", expected_plan=plan, cfg=cfg)["env_valid"] is True
     with pytest.raises(e3.StageE3Error, match="already has formal E3 attempts"):
         run(root, plan, "i3", expected_plan=plan, cfg=cfg)
+
+    root = tmp_path / "torn"                                       # an unreadable session.json still counts
+    shutil.copytree(frozen_root, root)
+    run(root, plan, "t1", expected_plan=plan, cfg=cfg, measure_b=lambda f: {"b_mib": f + 900, "drift": True})
+    (root / "results" / "stage_e" / "t1" / "session.json").write_text('{"stage": "E3", "mo')
+    assert not (root / "results" / "stage_e" / "t1" / "session.json.tmp").exists()
+    attempts = e3.formal_attempts(root, "wsl2-cuda")
+    assert [(a["dir"].name, a["valid"], a["started_at"]) for a in attempts] == [("t1", False, "")]
+    run(root, plan, "t2", expected_plan=plan, cfg=cfg, measure_b=lambda f: {"b_mib": f + 900, "drift": True})
+    with pytest.raises(e3.StageE3Error, match="already has formal E3 attempts"):
+        run(root, plan, "t3", expected_plan=plan, cfg=cfg)
 
 
 class FakeTime:

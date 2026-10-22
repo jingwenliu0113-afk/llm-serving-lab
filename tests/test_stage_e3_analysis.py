@@ -153,11 +153,10 @@ def test_only_the_first_valid_formal_session_after_at_most_one_void_attempt_is_a
     root, cfg = te_frozen
     base = root / "results" / "stage_e"
     pins_sha = hashlib.sha256((ROOT / "configs" / "pins.toml").read_bytes()).hexdigest()
-    plan = e3.build_plan(PINS, cfg, platform="wsl2-cuda", mode="formal", pins_sha256=pins_sha, stage_e3_sha256="e",
-                         root=root)
+    plan = e3.build_plan(PINS, cfg, platform="wsl2-cuda", mode="formal", pins_sha256=pins_sha, root=root)
     te.run(root, plan, "formal-a", expected_plan=plan, cfg=cfg, measure_b=lambda f: {"b_mib": f + 900, "drift": True})
     second = te.run(root, plan, "formal-b", expected_plan=plan, cfg=cfg)
-    kw = dict(pins=PINS, cfg=cfg, pins_sha256=pins_sha, stage_e3_sha256="e", root=root)
+    kw = dict(pins=PINS, cfg=cfg, root=root)
     assert any("void" in p for p in ea.session_problems(base / "formal-a", **kw))
     assert second["env_valid"] and ea.session_problems(base / "formal-b", **kw) == []
     assert any("not a finished formal" in p for p in ea.session_problems(base / "pilot-e3_cuda", **kw))
@@ -172,3 +171,12 @@ def test_only_the_first_valid_formal_session_after_at_most_one_void_attempt_is_a
 def te_frozen(tmp_path):
     root = te.pilots(tmp_path / "repo")
     return root, te.pinned(e3.PLATFORMS)
+
+
+def test_freezing_the_other_platform_later_keeps_a_session_analyzable(tmp_path):
+    root = te.pilots(tmp_path / "repo")
+    cuda_only = te.pinned(("wsl2-cuda",))
+    plan = e3.build_plan(PINS, cuda_only, platform="wsl2-cuda", mode="formal", pins_sha256="old pins", root=root)
+    assert te.run(root, plan, "formal-rtx", expected_plan=plan, cfg=cuda_only)["env_valid"]
+    both = te.pinned(e3.PLATFORMS)                                 # the Mac freezes afterwards; pins.toml moved on
+    assert ea.session_problems(root / "results" / "stage_e" / "formal-rtx", pins=PINS, cfg=both, root=root) == []

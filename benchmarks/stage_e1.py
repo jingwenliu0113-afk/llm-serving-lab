@@ -55,6 +55,7 @@ import c0_analysis as ca  # noqa: E402
 C, L = 8, 8192
 BASE_GROUPS = range(1, 24)
 CONFIG = ROOT / "configs" / "stage_e1.toml"
+STAMP_RESOLUTION_MS = 1.0                                 # steps.jsonl stamps are whole epoch milliseconds
 HARNESS_FILES = ("benchmarks/stage_e1.py", "benchmarks/c0_analysis.py")      # c0_analysis has no guard test
 RESULTS = ("results", "stage_e")
 ADV = Path("results/advanced/formal-20261011-adv")
@@ -236,12 +237,22 @@ def admission_s(row: dict) -> float:
 
 
 def n_dec_anchored(steps: list, row: dict) -> dict:
-    """Steps stamped in (arrival, s] (a step's stamp is its end; T / TG chunks can make some of them mixed), how many
-    of them are decode-only, and s minus the last such stamp: how close the count is to gaining or losing one step."""
+    """Steps stamped in (arrival, s] (a step's stamp is its end; T / TG chunks can make some of them mixed) and how
+    many of them are decode-only. The distance from each window edge to the nearest stamp on either side shows how
+    close the count is to gaining or losing one step; below the stamps' resolution (1 ms) the count is ambiguous."""
     a, s = row["arrival"], admission_s(row)
+    t = [x["t"] for x in steps]
     inside = [x for x in steps if a < x["t"] <= s]
-    return {"n": len(inside), "decode_only": sum(x["ctx_tok"] == 0 for x in inside),
-            "margin_ms": (s - inside[-1]["t"]) * 1000 if inside else None}
+    before_a, after_a = [v for v in t if v <= a], [v for v in t if v > a]
+    before_s, after_s = [v for v in t if v <= s], [v for v in t if v > s]
+    edges = {"arrival_minus_stamp_ms": (a - before_a[-1]) * 1000 if before_a else None,
+             "stamp_minus_arrival_ms": (after_a[0] - a) * 1000 if after_a else None,
+             "s_minus_stamp_ms": (s - before_s[-1]) * 1000 if before_s else None,
+             "stamp_minus_s_ms": (after_s[0] - s) * 1000 if after_s else None}
+    known = [v for v in edges.values() if v is not None]
+    margin = min(known) if known else None
+    return {"n": len(inside), "decode_only": sum(x["ctx_tok"] == 0 for x in inside), "edges": edges,
+            "margin_ms": margin, "ambiguous": margin is None or margin < STAMP_RESOLUTION_MS}
 
 
 def f_spikes(rows: list, steps: list | None, cfg: dict) -> dict:
@@ -258,10 +269,11 @@ def f_spikes(rows: list, steps: list | None, cfg: dict) -> dict:
         st = sorted(steps, key=lambda x: x["t"])
         nd = {g: n_dec_anchored(st, rows[C * g]) for g in groups}
         med = statistics.median(nd[g]["n"] for g in in_base)
+        plus1 = [g for g in spikes if nd[g]["n"] == med + 1]
         out["n_dec_anchor"] = {"median_g1_23": med, "spikes": {g: nd[g] for g in spikes},
-                               "spikes_at_median_plus_1": sum(nd[g]["n"] == med + 1 for g in spikes),
-                               "min_margin_ms": min((x["margin_ms"] for x in nd.values() if x["margin_ms"] is not None),
-                                                    default=None)}
+                               "spikes_at_median_plus_1": len(plus1),
+                               "spikes_at_median_plus_1_unambiguous": sum(not nd[g]["ambiguous"] for g in plus1),
+                               "ambiguous_groups_g1_23": sum(nd[g]["ambiguous"] for g in in_base)}
     return out
 
 
@@ -283,6 +295,8 @@ def raw_input(root: Path, session: Path, name: str, used: dict, *, required: boo
     key = f"raw/{name}"
     if key not in m:
         raise StageE1Error(f"{key} is not in {session}/raw_manifest.json")
+    if (root / path).with_name(name + ".sha256-mismatch").exists():                 # fetch_raw.sh's exit 5
+        raise StageE1Error(f"{path} failed its raw_manifest.json sha256 when it was fetched")
     if not (root / path).is_file():
         if required:
             raise StageE1Error(f"{path} is missing")
@@ -424,6 +438,12 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
         print("stage_e1: " + "; ".join(problems), file=sys.stderr)
         return 2
     if args.cmd == "fetch-list":
+        bad = [f"{s}/{n}" for _, s, names in FETCH for n in names
+               if (ROOT / COPIES / s / f"{n}.sha256-mismatch").exists()]
+        if bad:
+            print(f"stage_e1: fetched files failed their sha256, the analysis stops (041 v3 §1.5): {bad}",
+                  file=sys.stderr)
+            return 2
         print("stage_e1: fetch only while tools/rtx/gpu_status.sh prints FREE (041 v3 §1.7: never during a GPU "
               "session; the fetch takes no lock)", file=sys.stderr)
         for sub_dir, session, names in FETCH:

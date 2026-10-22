@@ -16,16 +16,19 @@ CFG = tomllib.loads((ROOT / "configs" / "stage_e1.toml").read_text())
 FROZEN = {**CFG, "freeze": {"e1": True, "e1_harness_sha256": e1.harness_sha256()}}
 PERIOD = 0.416
 EPOCH = 1.79e9                                   # server clock (spans, steps, derived arrival)
+DELAY_MS = (0.2, 0.3, 0.45)                      # client send -> server arrival, by idx % 3
+LAG_MS = 0.05                                    # client completion -> the send it releases
+PERM = (3, 0, 1, 2, 7, 4, 5, 6)                  # g 0 completes in this idx order
 
 
-def synth(slips=(5,), n=200, spike=True, extra_step=True, spikes=()):
-    """A closed-loop 8K bench: one request every PERIOD s; a slip at group k moves 8k+1..8k+7 326 ms earlier
-    (the k - 1 group finished early), adds 340 ms of TTFT and 348 ms of Q to them, a 16 ms F spike to 8k and one more
-    decode-only step before 8k's first prefill chunk. spikes: groups with only the F spike and the extra step."""
+def synth(slips=(5,), n=200, spike=True, extra_step=True, spikes=(), shifts=(0.326,) * 7):
+    """A closed-loop 8K bench: one request every PERIOD s; a slip at group k moves 8k+j shifts[j - 1] s earlier
+    (the k - 1 group finished early), adds 340 ms of TTFT and 348 ms of Q to 8k+1..8k+7, a 16 ms F spike to 8k and one
+    more decode-only step before 8k's first prefill chunk. spikes: groups with only the F spike and the extra step."""
     arrival = [i * PERIOD for i in range(n)]
     for k in slips:
         for j in range(1, 8):
-            arrival[8 * k + j] -= 0.326
+            arrival[8 * k + j] -= shifts[j - 1]
     ttft = [1000.0] * n
     q = [100.0] * n
     f = [26.0] * n
@@ -51,6 +54,19 @@ def run(d, **kw):
                 arrivals_s=d["arrival"])
     args.update(kw)
     return e1.bench_episodes(d["ttft"], **args)
+
+
+def client_side(d, clock):
+    """The client's bench.json view of a synthetic bench on its own clock: each send DELAY_MS before the server
+    arrival, g 0 completing out of order (PERM), every later send LAG_MS after the completion that releases it."""
+    n = len(d["arrival"])
+    start = [clock + a - DELAY_MS[i % 3] / 1000 for i, a in enumerate(d["arrival"])]
+    done = [None] * n
+    for m in range(n - 8):
+        done[PERM[m] if m < 8 else m] = start[m + 8] - LAG_MS / 1000
+    for i in range(n - 8, n):
+        done[i] = clock + d["completion"][i]
+    return start, [c - s for c, s in zip(done, start)]
 
 
 def rows_of(d):
@@ -151,12 +167,27 @@ def test_t_and_tg_get_only_the_anchored_f_spike_description():
     nd = out["n_dec_anchor"]
     assert nd["median_g1_23"] == 3 and nd["spikes_at_median_plus_1"] == 2
     assert (nd["spikes"][6]["n"], nd["spikes"][6]["decode_only"]) == (4, 4)
-    assert nd["spikes"][6]["margin_ms"] == pytest.approx(142 - 87, abs=1e-3)
+    assert nd["spikes"][6]["margin_ms"] == pytest.approx(12, abs=1e-3)              # the first stamp after arrival
     assert e1.f_spikes(rows_of(d), None, CFG)["n_dec_anchor"] is None
     steps = [{**s, "t": EPOCH + s["t"], "ctx_tok": 512 if s["t"] == d["arrival"][48] + 0.042 else s["ctx_tok"]}
              for s in d["steps"]]                                                   # a T chunk of another request
-    assert e1.f_spikes(rows_of(d), steps, CFG)["n_dec_anchor"]["spikes"][6] == {
-        "n": 4, "decode_only": 3, "margin_ms": pytest.approx(55, abs=1e-3)}
+    six = e1.f_spikes(rows_of(d), steps, CFG)["n_dec_anchor"]["spikes"][6]
+    assert (six["n"], six["decode_only"], six["ambiguous"]) == (4, 3, False)
+    assert six["edges"] == pytest.approx({"arrival_minus_stamp_ms": 8 * 416 - 300, "stamp_minus_arrival_ms": 12,
+                                          "s_minus_stamp_ms": 55, "stamp_minus_s_ms": 158}, abs=1e-3)
+    assert six["margin_ms"] == pytest.approx(12, abs=1e-3)
+
+
+def test_a_count_within_a_stamp_of_its_window_edge_is_ambiguous():
+    d = synth(slips=(), spikes=(6, 14))
+    s6 = d["arrival"][48] + (100 + 42) / 1000                                       # 8 * 6's prefill start
+    steps = sorted([{"t": EPOCH + x["t"], "ctx_tok": x["ctx_tok"]} for x in d["steps"]] +
+                   [{"t": EPOCH + s6 + 0.0005, "ctx_tok": 0}], key=lambda x: x["t"])  # 0.5 ms after s
+    nd = e1.f_spikes(rows_of(d), steps, CFG)["n_dec_anchor"]
+    assert nd["spikes"][6]["n"] == 4 and nd["spikes"][6]["ambiguous"] is True
+    assert nd["spikes"][6]["edges"]["stamp_minus_s_ms"] == pytest.approx(0.5, abs=1e-3)
+    assert (nd["spikes_at_median_plus_1"], nd["spikes_at_median_plus_1_unambiguous"]) == (2, 1)
+    assert nd["ambiguous_groups_g1_23"] == 1
 
 
 def test_the_config_is_041s_values_and_unfrozen():
@@ -216,10 +247,11 @@ def _jsonl(rows):
     return "".join(json.dumps(r) + "\n" for r in rows)
 
 
-def synthetic_repo(root, *, skip=(), clock=-1e5, adv_starts=None, e2e_extra_ms=None):
+def synthetic_repo(root, *, skip=(), clock=-1e5, adv_starts=None, e2e_extra_ms=None, shifts=(0.326,) * 7):
     """Committed derived files and manifests plus the raw copies under COPIES/<session>/ (fetch_raw.sh's DEST);
-    skip: raw names not (yet) fetched; clock: the client perf_counter origin relative to the synthetic times;
-    adv_starts: advanced bench.json start_times override; e2e_extra_ms: {idx: ms} added to the B0 spans' e2e."""
+    skip: raw names not (yet) fetched; clock: the client perf_counter origin relative to the synthetic times (client
+    files follow client_side); adv_starts: advanced bench.json start_times override; e2e_extra_ms: {idx: ms} added to
+    the B0 spans' e2e; shifts: the advanced slips' per-position arrival shifts."""
     manifests = {e1.ADV: {}, e1.C0: {}, e1.CORE: {}}
 
     def raw(session, name, text):
@@ -230,26 +262,27 @@ def synthetic_repo(root, *, skip=(), clock=-1e5, adv_starts=None, e2e_extra_ms=N
 
     for tag in e1.ADV_TAGS:
         cond, r = tag.split("-")[0], int(tag[-1])
-        d = synth(slips=(5,) if cond in e1.SLIP_CONDS else (), spikes=(6, 14) if cond in e1.AUX_CONDS else ())
+        d = synth(slips=(5,) if cond in e1.SLIP_CONDS else (), spikes=(6, 14) if cond in e1.AUX_CONDS else (),
+                  shifts=shifts)
         _write(root, e1.ADV / "derived" / f"{tag}-requests.jsonl", _jsonl(rows_of(d)))
         raw(e1.ADV, f"{tag}.steps.jsonl", _jsonl([{**s, "t": EPOCH + s["t"]} for s in d["steps"]]))
         extra = (e2e_extra_ms or {}) if cond == "B0" else {}
         spans = [{"id": f"cmpl-adv-{cond}-8192-uniform-r{r}-{i}-0", "arrival": EPOCH + d["arrival"][i],
                   "e2e": d["completion"][i] - d["arrival"][i] + extra.get(i, 0.0) / 1000} for i in range(200)]
         raw(e1.ADV, f"{tag}.spans.jsonl", _jsonl(spans))
-        starts = adv_starts or [clock + a for a in d["arrival"]]
-        raw(e1.ADV, f"{tag}.bench.json", json.dumps({"start_times": starts,
-                                                     "latencies": [v / 1000 for v in d["lat"]]}))
+        starts, lats = client_side(d, clock)
+        raw(e1.ADV, f"{tag}.bench.json", json.dumps({"start_times": adv_starts or starts, "latencies": lats}))
     for b in e1.C0_BENCHES:
         d = synth(slips=(11,) if b == "b1-n2" else ())
+        starts, lats = client_side(d, clock)
         _write(root, e1.C0 / "derived" / f"{b}-requests.jsonl",
-               _jsonl([{"idx": i, "ttft_ms": d["ttft"][i], "latency_ms": d["lat"][i]} for i in range(200)]))
-        raw(e1.C0, f"{b}.bench.json", json.dumps({"start_times": [clock + a for a in d["arrival"]]}))
+               _jsonl([{"idx": i, "ttft_ms": d["ttft"][i], "latency_ms": lats[i] * 1000} for i in range(200)]))
+        raw(e1.C0, f"{b}.bench.json", json.dumps({"start_times": starts}))
     for r in (1, 2, 3):
         d = synth(slips=(8, 9) if r == 1 else (5,))
+        starts, lats = client_side(d, clock)
         raw(e1.CORE, f"bench-uniform-8192-r{r}-c8.json",
-            json.dumps({"ttfts": [x / 1000 for x in d["ttft"]], "latencies": [x / 1000 for x in d["lat"]],
-                        "start_times": [clock + a for a in d["arrival"]]}))
+            json.dumps({"ttfts": [x / 1000 for x in d["ttft"]], "latencies": lats, "start_times": starts}))
     for session, files in manifests.items():
         _write(root, session / "raw_manifest.json", json.dumps({"files": files}))
     return root
@@ -259,7 +292,7 @@ def analyze(root):
     return e1.analyze(root, FROZEN, config_sha256="c" * 64)
 
 
-def rounded(x, nd=6):
+def rounded(x, nd=5):
     """Floats to nd decimals (ms values; a clock origin moves the last bits)."""
     if isinstance(x, float):
         return round(x, nd) + 0.0
@@ -283,14 +316,23 @@ def test_the_analysis_reports_each_dataset_from_manifest_checked_inputs(tmp_path
     adv = out["datasets"]["advanced"]
     assert adv["summary"]["chain"] == "holds" and adv["summary"]["episodes"] == 9 and adv["blocked"] == []
     assert all(r["completion_source"] == "e2e" for r in adv["runs"])
-    assert all(r["episodes"][0]["values"]["send_lag_ms_max"] == pytest.approx(0.0, abs=1e-3) for r in adv["runs"])
+    for r in adv["runs"]:                                    # the client clock only: never server arrival - e2e
+        assert r["episodes"][0]["values"]["send_lag_ms"] == pytest.approx([LAG_MS] * 7, abs=1e-6)
     assert {r["run"].split("-")[0] for r in adv["runs"]} == set(e1.SLIP_CONDS)
     assert {r["run"].split("-")[0] for r in adv["auxiliary_T_TG"]} == set(e1.AUX_CONDS)
     assert all("episodes" not in r and r["f_spikes"]["spike_groups"] == [6, 14] for r in adv["auxiliary_T_TG"])
     assert adv["f_spike_rate_g1_23"] == pytest.approx({"B0_G_K3": 1 / 23, "T_TG": 2 / 23})
-    assert out["datasets"]["c0"]["summary"]["start_idx"] == {89: 1}
+    c0 = out["datasets"]["c0"]
+    assert c0["summary"]["start_idx"] == {89: 1} and c0["summary"]["chain"] == "holds"
+    (ep,) = next(r for r in c0["runs"] if r["run"] == "b1-n2")["episodes"]
+    gap = 416 - 326 - (DELAY_MS[89 % 3] - DELAY_MS[88 % 3])                          # client starts, not the grid
+    assert ep["links"] == {"L1": None, "L2": None, "L3": True, "L4": True, "L5": None}
+    assert ep["values"]["gap_ms"] == pytest.approx(gap, abs=1e-6)
+    assert ep["values"]["send_lag_ms"] == pytest.approx([LAG_MS] * 7, abs=1e-6)
+    assert all(r["send_lag_ms_max"] == pytest.approx(LAG_MS, abs=1e-6) for r in c0["runs"])  # g 0 out of order too
     core = out["datasets"]["core"]
-    assert core["summary"]["continuous"] == 1 and all(r["send_lag_ms_max"] < 1 for r in core["runs"])
+    assert core["summary"]["continuous"] == 1
+    assert all(r["send_lag_ms_max"] == pytest.approx(LAG_MS, abs=1e-6) for r in core["runs"])
 
 
 def test_every_fetched_file_is_read_from_fetch_raws_destination(tmp_path):
@@ -309,19 +351,22 @@ def test_the_clock_sources_never_mix(tmp_path):
     b = analyze(synthetic_repo(tmp_path / "b", clock=7.5))
     assert rounded(a["datasets"]) == rounded(b["datasets"])
     c = analyze(synthetic_repo(tmp_path / "c", adv_starts=[1e9 + 13 * i for i in range(200)]))
-    assert rounded(links(c)) == rounded(links(a))                         # nonsense client times change only the client send lag
+    assert rounded(links(c)) == rounded(links(a))           # nonsense client times change only the client send lag
+    lags = [x["values"]["send_lag_ms"] for r in c["datasets"]["advanced"]["runs"] for x in r["episodes"]]
+    assert all(v > 1000 for v in sum(lags, []))
 
 
-def test_l3_uses_the_e2e_completion(tmp_path):
-    extra = {8 * 4 + j: 3.0 for j in range(1, 8)}       # the server's completions of g 4 come 3 ms later
-    out = analyze(synthetic_repo(tmp_path / "e2e", e2e_extra_ms=extra))
+def test_l3_uses_the_e2e_completion_else_the_proxy_arrival_8_later(tmp_path):
+    shifts = tuple(0.300 + 0.004 * j for j in range(1, 8))        # 8k+7 moves most: an i + 7 proxy would miss it
+    extra = {8 * 4 + j: 3.0 for j in range(1, 8)}                  # the server's completions of g 4 come 3 ms later
+    out = analyze(synthetic_repo(tmp_path / "e2e", e2e_extra_ms=extra, shifts=shifts))
     b0 = [r for r in out["datasets"]["advanced"]["runs"] if r["run"].startswith("B0")]
-    assert all(r["episodes"][0]["values"]["L3_dev_ms"] == pytest.approx(-323.0, abs=1e-3) for r in b0)
+    assert all(r["episodes"][0]["values"]["L3_dev_ms"] == pytest.approx(-325.0, abs=1e-3) for r in b0)
     names = tuple(f"{t}.spans.jsonl" for t in e1.ADV_TAGS)
-    out = analyze(synthetic_repo(tmp_path / "proxy", e2e_extra_ms=extra, skip=names))
+    out = analyze(synthetic_repo(tmp_path / "proxy", e2e_extra_ms=extra, skip=names, shifts=shifts))
     b0 = [r for r in out["datasets"]["advanced"]["runs"] if r["run"].startswith("B0")]
     assert all(r["completion_source"] == "proxy" for r in b0)
-    assert all(r["episodes"][0]["values"]["L3_dev_ms"] == pytest.approx(-326.0, abs=1e-3) for r in b0)
+    assert all(r["episodes"][0]["values"]["L3_dev_ms"] == pytest.approx(-328.0, abs=1e-3) for r in b0)
 
 
 def test_a_partial_fetch_blocks_only_what_depends_on_it(tmp_path):
@@ -351,4 +396,12 @@ def test_a_file_that_fails_its_manifest_stops_the_analysis(tmp_path):
     copy = root / e1.COPIES / "formal-20261011-adv" / "G-8192-uniform-r1.spans.jsonl"
     copy.write_text(copy.read_text() + "\n")
     with pytest.raises(e1.StageE1Error, match="raw_manifest"):
+        analyze(root)
+
+
+def test_a_file_fetch_raw_set_aside_as_a_mismatch_stops_the_analysis(tmp_path):
+    root = synthetic_repo(tmp_path / "repo")
+    copy = root / e1.COPIES / "formal-20261011-adv" / "K3-8192-uniform-r1.spans.jsonl"
+    copy.rename(copy.with_name(copy.name + ".sha256-mismatch"))                    # what fetch_raw.sh's exit 5 leaves
+    with pytest.raises(e1.StageE1Error, match="failed its raw_manifest.json sha256 when it was fetched"):
         analyze(root)

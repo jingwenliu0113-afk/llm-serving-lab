@@ -23,7 +23,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import sys
@@ -214,7 +213,7 @@ def combine(mac: dict | None, rtx: dict | None) -> dict:
 
 # ---------------------------------------------------------------- formal sessions
 
-def session_problems(path, *, pins: dict, cfg: dict, pins_sha256: str, stage_e3_sha256: str, root=ROOT) -> list:
+def session_problems(path, *, pins: dict, cfg: dict, root=ROOT) -> list:
     path = Path(path)
     try:
         s = json.loads((path / "session.json").read_text())
@@ -234,9 +233,9 @@ def session_problems(path, *, pins: dict, cfg: dict, pins_sha256: str, stage_e3_
     if s.get("plan_sha256") != e3.sha256_json(plan) or s.get("harness_sha256") != e3.harness_sha256():
         problems.append(f"{path.name}: plan_sha256 / harness_sha256 do not match")
     try:
-        want = e3.build_plan(pins, cfg, platform=platform, mode="formal", pins_sha256=pins_sha256,
-                             stage_e3_sha256=stage_e3_sha256, root=root)
-        if plan != want:
+        want = e3.build_plan(pins, cfg, platform=platform, mode="formal", root=root)
+        drop = lambda p: {k: v for k, v in p.items() if k != "pins_sha256"}  # noqa: E731 - content pins it
+        if drop(plan) != drop(want):
             problems.append(f"{path.name}: plan.json is not build_plan's formal {platform} plan")
     except e3.StageE3Error as exc:
         problems.append(f"{path.name}: build_plan refuses its formal plan ({exc})")
@@ -257,8 +256,7 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(cfg_raw.decode())
     by_platform = {}
     for sess in map(Path, args.session):
-        problems = session_problems(sess, pins=pins, cfg=cfg, pins_sha256=hashlib.sha256(raw).hexdigest(),
-                                    stage_e3_sha256=hashlib.sha256(cfg_raw).hexdigest())
+        problems = session_problems(sess, pins=pins, cfg=cfg)
         if problems:
             print("stage_e3_analysis: " + "; ".join(problems), file=sys.stderr)
             return 2
