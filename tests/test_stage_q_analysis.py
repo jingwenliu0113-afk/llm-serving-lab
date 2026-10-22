@@ -54,7 +54,7 @@ def test_the_ordering_family_is_holm_and_three_valued():
     swapped = {**good, ("4B", 512, "Q6_K"): (0.0010, 0.0001)}       # Q6_K below Q8_0
     assert qa2.ordering(swapped, [("4B", 512)])["verdict"] == "not supported"
     noisy = {k: (v[0], 1.0) for k, v in good.items()}
-    assert qa2.ordering(noisy, [("4B", 512)])["verdict"] == "inconclusive"
+    assert qa2.ordering(noisy, [("4B", 512)])["verdict"] == "not supported"     # 005: not significant -> not supported
     assert qa2.ordering({}, [("4B", 512)])["verdict"] == "NT"
 
 
@@ -71,39 +71,43 @@ def test_h_q2_compares_each_context_with_phase1_at_512():
 
 import hashlib  # noqa: E402
 import json  # noqa: E402
+import shutil  # noqa: E402
 import tomllib  # noqa: E402
 
 import stage_q as sq  # noqa: E402
+import test_stage_q as tq  # noqa: E402
 from run_core_a import sha256_json  # noqa: E402
 
-CFG_RAW = (ROOT / "configs" / "stage_q.toml").read_bytes()
-CFG_SHA = hashlib.sha256(CFG_RAW).hexdigest()
+CFG_SHA = hashlib.sha256((ROOT / "configs" / "stage_q.toml").read_bytes()).hexdigest()
 PINS_SHA = hashlib.sha256((ROOT / "configs" / "pins.toml").read_bytes()).hexdigest()
-PILOTS = {"pilot_q1_metal": "pilot-q1m", "pilot_q1_cuda": "pilot-q1c", "pilot_q2": "pilot-q2"}
+PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
+HOSTS = {"macos-metal": {"system": "Darwin", "wsl": False, "nvidia": False},
+         "wsl2-cuda": {"system": "Linux", "wsl": True, "nvidia": True}}
 
 
-def frozen(tmp_path):
-    root = tmp_path / "repo"
-    cfg = tomllib.loads(CFG_RAW.decode())
-    cfg["freeze"] = {"stage_q": True, **PILOTS}
-    for key, part in sq.FREEZE_EVIDENCE.items():
-        d = root / "results" / "stage_q" / PILOTS[key]
-        d.mkdir(parents=True)
-        (d / "session.json").write_text(json.dumps({"mode": "pilot", "part": part, "harness_sha256": sq.harness_sha256(),
-                                                    "outcomes": {"ok": 5, "oom": 0, "error": 0, "skipped": 0}}))
+@pytest.fixture(scope="module")
+def pilot_root(tmp_path_factory):
+    root = tq.pilots(tmp_path_factory.mktemp("pilots") / "repo")
     (root / "results" / "quality").mkdir(parents=True)
     (root / "results" / "quality" / "formal-20261010-quality").symlink_to(
         ROOT / "results" / "quality" / "formal-20261010-quality")
-    return root, cfg
+    return root
 
 
-def formal_session(root, part, rows, plan_over=None, session_over=None):
-    d = root / "results" / "stage_q" / f"formal-{part}"
+def frozen(tmp_path, pilot_root):
+    root = tmp_path / "repo"
+    shutil.copytree(pilot_root, root, symlinks=True)
+    return root, tq.FROZEN
+
+
+def formal_session(root, part, rows, plan_over=None, session_over=None, sid=None, started="2026-10-24T00:00:00"):
+    d = root / "results" / "stage_q" / (sid or f"formal-{part}")
     d.mkdir(parents=True)
-    plan = {"stage": "Q", "part": part, "mode": "formal", "platform": sq.PARTS[part], "pins_sha256": PINS_SHA,
-            "stage_q_sha256": CFG_SHA, "harness_sha256": sq.harness_sha256(), "jobs": [], **(plan_over or {})}
+    plan = {**sq.build_plan(PINS, part=part, mode="formal", pins_sha256=PINS_SHA, cfg=tq.FROZEN,
+                            stage_q_sha256=CFG_SHA, root=root), **(plan_over or {})}
     session = {"stage": "Q", "part": part, "mode": "formal", "platform": sq.PARTS[part], "env_valid": True,
-               "plan_sha256": sha256_json(plan), "harness_sha256": sq.harness_sha256(), **(session_over or {})}
+               "plan_sha256": sha256_json(plan), "harness_sha256": sq.harness_sha256(),
+               "host": HOSTS[sq.PARTS[part]], "inputs_verified": True, "started_at": started, **(session_over or {})}
     (d / "plan.json").write_text(json.dumps(plan))
     (d / "session.json").write_text(json.dumps(session))
     (d / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
@@ -118,11 +122,12 @@ def sessions(root):
 
 
 def analyze(root, cfg, paths, **kw):
-    return qa2.analyze_sessions(paths, cfg=cfg, stage_q_sha256=CFG_SHA, pins_sha256=PINS_SHA, root=root, **kw)
+    return qa2.analyze_sessions(paths, cfg=cfg, stage_q_sha256=CFG_SHA, pins_sha256=PINS_SHA, pins=PINS, root=root,
+                                **kw)
 
 
-def test_the_formal_sessions_give_every_hypothesis(tmp_path):
-    root, cfg = frozen(tmp_path)
+def test_the_formal_sessions_give_every_hypothesis(tmp_path, pilot_root):
+    root, cfg = frozen(tmp_path, pilot_root)
     out = analyze(root, cfg, sessions(root))
     assert {k: v["verdict"] for k, v in out["hypotheses"].items()} == {
         "H-Q1a": "supported", "H-Q1b": "supported", "H-Q1c": "supported", "H-Q2a": "supported", "H-Q2b": "supported"}
@@ -130,8 +135,8 @@ def test_the_formal_sessions_give_every_hypothesis(tmp_path):
     assert out["harness_sha256"] == sq.harness_sha256() and out["stage_q_sha256"] == CFG_SHA
 
 
-def test_a_part_not_yet_run_leaves_its_hypotheses_nt(tmp_path):
-    root, cfg = frozen(tmp_path)
+def test_a_part_not_yet_run_leaves_its_hypotheses_nt(tmp_path, pilot_root):
+    root, cfg = frozen(tmp_path, pilot_root)
     paths = sessions(root)
     out = analyze(root, cfg, {"q2": paths["q2"]})
     v = {k: h["verdict"] for k, h in out["hypotheses"].items()}
@@ -150,21 +155,34 @@ def test_a_part_not_yet_run_leaves_its_hypotheses_nt(tmp_path):
     ({"stage_q_sha256": "0" * 64}, {}, "configs/stage_q.toml"),
     ({"pins_sha256": "0" * 64}, {}, "pins.toml"),
     ({}, {"plan_sha256": "0" * 64}, "plan.json"),
+    ({"params": {"n_thr": 4, "poll": 0}}, {}, "not build_plan's formal q2 plan"),
+    ({}, {"host": HOSTS["macos-metal"]}, "not a wsl2-cuda host"),
+    ({}, {"inputs_verified": False}, "inputs_verified"),
 ])
-def test_a_session_that_is_not_a_frozen_formal_one_is_refused(tmp_path, plan_over, session_over, why):
-    root, cfg = frozen(tmp_path)
+def test_a_session_that_is_not_a_frozen_formal_one_is_refused(tmp_path, pilot_root, plan_over, session_over, why):
+    root, cfg = frozen(tmp_path, pilot_root)
     d = formal_session(root, "q2", [], plan_over, session_over)
     with pytest.raises(qa2.AnalysisError, match=why):
         analyze(root, cfg, {"q2": d})
 
 
-def test_no_analysis_before_the_freeze_or_without_its_evidence(tmp_path):
-    root, cfg = frozen(tmp_path)
+def test_only_the_first_formal_session_of_a_part_is_analyzed(tmp_path, pilot_root):
+    root, cfg = frozen(tmp_path, pilot_root)
+    rows = [kld_row(s, q, v * 1.4, ctx=c) for c in (2048, 8192) for (s, q), v in BASE_KLD.items()]
+    first = formal_session(root, "q2", rows, sid="formal-q2-a", started="2026-10-24T00:00:00")
+    second = formal_session(root, "q2", rows, sid="formal-q2-b", started="2026-10-25T00:00:00")
+    assert analyze(root, cfg, {"q2": first})["sessions"]["q2"] == "formal-q2-a"
+    with pytest.raises(qa2.AnalysisError, match="earlier formal q2 sessions"):
+        analyze(root, cfg, {"q2": second})
+
+
+def test_no_analysis_before_the_freeze_or_without_its_evidence(tmp_path, pilot_root):
+    root, cfg = frozen(tmp_path, pilot_root)
     paths = sessions(root)
     with pytest.raises(qa2.AnalysisError, match="freeze.stage_q"):
         analyze(root, {**cfg, "freeze": {**cfg["freeze"], "stage_q": False}}, paths)
-    (root / "results" / "stage_q" / "pilot-q2" / "session.json").unlink()
-    with pytest.raises(qa2.AnalysisError, match="pilot_q2"):
+    shutil.rmtree(root / "results" / "stage_q" / "pilot-q1c")
+    with pytest.raises(qa2.AnalysisError, match="pilot_q1_cuda"):
         analyze(root, cfg, paths)
 
 

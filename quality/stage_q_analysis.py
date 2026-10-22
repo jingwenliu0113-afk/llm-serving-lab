@@ -5,18 +5,19 @@ kld_test and holm (imported, never changed).
 
 - KLD of a (size, ctx, quant): the ok kld row's tool mean +/- SE (005: token-independent SE, reported as such).
 - H-Q1a / H-Q2a (ordering): per size (and context) KLD(Q8_0) < KLD(Q6_K) < KLD(Q4_K_M), z tests, Holm over the family
-  (4 tests for Q1a, 8 for Q2a); supported when every test rejects in the predicted direction, not supported when one
-  rejects in the other direction, inconclusive otherwise; NT when a KLD is missing.
+  (4 tests for Q1a, 8 for Q2a), with 005's rule (quality_analysis.h_a5): NT when a KLD is missing (an OOM included),
+  else supported only when every test rejects in the predicted direction, else not supported.
 - H-Q1b: KLD_Metal / KLD_CUDA on the same first 200 chunks in [0.8, 1.25] for each size and quant.
 - H-Q1c: PPL_Metal (the full-test ppl job) / PPL_CUDA (Phase 1: PPL(Q) of the quant's KLD row, of the self-KLD row for BF16)
   in [0.995, 1.005] for each of the 8 configurations.
 - H-Q2b: KLD(ctx) / KLD(512, Phase 1) in [0.5, 2.0] for each size, quant and context.
-- Bounds (Q1b, Q1c, Q2b): supported when every ratio is inside, not supported when one is outside, NT when one is
-  missing. They are 040's substantive thresholds, not statistical tests.
+- Bounds (Q1b, Q1c, Q2b): not supported when an observed ratio is outside (even if another is missing: the observed
+  violation stands), else NT when one is missing, else supported. They are 040's substantive thresholds, not
+  statistical tests.
 
 Formal sessions only (040 凍結): configs/stage_q.toml frozen with its pilot evidence, and each session formal, env-valid,
-of its part, run by the frozen harness (harness_sha256) with this configs/stage_q.toml and configs/pins.toml. A part
-not yet run leaves its hypotheses NT.
+of its part on its platform's host, its plan.json exactly build_plan's formal plan, and the first formal session of
+its part under results/stage_q (a later one needs its own decision log). A part not yet run leaves its hypotheses NT.
 
 Usage:
     python quality/stage_q_analysis.py --q1-metal results/stage_q/<id> --q1-cuda results/stage_q/<id> \
@@ -79,17 +80,12 @@ def ordering(table: dict, units: list) -> dict:
                 continue
             t = qa.kld_test(f"{size} c{ctx}", lo, a, hi, b)
             tests.append(t)
-    if missing:
+    if missing:                                         # 005: a missing cell makes the family not testable
         return {"verdict": "NT", "missing": missing, "tests": tests}
     adj = qa.holm({t["name"]: t["p"] for t in tests})
     for t in tests:
         t.update(p_adj=adj[t["name"]]["p_adj"], reject=adj[t["name"]]["reject"])
-    if all(t["reject"] and t["direction_ok"] for t in tests):
-        verdict = "supported"
-    elif any(t["reject"] and not t["direction_ok"] for t in tests):
-        verdict = "not supported"
-    else:
-        verdict = "inconclusive"
+    verdict = "supported" if all(t["reject"] and t["direction_ok"] for t in tests) else "not supported"
     return {"verdict": verdict, "correction": "Holm", "alpha": qa.ALPHA, "tests": tests}
 
 
@@ -143,8 +139,10 @@ class AnalysisError(RuntimeError):
     pass
 
 
-def session_problems(path, part: str, *, stage_q_sha256: str, pins_sha256: str) -> list:
-    """A formal, env-valid session of this part that ran the frozen harness, configs/stage_q.toml and pins.toml."""
+def session_problems(path, part: str, *, stage_q_sha256: str, pins_sha256: str, pins: dict, cfg: dict,
+                     root=sq.ROOT) -> list:
+    """A formal, env-valid session of this part on its platform's host that ran build_plan's formal plan (the frozen
+    harness, configs/stage_q.toml and pins.toml) and is the first formal session of its part under root."""
     path = Path(path)
     try:
         meta = json.loads((path / "session.json").read_text())
@@ -168,7 +166,36 @@ def session_problems(path, part: str, *, stage_q_sha256: str, pins_sha256: str) 
         problems.append(f"{path.name}: planned with another configs/stage_q.toml (stage_q_sha256)")
     if plan.get("pins_sha256") != pins_sha256:
         problems.append(f"{path.name}: planned with another configs/pins.toml (pins_sha256)")
+    problems += [f"{path.name}: {p}" for p in sq.host_problems(meta.get("host"), sq.PARTS[part])]
+    if meta.get("inputs_verified") is not True:
+        problems.append(f"{path.name}: its inputs were not checked against pins (inputs_verified)")
+    if not problems:
+        try:
+            want = sq.build_plan(pins, part=part, mode="formal", pins_sha256=pins_sha256, cfg=cfg,
+                                 stage_q_sha256=stage_q_sha256, root=root)
+        except sq.StageQError as exc:
+            want = None
+            problems.append(f"{path.name}: build_plan refuses its formal plan ({exc})")
+        if want is not None and plan != want:
+            problems.append(f"{path.name}: plan.json is not build_plan's formal {part} plan")
+        earlier = [d.name for d, m in _formal_sessions(root, part)
+                   if d.resolve() != path.resolve() and (m.get("started_at") or "") < (meta.get("started_at") or "")]
+        if earlier:
+            problems.append(f"{path.name}: earlier formal {part} sessions {earlier} exist (040: the first formal "
+                            "session of a part is the one analyzed; another needs its own decision log)")
     return problems
+
+
+def _formal_sessions(root, part: str) -> list:
+    out = []
+    for f in sorted(Path(root).joinpath(*sq.RESULTS).glob("*/session.json")):
+        try:
+            m = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if m.get("mode") == "formal" and m.get("part") == part:
+            out.append((f.parent, m))
+    return out
 
 
 def phase1_problems(path) -> list:
@@ -184,20 +211,22 @@ def phase1_problems(path) -> list:
     return []
 
 
-def analyze_sessions(paths: dict, *, cfg: dict, stage_q_sha256: str, pins_sha256: str, root=sq.ROOT) -> dict:
+def analyze_sessions(paths: dict, *, cfg: dict, stage_q_sha256: str, pins_sha256: str, pins: dict,
+                     root=sq.ROOT) -> dict:
     """paths: {part: session dir} of the parts run so far. Refuses (AnalysisError) unless 040 凍結 holds."""
     problems = [f"configs/stage_q.toml: {p}" for p in sq.config_problems(cfg)]
     if not problems and cfg["freeze"]["stage_q"] is not True:
         problems.append("freeze.stage_q is not true in configs/stage_q.toml (040 凍結: no Stage Q analysis before it)")
     if problems:
         raise AnalysisError("; ".join(problems))
-    problems += [f"freeze evidence: {p}" for p in sq.freeze_evidence_problems(cfg, root)]
+    problems += [f"freeze evidence: {p}" for p in sq.freeze_evidence_problems(cfg, root, pins)]
     paths = {k: v for k, v in paths.items() if v is not None}
     if set(paths) - set(sq.PARTS):
         problems.append(f"unknown parts {sorted(set(paths) - set(sq.PARTS))}; 040 defines {sorted(sq.PARTS)}")
     for part, path in sorted(paths.items()):
         if part in sq.PARTS:
-            problems += session_problems(path, part, stage_q_sha256=stage_q_sha256, pins_sha256=pins_sha256)
+            problems += session_problems(path, part, stage_q_sha256=stage_q_sha256, pins_sha256=pins_sha256,
+                                         pins=pins, cfg=cfg, root=root)
     phase1 = Path(root) / "results" / "quality" / cfg["stage_q"]["phase1_session"]
     problems += phase1_problems(phase1)
     if problems:
@@ -226,7 +255,8 @@ def main(argv: list | None = None) -> int:
             raise AnalysisError("give at least one formal session (--q1-metal, --q1-cuda, --q2)")
         result = analyze_sessions(paths, cfg=tomllib.loads(cfg_raw.decode()),
                                   stage_q_sha256=hashlib.sha256(cfg_raw).hexdigest(),
-                                  pins_sha256=hashlib.sha256(pins_raw).hexdigest())
+                                  pins_sha256=hashlib.sha256(pins_raw).hexdigest(),
+                                  pins=tomllib.loads(pins_raw.decode()))
     except AnalysisError as exc:
         print(f"stage_q_analysis: {exc}", file=sys.stderr)
         return 2

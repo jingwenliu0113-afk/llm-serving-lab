@@ -1,5 +1,6 @@
-"""Tests for quality/stage_q.py (decision 040): Stage Q plans in run_quality's job format, and the runner's platform
-rules (Mac lock, the 140W adapter, one powermode; GPU lock for the CUDA parts)."""
+"""Tests for quality/stage_q.py (decision 040): Stage Q plans in run_quality's job format, the runner's platform
+rules (Mac lock, the 140W adapter, one powermode; GPU lock for the CUDA parts; both verified), the freeze and its
+pilot evidence."""
 
 import json
 import shutil
@@ -13,40 +14,119 @@ import stage_q as sq
 ROOT = Path(__file__).resolve().parent.parent
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
 CFG = tomllib.loads((ROOT / "configs" / "stage_q.toml").read_text())
-FROZEN = {**CFG, "freeze": {"stage_q": True, "pilot_q1_metal": "pilot-q1m", "pilot_q1_cuda": "pilot-q1c",
-                            "pilot_q2": "pilot-q2"}}
-
-
-def formal(part):
-    return sq.build_plan(PINS, part=part, mode="formal", cfg=FROZEN, stage_q_sha256="q" * 64)
+PILOT_IDS = {"pilot_q1_metal": "pilot-q1m", "pilot_q1_cuda": "pilot-q1c", "pilot_q2": "pilot-q2"}
+FROZEN = {**CFG, "freeze": {"stage_q": True, **PILOT_IDS}}
 
 
 def jobs(plan, kind=None):
     return [j for j in plan["jobs"] if kind is None or j["kind"] == kind]
 
 
-def test_q1_metal_compares_the_first_200_chunks_and_runs_the_full_ppl():
-    p = formal("q1-metal")
+# ---------------------------------------------------------------- fakes shared with test_stage_q_analysis
+
+def env(platform="macos-metal", adapter="140W USB-C Power Adapter"):
+    def capture(llama_bin, out_path, gpu_lock_held):
+        rec = {"runtime": {"llama_cpp": {"build_number": PINS["llama_cpp"]["build_number"],
+                                         "commit": PINS["llama_cpp"]["commit"]}},
+               "repo": {"commit": "c", "dirty": False, "status": [], "source": "git"}, "probe_errors": []}
+        if platform == "macos-metal":
+            rec.update(os={"system": "Darwin", "wsl": False}, hardware={"iogpu_wired_limit_mb": 0},
+                       power={"source": "AC", "battery_pct": 90, "thermal": {}, "powermode": 2,
+                              "ac_adapter": {"manufacturer": "Apple Inc.", "name": adapter}})
+        else:
+            rec.update(os={"system": "Linux", "wsl": True},
+                       gpu={"nvidia": [{"enforced_power_limit_w": 300.0, "power_default_limit_w": 300.0}]})
+        Path(out_path).write_text(json.dumps(rec))
+        return rec
+    return capture
+
+
+def fake_llama(n=10, kld=0.002, ppl=8.0, fail=()):
+    """llama-perplexity output that quality_parse accepts for every job kind; argv containing any of `fail` exits 1."""
+    def run_proc(argv, out, err, timeout):
+        if any(f in a for f in fail for a in argv):
+            Path(out).write_text("")
+            Path(err).write_text("error: something failed\n")
+            return 1, 1.0
+        if "--kl-divergence" in argv:
+            text = (f"computing over {n} chunks\n====== KL divergence statistics ======\n"
+                    f"Mean PPL(Q)                   :  {ppl:.6f} ±   0.010000\n"
+                    f"Mean    KLD:   {kld:.6f} ±   0.000200\n")
+        else:
+            text = f"calculating perplexity over {n} chunks\n"
+            if "--ppl-output-type" in argv:
+                text += "".join(f"{i + 1:5d}  8.0000  2.000000  0.010000\n" for i in range(n))
+            text += f"Final estimate: PPL = {ppl:.4f} +/- 0.0100\n"
+        Path(out).write_text(text)
+        Path(err).write_text("")
+        return 0, 1.0
+    return run_proc
+
+
+def pinned_hash(path):
+    """hash_file for formal runs: the pinned sha256 of the file name (wiki.test.raw and the GGUFs)."""
+    name = Path(path).name
+    if name == "wiki.test.raw":
+        return PINS["quality"]["files"]["wiki_test_raw"]["sha256"]
+    for m in PINS["core_a"]["models"]:
+        for f in (m["reference"], *m["files"].values()):
+            if f["filename"] == name:
+                return f["sha256"]
+    raise OSError(f"no such file {path}")
+
+
+def run(root, plan, sid, *, capture=None, run_proc=None, **kw):
+    args = dict(bin_dir="/b", models_dir="/m", data_dir=str(root / "d"), session_id=sid, mac_lock_held=True,
+                gpu_lock_held=True, lock_check=lambda: True, out_dir=root / "results" / "stage_q" / sid,
+                repo_root=root, disk_ok=lambda path, need: {"ok": True}, delete_file=lambda path: None,
+                read_power=lambda: {"source": "AC", "battery_pct": 90}, sleep=lambda s: None,
+                capture_env=capture or env(sq.PARTS[plan["part"]]), run_proc=run_proc or fake_llama())
+    args.update(kw)
+    return sq.run_stage_q(plan, **args)
+
+
+def pilots(root, parts=tuple(sq.PARTS)):
+    """Real pilot sessions (fake llama) under root, named as FROZEN names them."""
+    ids = {part: PILOT_IDS[key] for key, part in sq.FREEZE_EVIDENCE.items()}
+    for part in parts:
+        run(root, sq.build_plan(PINS, part=part, mode="pilot"), ids[part])
+    return root
+
+
+def formal(part, root):
+    return sq.build_plan(PINS, part=part, mode="formal", cfg=FROZEN, stage_q_sha256="q" * 64, root=root)
+
+
+@pytest.fixture(scope="module")
+def frozen_root(tmp_path_factory):
+    return pilots(tmp_path_factory.mktemp("frozen") / "repo")
+
+
+# ---------------------------------------------------------------- plans
+
+def test_q1_metal_compares_the_first_200_chunks_and_runs_the_full_ppl(frozen_root):
+    p = formal("q1-metal", frozen_root)
     assert (p["platform"], p["params"]) == ("macos-metal", {"n_thr": 8, "poll": 0})
     base = jobs(p, "kld_base")
     assert len(base) == 2 and all(j["argv"][j["argv"].index("--chunks") + 1] == "200" for j in base)
-    assert all(j["expect"] == {"n_chunks": 200} for j in jobs(p, "kld"))
+    assert all(j["expect"] == {"n_chunks": 200} and j["base"] == f"kld_base-{j['size']}" for j in jobs(p, "kld"))
     ppl = jobs(p, "ppl")
     assert len(ppl) == 8 and all("--chunks" not in j["argv"] and j["expect"] == {"n_chunks": 580} for j in ppl)
     assert base[0]["need_gib"] < 40                                     # about 25 GB: fits the Mac (037 §4)
     flags = base[0]["argv"]
     assert flags[flags.index("-c") + 1] == "512" and flags[flags.index("-t") + 1] == "8"
+    assert "{data}/kld/{session}/stage-q-4B.kld" in base[0]["argv"]     # one base per session
 
 
-def test_q1_cuda_runs_the_same_kld_jobs_without_ppl():
-    m, c = formal("q1-metal"), formal("q1-cuda")
+def test_q1_cuda_runs_the_same_kld_jobs_without_ppl(frozen_root):
+    m, c = formal("q1-metal", frozen_root), formal("q1-cuda", frozen_root)
     assert c["platform"] == "wsl2-cuda" and c["params"] == {"n_thr": 6, "poll": 0} and not jobs(c, "ppl")
     strip = lambda j: [a for a in j["argv"] if a not in ("8", "6")]    # noqa: E731 - the thread count differs
     assert [strip(j) for j in jobs(c, "kld")] == [strip(j) for j in jobs(m, "kld")]
 
 
-def test_q2_runs_each_context_over_the_whole_test_set():
-    p = formal("q2")
+def test_q2_runs_each_context_over_the_whole_test_set(frozen_root):
+    p = formal("q2", frozen_root)
     base = jobs(p, "kld_base")
     assert [(j["size"], j["ctx"], j["expect"]["n_chunks"]) for j in base] == [
         ("4B", 2048, 145), ("9B", 2048, 145), ("4B", 8192, 36), ("9B", 8192, 36)]
@@ -58,6 +138,12 @@ def test_q2_runs_each_context_over_the_whole_test_set():
     assert sq.expected_chunks(PINS, 512) == 580
 
 
+def test_the_base_size_follows_the_scored_tokens():
+    assert [sq.scored_per_chunk(c) for c in (512, 2048, 8192)] == [255, 1023, 4095]
+    assert sq.kld_need_gib(580, 512) == pytest.approx(73.5 * 1.1 / 1.073741824, abs=0.1)
+    assert sq.kld_need_gib(145, 2048) == pytest.approx(73.5 / 580 * 145 * 1023 / 255 * 1.1 / 1.073741824, abs=0.1)
+
+
 def test_pilots_run_ten_chunks_everywhere():
     p = sq.build_plan(PINS, part="q2", mode="pilot")
     assert all(j["expect"]["n_chunks"] == 10 for j in jobs(p) if "expect" in j)
@@ -65,70 +151,98 @@ def test_pilots_run_ten_chunks_everywhere():
         sq.build_plan(PINS, part="q9", mode="pilot")
 
 
+# ---------------------------------------------------------------- the Mac rules (037 §4)
+
 def test_the_mac_rules_are_the_140w_adapter_and_one_powermode():
-    ok = {"power": {"powermode": 2, "ac_adapter": {"manufacturer": "Apple Inc.", "name": "140W USB-C Power Adapter"}},
+    ok = {"power": {"source": "AC", "battery_pct": 90, "thermal": {}, "powermode": 2,
+                    "ac_adapter": {"manufacturer": "Apple Inc.", "name": "140W USB-C Power Adapter"}},
           "hardware": {"iogpu_wired_limit_mb": 0}}
-    assert sq.mac_problems(ok) == []
-    old = {**ok, "power": {**ok["power"], "ac_adapter": {"manufacturer": "Apple Inc.", "name": "70W USB-C Power Adapter"}}}
-    assert any("140W" in p for p in sq.mac_problems(old))
-    assert sq.mac_problems({**ok, "power": {**ok["power"], "powermode": 1}})
+    assert sq.mac_problems(ok) == [] and sq.platform_problems(ok, "macos-metal") == []    # no 70 W rule (019)
+    old = {**ok, "power": {**ok["power"], "ac_adapter": {"manufacturer": "Apple Inc.",
+                                                         "name": "70W USB-C Power Adapter"}}}
+    assert [p for p in sq.platform_problems(old, "macos-metal") if "adapter" in p] == [
+        "AC adapter 'Apple Inc.' '70W USB-C Power Adapter' (037 §4 requires Apple Inc. '140W USB-C Power Adapter')"]
+    assert sq.platform_problems({**ok, "power": {**ok["power"], "powermode": 1}}, "macos-metal")
+    assert sq.platform_problems({**ok, "power": {**ok["power"], "source": "Battery"}}, "macos-metal")
 
 
-def env(ok_power=True):
-    def capture(llama_bin, out_path, gpu_lock_held):
-        rec = {"runtime": {"llama_cpp": {"build_number": PINS["llama_cpp"]["build_number"],
-                                         "commit": PINS["llama_cpp"]["commit"]}},
-               "repo": {"commit": "c", "dirty": False, "status": [], "source": "git"}, "probe_errors": [],
-               "power": {"source": "AC", "battery_pct": 90, "thermal": {}, "powermode": 2,
-                         "ac_adapter": {"manufacturer": "Apple Inc.",
-                                        "name": "140W USB-C Power Adapter" if ok_power else "70W USB-C Power Adapter"}},
-               "hardware": {"iogpu_wired_limit_mb": 0}}
-        Path(out_path).write_text(json.dumps(rec))
-        return rec
-    return capture
+def test_a_formal_metal_run_starts_with_the_140w_adapter_and_refuses_the_70w(frozen_root, tmp_path):
+    plan = formal("q1-metal", frozen_root)
+    root = tmp_path / "repo"
+    s = run(root, plan, "f1", expected_plan=plan, pins=PINS, hash_file=pinned_hash, run_proc=fake_llama(n=200))
+    assert s["env_valid"] is True and s["inputs_verified"] is True and s["host"]["system"] == "Darwin"
+    with pytest.raises(sq.StageQError, match="037 §4 requires"):
+        run(root, plan, "f2", expected_plan=plan, pins=PINS, hash_file=pinned_hash,
+            capture=env(adapter="70W USB-C Power Adapter"))
 
+
+def test_a_formal_run_needs_build_plans_plan_and_the_pinned_inputs(frozen_root, tmp_path):
+    plan = formal("q2", frozen_root)
+    root = tmp_path / "repo"
+    edited = {**plan, "jobs": plan["jobs"][:5]}
+    for bad in (None, edited):
+        with pytest.raises(sq.StageQError, match="exactly build_plan's"):
+            run(root, plan if bad is None else bad, "f", expected_plan=None if bad is None else plan, pins=PINS,
+                hash_file=pinned_hash)
+    with pytest.raises(sq.StageQError, match="not the pinned"):
+        run(root, plan, "g", expected_plan=plan, pins=PINS, hash_file=lambda path: "0" * 64)
+    with pytest.raises(sq.StageQError, match="another harness"):
+        run(root, {**plan, "harness_sha256": "0" * 64}, "h", expected_plan=plan, pins=PINS, hash_file=pinned_hash)
+    assert not (root / "results" / "stage_q" / "f").exists() and not (root / "results" / "stage_q" / "h").exists()
+
+
+# ---------------------------------------------------------------- the runner
 
 def test_the_runner_refuses_without_its_lock_or_outside_results(tmp_path):
     plan = sq.build_plan(PINS, part="q1-metal", mode="pilot")
-    kw = {"bin_dir": "/b", "models_dir": "/m", "data_dir": "/d", "capture_env": env(), "session_id": "s",
-          "repo_root": tmp_path}
     with pytest.raises(sq.StageQError, match="Mac heavy lock"):
-        sq.run_stage_q(plan, out_dir=tmp_path / "results" / "stage_q" / "s", **kw)
+        run(tmp_path, plan, "s", mac_lock_held=False)
+    with pytest.raises(sq.StageQError, match="Mac heavy lock"):
+        run(tmp_path, plan, "s", lock_check=lambda: False)                  # the flag alone is never trusted
     with pytest.raises(sq.StageQError, match="results/stage_q"):
-        sq.run_stage_q(plan, out_dir=tmp_path / "elsewhere", mac_lock_held=True, **kw)
+        run(tmp_path, plan, "s", out_dir=tmp_path / "elsewhere")
     cuda = sq.build_plan(PINS, part="q2", mode="pilot")
-    with pytest.raises(sq.StageQError, match="GPU lock"):
-        sq.run_stage_q(cuda, out_dir=tmp_path / "results" / "stage_q" / "t", **kw)
+    for kw in ({"gpu_lock_held": False}, {"lock_check": lambda: False}):
+        with pytest.raises(sq.StageQError, match="GPU lock"):
+            run(tmp_path, cuda, "t", **kw)
 
 
-def test_a_formal_metal_run_refuses_the_70w_adapter(tmp_path):
-    plan = formal("q1-metal")
-    with pytest.raises(sq.StageQError, match="140W"):
-        sq.run_stage_q(plan, bin_dir="/b", models_dir="/m", data_dir="/d", capture_env=env(ok_power=False),
-                       session_id="s", mac_lock_held=True, out_dir=tmp_path / "results" / "stage_q" / "s",
-                       repo_root=tmp_path)
+def test_the_mac_lock_must_be_held_by_an_ancestor(tmp_path):
+    lock = tmp_path / "lock"
+    assert not sq.mac_lock_owned(str(lock), pid=10, parent_of=lambda pid: pid - 1)
+    lock.mkdir()
+    (lock / "owner.txt").write_text("pid=7\nstarted_at=x\ncwd=/y\n")
+    parents = {10: 9, 9: 7, 7: 1, 5: 1}
+    assert sq.mac_lock_owned(str(lock), pid=10, parent_of=parents.get)
+    assert not sq.mac_lock_owned(str(lock), pid=5, parent_of=parents.get)
 
 
 def test_a_pilot_session_runs_every_job_and_deletes_the_bases(tmp_path):
     plan = sq.build_plan(PINS, part="q1-cuda", mode="pilot")
+    base = tmp_path / "d" / "kld" / "s"
+    base.mkdir(parents=True)
+    for size in ("4B", "9B"):                                           # the fake llama writes no base file
+        (base / f"stage-q-{size}.kld").write_text("x")
     deleted = []
-
-    def run_proc(argv, out, err, timeout):
-        kind = "kld" if "--kl-divergence" in argv else ("kld_base" if "--kl-divergence-base" in argv else "ppl")
-        text = ("computing over 10 chunks\\n" "====== KL divergence statistics ======\\n"
-                "Mean    KLD:   0.002000 ±   0.000200\\n") if kind == "kld" else "computing over 10 chunks\\n"
-        Path(out).write_text(text)
-        Path(err).write_text("")
-        return 0, 1.0
-
-    s = sq.run_stage_q(plan, bin_dir="/b", models_dir="/m", data_dir=str(tmp_path / "d"), capture_env=env(),
-                       session_id="s", gpu_lock_held=True, out_dir=tmp_path / "results" / "stage_q" / "s",
-                       repo_root=tmp_path, disk_ok=lambda path, need: {"ok": True}, run_proc=run_proc,
-                       delete_file=deleted.append)
+    s = run(tmp_path, plan, "s", delete_file=deleted.append)
     rows = [json.loads(x) for x in (tmp_path / "results" / "stage_q" / "s" / "rows.jsonl").read_text().splitlines()]
-    assert len(rows) == len(plan["jobs"]) and s["stage"] == "Q" and s["part"] == "q1-cuda"
-    assert s["harness_sha256"] == sq.harness_sha256()
+    assert len(rows) == len(plan["jobs"]) and all(r["outcome"] == "ok" for r in rows)
+    assert s["stage"] == "Q" and s["part"] == "q1-cuda" and s["harness_sha256"] == sq.harness_sha256()
+    assert s["host"] == {"system": "Linux", "wsl": True, "nvidia": True} and s["inputs_verified"] is False
+    assert deleted == [str(base / f"stage-q-{size}.kld") for size in ("4B", "9B")]
 
+
+def test_a_failed_base_skips_its_kld_runs(tmp_path):
+    plan = sq.build_plan(PINS, part="q1-cuda", mode="pilot")
+    run(tmp_path, plan, "s", run_proc=fake_llama(fail=("stage-q-4B.kld",)))
+    rows = {json.loads(x)["job_id"]: json.loads(x)
+            for x in (tmp_path / "results" / "stage_q" / "s" / "rows.jsonl").read_text().splitlines()}
+    assert rows["kld_base-4B"]["outcome"] == "error"
+    assert {rows[k]["outcome"] for k in ("kld_self-4B", "kld-4B-Q8_0", "kld-4B-Q6_K", "kld-4B-Q4_K_M")} == {"skipped"}
+    assert rows["delete_kld-4B"]["outcome"] == "error" and rows["kld-9B-Q8_0"]["outcome"] == "ok"
+
+
+# ---------------------------------------------------------------- config, freeze and evidence
 
 def test_the_repo_config_is_well_formed_and_not_yet_frozen():
     assert sq.config_problems(CFG) == [] and CFG["freeze"]["stage_q"] is False
@@ -137,48 +251,49 @@ def test_the_repo_config_is_well_formed_and_not_yet_frozen():
     assert sq.config_problems({**CFG, "extra": 1})
 
 
-def test_formal_plans_need_the_freeze_and_record_the_harness():
+def test_formal_plans_need_the_freeze_this_parts_pilot_and_record_the_harness(frozen_root, tmp_path):
     for cfg in (None, CFG):
         with pytest.raises(sq.StageQError, match="freeze.stage_q"):
-            sq.build_plan(PINS, part="q2", mode="formal", cfg=cfg)
-    p = formal("q2")
+            sq.build_plan(PINS, part="q2", mode="formal", cfg=cfg, root=frozen_root)
+    with pytest.raises(sq.StageQError, match="pilot first"):
+        formal("q2", tmp_path)
+    q2_only = pilots(tmp_path / "q2only", parts=("q2",))
+    assert formal("q2", q2_only)["part"] == "q2"                       # the other parts' pilots: the analysis
+    p = formal("q2", frozen_root)
     assert p["stage_q_sha256"] == "q" * 64 and p["harness_sha256"] == sq.harness_sha256()
     assert sq.build_plan(PINS, part="q2", mode="pilot")["harness_sha256"] == sq.harness_sha256()
 
 
-def test_the_harness_fingerprint_covers_the_stage_q_modules():
+def test_the_harness_fingerprint_covers_the_stage_q_modules_and_their_unguarded_imports():
     assert len(sq.harness_sha256()) == 64 and all((ROOT / f).is_file() for f in sq.HARNESS_FILES)
-    assert {Path(f).name for f in sq.HARNESS_FILES} == {"stage_q.py", "stage_q_analysis.py"}
+    assert {Path(f).name for f in sq.HARNESS_FILES} == {"stage_q.py", "stage_q_analysis.py", "run_quality.py",
+                                                         "quality_parse.py", "disk_guard.py"}
 
 
-def pilot_session(root, sid, part, over=None):
-    d = root / "results" / "stage_q" / sid
-    d.mkdir(parents=True)
-    s = {"mode": "pilot", "part": part, "outcomes": {"ok": 9, "oom": 0, "error": 0, "skipped": 0},
-         "harness_sha256": sq.harness_sha256(), **(over or {})}
-    (d / "session.json").write_text(json.dumps(s))
-
-
-def test_the_freeze_needs_a_passed_pilot_of_each_part_from_this_harness(tmp_path):
+def test_the_freeze_needs_a_passed_pilot_of_each_part_from_this_harness(frozen_root, tmp_path):
     assert sq.freeze_evidence_problems(CFG, tmp_path) == []                          # nothing to check before it
     assert len(sq.freeze_evidence_problems(FROZEN, tmp_path)) == 3
-    pilot_session(tmp_path, "pilot-q1m", "q1-metal")
-    pilot_session(tmp_path, "pilot-q1c", "q1-cuda")
-    pilot_session(tmp_path, "pilot-q2", "q2")
-    assert sq.freeze_evidence_problems(FROZEN, tmp_path) == []
-    for sid, part, over, why in (("pilot-q2", "q2", {"part": "q1-cuda"}, "not a passed q2 pilot"),
-                                 ("pilot-q2", "q2", {"outcomes": {"ok": 8, "oom": 1, "error": 0, "skipped": 0}},
-                                  "not a passed q2 pilot"),
-                                 ("pilot-q2", "q2", {"mode": "formal"}, "not a passed q2 pilot"),
-                                 ("pilot-q2", "q2", {"harness_sha256": "0" * 64}, "another harness")):
-        shutil.rmtree(tmp_path / "results" / "stage_q" / sid)
-        pilot_session(tmp_path, sid, part, over)
-        assert any(why in p for p in sq.freeze_evidence_problems(FROZEN, tmp_path)), over
+    assert sq.freeze_evidence_problems(FROZEN, frozen_root, PINS) == []
+    root = tmp_path / "copy"
+    shutil.copytree(frozen_root, root, symlinks=True)
+    d = root / "results" / "stage_q" / "pilot-q2"
+    session, plan = json.loads((d / "session.json").read_text()), json.loads((d / "plan.json").read_text())
 
+    def tamper(s_over=None, plan_jobs=None):
+        p = {**plan, "jobs": plan["jobs"] if plan_jobs is None else plan_jobs}
+        (d / "plan.json").write_text(json.dumps(p))
+        (d / "session.json").write_text(json.dumps({**session, "plan_sha256": sq.sha256_json(p), **(s_over or {})}))
+        return sq.freeze_evidence_problems(FROZEN, root, PINS)
 
-def test_a_formal_run_refuses_a_plan_from_another_harness(tmp_path):
-    plan = {**formal("q2"), "harness_sha256": "0" * 64}
-    with pytest.raises(sq.StageQError, match="harness"):
-        sq.run_stage_q(plan, bin_dir="/b", models_dir="/m", data_dir="/d", capture_env=env(), session_id="s",
-                       gpu_lock_held=True, out_dir=tmp_path / "results" / "stage_q" / "s", repo_root=tmp_path)
-    assert not (tmp_path / "results" / "stage_q" / "s").exists()
+    assert tamper() == []
+    assert any("not a q2 pilot" in p for p in tamper({"part": "q1-cuda"}))
+    assert any("not a q2 pilot" in p for p in tamper({"mode": "formal"}))
+    assert any("another harness" in p for p in tamper({"harness_sha256": "0" * 64}))
+    assert any("not a passed q2 pilot" in p for p in tamper({"outcomes": {"ok": 23, "oom": 1, "error": 0,
+                                                                          "skipped": 0}}))
+    assert any("not build_plan's pilot plan" in p for p in tamper(plan_jobs=plan["jobs"][:1]))
+    assert any("not a wsl2-cuda host" in p for p in tamper({"host": {"system": "Darwin", "wsl": False,
+                                                                      "nvidia": False}}))
+    (d / "session.json").write_text(json.dumps({**session, "plan_sha256": "0" * 64}))
+    (d / "plan.json").write_text(json.dumps(plan))
+    assert any("plan_sha256" in p for p in sq.freeze_evidence_problems(FROZEN, root, PINS))
