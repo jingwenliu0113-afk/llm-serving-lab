@@ -10,7 +10,8 @@ results/capacity/c0-step0/raw/<session>/):
   the closed-loop proxy completion(8g + j) ~ arrival(8(g + 1) + j)), bench.json (fetched: client start_times and
   latencies for the client-side send lag, never combined with the server clock). T, TG: auxiliary only (their TTFT
   structure differs; no slip classification). Every run: the position-0 F spikes and, with steps (T / TG fetched),
-  the decode-only steps stamped between 8g's arrival and its own prefill start s = arrival + server_ttft - P.
+  the steps stamped between 8g's arrival and its own scheduling s = arrival + server_ttft - P (plus ANCHOR_TAU_MS for
+  the stamps' logging delay).
 - c0: explore-c0-20261016's 24 benches: committed derived TTFT / latency; bench.json (fetched) for start_times.
 - core: formal-20261009-coreb-uniform's three C 8 benches (local copies): TTFT, latency, start_times.
 A missing raw file blocks only what depends on it (listed in "blocked"); a file that fails its manifest stops the
@@ -55,7 +56,11 @@ import c0_analysis as ca  # noqa: E402
 C, L = 8, 8192
 BASE_GROUPS = range(1, 24)
 CONFIG = ROOT / "configs" / "stage_e1.toml"
-STAMP_RESOLUTION_MS = 1.0                                 # steps.jsonl stamps are whole epoch milliseconds
+# steps.jsonl stamps are the runner's floored wall-clock milliseconds when it read each iteration log line
+# (run_adv.pump_log), not the step's end: the stamp of the step after which 8g is scheduled lands -0.9 to +3.1 ms
+# from s on the seen B0/G/K3 data, so the window ends ANCHOR_TAU_MS after s (decode steps take >= ~11 ms).
+STAMP_RESOLUTION_MS = 1.0
+ANCHOR_TAU_MS = 5.0
 HARNESS_FILES = ("benchmarks/stage_e1.py", "benchmarks/c0_analysis.py")      # c0_analysis has no guard test
 RESULTS = ("results", "stage_e")
 ADV = Path("results/advanced/formal-20261011-adv")
@@ -237,21 +242,24 @@ def admission_s(row: dict) -> float:
 
 
 def n_dec_anchored(steps: list, row: dict) -> dict:
-    """Steps stamped in (arrival, s] (a step's stamp is its end; T / TG chunks can make some of them mixed) and how
-    many of them are decode-only. The distance from each window edge to the nearest stamp on either side shows how
-    close the count is to gaining or losing one step; below the stamps' resolution (1 ms) the count is ambiguous."""
+    """Steps stamped in (arrival, s + ANCHOR_TAU_MS] (T / TG chunks can make some of them mixed) and how many of them
+    are decode-only. The distance from each window edge to the nearest stamp on either side shows how close the count
+    is to gaining or losing one step; below the stamps' resolution (1 ms) the count is ambiguous."""
     a, s = row["arrival"], admission_s(row)
+    end = s + ANCHOR_TAU_MS / 1000
     t = [x["t"] for x in steps]
-    inside = [x for x in steps if a < x["t"] <= s]
+    inside = [x for x in steps if a < x["t"] <= end]
     before_a, after_a = [v for v in t if v <= a], [v for v in t if v > a]
-    before_s, after_s = [v for v in t if v <= s], [v for v in t if v > s]
+    before_e, after_e = [v for v in t if v <= end], [v for v in t if v > end]
+    nearest = min(t, key=lambda v: abs(v - s)) if t else None
     edges = {"arrival_minus_stamp_ms": (a - before_a[-1]) * 1000 if before_a else None,
              "stamp_minus_arrival_ms": (after_a[0] - a) * 1000 if after_a else None,
-             "s_minus_stamp_ms": (s - before_s[-1]) * 1000 if before_s else None,
-             "stamp_minus_s_ms": (after_s[0] - s) * 1000 if after_s else None}
+             "end_minus_stamp_ms": (end - before_e[-1]) * 1000 if before_e else None,
+             "stamp_minus_end_ms": (after_e[0] - end) * 1000 if after_e else None}
     known = [v for v in edges.values() if v is not None]
     margin = min(known) if known else None
     return {"n": len(inside), "decode_only": sum(x["ctx_tok"] == 0 for x in inside), "edges": edges,
+            "nearest_stamp_minus_s_ms": (nearest - s) * 1000 if nearest is not None else None,
             "margin_ms": margin, "ambiguous": margin is None or margin < STAMP_RESOLUTION_MS}
 
 
@@ -324,7 +332,7 @@ def advanced_run(root: Path, tag: str, cfg: dict, used: dict) -> dict:
     steps_path = raw_input(root, ADV, f"{tag}.steps.jsonl", used, required=False)
     steps = _jsonl(steps_path) if steps_path else None
     if steps is None:
-        blocked.append("steps (L2 and the anchored n_dec)")
+        blocked.append("steps (the anchored n_dec)" if cond in AUX_CONDS else "steps (L2 and the anchored n_dec)")
     spikes = f_spikes(rows, steps, cfg)
     if cond in AUX_CONDS:
         return {"run": tag, "slip_condition": False, "f_spikes": spikes, "blocked": blocked}

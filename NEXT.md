@@ -52,8 +52,9 @@
   - [x] 第 2 版經審查（44 項確認）與設計 workflow（3 位設計者、3 位評審）後改寫為第 3 版（`6db1512`），設計前看過的重算在 `results/stage_e/prereg-tally/`。
   - [ ] **等使用者決定**（041 §6）：A1 E1 的換 seed 探針、A2 allocator 不操弄、A3 PC 作為能力檢查、A4 E2 只能給條件式結論。
   - [x] harness：E3（`320343a`）、E1-D（`1450a3c`）、E2（`a7a5e44`）；每個部分有自己的設定檔與凍結。
-  - [x] E1-D 與 E3 的 harness 審查：確認 34 項，全部修正（E1-D `4f83e06`；E3 見 041 修訂紀錄「第 3 版的 harness 審查」）。
-  - [ ] E1-D：修正後的覆核 → 凍結（`freeze.e1 = true` 與 `e1_harness_sha256`）→ `stage_e1.py fetch-list` → `tools/rtx/gpu_status.sh` 為 FREE 時以 `fetch_raw.sh` 取回 → `analyze --out results/stage_e/e1-<date>/e1.json`。
+  - [x] E1-D 與 E3 的 harness 審查：確認 34 項，全部修正（E1-D `4f83e06`、E3 `c41c073`）。
+  - [x] 修正後的覆核：確認 9 項（E3 的 plan 雜湊含 `[freeze]` 為 must-fix），全部修正（`13d7a74`）。
+  - [ ] E1-D：凍結前覆核（041 §1 逐條、在已看過的數據上重現 §1.2、取回檔案的格式；workflow 執行中）→ 凍結（`freeze.e1 = true` 與 `e1_harness_sha256`）→ `stage_e1.py fetch-list` → `tools/rtx/gpu_status.sh` 為 FREE 時以 `fetch_raw.sh` 取回 → `analyze --out results/stage_e/e1-<date>/e1.json`。
   - [ ] E3：Mac lock 釋放後 `produce_gguf_e3.py produce --size 4B / 9B` → pin 輸出的條目 → `produce_gguf_e3.py sync` → 兩個平台的 pilot → 凍結 → 正式（每個平台最多兩次嘗試）。
   - [ ] E2：WSL 原始碼核對（prefix caching、warmup 來源、計數器名稱）→ 共享前綴 dataset → smoke（GPU）→ 凍結 → 正式（約 4.2 h）。
   - [ ] E1-P：等 A1。

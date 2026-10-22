@@ -52,7 +52,7 @@
   2. 它晚一次排程決策才進入 queue，第一個 prefill chunk 之前多一個 decode-only step；
   3. 還在 decode 的 8(k−1)+1…+7 少經過一個約 342 ms 的混合 step，提早約 330 ms 完成；
   4. 封閉迴路因此提早送出 8k+1…8k+7，間隔約 90 ms 而不是約 416 ms；
-  5. 這 7 個 request 各多等一個 prefill step（Q +347–349 ms），形成一段滑移。
+  5. 這 7 個 request 各多等一個 prefill step（每個 request 的 Q +347–351 ms，每段平均 ΔQ 348.8–349.6 ms），形成一段滑移。
 - 第 2 版的「前一組的不同步」是第 3 環，是第 1–2 環的結果；第 2 版的 g*、往前追溯與三類事件全部不再使用。
 - 「client 類」（晚送出 > 100 ms）只在 Core 的 8 段有直接量測（≤ 0.41 ms，不成立）；Advanced 的 8 段量到的是 server 端提早到達；C0 的 5 段是推論。028:136 與 032:67 的「位置或內容鎖定」仍然沒有答案。
 
@@ -81,7 +81,7 @@
 - **L4**：gap(k) = 到達(8k+1) − 到達(8k) < 200 ms。
 - **L5**（Advanced）：ΔQ(k) = 8k+1…8k+7 的 Q 減同位置正常組 Q 的中位數，取平均；成立條件 > 170 ms。
 - **送出延遲**（Core；C0 與 Advanced 需取回 bench.json）：依時間排序，第 C + m 個送出減第 m 個完成（封閉迴路的 semaphore，與 idx 無關）；每段列出 8k+1…8k+7 的值與最大值。只用 client 的時鐘（start_times 與 latency），不和 server 的時鐘相減。
-- **F 尖峰的描述**（Advanced 全部 15 run；T、TG 只有這一項）：g 1–24 中 F(8g) > 35 ms 的組、F 的值、g 1–23 的尖峰率；有 step 紀錄時（T、TG 需取回），計 8g 到達之後、它自己的 prefill 開始 s = arrival + server_ttft − P 之前（含）結束的 step 數，與其中 decode-only 的數目，對照同一 run 的 g 1–23 中位數，並列出「尖峰而且多 1 個 step」的組數。step 的時間戳是 step 結束時、精度 1 ms，所以列出兩個窗邊（arrival 與 s）各自到兩側最近時間戳的距離，取最小值為 margin；margin < 1 ms（低於時間戳的精度）時該組的計數標為 ambiguous，「尖峰而且多 1 個 step」另列不含 ambiguous 的組數。這個錨點不用「第一個 ctx_tok > 0 的 step」，因為 T 的小 chunk 可能屬於別的 request。
+- **F 尖峰的描述**（Advanced 全部 15 run；T、TG 只有這一項）：g 1–24 中 F(8g) > 35 ms 的組、F 的值、g 1–23 的尖峰率；有 step 紀錄時（T、TG 需取回），計時間戳落在 (arrival, s + 5 ms] 的 step 數與其中 decode-only 的數目，s = arrival + server_ttft − P 是 8g 被排進 engine 的時刻；對照同一 run 的 g 1–23 中位數，並列出「尖峰而且多 1 個 step」的組數。step 的時間戳是 runner 讀到該 iteration log 的 wall clock（取整到 ms，`run_adv.pump_log`），不是 step 結束的時刻：在已看過的 B0、G、K3 數據上，8g 被排進之前那個 step 的時間戳落在 s 的 −0.9 至 +3.1 ms，所以窗的終點是 s + 5 ms（decode step 約 11 ms 以上，不會多算下一個）。列出兩個窗邊（arrival 與 s + 5 ms）各自到兩側最近時間戳的距離與最近時間戳減 s，取最小距離為 margin；margin < 1 ms（時間戳的精度）時該組的計數標為 ambiguous，「尖峰而且多 1 個 step」另列不含 ambiguous 的組數。這個錨點不用「第一個 ctx_tok > 0 的 step」，因為 T 的小 chunk 可能屬於別的 request。
 
 ### 1.5 E1-D 的描述規則
 
@@ -120,7 +120,7 @@
 
 ### 1.7 E1 的凍結證據
 
-- **`freeze.e1`**：E1-D 的模組、合成 fixture 的測試（連續滑移、g 0 與 g 24 的排除、n = 192 的短 bench、時鐘不跨來源（client 與 server 的時間刻意不同，送出延遲與 C0 的 L4 都核對數值）、亂序完成的送出延遲、e2e 與代理量不同（代理量的 index 也核對）、部分取回、取回時 sha256 不符、窗邊的 ambiguous）與取回清單一起 commit，`freeze.e1_harness_sha256` 記下當時的 `harness_sha256()`；`[e1]` 的五個值固定為本節的值。`fetch-list` 與 `analyze` 在未凍結或 harness 不符時拒絕。之後才以 `tools/rtx/fetch_raw.sh` 唯讀取回（放進 `results/capacity/c0-step0/raw/<session>/`）並依 raw_manifest 驗證 sha256：
+- **`freeze.e1`**：E1-D 的模組、合成 fixture 的測試（連續滑移、g 0 與 g 24 的排除、n = 192 的短 bench、時鐘不跨來源（client 與 server 的時間刻意不同，送出延遲與 C0 的 L4 都核對數值）、亂序完成的送出延遲、e2e 與代理量不同（代理量的 index 也核對）、部分取回、取回時 sha256 不符、窗邊的 ambiguous、s 落在時間戳 −0.9 至 +3.1 ms 的真實時序、receiver 格式的 spans 與 warmup span）與取回清單一起 commit，`freeze.e1_harness_sha256` 記下當時的 `harness_sha256()`；`[e1]` 的五個值固定為本節的值。`fetch-list` 與 `analyze` 在未凍結或 harness 不符時拒絕。之後才以 `tools/rtx/fetch_raw.sh` 唯讀取回（放進 `results/capacity/c0-step0/raw/<session>/`）並依 raw_manifest 驗證 sha256：
   - `advanced formal-20261011-adv`：{B0,G,K3}-8192-uniform-r{1,2,3} 的 spans.jsonl 與 bench.json，以及 {T,TG} 的 steps.jsonl；
   - `capacity explore-c0-20261016`：b*-n*.bench.json。
   - 取回會讀 WSL 的磁碟與網路，只在 `tools/rtx/gpu_status.sh` 印出 FREE 時進行（不拿、不等 lock），排在 GPU 正式 session 之外。
@@ -380,6 +380,7 @@
 10. 第 2 版的數字更正：C 4 → C 8 的 P95 為 969 → 977 ms（均值）；2 長 + 6 短為 174 / 247 個 block（不是 156），3 長的峰值 233。
 11. Phase 3 在 Mac 上的數字是 140W adapter 的條件（實際協商 94 W），不和 Phase 1 的 70W 數字比較。
 12. E1-D 與 E3 harness 的審查（凍結前）用 committed 的 derived 數據重算過：T、TG 上 `classify_bench` 標出的段與 20 次 F 尖峰的位置、C0 前兆組的 min_j、§1.2 的其他數字（全部重現）。這些都不是新的 raw 數據。
+13. E1-D 凍結前的覆核用已看過的 B0、G、K3 steps（設計 tally 用過的本機副本）算了 F 尖峰的錨定計數，錨點因此改變：原本的窗 (arrival, s] 在 207 個正常組中有 189 個 ambiguous，8 個尖峰中沒有一個是「明確地多 1 個 step」；改為 (arrival, s + 5 ms] 之後，9 個 run 的中位數都是 2，8 個尖峰都是 3（中位數加 1），沒有 ambiguous，尖峰的 margin 最小 2.61 ms。T、TG 的 steps 尚未取回、沒有看過。
 
 ## 6. 相對 037 範圍的決定（等使用者決定）
 
@@ -436,3 +437,8 @@
   - E3（must-fix）：plan 原本記錄設定檔 bytes 的雜湊，另一個平台之後凍結會讓已完成的正式 session 無法分析，而重跑上限又讓它無法重跑；改為不含 `[freeze]` 的內容雜湊，分析不比 `pins_sha256`（3.6）。
   - E3：pilot 也必須是 build_plan 的 pilot plan；嘗試次數在 `session.json` 讀不到時以 `plan.json` 判定；`session.json` 改為原子寫入（3.6）。
   - E1-D：F 尖峰計數的 margin 改為兩個窗邊、兩側的距離，低於 1 ms 標 ambiguous（1.4）；取回時 sha256 不符（`.sha256-mismatch`）也停止分析（1.5）；測試改為 client 與 server 的時間不同、g 0 亂序完成，核對送出延遲、C0 的 L4 與代理量的 index，覆核者的 10 個突變全部被抓到（1.7）。
+- E1-D 凍結前覆核（逐條對照 1.3–1.7、在已看過的數據上重現 1.2、檢查取回後才有的檔案格式；確認 5 項，其中 2 項是同一個 must-fix）：
+  - must-fix：F 尖峰錨定計數的窗終點原本是 s，但時間戳是 runner 讀到 log 的時刻，8g 被排進之前那個 step 的時間戳落在 s 的 −0.9 至 +3.1 ms，所以幾乎每組都是 ambiguous，而且少數「明確」的組計數偏少。改為 (arrival, s + 5 ms]，並在 §5 第 13 項揭露這是看過 B0、G、K3 的 steps 之後的改變（1.4）。
+  - §1.2 的 Q 更正為每個 request +347–351 ms（每段平均 ΔQ 348.8–349.6 ms），和 028 一致。
+  - T、TG 缺 steps 時的 blocked 標籤不再寫 L2；測試的 spans 改用 receiver 的實際格式並加入 warmup span。
+  - 其餘：1.2 的 21 段、起始 idx、F、間隔、n_dec、送出延遲、C0 的 L3 全部重現；取回檔案的格式假設（span id、e2e 單位、warmup span、bench.json 的 start_times 與 latencies、manifest 鍵名、fetch_raw.sh 的路徑）都成立。

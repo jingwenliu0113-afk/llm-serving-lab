@@ -174,20 +174,38 @@ def test_t_and_tg_get_only_the_anchored_f_spike_description():
     six = e1.f_spikes(rows_of(d), steps, CFG)["n_dec_anchor"]["spikes"][6]
     assert (six["n"], six["decode_only"], six["ambiguous"]) == (4, 3, False)
     assert six["edges"] == pytest.approx({"arrival_minus_stamp_ms": 8 * 416 - 300, "stamp_minus_arrival_ms": 12,
-                                          "s_minus_stamp_ms": 55, "stamp_minus_s_ms": 158}, abs=1e-3)
+                                          "end_minus_stamp_ms": 147 - 87, "stamp_minus_end_ms": 300 - 147}, abs=1e-3)
     assert six["margin_ms"] == pytest.approx(12, abs=1e-3)
 
 
 def test_a_count_within_a_stamp_of_its_window_edge_is_ambiguous():
     d = synth(slips=(), spikes=(6, 14))
-    s6 = d["arrival"][48] + (100 + 42) / 1000                                       # 8 * 6's prefill start
+    end6 = d["arrival"][48] + (100 + 42 + e1.ANCHOR_TAU_MS) / 1000                 # 8 * 6's s + tau
     steps = sorted([{"t": EPOCH + x["t"], "ctx_tok": x["ctx_tok"]} for x in d["steps"]] +
-                   [{"t": EPOCH + s6 + 0.0005, "ctx_tok": 0}], key=lambda x: x["t"])  # 0.5 ms after s
+                   [{"t": EPOCH + end6 + 0.0005, "ctx_tok": 0}], key=lambda x: x["t"])  # 0.5 ms after the window
     nd = e1.f_spikes(rows_of(d), steps, CFG)["n_dec_anchor"]
     assert nd["spikes"][6]["n"] == 4 and nd["spikes"][6]["ambiguous"] is True
-    assert nd["spikes"][6]["edges"]["stamp_minus_s_ms"] == pytest.approx(0.5, abs=1e-3)
+    assert nd["spikes"][6]["edges"]["stamp_minus_end_ms"] == pytest.approx(0.5, abs=1e-3)
     assert (nd["spikes_at_median_plus_1"], nd["spikes_at_median_plus_1_unambiguous"]) == (2, 1)
     assert nd["ambiguous_groups_g1_23"] == 1
+
+
+def test_the_window_absorbs_the_stamps_logging_delay_around_s():
+    """The real layout (041 v3 §1.4): Q(8g) = 0 and s lands -0.9 to +3.1 ms from the stamp of the step after which 8g
+    is scheduled (the second decode step normally, the third after an F spike)."""
+    d = synth(slips=(), spikes=(6, 14))
+    offsets = (-0.9, 0.0, 1.0, 3.1)
+    rows = rows_of(d)
+    for g in range(len(rows) // 8):
+        stamp = 42.0 if g in (6, 14) else 27.0
+        f = stamp - offsets[g % len(offsets)]
+        rows[8 * g] = {**rows[8 * g], "Q_ms": 0.0, "F_ms": f, "server_ttft_ms": f + 900.0}
+    steps = [{**x, "t": EPOCH + x["t"]} for x in d["steps"]]
+    nd = e1.f_spikes(rows, steps, CFG)["n_dec_anchor"]
+    assert nd["median_g1_23"] == 2 and nd["ambiguous_groups_g1_23"] == 0
+    assert {g: v["n"] for g, v in nd["spikes"].items()} == {6: 3, 14: 3}
+    assert (nd["spikes_at_median_plus_1"], nd["spikes_at_median_plus_1_unambiguous"]) == (2, 2)
+    assert nd["spikes"][14]["nearest_stamp_minus_s_ms"] == pytest.approx(offsets[14 % 4], abs=1e-3)
 
 
 def test_the_config_is_041s_values_and_unfrozen():
@@ -247,6 +265,13 @@ def _jsonl(rows):
     return "".join(json.dumps(r) + "\n" for r in rows)
 
 
+def span(rid, arrival, e2e):
+    """An llm_request span as run_adv's receiver appends it to spans.jsonl (adv_decomp.decode_otlp_traces)."""
+    return {"name": "llm_request", "trace_id": "0" * 32, "span_id": "0" * 16,
+            "start_time_unix_nano": round(arrival * 1e9), "end_time_unix_nano": round((arrival + e2e) * 1e9),
+            "attributes": {"gen_ai.request.id": rid, "gen_ai.latency.e2e": e2e, "gen_ai.usage.prompt_tokens": 8064}}
+
+
 def synthetic_repo(root, *, skip=(), clock=-1e5, adv_starts=None, e2e_extra_ms=None, shifts=(0.326,) * 7):
     """Committed derived files and manifests plus the raw copies under COPIES/<session>/ (fetch_raw.sh's DEST);
     skip: raw names not (yet) fetched; clock: the client perf_counter origin relative to the synthetic times (client
@@ -267,9 +292,10 @@ def synthetic_repo(root, *, skip=(), clock=-1e5, adv_starts=None, e2e_extra_ms=N
         _write(root, e1.ADV / "derived" / f"{tag}-requests.jsonl", _jsonl(rows_of(d)))
         raw(e1.ADV, f"{tag}.steps.jsonl", _jsonl([{**s, "t": EPOCH + s["t"]} for s in d["steps"]]))
         extra = (e2e_extra_ms or {}) if cond == "B0" else {}
-        spans = [{"id": f"cmpl-adv-{cond}-8192-uniform-r{r}-{i}-0", "arrival": EPOCH + d["arrival"][i],
-                  "e2e": d["completion"][i] - d["arrival"][i] + extra.get(i, 0.0) / 1000} for i in range(200)]
-        raw(e1.ADV, f"{tag}.spans.jsonl", _jsonl(spans))
+        spans = [span(f"cmpl-adv-{cond}-8192-uniform-r{r}-{i}-0", EPOCH + d["arrival"][i],
+                      d["completion"][i] - d["arrival"][i] + extra.get(i, 0.0) / 1000) for i in range(200)]
+        warmup = [span(f"cmpl-{i:032x}-0", EPOCH - 60 + i, 1.0) for i in range(8)]     # server-generated ids
+        raw(e1.ADV, f"{tag}.spans.jsonl", _jsonl(warmup + spans))
         starts, lats = client_side(d, clock)
         raw(e1.ADV, f"{tag}.bench.json", json.dumps({"start_times": adv_starts or starts, "latencies": lats}))
     for b in e1.C0_BENCHES:
@@ -378,6 +404,8 @@ def test_a_partial_fetch_blocks_only_what_depends_on_it(tmp_path):
     assert adv["K3-8192-uniform-r1"]["blocked"] == ["bench.json (client send lag)"]
     assert "send_lag_ms" not in adv["K3-8192-uniform-r1"]["episodes"][0]["values"]
     assert adv["T-8192-uniform-r3"]["f_spikes"]["n_dec_anchor"] is None
+    assert adv["T-8192-uniform-r3"]["blocked"] == ["steps (the anchored n_dec)"]
+    assert not any("L2" in b for b in out["datasets"]["advanced"]["blocked"])     # B0 / G / K3 have their steps
     assert adv["T-8192-uniform-r2"]["f_spikes"]["n_dec_anchor"]["spikes_at_median_plus_1"] == 2
     c0 = {r["run"]: r for r in out["datasets"]["c0"]["runs"]}
     (ep,) = c0["b1-n2"]["episodes"]
