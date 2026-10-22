@@ -1,0 +1,24 @@
+# Stage E2 settings: decision 041 v3 §2 (why T fails at 2K C 25: load S, T x KV V, threshold Th), PREREGISTRATION §11
+# (DRAFT). benchmarks/stage_e2_plan.py refuses a formal plan until freeze.e2 is true and the smoke passed; every server
+# is 024's observed B0 plus its condition (pins [core_b] / [stage_b] / [advanced] are read only). The PC cells wait on
+# the user's decision A3 (041 §6); E2 is built with the recommended option (a separate capability check).
+schema_version = 1
+
+[freeze]
+e2 = false
+smoke_e2 = ""                                             # session id of the passed smoke (results/stage_e/<id>)
+
+[e2]
+seed = 20261008                                           # block order: Random(sha256("<seed>:stage_e:E2:block:<r>"))
+L = 2048
+restarts = 3
+kv25_bytes = 2684354560                                   # K2.5: 10 x 256 MiB; adv_plan.blocks_bounds gives 155 exactly
+t256 = 256                                                # T256's --long-prefill-token-threshold
+expected_blocks = { B0 = 248, T = 248, T256 = 248, K25 = 155, TK25 = 155, PC = 0 }   # PC: measured by the smoke
+m_effective = 0.20                                        # E: category M / P and ln(M0 / Mc) >= 0.20 (041 v3 §2.2)
+beta_gap = 0.20                                           # beta(B0@25) - beta(B0@8) >= 0.20
+specificity = 0.10                                        # |ln(U_8k / U_8)| <= 0.10 (KV_ok, H-E2k)
+cap_hours = 7.5                                           # lock-holding cap of the formal session
+# PC cells' dataset (stage_e2_datasets.py, WSL): rows of `total` tokens sharing a RandomDataset prefix of prefix_len;
+# the token-id prefix common to every row must be >= min_shared (3 x 528 blocks); sha256 / common_prefix pinned on WSL
+shared_prefix = { total = 1920, min_shared = 1584, prefix_len = 1600, rows = 275, sha256 = "", common_prefix = 0 }
