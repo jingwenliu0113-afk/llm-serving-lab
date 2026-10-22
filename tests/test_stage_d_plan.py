@@ -39,6 +39,7 @@ def plan(session, c=None, refs=None, formal=False):
 
 def test_the_repo_config_is_the_039_draft():
     assert sd.stage_d_problems(CFG, PINS) == []
+    assert all(len(v) == 64 for v in CFG["stage_d"]["var_dataset_sha256"].values())   # generated on WSL, pinned
     assert CFG["freeze"]["stage_d"] is False and CFG["slo"] == cp.SLO_S2
     assert CFG["stage_d"]["sessions"] == sd.SESSIONS and CFG["stage_d"]["sentinel"] == sd.SENTINEL
 
@@ -68,6 +69,7 @@ def test_the_slo_is_s2_and_unknown_keys_are_refused():
 def test_the_freeze_needs_three_mini_smokes_and_the_var_datasets(tmp_path):
     c = copy.deepcopy(CFG)
     c["freeze"]["stage_d"] = True
+    c["stage_d"]["var_dataset_sha256"] = {"2048": "", "8192": ""}
     problems = sd.stage_d_problems(c, PINS)
     assert sum("freeze.mini_" in p for p in problems) == 3 and any("var_dataset_sha256 pinned" in p for p in problems)
     c["freeze"].update(mini_closed="smoke-d-a", mini_open="smoke-d-b", mini_verify="smoke-d-c")
