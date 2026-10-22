@@ -1,0 +1,103 @@
+{
+ "schema_version": 1,
+ "session_id": "formal-20261023-d-a1",
+ "stage": "D",
+ "session": "D-A1",
+ "kind": "closed",
+ "mode": "formal",
+ "formal": true,
+ "gpu_lock_held": true,
+ "plan_sha256": "45b38decd4b95d352ad90d227c0c4a05665688b42835ffef28feeeac3feccf36",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+ "plan_pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "plan_stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+ "started_at": "2026-10-22T19:59:40.207407+00:00",
+ "preflight": "env/preflight.json",
+ "repo_commit": "0ec7b9208ea339b302cf43f8658829f4a9995545",
+ "repo_source": "DEPLOYED_COMMIT",
+ "vllm": "0.30.0",
+ "server": {
+  "gdn_prefill_backend": "triton",
+  "gpu_memory_utilization": "0.91",
+  "port": 8000,
+  "vllm_bin": ".venv/bin/vllm"
+ },
+ "datasets": {
+  "mixed:8192": "data/core_b/mixed-8192.jsonl",
+  "var:2048": "data/stage_d/var-2048.jsonl",
+  "var:8192": "data/stage_d/var-8192.jsonl"
+ },
+ "dataset_sha256": {
+  "mixed:8192": "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2"
+ },
+ "server_env": {
+  "HF_HOME": "/home/wenn0113/.cache/huggingface",
+  "HF_HUB_OFFLINE": "1",
+  "VLLM_GDN_DECODE_KERNEL": "triton",
+  "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+  "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+  "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+  "OTEL": {},
+  "engine_vars": [
+   "CUDA_HOME",
+   "VLLM_GDN_DECODE_KERNEL",
+   "VLLM_WSL2_ENABLE_PIN_MEMORY"
+  ]
+ },
+ "inherited_unlisted": [],
+ "gpu_idle": {
+  "decision": "031",
+  "v_total_mib": 16303,
+  "f_peak_mib": 15157,
+  "margin_mib": 128,
+  "bound_mib": 1018,
+  "util_max_pct": 5,
+  "range_max_mib": 64,
+  "windows": 3,
+  "window_samples": 30,
+  "interval_s": 1.0,
+  "spill_tol_mib": 64
+ },
+ "boots": [
+  {
+   "boot": 0,
+   "phase": "sentinel",
+   "workload": "U2K",
+   "block": null,
+   "attempt": null,
+   "position": "start",
+   "reached_first_bench": null,
+   "problems": [],
+   "tag": "b000-sentinel-start-U2K"
+  }
+ ],
+ "runs": {},
+ "derived_sha256": {},
+ "out": "results/stage_d/formal-20261023-d-a1",
+ "result_dir": "results/stage_d/formal-20261023-d-a1/raw",
+ "gateway_python": "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+ "harness_sha256": "2b85155d239364c22faf3e340a53effa179e09836ce8e8e6e5eacc9e25d5a5cf",
+ "capserve_sha256": null,
+ "spill_unreadable": {
+  "boot": "b000-sentinel-start-U2K",
+  "tol_mib": 64,
+  "ready_tol_mib": 160,
+  "pre": null,
+  "readings": [],
+  "spilled": null,
+  "error": "pre-boot: SharedUsageError: powershell.exe exited 1: '<3>WSL (558 - ) ERROR: UtilAcceptVsock:273: accept4 failed 110'"
+ },
+ "aborted": "RunError: spill_unreadable before b000-sentinel-start-U2K: shared usage unreadable at pre-boot (SharedUsageError: powershell.exe exited 1: '<3>WSL (558 - ) ERROR: UtilAcceptVsock:273: accept4 failed 110') (031: the spill guard fails closed)",
+ "finished_at": "2026-10-22T20:00:18.906441+00:00",
+ "outcomes": {
+  "boots": 1,
+  "runs": 0,
+  "valid": 0,
+  "invalid": 0,
+  "timeout": 0
+ },
+ "env_flags": [],
+ "env_valid": true,
+ "rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

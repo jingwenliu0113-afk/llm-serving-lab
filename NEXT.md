@@ -34,17 +34,24 @@
 - **Stage D**（decision 039，DRAFT）：
   - 範圍：D-A 封閉迴路延伸（U32K、T、輸出 512）、D-B 開放迴路、D-C 固定點驗證（prompt 長度不一、經過 gateway）、D5 開場湧入的描述。
   - [x] harness（`91e6e73`）：兩輪審查（13 + 8 項）全部處理；λ_ref pin 在設定檔、由 Mac 上的測試比對；凍結證據綁定 `harness_sha256`。
-  - [ ] 三個 mini smoke（`smoke-d-{closed,open,verify}-20261023b`，WSL 部署 `91e6e73`，GPU lock 下執行中）→ 取回並 commit。
-  - [ ] 凍結：`freeze.stage_d = true` 與三個 mini id、`tests/test_stage_d_frozen.py`（sha256 pin）、§9 改為 FROZEN。
-  - [ ] 正式 session D-A1、D-A2、D-B、D-C（約 30 h GPU）→ report → D5（`stage_d_analysis.py startup-wave`）。
+  - [x] 三個 mini smoke 全部通過（`smoke-d-{closed,open,verify}-20261023b`）。
+  - [x] **凍結**（`fd95164`）：`freeze.stage_d = true`、`tests/test_stage_d_frozen.py`、039 與 §9 為 FROZEN。
+  - [ ] 正式 session（約 30 h GPU）：`formal-20261023-d-a1` 因 interop 失效在第一次 boot 前中止（039 執行紀錄一）；
+        2026-10-23 20:11Z 起以前景 ssh 依序執行 `-d-a1b`、`-d-a2`、`-d-b`、`-d-c`（WSL 的 log：`~/stage-d-logs/`）。
+        每個 session 結束後取回、commit、跑 report；全部結束後產生 D5（`stage_d_analysis.py startup-wave`）。
 - **Stage Q**（decision 040，DRAFT；PREREGISTRATION §10）：
   - [x] Q1 / Q2 harness 與凍結檢查（`f65c081`、`49b88af`）：`configs/stage_q.toml`，三個 pilot 是凍結的證據，分析只接受凍結後的正式 session。
   - [x] Q3 harness（`quality/stage_q3.py`、`configs/stage_q3.toml`，獨立的凍結）。
+  - [x] 審查（5 個審查者、每項由兩個 agent 嘗試反駁；33 項確認）全部處理（`0ec7b92`、`fd832e4`），見 040 的審查表。
+        包括：q1-metal 原本因 70W／140W 兩條規則同時套用而永遠無法執行；Phase 1 的 20-chunk pilot 已揭露（界線與預測不改）。
   - [ ] pilot：q1-cuda、q2（RTX，Stage D 的 mini 之後）；q1-metal（Mac，**blocked**：Mac heavy lock 由 incident-investigator 持有，不搶占）。
   - [ ] Q3：需要下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**等使用者同意**；
         之後在 WSL 產生 chunk 檔並 pin sha256 → pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性）→ 凍結。
   - 觀察：Mac 的 140W adapter 目前只協商到 94 W（20 V × 4.69 A；名稱檢查會通過）。可能是線材或連接埠的限制，重負載時電池可能下降（016 的充電閘門會處理）。
-- **Stage E**（decision 041，DRAFT）：harness 設計中（先整理凍結的 Advanced、C0、Core A 模組的介面）。041 E3 寫「safetensors 已在 Mac」不正確，改由 pin 住的 BF16 GGUF 以 `llama-quantize` 產生，凍結前修正。
+- **Stage E**（decision 041，DRAFT 第 2 版；PREREGISTRATION §11）：
+  - [x] 整理凍結模組的介面後修訂 041（26 項，見其修訂紀錄）：E1 改為桌面分析（不用 GPU）；E2 全部對比在同一 session、C 8 取代 C 12、
+        加 T256 與 K3、刪除 allocator 操弄；E3 在同一 session 重量 6 個舊設定並擬合，GGUF 由 BF16 GGUF 量化。
+  - [ ] 041 第 2 版的審查 → harness（`configs/stage_e.toml`、E2 → E1 → E3，TDD）→ smoke / pilot → 各部分凍結 → 正式。
 
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
 

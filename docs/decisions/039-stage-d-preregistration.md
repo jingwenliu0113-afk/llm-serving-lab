@@ -307,7 +307,22 @@ harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_sta
   - `smoke-d-open-20261023b`：5 次 boot、9 個 run 全部有效（U2K-P 在 0.4、1.1、1.5 λ_ref），replay 乾淨；
   - `smoke-d-verify-20261023b`：8 次 boot、8 個 run 全部有效（U2K-var、U2K-gw、U8K-gw），gateway 檢查通過。
   - mini 結束後依 030 8.6 丟棄延遲數值（`mask_smoke`），沒有任何 Stage D 的正式數據。
-- **ssh 斷線**：open mini 開始時 Mac 端的 ssh 逾時，但 WSL 上的程序沒有中斷，三個 mini 都正常完成。正式 session 改在 WSL 上以 `nohup` 執行並寫 log，不依賴 ssh 連線。
+- **ssh 斷線**：open mini 開始時 Mac 端的 ssh 逾時，但 WSL 上的程序沒有中斷，三個 mini 都正常完成。（原本寫「正式 session 改以 `nohup` 執行」，這個做法失敗，見下方執行紀錄一。）
 - **凍結的內容**：`configs/stage_d.toml`（`freeze.stage_d = true` 與三個 mini id）與 `HARNESS_FILES` 的五個模組，由 `tests/test_stage_d_frozen.py` 以 sha256 鎖住。
   之後任何修改都需要新的 decision log 與新的 session。capserve 不在凍結範圍內，D-C 的 session 記錄它的 `capserve_sha256`（審查第 13 項）。
+
+## 執行紀錄
+
+### 一、D-A1 的第一次 session 在第一次 boot 前中止（2026-10-23）
+
+- `formal-20261023-d-a1`：部署 `0ec7b92`（凍結 commit `fd95164` 之後只改了 Stage Q 的檔案，Stage D 的模組與設定不變，`test_stage_d_frozen` 通過）。
+- 我把四個正式 session 用 `nohup setsid` 從 ssh 脫離執行。發起它的 `wsl.exe` 結束後，WSL 呼叫 Windows 程式的 interop 通道跟著失效，
+  031 的 spill guard 讀不到 Windows 的 shared GPU 記憶體（`powershell.exe` 回傳 `UtilAcceptVsock: accept4 failed 110`），依規則 fail closed，
+  在第一次 boot 之前中止（啟動後 44 秒；0 個 run，GPU 沒有被使用）。
+- 這是我的操作錯誤：030 8.4 的做法是「每個 session 一個前景 ssh 指令」，Stage C 也是這樣執行。
+- **處理**：
+  - 改回前景 ssh：Mac 端以 `caffeinate -i` 包住 ssh（ssh 在跑的期間 Mac 不會閒置睡眠），並加上 `ServerAliveInterval`；
+  - 每個 session 各自以 `flock -n` 取得 GPU lock，session 之間釋放；任何一個 session 回傳非 0 就停止後續；
+  - 中止的 session 已取回並 commit（只有 session.json），不重用它的 id，D-A1 以新 id `formal-20261023-d-a1b` 重跑。
+- 2026-10-23 20:11Z（UTC）起依序執行 `formal-20261023-d-a1b`、`-d-a2`、`-d-b`、`-d-c`；第一次 boot 的 spill 檢查已通過。
 
