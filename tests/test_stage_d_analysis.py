@@ -37,7 +37,7 @@ def requests(x, n, *, ttft, tpot, long_ttft=None):
         cls = "long" if x["mix"] == "mixed" and idx % 10 == 5 else "short"
         t = long_ttft if cls == "long" else ttft
         out.append({"idx": idx, "cls": cls, "ttft_ms": float(t), "latency_ms": float(t) + (x["out"] - 1) * tpot,
-                    "out": x["out"]})
+                    "out": x["out"], "start_s": 0.1 * idx})
     return out
 
 
@@ -74,7 +74,7 @@ def simulate(p, latency, *, invalid=()):
         if phase == "S":
             bits = sda.search_bits(row, reqs, p)
             row["search_pass"], row["within_band"] = bits["pass"], bits["within_band"]
-        elif phase == "C":
+        elif phase in ("C", "V"):
             row["outcome"] = sda.phase_c_outcome(row, reqs, p)
         rows.append(row)
         return row
@@ -83,19 +83,20 @@ def simulate(p, latency, *, invalid=()):
     run(boot("sentinel", s["workload"], position="start"), s["C"])
     confirm = None
     if p["kind"] == "verify":
-        n = max(x["n"] for x in p["workloads"].values())
-        for r in range(1, n + 1):
-            for w in cp.block_order(p["seed"], r, list(p["workloads"])):
-                run(boot("V", w, block=r), p["workloads"][w]["C"])
+        dropped = set()
+        for r, w in sda.verify_order(p):
+            if w not in dropped and run(boot("V", w, block=r), p["workloads"][w]["C"])["outcome"] != "ok":
+                dropped.add(w)
     else:
+        search_next = sd.open_search_next if p["kind"] == "open" else cp.search_next
         searches = {}
         for w, x in p["workloads"].items():
             b, hist = boot("S", w, attempt=1), []
-            while (c := cp.search_next(x["c_cap"], [(h["C"], h["pass"]) for h in hist])) is not None:
+            while (c := search_next(x["c_cap"], [(h["C"], h["pass"]) for h in hist])) is not None:
                 row = run(b, c)
                 hist.append({"C": c, "pass": row["search_pass"], "within_band": row["within_band"]})
             searches[w] = hist
-        confirm = cp.build_confirm_plan(p, searches)
+        confirm = (sd.build_open_confirm_plan if p["kind"] == "open" else cp.build_confirm_plan)(p, searches)
         outcomes = {w: [] for w in p["workloads"]}
         for r in range(1, confirm["blocks"] + 1):
             new = []
@@ -238,7 +239,7 @@ def test_a_verify_session_runs_n_boots_per_point_and_judges_h_d6_h_d7():
     lat = lambda w, c: (500.0, 120.0 if w == "U8K-gw" else 50.0, None)   # noqa: E731
     cap, reqs = simulate(p, lat)
     a = sda.analyze(cap, reqs)
-    assert a["replay"]["ok"] and len(cap["session"]["boots"]) == 2 + 4 * 5
+    assert a["replay"]["ok"] and len(cap["session"]["boots"]) == 2 + 3 * 5 + 1      # U8K-gw: FAIL, then skipped
     w = a["workloads"]
     assert {k: v["class"] for k, v in w.items()} == {"U2K-var": "PASS", "U8K-var": "PASS", "U2K-gw": "PASS",
                                                      "U8K-gw": "FAIL"}
@@ -282,3 +283,56 @@ def test_the_start_up_wave_is_described_from_c1b():
     assert u2k["points"]["32"]["max_ms"] == pytest.approx(10350, abs=10)    # 035: uniform-2k 10.35 s at C_PROD
     assert u2k["fit"]["slope_ms_per_request"] > 0 and out["workloads"]["M2K"]["fit"] is None
     assert out["workloads"]["U8K"]["points"]["8"]["max_ms"] == pytest.approx(11040, abs=10)
+
+
+def test_an_open_session_scans_the_grid_and_confirms_without_c_low():
+    """039 D-B: Phase S runs 1, 2, ... up to the first fail (an early fail ends it, whatever lies above);
+    K = {i^ - 1, i^, i^ + 1}, n_near each, no c_low."""
+    p = plan("D-B")
+    lat = lambda w, i: (500.0, 120.0 if i in (3, 7, 8, 9) else 50.0, None)      # noqa: E731 - 4..6 pass, never run
+    cap, reqs = simulate(p, lat)
+    a = sda.analyze(cap, reqs)
+    assert a["replay"]["ok"]
+    u = a["workloads"]["U2K-P"]
+    assert [r["C"] for r in u["search"]["runs"]] == [1, 2, 3] and u["K"] == [1, 2, 3]
+    assert {k: v["n"] for k, v in u["points"].items()} == {"1": 5, "2": 5, "3": 5}
+    assert u["c_prod"] == {"value": 2, "status": "EXACT"}
+
+
+def test_a_verify_point_stops_after_an_invalid_run():
+    p = plan("D-C")
+    cap, reqs = simulate(p, lambda w, c: (500.0, 50.0, None), invalid={("U2K-gw", 32, "V")})
+    a = sda.analyze(cap, reqs)
+    v_rows = [r for r in cap["rows"] if r["workload"] == "U2K-gw"]
+    assert a["replay"]["ok"] and len(v_rows) == 1 and a["workloads"]["U2K-gw"]["class"] == "NT"
+    assert a["hypotheses"]["H-D7"]["U2K-gw"]["verdict"] == "NT"
+
+
+def test_open_loop_runs_must_be_sent_in_idx_order():
+    p = plan("D-B")
+    x = p["workloads"]["U2K-P"]
+    n = x["points"]["1"]["N"]
+    row = {"phase": "S", "workload": "U2K-P", "C": 1, "N": n, "valid": True, "reasons": []}
+    reqs = requests(x, n, ttft=500.0, tpot=50.0)
+    reqs[10]["start_s"] = reqs[9]["start_s"] - 0.2
+    assert any("send order" in r for r in sda.evaluate(row, reqs, p)[1])
+    del reqs[10]["start_s"]
+    assert any("start_s missing" in r for r in sda.evaluate(row, reqs, p)[1])
+
+
+def test_open_loop_runs_never_claim_inflight_within_c():
+    p = plan("D-B")
+    cap, reqs = simulate(p, step({"U2K-P": 5, "U8K-P": 5}))
+    for row in cap["rows"]:
+        row["metrics"] = {"inflight_peak": 40}
+    a = sda.analyze(cap, reqs)
+    runs = [r for pt in a["workloads"]["U2K-P"]["points"].values() for r in pt["runs"]]
+    assert runs and all(r["inflight_le_c"] is None for r in runs)
+
+
+def test_the_d5_cli_writes_only_its_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sd, "ROOT", tmp_path)
+    assert sda.main(["startup-wave", "--c1b", str(C1B)]) == 0
+    out = tmp_path / "results" / "stage_d" / "d5-startup-wave" / "analysis.json"
+    assert json.loads(out.read_text())["source_session"] == "formal-20261017-c1b"
+    assert sda.main(["startup-wave", "--c1b", str(tmp_path)]) == 2

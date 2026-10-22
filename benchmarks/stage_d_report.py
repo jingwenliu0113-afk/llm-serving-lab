@@ -84,6 +84,9 @@ def _session_problems(cap: dict, pins: dict, repo_root) -> list:
         problems.append(f"the session's vLLM {s.get('vllm')!r} != pinned {pins['vllm']['version']}")
     if plan.get("kind") != "verify" and cap.get("confirm_plan") is None:
         problems.append("no confirm_plan.json: the session never reached Phase C")
+    if plan.get("kind") == "verify" and not (isinstance(s.get("capserve_sha256"), str)
+                                             and len(s["capserve_sha256"]) == 64):
+        problems.append("a D-C session without capserve_sha256: which gateway H-D7 measured is unknown (039)")
     return problems
 
 
@@ -128,10 +131,24 @@ def _sha_problems(cap: dict, *, stage_d_sha256: str, pins_sha256: str) -> list:
     return problems
 
 
-def _plan_problems(cap: dict, cfg: dict, pins: dict, *, stage_d_sha256: str, pins_sha256: str, repo_root) -> list:
+def _plan_problems(cap: dict, cfg: dict, pins: dict, *, stage_d_sha256: str, pins_sha256: str, repo_root,
+                  uniform: dict | None) -> list:
+    """plan.json against stage_d_plan.build_plan of these bytes, with C_KV's block pool from the derived_from uniform
+    session (formal, env-valid, its plan's blocks), as capacity_report does for Stage C."""
+    if uniform is None:
+        return ["no uniform session: C_KV's block pool cannot be checked (039, as 030)"]
+    us, up = uniform["session"], uniform["plan"]
+    problems = []
+    if us.get("session_id") != cfg["stage_d"]["derived_from"]:
+        problems.append(f"uniform session {us.get('session_id')!r} != derived_from {cfg['stage_d']['derived_from']!r}")
+    if us.get("formal") is not True or us.get("env_valid") is not True:
+        problems.append(f"uniform session {us.get('session_id')!r} is not formal and env-valid")
+    if problems:
+        return problems
     try:
         want = rd.expected_plan(cfg, pins, session_name=cap["plan"].get("session"), pins_sha256=pins_sha256,
-                                stage_d_sha256=stage_d_sha256, formal=True, repo_root=repo_root)
+                                stage_d_sha256=stage_d_sha256, formal=True, repo_root=repo_root,
+                                uniform_plan={k: up.get(k) for k in ("num_gpu_blocks", "block_size")})
     except (sd.PlanError, OSError, KeyError, ValueError) as exc:
         return [f"the plan cannot be rebuilt: {exc}"]
     if want != cap["plan"]:
@@ -181,7 +198,9 @@ def _argv_problems(cap: dict, pins: dict) -> list:
         try:
             if plan["kind"] == "open" and r["phase"] in ("S", "C"):
                 want = sd.bench_argv_for(pins, r["workload"], rate=r.get("rate"), N=r["N"],
-                                         warmups=plan["open_loop"]["warmups"], **kw)
+                                         warmups=plan["open_loop"]["warmups"],
+                                         seed=sd.open_seed(r["workload"], r["C"], phase=r["phase"], block=r["block"]),
+                                         **kw)
             else:
                 want = sd.bench_argv_for(pins, r["workload"], C=r["C"], **kw)
         except (bp.PlanError, KeyError) as exc:
@@ -196,11 +215,11 @@ def _argv_problems(cap: dict, pins: dict) -> list:
 
 
 def refusal_problems(cap: dict, *, cfg: dict, pins: dict, stage_d_sha256: str, pins_sha256: str,
-                     repo_root=ROOT) -> list:
+                     uniform: dict | None = None, repo_root=ROOT) -> list:
     return (_session_problems(cap, pins, repo_root) + _config_problems(cap, cfg, pins, repo_root)
             + _sha_problems(cap, stage_d_sha256=stage_d_sha256, pins_sha256=pins_sha256)
             + _plan_problems(cap, cfg, pins, stage_d_sha256=stage_d_sha256, pins_sha256=pins_sha256,
-                             repo_root=repo_root)
+                             repo_root=repo_root, uniform=uniform)
             + _argv_problems(cap, pins) + cr.spill_problems(cap["rows"]))
 
 
@@ -212,7 +231,8 @@ def provenance(cap: dict, *, stage_d_sha256: str, pins_sha256: str) -> dict:
             "deployed_commit": s.get("repo_commit"), "stage_d_sha256": stage_d_sha256, "pins_sha256": pins_sha256,
             "plan_sha256": s.get("plan_sha256"), "confirm_plan_sha256": s.get("confirm_plan_sha256"),
             "rows_sha256": s.get("rows_sha256"), "dataset_sha256": s.get("dataset_sha256"),
-            "derived_from": plan.get("derived_from"), "c1b_session": plan.get("c1b_session")}
+            "derived_from": plan.get("derived_from"), "c1b_session": plan.get("c1b_session"),
+            "capserve_sha256": s.get("capserve_sha256")}
 
 
 def platform(cap: dict, pins: dict) -> dict:
@@ -231,7 +251,7 @@ def platform(cap: dict, pins: dict) -> dict:
 def report(cap: dict, *, cfg: dict, pins: dict, stage_d_sha256: str, pins_sha256: str, uniform: dict | None,
            advanced_runs: list | None, repo_root=ROOT) -> dict:
     problems = refusal_problems(cap, cfg=cfg, pins=pins, stage_d_sha256=stage_d_sha256, pins_sha256=pins_sha256,
-                                repo_root=repo_root)
+                                uniform=uniform, repo_root=repo_root)
     if problems:
         raise ReportError("; ".join(problems))
     refs = ca.sentinel_references(uniform["rows"], advanced_runs) if uniform and advanced_runs else None

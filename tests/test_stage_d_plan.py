@@ -242,9 +242,9 @@ def test_capacity_plans_confirm_plan_builder_takes_a_stage_d_plan():
 def test_the_open_plan_maps_the_grid_onto_030s_search():
     p = plan("D-B")
     x = p["workloads"]["U2K-P"]
-    assert (x["c_cap"], x["bracket"], x["lambda_ref"]["c_prod"]) == (9, [1, 2, 4, 8, 9], 32)
+    assert (x["c_cap"], x["scan"], x["lambda_ref"]["c_prod"]) == (9, list(range(1, 10)), 32) and "bracket" not in x
     assert x["points"]["6"]["rate"] == round(x["lambda_ref"]["lambda_ref"], 4)
-    assert p["open_loop"] == sd.OPEN_LOOP and cp.search_next(9, [(1, True), (2, True)]) == 4
+    assert p["open_loop"] == sd.OPEN_LOOP
     with pytest.raises(sd.PlanError, match="lambda_ref"):
         plan("D-B", refs={})
 
@@ -267,3 +267,37 @@ def test_plans_refuse_a_bad_config_an_unknown_session_and_an_unfrozen_formal():
     with pytest.raises(sd.PlanError, match="num_gpu_blocks"):
         sd.build_plan(CFG, PINS, session_name="D-A1", uniform_plan={"num_gpu_blocks": 186, "block_size": 528},
                       refs=None, pins_sha256="p", stage_d_sha256="s")
+
+
+def test_the_open_scan_runs_up_the_grid_to_the_first_fail():
+    nxt = sd.open_search_next
+    assert nxt(9, []) == 1 and nxt(9, [(1, True), (2, True)]) == 3
+    assert nxt(9, [(1, True), (2, False)]) is None and nxt(9, [(i, True) for i in range(1, 10)]) is None
+    for bad in ([(2, True)], [(1, False), (2, True)], [(1, True), (3, True)]):
+        with pytest.raises(sd.PlanError):
+            nxt(9, bad)
+    assert sd.open_search_summary(9, [{"C": 1, "pass": True}, {"C": 2, "pass": False}])["c_hat"] == 1
+    assert sd.open_search_summary(9, [{"C": 1, "pass": False}])["c_hat"] == 0
+
+
+def test_the_open_confirm_set_is_the_neighbourhood_without_c_low():
+    p = plan("D-B")
+    hist = lambda k, cap=9: [{"C": i, "pass": i <= k, "within_band": i <= k} for i in range(1, min(k + 1, cap) + 1)]
+    c = sd.build_open_confirm_plan(p, {"U2K-P": hist(5), "U8K-P": hist(0)})
+    assert [(x["C"], x["role"], x["n"]) for x in c["workloads"]["U2K-P"]["points"]] == [
+        (4, "near", 5), (5, "near", 5), (6, "near", 5)]
+    assert [(x["C"], x["role"]) for x in c["workloads"]["U8K-P"]["points"]] == [(1, "one")]
+    c9 = sd.build_open_confirm_plan(p, {"U2K-P": hist(9), "U8K-P": None})
+    assert [x["C"] for x in c9["workloads"]["U2K-P"]["points"]] == [8, 9] and c9["workloads"]["U8K-P"]["points"] == []
+    assert c["blocks"] == 5 and cp.phase_c_boots(c, 1, {})
+
+
+def test_every_open_loop_run_has_its_own_seed():
+    seeds = {sd.open_seed(w, i, phase=ph, block=b) for w in ("U2K-P", "U8K-P") for i in range(1, 10)
+             for ph, b in (("S", None), *(("C", r) for r in range(1, 6)))}
+    assert len(seeds) == 2 * 9 * 6 and all(0 <= x < 2 ** 31 for x in seeds)
+    kw = {"result_dir": "/r", "result_filename": "x.json"}
+    argv = sd.bench_argv_for(PINS, "U2K-P", rate=1.0, N=300, warmups=10, seed=123, **kw)
+    assert argv[argv.index("--seed") + 1] == "123"
+    with pytest.raises(sd.PlanError, match="Core B seed"):
+        sd.bench_argv_for(PINS, "U2K", C=2, seed=123, **kw)

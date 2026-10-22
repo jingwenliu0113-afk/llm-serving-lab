@@ -11,8 +11,12 @@ cross-session shift); this module only supplies what 030 did not have:
   steady window with C := ceil(0.1 N) (so its "burst" is the first 10 %, descriptive);
 - derived_problems with the workload's output length and its mix (mixed: 007's long count and a long request in W;
   uniform / var: every request short);
-- the replay of D-A / D-B (capacity_analysis.replay_problems' rules with Stage D's tags and N) and of D-C (blocks
-  r = 1..n in capacity_plan.block_order, one boot and one run per point and block, nothing skipped);
+- the replay of D-A (capacity_analysis.replay_problems' rules with Stage D's tags and N), of D-B (the same with
+  039's scan and confirm set: stage_d_plan.open_search_next / build_open_confirm_plan) and of D-C (blocks r = 1..n in
+  capacity_plan.block_order, one boot and one run per active point; 030's skip rule: a point leaves later blocks
+  after a valid FAIL or an invalid run);
+- open loop (039 FS-order, per run): the derived start_s must follow idx (no request sent more than ORDER_TOL_S before
+  a lower idx), so the trimmed window by idx is the window by send time;
 - D-B values are grid indices in the estimands; the report adds their rates;
 - the 039 hypotheses: H-D1 / H-D3 = 030's H-S2 (C_SLO <= C_KV; "refuted" written "not supported"), H-D2a C_PROD(M8K-T)
   > 2 and H-D2b C_PROD(U8K-T) < 8 (c1b's values, 035), H-D4 lambda_PROD <= 0.9 lambda_ref, H-D6 / H-D7 PASS;
@@ -36,6 +40,7 @@ STAGE = sd.STAGE
 WINDOWS = ca.WINDOWS
 C1B_C_PROD = {"M8K": 2, "U8K": 8}          # 035, the c1b values H-D2a / H-D2b compare with (never re-estimated)
 NO_CKV = 10 ** 9                           # D-B: a grid index has no C_KV, so ABOVE_CKV never applies
+ORDER_TOL_S = 0.05                         # D-B: send-order slack between consecutive idx (asyncio task start jitter)
 NOT_SUPPORTED = (
     "Stage D measures one machine, one model and Core B's server (or T); open loop is vLLM's own capacity without the "
     "gateway's admission; D-C checks only C_PROD itself; mixed open loop, other output lengths and T on other "
@@ -76,9 +81,9 @@ def window_c(plan: dict, row: dict, n: int) -> int:
     return row["C"]
 
 
-def derived_problems(reqs, *, x: dict, c: int, n: int) -> list:
+def derived_problems(reqs, *, x: dict, c: int, n: int, ordered: bool = False) -> list:
     """030 8.6 (e) for a Stage D run: complete idx, numbers, every out = the workload's output length, the mix's
-    classes and a short (mixed: and a long) request in W = [c, n - c)."""
+    classes and a short (mixed: and a long) request in W = [c, n - c); ordered (open loop): start_s follows idx."""
     if reqs is None:
         return ["no derived requests file"]
     if not all(isinstance(q, dict) and isinstance(q.get("idx"), int) for q in reqs):
@@ -99,6 +104,15 @@ def derived_problems(reqs, *, x: dict, c: int, n: int) -> list:
         problems.append("no short request in W")
     if x["mix"] == "mixed" and "long" not in in_w:
         problems.append("no long request in W (030 8.6 (e))")
+    if ordered and not problems:
+        starts = [q.get("start_s") for q in sorted(reqs, key=lambda q: q["idx"])]
+        if not all(ca._num(t) for t in starts):
+            problems.append("start_s missing: the send order cannot be checked (039 D-B)")
+        else:
+            late = max((a - b for a, b in zip(starts, starts[1:])), default=0.0)
+            if late > ORDER_TOL_S:
+                problems.append(f"a request was sent {late:.3f} s before a lower idx: idx is not the send order "
+                                "(039 D-B window)")
     return problems
 
 
@@ -106,7 +120,8 @@ def run_valid(row: dict, reqs, plan: dict) -> tuple:
     if row.get("valid") is not True:
         return False, ["runner: " + "; ".join(row.get("reasons") or ["not valid"])]
     n = run_n(plan, row)
-    problems = derived_problems(reqs, x=spec(plan, row["workload"]), c=window_c(plan, row, n), n=n)
+    ordered = plan["kind"] == "open" and row.get("phase") in ("S", "C")
+    problems = derived_problems(reqs, x=spec(plan, row["workload"]), c=window_c(plan, row, n), n=n, ordered=ordered)
     return not problems, problems
 
 
@@ -131,6 +146,13 @@ def phase_c_outcome(row: dict, reqs, plan: dict) -> str:
 
 
 # ---------------------------------------------------------------- replay
+
+def verify_order(plan: dict) -> list:
+    """D-C's boots before skips: [(block, workload), ...], blocks r = 1..n in capacity_plan.block_order."""
+    n = max(x["n"] for x in plan["workloads"].values())
+    return [(r, w) for r in range(1, n + 1) for w in cp.block_order(plan["seed"], r, list(plan["workloads"]))
+            if r <= plan["workloads"][w]["n"]]
+
 
 def _row_plan_problems(plan: dict, row: dict) -> list:
     tag, phase, w, x = row.get("tag"), row.get("phase"), row.get("workload"), row.get("C")
@@ -209,7 +231,7 @@ def replay_problems(plan: dict, confirm_plan, boots: list, rows: list, requests:
             return None
         c_cap, hist = plan["workloads"][w]["c_cap"], []
         for row in rows_b:
-            want = cp.search_next(c_cap, [(h["C"], h["pass"]) for h in hist])
+            want = search_next(c_cap, [(h["C"], h["pass"]) for h in hist])
             if (row.get("phase"), row.get("workload"), row.get("C")) != ("S", w, want):
                 problems.append(f"Phase S {w} step {len(hist) + 1} ran {row.get('phase')} {row.get('workload')} "
                                 f"{row.get('C')}; the 030 search runs {want}")
@@ -219,27 +241,34 @@ def replay_problems(plan: dict, confirm_plan, boots: list, rows: list, requests:
                 problems.append(f"Phase S {row['tag']}: recorded search_pass {row.get('search_pass')!r}, "
                                 f"recomputed {bits['pass']}")
             hist.append({"C": row["C"], **bits})
-        nxt = cp.search_next(c_cap, [(h["C"], h["pass"]) for h in hist])
+        nxt = search_next(c_cap, [(h["C"], h["pass"]) for h in hist])
         if nxt is not None:
             problems.append(f"Phase S {w} stopped before {nxt}: the search is incomplete")
             raise _Stop
         return hist
 
+    search_next = sd.open_search_next if plan["kind"] == "open" else cp.search_next
+    build_confirm = sd.build_open_confirm_plan if plan["kind"] == "open" else cp.build_confirm_plan
     try:
         sentinel("start")
         if plan["kind"] == "verify":
-            n = max(x["n"] for x in plan["workloads"].values())
-            for r in range(1, n + 1):
-                for w in cp.block_order(plan["seed"], r, list(plan["workloads"])):
-                    x = plan["workloads"][w]
-                    if r > x["n"]:
-                        continue
-                    b = take("V", w, block=r)
-                    got = [(row.get("phase"), row.get("workload"), row.get("block"), row.get("C"))
-                           for row in by_boot.get(b["boot"], [])]
-                    if got != [("V", w, r, x["C"])]:
-                        problems.append(f"D-C block {r} {w} ran {got}; 039 runs one V run at C {x['C']}")
-                        raise _Stop
+            dropped = set()
+            for r, w in verify_order(plan):
+                if w in dropped:
+                    continue
+                x = plan["workloads"][w]
+                b = take("V", w, block=r)
+                rows_b = by_boot.get(b["boot"], [])
+                got = [(row.get("phase"), row.get("workload"), row.get("block"), row.get("C")) for row in rows_b]
+                if got != [("V", w, r, x["C"])]:
+                    problems.append(f"D-C block {r} {w} ran {got}; 039 runs one V run at C {x['C']}")
+                    raise _Stop
+                outcome = phase_c_outcome(rows_b[0], requests.get(rows_b[0]["tag"]), plan)
+                if rows_b[0].get("outcome") != outcome:
+                    problems.append(f"D-C {rows_b[0]['tag']}: recorded outcome {rows_b[0].get('outcome')!r}, "
+                                    f"recomputed {outcome!r}")
+                if outcome != "ok":
+                    dropped.add(w)
         else:
             searches, retry = {}, []
             for w in plan["workloads"]:
@@ -251,7 +280,7 @@ def replay_problems(plan: dict, confirm_plan, boots: list, rows: list, requests:
             for w in cp.phase_s_retries(plan["workloads"], set(retry)):
                 searches[w] = search(w, take("S", w, attempt=2))
             try:
-                confirm = cp.build_confirm_plan(plan, searches)
+                confirm = build_confirm(plan, searches)
             except cp.PlanError as e:
                 problems.append(f"confirm plan cannot be recomputed: {e}")
                 raise _Stop
@@ -301,7 +330,8 @@ def _point(plan: dict, rows: list, requests: dict, *, n: int, x: dict, slo: dict
             for win in WINDOWS:
                 evals[win].append(e if win == "steady" else _eval_row(row, requests, plan, slo, win)[2])
             full = evals["full"][-1]
-        runs.append(ca._run_summary(row, ok, reasons, e, full))
+        # open loop: the grid index is not a concurrency, so inflight <= C does not apply
+        runs.append(ca._run_summary({**row, "C": None} if plan["kind"] == "open" else row, ok, reasons, e, full))
     summary = {win: ca.classify(evals[win], n=n, L=x["tier"], mix=eval_mix(x), slo=slo,
                                 guard_band=plan["guard_band"]) for win in WINDOWS}
     return summary["steady"], {win: summary[win]["class"] for win in WINDOWS}, runs
@@ -526,3 +556,32 @@ def startup_wave(c1b_dir) -> dict:
             "definition": "largest TTFT of idx < C per valid run (Phase S and C), its mean and max over runs at each C",
             "workloads": out}
 
+
+
+D5_OUT = ("results", "stage_d", "d5-startup-wave", "analysis.json")
+
+
+def main(argv: list | None = None) -> int:
+    """`python3 benchmarks/stage_d_analysis.py startup-wave --c1b results/capacity/formal-20261017-c1b`: writes D5's
+    description to results/stage_d/d5-startup-wave/analysis.json (039 D5; no GPU, descriptive)."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description="Stage D analysis helpers (039)")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    d5 = sub.add_parser("startup-wave", help="039 D5: the start-up wave of the c1b session (descriptive)")
+    d5.add_argument("--c1b", required=True)
+    args = parser.parse_args(argv)
+    c1b = Path(args.c1b)
+    if c1b.resolve().name != sd.C1B_SESSION:
+        print(f"stage_d_analysis: --c1b must be the {sd.C1B_SESSION} session (039 D5)", file=sys.stderr)
+        return 2
+    out = sd.ROOT.joinpath(*D5_OUT)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(startup_wave(c1b), indent=1) + "\n")
+    print(json.dumps({"out": str(out.relative_to(sd.ROOT))}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

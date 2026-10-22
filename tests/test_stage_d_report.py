@@ -92,3 +92,29 @@ def test_the_cli_writes_only_the_sessions_analysis(tmp_path, capsys):
     assert sr.main(["--session", str(tmp_path / "x"), "--uniform-session", str(UNIFORM), "--advanced-session",
                     str(ADVANCED), "--out", str(tmp_path / "x" / "analysis.json")]) == 2
     assert "results/stage_d" in capsys.readouterr().err
+
+
+def test_c_kv_comes_from_a_formal_derived_from_session(tmp_path):
+    out, s, w = t.session(tmp_path, "D-A1")
+    c, p = configs(tmp_path / "repo")
+    uniform = cr.load_uniform(UNIFORM)
+    bad = {**uniform, "plan": {**uniform["plan"], "num_gpu_blocks": 186}}
+    with pytest.raises(sr.ReportError, match="num_gpu_blocks"):
+        sr.report(cr.load_session(out), cfg=c, pins=p, stage_d_sha256=t.SD_SHA, pins_sha256=t.PINS_SHA,
+                  uniform=bad, advanced_runs=None, repo_root=tmp_path / "repo")
+    informal = {**uniform, "session": {**uniform["session"], "env_valid": False}}
+    with pytest.raises(sr.ReportError, match="formal and env-valid"):
+        sr.report(cr.load_session(out), cfg=c, pins=p, stage_d_sha256=t.SD_SHA, pins_sha256=t.PINS_SHA,
+                  uniform=informal, advanced_runs=None, repo_root=tmp_path / "repo")
+
+
+def test_a_verify_report_names_the_measured_gateway(tmp_path):
+    out, s, w = t.session(tmp_path, "D-C")
+    rep = report(out, tmp_path / "repo")
+    assert rep["provenance"]["capserve_sha256"] == s["capserve_sha256"] and len(s["capserve_sha256"]) == 64
+
+    def no_hash(cap):
+        cap["session"]["capserve_sha256"] = None
+
+    with pytest.raises(sr.ReportError, match="capserve_sha256"):
+        report(out, tmp_path / "repo", change=no_hash)

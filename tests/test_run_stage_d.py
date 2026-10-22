@@ -155,7 +155,7 @@ class World:
             lats.append(t / 1000 + (out - 1) * tpot / 1000)
         res = {"completed": n, "failed": 0, "duration": 10.0, "request_throughput": n / 10.0,
                "output_throughput": 300.0, "total_token_throughput": 1e5, "input_lens": lens, "output_lens": [out] * n,
-               "ttfts": ttfts, "latencies": lats}
+               "ttfts": ttfts, "latencies": lats, "start_times": [1000.0 + 0.05 * i for i in range(n)]}
         Path(a["--result-dir"], a["--result-filename"]).write_text(json.dumps(res))
         self.t += 10.0
         return 0, False
@@ -217,6 +217,7 @@ def session(tmp_path, name, *, mode="formal", world=None, cfg_over=None, plan_ov
                        group_alive=w.group_alive, http_get=w.http_get, run_bench=w.run_bench,
                        gpu_sample=w.gpu_sample, compute_apps=w.compute_apps, shared_usage=w.shared_usage,
                        lock_held_check=w.lock_check, gpu_lock_held=True, datasets=paths, gateway_python="/venv/python",
+                       port_free=kw.pop("port_free", lambda port: True),
                        toolchain_check=lambda env: [], capture_env=Env(), base_env=BASE_ENV, sample_interval=None,
                        now=w.now, sleep=w.sleep, repo_root=root, **kw)
     return out, s, w
@@ -298,6 +299,7 @@ def test_a_verify_session_boots_every_point_n_times_and_runs_the_gateway(tmp_pat
     out, s, w = session(tmp_path, "D-C")
     a, rows = analysis(out)
     assert a["replay"]["ok"] and len(s["boots"]) == 22 and all(r["valid"] for r in rows)
+    assert s["capserve_sha256"] == rd.capserve_sha256(ROOT, "service/profiles/verified-formal-20261017-c1b.json")
     assert {k: v["class"] for k, v in a["workloads"].items()} == dict.fromkeys(
         ("U2K-var", "U8K-var", "U2K-gw", "U8K-gw"), "PASS")
     assert len(w.gateway_argvs) == 10
@@ -320,11 +322,11 @@ def test_a_verify_session_boots_every_point_n_times_and_runs_the_gateway(tmp_pat
 
 
 def test_a_gateway_serving_another_class_fails_its_boot(tmp_path):
-    world = World(tmp_path, readyz={"profile": {"status": "verified"}, "active_class": "uniform-8k",
-                                    "limits": {"max_concurrency": 8}})
+    world = World(tmp_path, readyz={"profile": {"id": "verified-formal-20261017-c1b", "status": "verified"},
+                                    "active_class": "uniform-8k", "limits": {"max_concurrency": 8}})
     out, s, w = session(tmp_path, "D-C", world=world)
     bad = [b for b in s["boots"] if b["workload"] == "U2K-gw"]
-    assert bad and all(b["reached_first_bench"] is False and "gateway serves" in b["problems"][0] for b in bad)
+    assert len(bad) == 1 and bad[0]["reached_first_bench"] is False and "gateway serves" in bad[0]["problems"][0]
     a, rows = analysis(out)
     assert a["replay"]["ok"] and a["workloads"]["U2K-gw"]["class"] == "NT"
 
@@ -362,3 +364,46 @@ def test_refusals_before_anything_starts(tmp_path):
 def test_the_runner_never_imports_capserve():
     text = (ROOT / "benchmarks" / "run_stage_d.py").read_text()
     assert "import capserve" not in text and "from capserve" not in text
+
+
+def test_a_busy_gateway_port_fails_the_boot_without_starting_a_gateway(tmp_path):
+    out, s, w = session(tmp_path, "D-C", port_free=lambda port: port != 8080)
+    gw_boots = [b for b in s["boots"] if b["workload"].endswith("-gw")]
+    assert gw_boots and all("port 8080 is in use" in b["problems"][0] for b in gw_boots)
+    assert w.gateway_argvs == []
+
+
+def test_a_gateway_that_dies_during_a_bench_invalidates_the_run(tmp_path):
+    class Dying(World):
+        def run_bench(self, argv, log_path, env, timeout_s):
+            out = super().run_bench(argv, log_path, env, timeout_s)
+            if "8080" in " ".join(argv) and self.gw is not None:
+                self.gw.returncode = 1
+            return out
+
+    out, s, w = session(tmp_path, "D-C", world=Dying(tmp_path))
+    a, rows = analysis(out)
+    gw_rows = [r for r in rows if r["workload"].endswith("-gw")]
+    assert a["replay"]["ok"] and gw_rows and all("gateway exited" in " ".join(r["reasons"]) for r in gw_rows)
+    assert {r["workload"] for r in gw_rows} == {"U2K-gw", "U8K-gw"} and len(gw_rows) == 2     # skipped after
+
+
+def test_open_loop_runs_send_their_own_seed(tmp_path):
+    out, s, w = session(tmp_path, "D-B")
+    seeds = [argv[argv.index("--seed") + 1] for argv in w.bench_argvs if "--burstiness" in argv]
+    assert len(seeds) == len(set(seeds)) > 5
+
+
+def test_the_d_c_gateway_uses_the_production_configs_settings():
+    """039 D-C measures the production gateway: its tokenizer mode and class come from rtx-verified.toml's [gateway]
+    and pinned profile (the class of each workload is the profile's), only the addresses are the research's."""
+    prod = tomllib.loads((ROOT / "service" / "deploy" / "rtx-verified.toml").read_text())
+    plan = rd.expected_plan(CFG, PINS, session_name="D-C", pins_sha256=PINS_SHA, stage_d_sha256=SD_SHA, formal=False)
+    for w in ("U2K-gw", "U8K-gw"):
+        s = rd.gateway_settings(plan, PINS, w)
+        assert s["tokenizer"] == prod["gateway"]["tokenizer"] == "local"
+        assert s["tokenizer_path"] == bp.snapshot_dir(PINS)
+    assert plan["verify"]["gateway_profile"] == prod["deploy"]["production_profile"]
+    profile = json.loads((ROOT / prod["deploy"]["production_profile"]).read_text())
+    limits = {c["name"]: c["max_concurrency"] for c in profile["classes"]}
+    assert (limits["uniform-2k"], limits["uniform-8k"]) == (sd.VERIFY["points"]["U2K-gw"], sd.VERIFY["points"]["U8K-gw"])

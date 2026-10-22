@@ -20,7 +20,11 @@ functions (search_next, bracket_points, build_confirm_plan, phase_c_boots), so D
 - D-B (open loop): lambda_ref(w) = C_PROD(w) / mean e2e latency over W = [C, N - C) of the c1b Phase C runs at C_PROD
   that capacity_analysis.run_valid accepts (lambda_ref, from the committed c1b files: U2K 2.5459, U8K 0.6297 req/s);
   point i (1-based) of the grid has rate round(grid[i - 1] x lambda_ref, 4) and N = max(min_n, ceil(min_duration_s x
-  rate)). The index i is the "C" of 030's search and confirmation (c_cap = len(grid)).
+  rate)). The index i plays 030's "C" (c_cap = len(grid)), but 039 scans it: Phase S runs i = 1, 2, ... up to the
+  first fail (open_search_next, not 030's bracket and bisection), K = {i^ - 1, i^, i^ + 1} with n_near each and no
+  c_low (build_open_confirm_plan, in capacity_plan's confirm-plan shape so phase_c_boots orders and skips it). Every
+  open-loop run has its own client seed (open_seed): vLLM 0.30.0's bench seeds numpy with --seed and draws the
+  arrival gaps from it, so one seed would replay one Poisson path in every run.
 - D-C (verify): each point runs n times at its C, one boot per run, blocks r = 1..n in seeded order.
 - argv: B0 / T servers; clients = core_b_plan.bench_argv where it applies unchanged (128-token outputs at port 8000
   or the gateway's 8080), else the same flags with --random-output-len 512, a custom var dataset, or (D-B)
@@ -241,6 +245,56 @@ def open_points(cfg: dict, w: str, ref: dict) -> dict:
     return out
 
 
+def open_search_next(c_cap: int, history) -> int | None:
+    """039 D-B Phase S: the grid indices 1, 2, ... in order up to the first fail (or c_cap); history = [(i, passed),
+    ...] in run order. Refuses a history the scan would not have run."""
+    for k, (i, passed) in enumerate(history):
+        if i != k + 1 or (not passed and k != len(history) - 1):
+            raise PlanError(f"D-B Phase S step {k + 1} ran {i!r}; the 039 scan runs {k + 1} and stops at a fail")
+    if history and (not history[-1][1] or len(history) >= c_cap):
+        return None
+    return len(history) + 1 if c_cap >= 1 else None
+
+
+def open_search_summary(c_cap: int, history: list) -> dict:
+    """i^ (the last passing index; 0 when index 1 fails) of one complete D-B Phase S history."""
+    pairs = [(h["C"], h["pass"]) for h in history]
+    nxt = open_search_next(c_cap, pairs)
+    if nxt is not None:
+        raise PlanError(f"D-B Phase S history is incomplete: the 039 scan still runs {nxt}")
+    passed = [i for i, ok in pairs if ok]
+    return {"c_hat": max(passed) if passed else 0, "c_hat_g": None, "f": next((i for i, ok in pairs if not ok), None)}
+
+
+def build_open_confirm_plan(plan: dict, searches: dict) -> dict:
+    """039 D-B's confirm plan in capacity_plan.build_confirm_plan's shape: K = {i^ - 1, i^, i^ + 1} within the grid
+    ({1} when index 1 failed), n_near each, no c_low; orders from capacity_plan.point_order / block_order."""
+    workloads, per_w = list(plan["workloads"]), {}
+    for w in workloads:
+        x, history = plan["workloads"][w], searches.get(w)
+        if history is None:
+            per_w[w] = {"c_hat": None, "c_hat_g": None, "search": None, "points": []}
+            continue
+        history = [{"C": h["C"], "pass": bool(h["pass"]), "within_band": bool(h["within_band"])} for h in history]
+        c_hat = open_search_summary(x["c_cap"], history)["c_hat"]
+        near = [1] if c_hat == 0 else [i for i in (c_hat - 1, c_hat, c_hat + 1) if 1 <= i <= x["c_cap"]]
+        per_w[w] = {"c_hat": c_hat, "c_hat_g": None, "search": history,
+                    "points": [{"C": i, "role": "one" if c_hat == 0 else "near", "n": x["n_near"]} for i in near]}
+    blocks = max((p["n"] for x in per_w.values() for p in x["points"]), default=0)
+    for w, x in per_w.items():
+        x["orders"] = {str(r): cp.point_order(plan["seed"], w, r, [p["C"] for p in x["points"]])
+                       for r in range(1, blocks + 1)} if x["points"] else {}
+    return {"schema_version": cp.SCHEMA_VERSION, "seed": plan["seed"], "blocks": blocks,
+            "block_orders": {str(r): cp.block_order(plan["seed"], r, workloads) for r in range(1, blocks + 1)},
+            "workloads": per_w}
+
+
+def open_seed(w: str, i: int, *, phase: str, block: int | None) -> int:
+    """039 D-B: the client seed of one open-loop run (its prompts and its Poisson arrival path)."""
+    key = f"{SEED}:stage_d:open:{w}:{i}:{phase}:{block}"
+    return int(hashlib.sha256(key.encode()).hexdigest(), 16) % (2 ** 31)
+
+
 def open_window(n: int, trim: float) -> tuple:
     """D-B's W = idx in [ceil(trim N), N - ceil(trim N))."""
     k = math.ceil(Fraction(str(trim)) * n)
@@ -258,16 +312,19 @@ def server_argv_for(pins: dict, w: str, *, port: int = PORT, vllm_bin: str = "{v
 
 
 def bench_argv_for(pins: dict, w: str, *, C: int | None = None, rate: float | None = None, N: int | None = None,
-                   warmups: int | None = None, result_dir: str, result_filename: str, dataset: str | None = None,
-                   vllm_bin: str = "{vllm}") -> list:
+                   warmups: int | None = None, seed: int = SEED, result_dir: str, result_filename: str,
+                   dataset: str | None = None, vllm_bin: str = "{vllm}") -> list:
     """The client of one run: closed loop at C (C given) or open loop at rate (rate, N and warmups given).
     core_b_plan.bench_argv itself where it applies (128-token outputs of a uniform or mixed workload, closed loop,
     port 8000 or the gateway's 8080); otherwise its flags in its order with only these changes: --random-output-len
-    512, a var custom dataset, or (open loop) --request-rate rate --burstiness 1.0 and no --max-concurrency."""
+    512, a var custom dataset, or (open loop) --request-rate rate --burstiness 1.0, no --max-concurrency and the
+    run's own seed (open_seed)."""
     spec = workload(w)
     port = GATEWAY_PORT if spec["via"] == "gateway" else PORT
     if (C is None) == (rate is None):
         raise PlanError("a run is closed loop (C) or open loop (rate), exactly one")
+    if C is not None and seed != SEED:
+        raise PlanError("a closed-loop run uses the Core B seed (030)")
     if C is not None and spec["mix"] in ("uniform", "mixed") and spec["out"] == bp.N_GEN:
         L = spec["prompt"] + spec["out"] if spec["mix"] == "uniform" else spec["tier"]
         return bp.bench_argv(pins, L=L, C=C, mix=spec["mix"], result_dir=result_dir, result_filename=result_filename,
@@ -290,7 +347,7 @@ def bench_argv_for(pins: dict, w: str, *, C: int | None = None, rate: float | No
     else:
         argv += ["--num-prompts", str(N), "--num-warmups", str(warmups), "--request-rate", str(rate), "--burstiness",
                  str(OPEN_LOOP["burstiness"])]
-    return argv + ["--ignore-eos", "--temperature", "0", "--seed", str(SEED), "--percentile-metrics",
+    return argv + ["--ignore-eos", "--temperature", "0", "--seed", str(seed), "--percentile-metrics",
                    "ttft,tpot,itl,e2el,client_queue_time", "--metric-percentiles", "50,95,99", "--save-result",
                    "--save-detailed", "--result-dir", result_dir, "--result-filename", result_filename]
 
@@ -340,7 +397,7 @@ def build_plan(cfg: dict, pins: dict, *, session_name: str, uniform_plan: dict, 
             if not ref:
                 raise PlanError(f"{w} needs lambda_ref of {OPEN_BASE[w]} from {d['c1b_session']} (039 D-B)")
             grid = d["open_loop"]["grid"]
-            x.update(c_cap=len(grid), n_near=d["n_near"], bracket=cp.bracket_points(len(grid)), lambda_ref=ref,
+            x.update(c_cap=len(grid), n_near=d["n_near"], scan=list(range(1, len(grid) + 1)), lambda_ref=ref,
                      points=open_points(cfg, w, ref))
         else:
             C = d["verify"]["points"][w]

@@ -68,8 +68,31 @@ S1、S3 只作為描述性的界線報告，和 030 相同。
 | H-D2b | C_PROD(U8K-T) < C_PROD(U8K) = 8 | supported | Advanced 中 T 讓 8K uniform 的短類 P95 TTFT 在 C 8 達到約 6.7 s，超過 6 s |
 | H-D3 | 輸出 512 時 C_SLO ≤ C_KV(prompt + 512)（30 與 12） | supported | 030 的 H-S2：KV 容量是上限 |
 
-- 判定的規則沿用 030 的 H-S2：EXACT 或 INFEASIBLE 而且不等式成立為 supported；LOWER 而且不等式成立為 inconclusive；不等式不成立為 not supported；NT 為 NT。
+- **H-D1、H-D3（≤ C_KV）**沿用 030 的 H-S2（`capacity_analysis.h_s2`，它的 refuted 寫成 not supported）：
+  - EXACT 或 INFEASIBLE，而且 ≤ C_KV：supported；
+  - LOWER 而且 ≤ C_KV：inconclusive；
+  - CENSORED，或 EXACT / LOWER 而且 > C_KV：not supported；
+  - NT、UNSTABLE：NT。
+- **H-D2a（C_PROD > 2）**：
+
+  | 估計量 | 判定 |
+  |---|---|
+  | 值 > 2（EXACT、LOWER、CENSORED 都算：下界已經大於 2） | supported |
+  | EXACT 或 INFEASIBLE，值 ≤ 2 | not supported |
+  | LOWER，值 ≤ 2 | inconclusive |
+  | NT、UNSTABLE | NT |
+
+- **H-D2b（C_PROD < 8）**：
+
+  | 估計量 | 判定 |
+  |---|---|
+  | EXACT 或 INFEASIBLE，值 < 8 | supported |
+  | 值 ≥ 8（任何狀態：下界已經不小於 8） | not supported |
+  | LOWER，值 < 8 | inconclusive |
+  | NT、UNSTABLE | NT |
+
 - H-D2a 與 H-D2b 比較的是 c1b 的 C_PROD（035），c1b 的值不重新估計。
+- 〔2026-10-23 凍結前，依審查補上上面三張表：原本只寫了 H-S2 式的規則，套在「>」型的假說上時，LOWER 的處理方向相反。〕
 
 ## D-B：開放迴路（正式）
 
@@ -79,7 +102,14 @@ S1、S3 只作為描述性的界線報告，和 030 相同。
   - `vllm bench serve --request-rate λ --burstiness 1.0`（Poisson），不設 `--max-concurrency`；
   - N(λ) = max(300, ⌈300 s × λ⌉)，至少約 5 分鐘；warmup 10 個；
   - TTFT 從 request 送出起算。送出時刻就是排定的到達時刻，所以包含 vLLM 內部的排隊。
+  - **每個 run 有自己的 seed**：sha256("<seed>:stage_d:open:<w>:<i>:<phase>:<block>") 除以 2³¹ 的餘數。
+    vLLM 0.30.0 的 bench 在 main 以 `--seed` 設定 numpy 的亂數，再用 `np.random.gamma` 產生到達間隔（2026-10-23 唯讀查看 WSL 上的原始碼）。
+    若所有 run 都用同一個 seed，同一格點的 6 次 run 會重播同一條 Poisson 路徑，不同格點也只是同一條路徑的時間縮放，n = 5 就量不到到達過程本身的變異。
+    換 seed 也會換掉 random prompt 的內容，但長度不變。
 - **時間窗**：W = 序號在 [⌈0.1 N⌉, N − ⌈0.1 N⌉) 的 request。Y_short、Y_TPOT、R 與類別都和 030 相同。
+  - 這假設序號就是送出順序。bench 的 detailed 結果有每個 request 的 `start_times`，所以每個 run 都檢查：
+    沒有任何 request 比序號較小的 request 早送出超過 50 ms，否則該 run 無效。
+  - 這個逐 run 的檢查取代 030 的 FS-order smoke。
 - **參考到達率** λ_ref(w) = C_PROD(w) ÷ T̄(w)。
   - T̄ 是 c1b 中 C_PROD 點所有有效階段 C run 在 W 內 request 的平均 e2e 延遲。
   - 由 plan 從已 commit 的 c1b 逐 request 檔重算，不手寫。
@@ -96,13 +126,23 @@ S1、S3 只作為描述性的界線報告，和 030 相同。
     - 其他與 030 相同。
 - **H-D4**：λ_PROD(w) < λ_ref(w)，預測 supported。
   - 理由：Poisson 的突發會讓瞬間並發超過平均值，而 C_PROD 在封閉迴路下已經緊貼 SLO。
-  - 判定：EXACT 而且 λ_PROD ≤ 0.9 λ_ref 為 supported；λ_PROD ≥ λ_ref 為 not supported；其他為 inconclusive。
+  - 判定依格點的倍率 f（λ = f × λ_ref；到達率四捨五入到 4 位，所以不以到達率比較）：
+
+    | λ_PROD | 判定 |
+    |---|---|
+    | EXACT，f ≤ 0.9；或 INFEASIBLE（低於 0.4 λ_ref） | supported |
+    | f ≥ 1（任何狀態：下界已經不低於 λ_ref） | not supported |
+    | 其他（例如 LOWER 而且 f < 1） | inconclusive |
+    | NT、UNSTABLE | NT |
 - **產品上的意義**：這是 vLLM 本身在 Poisson 到達下的容量。gateway 以 C_PROD 准入時，超過的 request 會在 gateway 排隊或回 429，不會進入 vLLM。所以 λ_PROD 不是 gateway 的上限，而是「不靠准入控制時」的到達率上限。
 - **預估時數**：約 4–6 h。
 
 ## D-C：固定點驗證（正式）
 
 在 C_PROD 跑 n = 5 次，分類規則和 030 的單一點相同。PASS 代表該條件下正式容量仍成立。
+- 順序：每個 block r = 1..5 以 `capacity_plan.block_order` 洗牌，每個點各 boot 一次、跑一個 run。
+- **沿用 030 的跳過規則**：某個點出現有效的 FAIL 或無效的 run 之後，之後的 block 不再測它。
+  所以一次 FAIL 就是 FAIL（不再花 boot），一次無效就是 NT（無效的 run 不補跑，013）。
 
 | 點 | 條件 | C |
 |---|---|---|
@@ -119,6 +159,8 @@ S1、S3 只作為描述性的界線報告，和 030 相同。
   - research runner 以子 process 啟動 `python -m capserve serve`，使用正式 profile 與 gateway 設定（port 8080 → vLLM 8000）；
   - research 的程式不 import capserve，維持 `test_research_isolation`；
   - client 的 TTFT 包含 gateway 的開銷。
+  - session 記錄 `service/capserve` 與 profile 的 sha256（`capserve_sha256`）：H-D7 量的是那一版 gateway。
+    產品在 Stage D 期間仍會繼續開發，所以 report 把它寫進 provenance，不凍結 capserve。
   - vLLM 0.30.0 的 bench client 會送 `repetition_penalty: 1.0`。gateway 目前會拒絕這個欄位，所以要先把中性值 1.0 視為預設值並忽略。這屬於產品變更，在凍結前另外 commit 並測試。
 - **H-D6**：U2K-var、U8K-var 為 PASS，預測 supported。理由：較短的 prompt 只會減少 prefill 與 KV。
 - **H-D7**：U2K-gw、U8K-gw 為 PASS，預測 supported。理由：gateway 在 C_PROD 不會排隊，只多一次 loopback 往返。
@@ -128,6 +170,7 @@ S1、S3 只作為描述性的界線報告，和 030 相同。
 ## D5：開場湧入（描述，不用 GPU）
 
 - 用 c1b 已 commit 的逐 request 檔，對每個 workload 與每個測過的 C，計算第一波（idx < C）的最大 TTFT。描述它和 C 的關係，例如以 C 的線性函數擬合，報告斜率與殘差。
+- 輸出：`stage_d_analysis.py startup-wave` 寫出 `results/stage_d/d5-startup-wave/analysis.json`。
 - 這是事後的描述性分析，不是事先登記的檢定。
 - 產品端的處理（准入時限制同時 prefill 的 token 數）屬於產品設計，等 D-A 的結果之後另寫 decision。
 
@@ -148,11 +191,10 @@ S1、S3 只作為描述性的界線報告，和 030 相同。
 - **不改正式設定的釘選**：要不要服務新的 class，由使用者決定（037 §2）。
 - D-B 與 D-C 不產生 profile，只寫進適用條件。
 
-## 尚未決定（凍結前定案）
+## 原本尚未決定的項目（已在實作補記中定案）
 
-- `configs/stage_d.toml` 的格式。
-- harness 的模組切分。凍結的 Stage C 模組只能 import，不能修改。
-- smoke 的內容：mini（走過每一種 workload 與 gateway 路徑）與 FS-order（只對新的 client 設定）。
+- `configs/stage_d.toml` 的格式；harness 的模組切分（凍結的 Stage C 模組只 import 或繼承）。
+- smoke：三個 mini。FS-order 改為 D-B 每個 run 的送出順序檢查（見 D-B）。
 
 ## 實作補記（2026-10-23，凍結前；沒有任何 Stage D 數據）
 
@@ -161,29 +203,27 @@ harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_sta
 本文沒有寫死、實作時決定的細節如下，凍結時一併凍結。
 
 1. **重用的範圍**：
-   - D-A 與 D-B 直接執行 `run_capacity` 的狀態機，以及 `capacity_plan` 的 `search_next`、`build_confirm_plan`、`phase_c_boots`；
+   - D-A 直接執行 `run_capacity` 的狀態機，以及 `capacity_plan` 的 `search_next`、`build_confirm_plan`、`phase_c_boots`；
+   - D-B 用同一個狀態機的複本，只換掉兩個函式：本文的線性掃描（`open_search_next`）與不含 c_low 的確認集合（`build_open_confirm_plan`）；
+     Phase C 的順序與跳過仍是 `capacity_plan.phase_c_boots`；
    - 每個 run 的統計量、分類、估計量、旗標、sentinel 閘門與跨 session 偏移，都用 `capacity_analysis` 的凍結函式；
    - `StageDHarness` 繼承 `run_capacity._Harness`，只覆寫 server、client、結果檢查、逐 request 檔、tag 與 gateway。
 2. **開放迴路的時間窗**：把 `run_eval` 的 C 設為 ⌈0.1 N⌉，它的穩態時間窗 [C, N − C) 就是本文的 [⌈0.1 N⌉, N − ⌈0.1 N⌉)。
    「開場湧入」欄位因此是前 10% 的 request，只作描述。
-3. **H-D4 依格點的倍率判定**：
-   - 格點的到達率是倍率 × λ_ref 再四捨五入到 4 位，所以 0.9 倍那一點的到達率可能略高於 0.9 λ_ref；
-   - 改依格點的倍率判定：λ_PROD 的倍率 ≤ 0.9 而且 EXACT 或 INFEASIBLE 為 supported；倍率 ≥ 1 為 not supported；其他為 inconclusive。
-   - INFEASIBLE（低於 0.4 λ_ref）也算 supported，因為它比 0.9 λ_ref 更低。
-4. **H-D2a / b 的規則**（本文只寫了不等式）：
-   - **大於**：值大於界線就是 supported，下界也算；EXACT 或 INFEASIBLE 而且不大於界線為 not supported；下界而且不大於界線為 inconclusive。
-   - **小於**：EXACT 或 INFEASIBLE 而且小於界線為 supported；任何不小於界線的值為 not supported，下界也算；下界而且小於界線為 inconclusive。
-   - NT 與 UNSTABLE 為 NT。
+3. **H-D4 依格點的倍率判定**：見 D-B 的狀態表。格點的到達率四捨五入到 4 位，0.9 倍那一點的到達率可能略高於 0.9 λ_ref。
+4. **H-D2a / b 的狀態表**：見 D-A。
 5. **H-D1 / H-D3** 使用 `capacity_analysis.h_s2`。它的 "refuted" 在 Stage D 寫成 "not supported"，和本文的用詞一致。
-6. **D-C 不套用跳過規則**：每個點的 5 次都跑完。一次 FAIL 就足以判定，但跑完可以報告「5 次中幾次符合」。
-   順序是每個 block 以 `capacity_plan.block_order` 洗牌，每個點各 boot 一次。
+6. **D-C 的跳過規則**：見 D-C。D-C 的 V run 也記錄 outcome，replay 依同一規則重算。
 7. **D-C 的 gateway**：
    - research runner 以 `python -m capserve serve` 啟動 gateway（子 process，不 import capserve；有測試檢查原始碼）；
    - 設定為 127.0.0.1:8080 → vLLM 8000、`tokenizer = "local"`、`tokenizer_path` = 服務的 snapshot、該 workload 的 class；
    - profile 為 `verified-formal-20261017-c1b.json`；
    - gateway 的環境移除所有 `CAPSERVE_*`，並設 `HF_HUB_OFFLINE=1`。
-   - `/readyz` 必須是 verified、class 正確，而且 max_concurrency 等於該點的 C，否則該 boot 在第一個 bench 之前就失敗。
-   - gateway 一律先停（SIGTERM，30 s 後 SIGKILL），再進行 server 的 teardown。
+   - 啟動前 port 8080 必須沒有人在 listen，否則可能由上次留下的 gateway 回答；
+   - `/readyz` 必須是正式 profile 的 id、verified、class 正確，而且 max_concurrency 等於 class 的正式上限，否則該 boot 在第一個 bench 之前就失敗；
+   - 就緒後與每個 bench 前後都檢查 gateway 是否還在；結束了的話，該 run 無效，之後的 run 不跑；
+   - gateway 一律先停，再進行 server 的 teardown：SIGTERM，30 s 後 SIGKILL，並確認整個 process group 已結束；
+     停止的過程在 `run_adv.DeferredSignals` 之下，ssh 斷線不會讓 gateway 留在 8080。
 8. **結果檢查**：
    - 每個 run 都要求 N 個完成、輸出都等於該 workload 的長度；
    - uniform 的 prompt 長度都等於設定值，mixed 符合 007 的數量，var 落在 [64, tier − 128]。
@@ -199,6 +239,32 @@ harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_sta
 10. **mini smoke**（凍結的證據，三個）：
     - 和 Stage C 的 mini 相同：假的 SLO、N = 20、n_near 2、n_low 1、sentinel 在 C 2，跑完後丟棄所有延遲數值。
     - **closed**：U2K-O512 上限 3，在 C 3 強制 5 s 逾時，以走過跳過規則；M8K-T 上限 2，走過 T 的 server 檢查與 mixed。
-    - **open**：U2K-P 只用前 3 個格點，每點 N = 20。
-    - **verify**：U2K-var 與 U2K-gw 在 C 4 各兩個 block。gateway 仍服務 class 的正式上限（`class_limit`），所以 `/readyz` 比對的是正式上限。
+    - **open**：U2K-P 掃描 0.4、1.1、1.5 λ_ref 三個格點（含高於 λ_ref 的點），每點 N = 20。
+    - **verify**：U2K-var、U2K-gw、U8K-gw 在 C 4 各兩個 block。
+      gateway 仍服務 class 的正式上限（`class_limit`），所以 `/readyz` 比對的是正式上限。
+      U8K-gw 的 prompt 是 8,064 token，剛好等於 uniform-8k 的上限，可以在正式 session 之前驗證 local tokenizer 的邊界。
 11. **vLLM 的 bench client 每個 request 都送 `repetition_penalty: 1.0`**：gateway 把這個中性值視為預設值並忽略（038 的後續變更）。否則 D-C 經過 gateway 的每個 request 都會是 400。
+
+12. **C_KV 的來源**：report 從 `--uniform-session` 的 plan.json 取 block 數，並要求該 session 是 `derived_from`、formal、env 有效，和 030 的 report 相同。runner 用 pins 的值（`build_plan` 本來就拒絕和 pins 不同的 block 數）。
+
+## 凍結前的審查（2026-10-23）
+
+一個獨立的 agent 對照本文與 030 審查 harness，提出 13 項。全部處理，其中 1–7 是凍結前必須處理的：
+
+| # | 發現 | 處理 |
+|---|---|---|
+| 1 | D-B 的階段 S 用了 030 的夾擠加二分，不是本文的線性掃描 | 實作線性掃描，runner 與 replay 共用 |
+| 2 | D-B 的 K 多了 c_low（n_low 3），可能讓 λ_PROD 變成 UNSTABLE | 實作本文的 K：前一點、λ̂、後一點，n_near 5，沒有 c_low |
+| 3 | H-D4 的 INFEASIBLE / UNSTABLE 判定和本文字面不同 | 本文補上完整的狀態表（見 D-B）。INFEASIBLE 為 supported，NT / UNSTABLE 為 NT，與其他假說一致 |
+| 4 | H-D2a 的 LOWER 處理和本文字面不同 | 本文補上 H-D2a / b 的狀態表；程式的邏輯不變 |
+| 5 | D-C 沒有套用 030 的跳過規則 | 實作：一次有效的 FAIL 或無效的 run 之後不再測該點 |
+| 6 | FS-order smoke 沒有實作 | 改為 D-B 每個 run 的送出順序檢查（bench 的 `start_times`），比一次 smoke 更強 |
+| 7 | 所有 run 同一個 seed，到達路徑會重播 | WSL 上確認成立；改為每個 run 自己的 seed |
+| 8 | gateway 的啟動與停止不夠穩健 | port 檢查、profile id 比對、bench 前後檢查 gateway 是否還在、停止在 DeferredSignals 之下並確認 group 結束 |
+| 9 | mini 沒有涵蓋 uniform-8k 的 gateway 與高於 λ_ref 的到達率 | verify mini 加入 U8K-gw；open mini 改掃 0.4、1.1、1.5 λ_ref |
+| 10 | 沒有從 derived_from session 重建 C_KV | report 改用 uniform session 的 block 數並檢查它是 formal |
+| 11 | 開放迴路的 `inflight_le_c` 沒有意義 | 開放迴路改為 None |
+| 12 | D5 沒有產出路徑 | 新增 `startup-wave` 指令 |
+| 13 | capserve 不在凍結範圍內 | session 記錄 `capserve_sha256`，report 寫進 provenance；不凍結 capserve |
+
+- 處理之前跑的三個 mini smoke 用的是舊版 harness，不作為凍結的證據；修正後重跑。
