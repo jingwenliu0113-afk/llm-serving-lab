@@ -1,0 +1,29 @@
+# Stage E1-P settings: decision 041 v3 §1.6-1.7 (the seed-swap probe, exploratory; A1 decided by the user 2026-10-23),
+# PREREGISTRATION §11 (DRAFT). Its own file (041 §0: one config per part): configs/stage_e1.toml is frozen with E1-D and
+# its keys are pinned (stage_e1.CONFIG_KEYS), so freeze.e1p cannot live there. benchmarks/stage_e1p_plan.py refuses a
+# formal plan until freeze.e1p is true and the passed smoke is named; every value is pinned to 041 v3 §1.6
+# (stage_e1p_plan.E1P_VALUES); E1-D's links (L1-L5, 35 ms, 170 ms, 200 ms) are read from the frozen stage_e1.toml.
+schema_version = 1
+
+[freeze]
+e1p = false
+smoke_e1p = ""                                            # session id of the passed smoke (results/stage_e/<id>)
+
+[e1p]
+seeds = { A = 20261008, B = 20261023 }                    # A = Core B's seed (Advanced, C0); B fixed 2026-10-23
+boots = 6
+order_odd = ["A", "B", "B", "A"]                          # boots 1, 3, 5
+order_even = ["B", "A", "A", "B"]                         # boots 2, 4, 6: each seed 12 benches, 3 at each position
+smoke_order = ["A", "B"]                                  # the smoke: 1 boot, one bench per seed at smoke_N
+smoke_N = 16
+cap_hours = 3.0                                           # lock-holding cap, smoke included: a formal plan's cap is
+                                                          # this minus the passed smoke's elapsed_s
+boot_margin_s = 1800                                      # no new boot when elapsed + 30 min > cap (028 rule 3)
+temp_stop_c = 88                                          # 028 rule 6
+max_failed_boots = 2                                      # 028 rule 5: the 2nd failed boot stops the session
+f_spike_ms = 35.0                                         # spike idx: F(8k) > 35 ms, k 1-24 (= stage_e1's L1)
+repeat_min = 3                                            # repeated position: spikes in >= 3 valid benches of a seed
+min_spikes = 5                                            # a seed with fewer spikes in total: 無法判定
+a_prior = [32, 64, 88, 128, 176, 192]                     # Advanced's idx with >= 2 spikes in its 15 runs
+j_content_max = 0.2                                       # J(A_in, B_in) <= 0.2: content-locked
+j_position_min = 0.5                                      # J >= 0.5: position / time-locked

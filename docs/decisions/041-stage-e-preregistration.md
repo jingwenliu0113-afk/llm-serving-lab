@@ -7,7 +7,7 @@
 
 ## 0. 共通規則
 
-| 旗標（每個部分自己的設定檔：`configs/stage_e1.toml`、`stage_e2.toml`、`stage_e3.toml`） | 範圍 | 凍結證據 |
+| 旗標（每個部分自己的設定檔：`configs/stage_e1.toml`、`stage_e1p.toml`、`stage_e2.toml`、`stage_e3.toml`） | 範圍 | 凍結證據 |
 |---|---|---|
 | `freeze.e1` | E1-D（桌面分析） | 分析模組、合成 fixture 的測試與取回清單一起 commit；在取回任何 raw 之前完成 |
 | `freeze.e1p` | E1-P（換 seed 探針） | 一次通過的 smoke，`harness_sha256` 相同 |
@@ -129,6 +129,15 @@
 - **E1-D 已凍結（2026-10-23）**：`configs/stage_e1.toml` 的 `freeze.e1 = true`，`e1_harness_sha256 = 87b937d12799853b50745bc4430de5c26f8b9db71cd6726aebb78466a656c00d`（`benchmarks/stage_e1.py` 與 `benchmarks/c0_analysis.py`）。凍結時清單中的檔一個都還沒取回。`tests/test_stage_e1.py` 檢查設定檔的 pin 等於目前的 harness，所以兩個檔都不再修改；E1-D 的規則之後只能以新的 decision log 修訂。輸出寫在 `results/stage_e/<新的 session>/`。
   - 取回：`python benchmarks/stage_e1.py fetch-list | while read -r args; do tools/rtx/fetch_raw.sh $args; done`，只在 `tools/rtx/gpu_status.sh` 印出 FREE 時執行。
 - **`freeze.e1p`**：smoke 1 次 boot、2 個 bench（seed A、B 各一，N 16）。通過條件：每個主 id 都有 span、F 算得出來、時間窗內有 step 紀錄、seed B 的 input_lens 全部 8,064、derived schema 正確；延遲遮蔽，不看。
+- **E1-P 的實作（2026-10-23，harness 寫成時決定，沒有任何 E1-P 數據）**：
+  - 設定檔是 `configs/stage_e1p.toml`（`freeze.e1p`、`freeze.smoke_e1p`、`[e1p]`），不是 `stage_e1.toml`：後者隨 E1-D 凍結，鍵是固定的（`stage_e1.CONFIG_KEYS`），加鍵會讓 E1-D 拒絕執行；這也符合 §0「每個部分一個設定檔」。`[e1p]` 的值固定為 1.6 的值（`stage_e1p_plan.E1P_VALUES`），L1–L5 的門檻讀 E1-D 凍結的 `stage_e1.toml`。
+  - 模組：`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`；`harness_sha256` 也包含匯入的 `run_c0_probe.py` 與 `c0_analysis.py`（§0）。`stage_e1.py` 只匯入（它的 pin 由自己的測試保護）。
+  - 「上限 3.0 h（含 smoke）」：smoke 必須在凍結之前跑，所以是另一個 session；正式 plan 的上限 = 3.0 h − smoke 記錄的 `elapsed_s`（拿到 lock 起算）。
+  - bench 無效的條件在 028 / C0 之外多兩項：有主 request 沒有 span 或算不出 F（F 是這個探針的量）、input_lens 不全是 8,064。boot 失敗與停止規則照 028。
+  - session 狀態：沒有任何 server 啟動過（含第一次 boot 前就因停止規則結束）為 `refused`，不算嘗試；因環境而停（lock、gpu_not_idle、gpu_check、spill_unreadable、telemetry）的 session 作廢，可用新 id 重跑一次（§0）；因 cap、88 °C、2 次失敗的 boot 而停的 session 有效，照現有數據分析，不補跑（028）。
+  - 每個 bench 的描述量由 runner 用 E1-D 凍結的函式算（`stage_e1.f_spikes` 與 N 200 時的 `stage_e1.bench_episodes`），寫在 `derived/<bench>-e1.json`；step 紀錄留在 raw/。L3 用 span 的 e2e，L4 用 server 的 arrival，送出延遲只用 client 的時鐘。1 Hz 的 /metrics 序列照 Advanced（024）。
+  - 分析自己找第一個有效的正式 session（最多一次作廢），逐檔核對 row 記下的 sha256，並核對 runner 的尖峰與 derived F 重算的一致。
+  - smoke 之前在 WSL 核對 vLLM 0.30.0 的原始碼：`vllm bench serve --seed` 決定 random dataset 的 token（否則 seed B 的內容和 A 相同，J 沒有意義）；只讀檔，在 `tools/rtx/gpu_status.sh` 印出 FREE 時進行，結果記在本節。
 
 ### 1.8 能交付與不能交付
 
@@ -494,4 +503,8 @@
   - A3 (1)：prefix caching 是獨立的能力檢查（2.8）。
   - A4 (1)：E2 可能以條件式結論或「成因未確立」結束。
 - 第 6 節「在 037 範圍內的變更（只告知）」照原文。
+
+### E1-P harness（2026-10-23，smoke 之前）
+
+- 依 A1 寫成 E1-P 的 harness（1.7「E1-P 的實作」）。§0 的表加上 `configs/stage_e1p.toml`。這些都是實作層級的決定，沒有改動 1.6 的設計、門檻或讀法；寫的時候沒有任何 E1-P 數據。
 

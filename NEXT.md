@@ -65,7 +65,11 @@
   - [x] E2 harness 審查：確認 18 項，全部修正（smoke 綁定設計並改為 12 次 boot、通過條件補齊、停止規則、重跑上限、R / Λ / L̄q、incomplete 的代換規則等；041 修訂紀錄「E2 harness 審查」）。
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
   - [ ] E2（**等 GPU 空閒**，WSL）：原始碼核對（prefix caching 路徑、warmup 來源、`vllm:prefix_cache_hits_total`、`cache_config_info` 的 `mamba_cache_mode` 標籤、span 的 cached-token 欄位、`num_requests_waiting`）→ `stage_e2_datasets.py` 產生共享前綴 dataset 並 pin sha256 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
-  - [ ] E1-P（A1 已決定做）：harness（041 §1.6–1.7）→ 審查 → smoke（GPU）→ 凍結 → 正式（約 2.5 h，上限 3 h）。
+  - [x] E1-P harness 寫成（2026-10-23，DRAFT）：`configs/stage_e1p.toml`、`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`、`tests/test_stage_e1p.py`（32 個測試）；實作決定記在 041 §1.7「E1-P 的實作」。
+  - [ ] E1-P：審查 workflow → 修正 → （**等 GPU 空閒**）WSL 原始碼核對 `--seed` 決定 random dataset 的 token → smoke：
+        `python benchmarks/stage_e1p_plan.py --mode smoke --out ~/e1p-smoke-plan.json`，
+        `flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_e1p.py --plan ~/e1p-smoke-plan.json --out results/stage_e/smoke-e1p-<date> --gpu-lock-held --smoke`
+        → 取回、凍結（`freeze.e1p = true`、`smoke_e1p`）→ 正式（約 2.5 h，上限 3.0 h 減 smoke 的時間）→ `stage_e1p_analysis.py --out results/stage_e/e1p-analysis-<date>/e1p.json`。
 
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
 
