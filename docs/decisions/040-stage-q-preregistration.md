@@ -114,7 +114,7 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 4. **CUDA 的 BF16 PPL**（H-Q1c 的對照）：取 Phase 1 self-KLD row 的 PPL(Q)，和各 quant 取 KLD row 的 PPL(Q) 是同一種評估（README 的 9.945 / 8.186）。
 5. **pilot**：
    - 每個部分（q1-metal、q1-cuda、q2）一個 pilot session，執行完整的 job 清單，但每個 job 只跑 10 chunks；
-   - 用來確認標記、chunk 數、時間與磁碟用量，結果不分析（和 005 的 pilot 相同）。
+   - 用來確認標記、chunk 數、時間與磁碟用量，結果不分析（和 005 的 pilot 相同）；每個 KLD base 跑完與刪除前都記錄實際大小（`base_bytes`），和該 job 的 `need_gib` 並列，用來核對補記 3 的估計。
 6. **凍結的檢查**：
    - `configs/stage_q.toml` 的 `freeze.stage_q` 為 true 之前，`stage_q.py plan --mode formal` 拒絕；
    - 凍結的證據是三個通過的 pilot（每個 job 都 ok），而且 session 記錄的 `harness_sha256`（`stage_q.py` 與 `stage_q_analysis.py`）等於目前的 harness；
@@ -126,7 +126,7 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
    - 下載量大，先取得使用者同意。Q3 的 harness 可以先寫，pilot 與正式數據在下載之後。
 8. **Q3 的 harness**（`quality/stage_q3.py`，`configs/stage_q3.toml`）：
    - **獨立的凍結**：Q3 用另一個 runtime，又要等下載，所以有自己的 `freeze.stage_q3` 與 pilot，不拖住 Q1 / Q2 的凍結。
-   - **chunk 檔**：在 WSL 以 pin 住的 tokenizer 編碼 `wiki.test.raw`（不加 special token），切成 ⌊n ÷ 512⌋ 個 512-token chunk。
+   - **chunk 檔**：在 WSL 以 pin 住的 tokenizer 編碼 `wiki.test.raw`（不加 special token；和 llama-perplexity 的 `-f` 及 005 的交叉核對一樣先去掉一個結尾換行），切成 ⌊n ÷ 512⌋ 個 512-token chunk。
      檔案的 sha256 與 chunk 數在凍結前 pin 在設定檔，兩個 checkpoint 讀同一份 token id。
    - **計分**：每個 chunk 一個 prompt，`prompt_logprobs = 1`、`max_tokens = 1`、temperature 0。
      計分位置是 257–511（和 llama-perplexity 相同的 255 個 token），記錄實際 token 的 logprob 與 rank-1 的 token。
@@ -151,7 +151,8 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
      | 任一已觀察到的比值超出界線（即使另有缺格） | not supported |
      | 沒有超出，但有缺格 | NT |
      | 全部在界線內（含端點） | supported |
-   - 尚未執行的部分，其 hypothesis 為 NT。
+   - 比值以印出的十進位數值做精確的分數運算（端點本身算在界線內，不受浮點誤差影響）。
+   - 尚未執行的部分（沒有任何正式嘗試），其 hypothesis 為 NT；每個嘗試都作廢的部分也是 NT，並列出那些嘗試。
 10. **平台規則**（037 §4）：
     - Mac 上沿用 `run_core_a.env_problems` 的 AC、電量與 thermal 檢查，但它的 Phase 1 設定檢查（019 的 70W adapter）改為本 stage 的規則：powermode 0 或 2、Apple 140W adapter、`iogpu.wired_limit_mb` 0。
       原本兩條規則同時套用，任何 adapter 都會被拒絕，正式的 q1-metal 永遠無法執行（審查第 1 項）。
@@ -164,6 +165,12 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
     - 建立正式 plan 時，該部分的 pilot 必須已在這台機器上通過（另外兩部分由 Mac 上的分析檢查），所以正式數據不會早於 pilot；
     - `harness_sha256` 也涵蓋 `run_quality`、`quality_parse` 與 `disk_guard`（沒有 guard test 鎖住它們）。
 14. **只分析第一個正式 session**：同一部分若有多個正式 session，分析只接受最早開始的那一個；其他的需要另寫 decision log。這是為了不能事後挑選結果（例如 OOM 之後換設定重跑）。
+    - 實作（修正後覆核，2026-10-23）：
+      - session 目錄只能是 `results/stage_q/<id>`（不可巢狀）。第一個 job 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），所以中斷的 session 也是一次嘗試；讀不到 `session.json` 時以 `plan.json` 判定，算作廢的嘗試；只有 `plan.json` 的目錄與在第一個 job 之前被拒絕的（status refused）不算。
+      - 有效 = 跑完而且 env 有效。env 無效（012）的 session 作廢，可用新 id 重跑一次；一個部分已有有效的正式 session，或已有兩次嘗試時，runner 拒絕開始。
+      - 分析自己從 `results/stage_q` 找出每個部分的嘗試，取第一個有效的 session（之前最多一次作廢的嘗試），不再由 CLI 指定，所以不能省略已執行的部分。
+      - 「另寫 decision log」的機制：`--superseded <id>=docs/decisions/<log>.md`（runner 與分析都有），log 必須已 commit、在 `docs/decisions/` 之下、內文同時寫出被取代與取代它的 session id；這個決定放在所有被雜湊的檔案之外，不會讓 pilot 或正式 session 失效。Q3 用同樣的規則（`stage_q3.formal_attempts`）。
+      - plan 指令拒絕把 plan 寫進 `results/stage_q/`；分析的輸出必須是 `results/stage_q/` 下的新 .json 檔。
 15. **Q3 的修正**：
     - 子 process 的環境改用 Core B 的 `server_env`（CUDA_HOME shim、venv 的 bin 在 PATH 最前面、GDN decode kernel），啟動前跑 `toolchain_problems`；原本少了這些，vLLM 的 FlashInfer JIT 會失敗。
     - engine 加上 Core B 的 `attention_backend = FLASH_ATTN`，並從子 process 的 log 核對 attention backend、text-only 與 GDN prefill kernel（`coreb_smoke.parse_server_log`）。
@@ -172,6 +179,7 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
     - pilot 證據要符合目前設定的 job（engine、offload、env）、pin 住的 chunk 檔、host 與 vLLM 版本。
     - 逾時另外記錄（不再和 SIGKILL 混在一起），並結束整個 process group；OOM 只看 log 的最後 60 行，並加入 vLLM KV 不足的訊息。
     - rank-1 平手時取最小的 token id（兩個 checkpoint 用同一規則）。
+      修正後覆核：vLLM V1 會把和 topk 並列最高的實際 token 排為 rank 2，所以 top-1 改依 logprob 的值決定：回傳的項目中 logprob 最大者取最小的 id。兩個都不是實際 token 的並列在 `prompt_logprobs = 1` 下看不到，依 torch.topk 的順序（只影響描述用的 top-1 一致率，H-Q3 只用實際 token 的 logprob）。審查表第 19 項的前提（rank-1 平手會讓 job 失敗）在 V1 下不成立。
 
 ## 凍結前的審查（2026-10-23）
 
@@ -203,3 +211,19 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 
 被反駁的 2 項：rows.jsonl 沒有雜湊（分析與 runner 已以 plan、session 與 raw manifest 綁定）；輸入的「同一份」前提沒有證據（已由第 11 項處理）。
 
+### 修正後的覆核（2026-10-23，pilot 之前）
+
+審查者加反駁者再看一次修正後的 harness，Q1 / Q2 確認 5 項（3 項 must-fix）、Q3 確認 3 項（1 項 must-fix），全部處理：
+
+| # | 發現 | 處理 |
+|---|---|---|
+| 22 | 中止或巢狀的 session 讓「只分析第一個」可以被繞過 | 補記 14：stub、目錄不可巢狀、嘗試次數 |
+| 23 | CLI 省略某一部分，已執行的部分會被當成尚未執行（NT） | 補記 14：分析自己找 session |
+| 24 | 第一個 session 若 env 無效，該部分永遠無法分析；「另寫 decision log」沒有可用的機制 | 補記 14：一次作廢可重跑、`--superseded` |
+| 25 | 界線的端點以浮點比值判定，正好在端點時會被判為超出 | 補記 9：精確分數 |
+| 26 | pilot 沒有記錄 KLD base 的實際大小 | 補記 5：`base_bytes` |
+| 27 | Q3 編碼前沒有去掉結尾換行，token 數差 1，chunk 檔寫不出來 | 補記 8 |
+| 28 | Q3 只分析第一個 session 的規則和 Q1 / Q2 有同樣的問題 | 補記 14 |
+| 29 | Q3 的 rank-1 平手規則在 vLLM V1 下從未生效，測試資料不是 V1 的形狀 | 補記 15 |
+
+被反駁的 3 項：`pin_memory` 不影響數值，不屬於補記 8 要沿用 Core B 的設定（pilot 若需要 "1"，再補記）；GGUF 各 quant 的 PPL 並列只是結果文件中的描述，不需要改 harness；主機端的 OOM 會記為 error 並保留 exit code 與 log，判定同樣是 NT。

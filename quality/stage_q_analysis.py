@@ -15,13 +15,17 @@ kld_test and holm (imported, never changed).
   violation stands), else NT when one is missing, else supported. They are 040's substantive thresholds, not
   statistical tests.
 
-Formal sessions only (040 凍結): configs/stage_q.toml frozen with its pilot evidence, and each session formal, env-valid,
-of its part on its platform's host, its plan.json exactly build_plan's formal plan, and the first formal session of
-its part under results/stage_q (a later one needs its own decision log). A part not yet run leaves its hypotheses NT.
+Formal sessions only (040 凍結): configs/stage_q.toml frozen with its pilot evidence. The analysis finds each part's
+session itself (040 補記 14; no part can be left out): its formal attempts under results/stage_q
+(stage_q.formal_attempts, minus those superseded by a committed decision log naming both ids), the first valid one,
+after at most one void attempt; that session must be finished, env-valid, of its part on its platform's host,
+directly under results/stage_q, with plan.json exactly build_plan's formal plan. A part with no formal attempt leaves
+its hypotheses NT ("not run"); a part whose attempts are all void leaves them NT and lists the attempts. Bounds
+compare exact decimal ratios.
 
 Usage:
-    python quality/stage_q_analysis.py --q1-metal results/stage_q/<id> --q1-cuda results/stage_q/<id> \
-        --q2 results/stage_q/<id> --out results/stage_q/analysis.json
+    python quality/stage_q_analysis.py --out results/stage_q/analysis-<date>.json \
+        [--superseded <id>=docs/decisions/<log>]
 """
 
 from __future__ import annotations
@@ -90,10 +94,10 @@ def ordering(table: dict, units: list) -> dict:
 
 
 def bounded(ratios: dict, bounds: tuple) -> dict:
-    """ratios: {name: ratio or None}; supported when all inside bounds (inclusive), not supported when one is outside
-    (even if another is missing), NT when one is missing and none is outside."""
+    """ratios: {name: exact Fraction or None}; supported when all inside bounds (inclusive), not supported when one is
+    outside (even if another is missing), NT when one is missing and none is outside."""
     lo, hi = bounds
-    inside = {k: None if v is None else lo <= Fraction(str(v)) <= hi for k, v in ratios.items()}
+    inside = {k: None if v is None else lo <= v <= hi for k, v in ratios.items()}
     if any(v is False for v in inside.values()):
         verdict = "not supported"
     elif any(v is None for v in inside.values()):
@@ -101,11 +105,12 @@ def bounded(ratios: dict, bounds: tuple) -> dict:
     else:
         verdict = "supported"
     return {"verdict": verdict, "bounds": [float(lo), float(hi)],
-            "ratios": {k: v for k, v in ratios.items()}, "inside": inside}
+            "ratios": {k: None if v is None else float(v) for k, v in ratios.items()}, "inside": inside}
 
 
 def _ratio(a, b):
-    return None if a is None or b is None or b == 0 else a / b
+    """The exact ratio of the two printed decimals (040 補記 9: the bounds include their endpoints)."""
+    return None if a is None or b is None or b == 0 else Fraction(str(a)) / Fraction(str(b))
 
 
 def h_q1(metal_rows: list, cuda_rows: list, phase1_rows: list) -> dict:
@@ -141,8 +146,8 @@ class AnalysisError(RuntimeError):
 
 def session_problems(path, part: str, *, stage_q_sha256: str, pins_sha256: str, pins: dict, cfg: dict,
                      root=sq.ROOT) -> list:
-    """A formal, env-valid session of this part on its platform's host that ran build_plan's formal plan (the frozen
-    harness, configs/stage_q.toml and pins.toml) and is the first formal session of its part under root."""
+    """A finished, env-valid formal session of this part on its platform's host, directly under results/stage_q, that
+    ran build_plan's formal plan (the frozen harness, configs/stage_q.toml and pins.toml)."""
     path = Path(path)
     try:
         meta = json.loads((path / "session.json").read_text())
@@ -153,8 +158,12 @@ def session_problems(path, part: str, *, stage_q_sha256: str, pins_sha256: str, 
     problems = []
     if meta.get("mode") != "formal" or plan.get("mode") != "formal":
         problems.append(f"{path.name}: mode {meta.get('mode')!r} is not formal (pilots stay masked, 040)")
+    if meta.get("status") != "finished":
+        problems.append(f"{path.name}: status {meta.get('status')!r}, not a finished session")
+    if path.resolve().parent != Path(root).resolve().joinpath(*sq.RESULTS):
+        problems.append(f"{path}: not results/stage_q/<session id>")
     if meta.get("env_valid") is not True:
-        problems.append(f"{path.name}: the session is env-invalid (rerun it under a new id, 012)")
+        problems.append(f"{path.name}: the session is env-invalid (void: one rerun under a new id, 012)")
     if (meta.get("stage"), meta.get("part"), plan.get("part"), meta.get("platform")) != \
             (sq.STAGE, part, part, sq.PARTS[part]):
         problems.append(f"{path.name}: not a {part} session (stage / part / platform)")
@@ -178,24 +187,30 @@ def session_problems(path, part: str, *, stage_q_sha256: str, pins_sha256: str, 
             problems.append(f"{path.name}: build_plan refuses its formal plan ({exc})")
         if want is not None and plan != want:
             problems.append(f"{path.name}: plan.json is not build_plan's formal {part} plan")
-        earlier = [d.name for d, m in _formal_sessions(root, part)
-                   if d.resolve() != path.resolve() and (m.get("started_at") or "") < (meta.get("started_at") or "")]
-        if earlier:
-            problems.append(f"{path.name}: earlier formal {part} sessions {earlier} exist (040: the first formal "
-                            "session of a part is the one analyzed; another needs its own decision log)")
     return problems
 
 
-def _formal_sessions(root, part: str) -> list:
-    out = []
-    for f in sorted(Path(root).joinpath(*sq.RESULTS).glob("*/session.json")):
-        try:
-            m = json.loads(f.read_text())
-        except (OSError, ValueError):
-            continue
-        if m.get("mode") == "formal" and m.get("part") == part:
-            out.append((f.parent, m))
-    return out
+def part_session(part: str, *, root, superseded: dict, tracked) -> tuple:
+    """(the session dir to analyze or None, record): the part's first valid formal attempt after at most one void one,
+    superseded attempts left out once their decision log names both ids (040 補記 14)."""
+    attempts = sq.formal_attempts(root, part)
+    kept = [a for a in attempts if a["id"] not in superseded]
+    gone = [a["id"] for a in attempts if a["id"] in superseded]
+    valid = [i for i, a in enumerate(kept) if a["valid"]]
+    record = {"attempts": [a["id"] for a in kept], "superseded": gone}
+    if not kept:
+        return None, {**record, "status": "not run"}
+    if not valid:
+        return None, {**record, "status": "no valid formal session (every attempt is void)"}
+    first = kept[valid[0]]
+    if valid[0] > 1:
+        raise AnalysisError(f"{part}: {valid[0]} void attempts {record['attempts'][:valid[0]]} before {first['id']}; "
+                            "040 allows one rerun")
+    bad = sq.superseded_problems({k: superseded[k] for k in gone}, first["id"], root=root, tracked=tracked)
+    if bad:
+        raise AnalysisError("; ".join(bad))
+    return first["dir"], {**record, "status": "analyzed", "session": first["id"],
+                          "void_before": [a["id"] for a in kept[:valid[0]]]}
 
 
 def phase1_problems(path) -> list:
@@ -211,20 +226,20 @@ def phase1_problems(path) -> list:
     return []
 
 
-def analyze_sessions(paths: dict, *, cfg: dict, stage_q_sha256: str, pins_sha256: str, pins: dict,
-                     root=sq.ROOT) -> dict:
-    """paths: {part: session dir} of the parts run so far. Refuses (AnalysisError) unless 040 凍結 holds."""
+def analyze_sessions(*, cfg: dict, stage_q_sha256: str, pins_sha256: str, pins: dict, root=sq.ROOT,
+                     superseded: dict | None = None, tracked=sq.git_tracked) -> dict:
+    """Every part's session found under root (part_session). Refuses (AnalysisError) unless 040 凍結 holds."""
     problems = [f"configs/stage_q.toml: {p}" for p in sq.config_problems(cfg)]
     if not problems and cfg["freeze"]["stage_q"] is not True:
         problems.append("freeze.stage_q is not true in configs/stage_q.toml (040 凍結: no Stage Q analysis before it)")
     if problems:
         raise AnalysisError("; ".join(problems))
     problems += [f"freeze evidence: {p}" for p in sq.freeze_evidence_problems(cfg, root, pins)]
-    paths = {k: v for k, v in paths.items() if v is not None}
-    if set(paths) - set(sq.PARTS):
-        problems.append(f"unknown parts {sorted(set(paths) - set(sq.PARTS))}; 040 defines {sorted(sq.PARTS)}")
-    for part, path in sorted(paths.items()):
-        if part in sq.PARTS:
+    paths, records = {}, {}
+    for part in sq.PARTS:
+        path, records[part] = part_session(part, root=root, superseded=superseded or {}, tracked=tracked)
+        if path is not None:
+            paths[part] = path
             problems += session_problems(path, part, stage_q_sha256=stage_q_sha256, pins_sha256=pins_sha256,
                                          pins=pins, cfg=cfg, root=root)
     phase1 = Path(root) / "results" / "quality" / cfg["stage_q"]["phase1_session"]
@@ -233,30 +248,28 @@ def analyze_sessions(paths: dict, *, cfg: dict, stage_q_sha256: str, pins_sha256
         raise AnalysisError("; ".join(problems))
     rows = {part: load_rows(paths[part]) if part in paths else [] for part in sq.PARTS}
     base = load_rows(phase1)
-    return {"stage": sq.STAGE, "sessions": {part: Path(paths[part]).name if part in paths else None for part in sq.PARTS},
-            "phase1_session": phase1.name, "harness_sha256": sq.harness_sha256(), "stage_q_sha256": stage_q_sha256,
-            "pins_sha256": pins_sha256,
+    return {"stage": sq.STAGE,
+            "sessions": {part: Path(paths[part]).name if part in paths else None for part in sq.PARTS},
+            "parts": records, "phase1_session": phase1.name, "harness_sha256": sq.harness_sha256(),
+            "stage_q_sha256": stage_q_sha256, "pins_sha256": pins_sha256,
             "hypotheses": {**h_q1(rows["q1-metal"], rows["q1-cuda"], base), **h_q2(rows["q2"], base)}}
 
 
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description="Stage Q hypotheses (040) from its formal sessions")
-    for part in sq.PARTS:
-        parser.add_argument(f"--{part}", dest=part, help=f"results/stage_q/<{part} session>")
-    parser.add_argument("--out", required=True, help="results/stage_q/<name>.json")
-    args = vars(parser.parse_args(argv))
-    out = Path(args.pop("out")).resolve()
-    paths = {part: Path(v) for part, v in args.items() if v}
+    parser.add_argument("--out", required=True, help="results/stage_q/<name>.json (a new file)")
+    parser.add_argument("--superseded", action="append", default=[], help="<session id>=docs/decisions/<log>.md")
+    args = parser.parse_args(argv)
+    out = Path(args.out).resolve()
     cfg_raw, pins_raw = sq.CONFIG.read_bytes(), (sq.ROOT / "configs" / "pins.toml").read_bytes()
     try:
-        if out.parent != sq.ROOT.joinpath(*sq.RESULTS).resolve() or out.suffix != ".json":
-            raise AnalysisError(f"--out {out} is not a .json file directly under results/stage_q/")
-        if not paths:
-            raise AnalysisError("give at least one formal session (--q1-metal, --q1-cuda, --q2)")
-        result = analyze_sessions(paths, cfg=tomllib.loads(cfg_raw.decode()),
+        if out.parent != sq.ROOT.joinpath(*sq.RESULTS).resolve() or out.suffix != ".json" or out.exists():
+            raise AnalysisError(f"--out {out} is not a new .json file directly under results/stage_q/")
+        result = analyze_sessions(cfg=tomllib.loads(cfg_raw.decode()),
                                   stage_q_sha256=hashlib.sha256(cfg_raw).hexdigest(),
                                   pins_sha256=hashlib.sha256(pins_raw).hexdigest(),
-                                  pins=tomllib.loads(pins_raw.decode()))
+                                  pins=tomllib.loads(pins_raw.decode()),
+                                  superseded=dict(x.split("=", 1) for x in args.superseded))
     except AnalysisError as exc:
         print(f"stage_q_analysis: {exc}", file=sys.stderr)
         return 2

@@ -44,7 +44,8 @@
   - [x] Q3 harness（`quality/stage_q3.py`、`configs/stage_q3.toml`，獨立的凍結）。
   - [x] 審查（5 個審查者、每項由兩個 agent 嘗試反駁；33 項確認）全部處理（`0ec7b92`、`fd832e4`），見 040 的審查表。
         包括：q1-metal 原本因 70W／140W 兩條規則同時套用而永遠無法執行；Phase 1 的 20-chunk pilot 已揭露（界線與預測不改）。
-  - [ ] pilot：q1-cuda、q2（RTX，Stage D 的 mini 之後）；q1-metal（Mac，**blocked**：Mac heavy lock 由 incident-investigator 持有，不搶占）。
+  - [x] 修正後的覆核：Q1 / Q2 確認 5 項、Q3 確認 3 項（共 4 項 must-fix），全部處理（040「修正後的覆核」）：stub 與嘗試次數、分析自己找 session、`--superseded` 機制、精確的端點、pilot 記錄 base 大小、Q3 去掉結尾換行與 V1 的平手規則。
+  - [ ] pilot：q1-cuda、q2（RTX，**等 GPU 空閒**）；q1-metal（Mac；plan 已可建立，lock 釋放時在 `tools/with-mac-lock` 下執行；2026-10-23 08:0x 曾因 incident-investigator 重新取得 lock 而放棄）。
   - [ ] Q3：需要下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**等使用者同意**；
         之後在 WSL 產生 chunk 檔並 pin sha256 → pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性）→ 凍結。
   - 觀察：Mac 的 140W adapter 目前只協商到 94 W（20 V × 4.69 A；名稱檢查會通過）。可能是線材或連接埠的限制，重負載時電池可能下降（016 的充電閘門會處理）。

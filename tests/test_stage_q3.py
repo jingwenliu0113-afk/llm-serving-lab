@@ -73,8 +73,11 @@ def test_prompt_logprobs_give_the_actual_token_and_the_top_one():
 
     objs = [None] + [{7: Lp(-2.0, 1)} for _ in range(511)]
     assert q3.scored(ids, objs)["logprobs"][0] == -2.0
-    tied = [None] + [{7: Lp(-0.69, 1), 3: Lp(-0.69, 1)} for _ in range(511)]
-    assert q3.scored(ids, tied)["top1"] == [3] * 255                    # tied rank 1: the smallest id
+    tied = [None] + [{7: Lp(-0.69, 2), 3: Lp(-0.69, 1)} for _ in range(511)]   # vLLM V1: the actual token ranks 2
+    assert q3.scored(ids, tied)["top1"] == [3] * 255                    # tied top logprob: the smallest id
+    tied = [None] + [{7: Lp(-0.69, 2), 9: Lp(-0.69, 1)} for _ in range(511)]
+    assert q3.scored(ids, tied)["top1"] == [7] * 255                    # whichever id torch.topk returned
+    assert q3.scored(ids, [None] + [{7: Lp(-0.5, 1)} for _ in range(511)])["top1"] == [7] * 255
     with pytest.raises(q3.StageQ3Error, match="position 257"):
         q3.scored(ids, [None] + [{"8": {"logprob": -1.0, "rank": 1}} for _ in range(511)])
 
@@ -376,14 +379,40 @@ def test_an_oom_leaves_h_q3_nt(tmp_path):
     assert analyze_session(root, cfg, out)["H-Q3"]["verdict"] == "NT"
 
 
-def test_only_the_first_formal_q3_session_is_analyzed(tmp_path):
+def test_only_the_first_valid_formal_q3_session_after_one_void_attempt_is_analyzed(tmp_path):
     root, cfg, out = formal_session(tmp_path)
     later = root / "results" / "stage_q" / "formal-q3-b"
     shutil.copytree(out, later)
     meta = json.loads((later / "session.json").read_text())
     (later / "session.json").write_text(json.dumps({**meta, "started_at": "9999"}))
-    with pytest.raises(q3.StageQ3Error, match="earlier formal q3 sessions"):
+    with pytest.raises(q3.StageQ3Error, match="earlier formal q3 attempts"):
         analyze_session(root, cfg, later)
+    (out / "session.json").write_text(json.dumps({**json.loads((out / "session.json").read_text()), "env_valid": False}))
+    assert analyze_session(root, cfg, later, n_boot=50)["session"] == "formal-q3-b"     # after one void attempt
+    log = root / "docs" / "decisions" / "999-q3.md"
+    log.parent.mkdir(parents=True)
+    log.write_text("formal-q3 is superseded by formal-q3-b.\n")
+    (out / "session.json").write_text(json.dumps({**json.loads((out / "session.json").read_text()), "env_valid": True}))
+    a = analyze_session(root, cfg, later, n_boot=50, superseded={"formal-q3": "docs/decisions/999-q3.md"},
+                        tracked=lambda p: True)
+    assert a["session"] == "formal-q3-b"
+
+
+def test_a_formal_q3_run_counts_its_attempts(tmp_path):
+    root, cfg = with_pilot(tmp_path)
+    plan = q3.build_plan(PINS, cfg, mode="formal", stage_q3_sha256="q" * 64, pins_sha256=PINS_SHA, root=root)
+    run(root, plan, "a", expected_plan=plan, run_proc=fake_score({"score-w4a16": -2.01, "score-bf16": -2.0}))
+    assert json.loads((root / "results" / "stage_q" / "a" / "session.json").read_text())["status"] == "finished"
+    with pytest.raises(q3.StageQ3Error, match="already has formal attempts"):
+        run(root, plan, "b", expected_plan=plan, run_proc=fake_score({"score-w4a16": -2.01, "score-bf16": -2.0}))
+    with pytest.raises(q3.StageQ3Error, match="results/stage_q/<session id>"):
+        run(root, plan, "x", out_dir=root / "results" / "stage_q" / "n" / "x", expected_plan=plan)
+
+
+def test_the_test_set_is_encoded_without_its_last_newline():
+    seen = []
+    assert q3.encode_text(b"a b \n \n", lambda t: seen.append(t) or [1, 2]) == [1, 2] and seen == ["a b \n "]
+    assert q3.encode_text(b"abc", lambda t: seen.append(t) or [3]) == [3] and seen[-1] == "abc"
 
 
 def test_the_analysis_refuses_what_040_does_not_allow(tmp_path):

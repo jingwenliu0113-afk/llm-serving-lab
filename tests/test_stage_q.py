@@ -171,9 +171,13 @@ def test_a_formal_metal_run_starts_with_the_140w_adapter_and_refuses_the_70w(fro
     root = tmp_path / "repo"
     s = run(root, plan, "f1", expected_plan=plan, pins=PINS, hash_file=pinned_hash, run_proc=fake_llama(n=200))
     assert s["env_valid"] is True and s["inputs_verified"] is True and s["host"]["system"] == "Darwin"
+    assert s["status"] == "finished"
+    root = tmp_path / "repo2"
     with pytest.raises(sq.StageQError, match="037 §4 requires"):
         run(root, plan, "f2", expected_plan=plan, pins=PINS, hash_file=pinned_hash,
             capture=env(adapter="70W USB-C Power Adapter"))
+    refused = json.loads((root / "results" / "stage_q" / "f2" / "session.json").read_text())
+    assert refused["status"] == "refused" and sq.formal_attempts(root, "q1-metal") == []
 
 
 def test_a_formal_run_needs_build_plans_plan_and_the_pinned_inputs(frozen_root, tmp_path):
@@ -297,3 +301,87 @@ def test_the_freeze_needs_a_passed_pilot_of_each_part_from_this_harness(frozen_r
     (d / "session.json").write_text(json.dumps({**session, "plan_sha256": "0" * 64}))
     (d / "plan.json").write_text(json.dumps(plan))
     assert any("plan_sha256" in p for p in sq.freeze_evidence_problems(FROZEN, root, PINS))
+
+
+# ---------------------------------------------------------------- attempts (040 補記 14)
+
+def drifting_powermode():
+    calls = iter(range(10 ** 6))
+
+    def capture(llama_bin, out_path, gpu_lock_held):
+        rec = env()(llama_bin, out_path, gpu_lock_held)
+        if next(calls) > 2:
+            rec["power"]["powermode"] = 0
+        return rec
+    return capture
+
+
+def test_one_valid_formal_session_or_one_void_attempt_and_its_rerun(frozen_root, tmp_path):
+    plan = formal("q1-metal", frozen_root)
+    kw = dict(expected_plan=plan, pins=PINS, hash_file=pinned_hash, run_proc=fake_llama(n=200))
+    root = tmp_path / "valid"
+    run(root, plan, "a", **kw)
+    with pytest.raises(sq.StageQError, match="already has formal attempts"):
+        run(root, plan, "b", **kw)
+    root = tmp_path / "void"
+    assert run(root, plan, "a", capture=drifting_powermode(), **kw)["env_valid"] is False
+    assert run(root, plan, "b", **kw)["env_valid"] is True
+    with pytest.raises(sq.StageQError, match="already has formal attempts"):
+        run(root, plan, "c", **kw)
+    root = tmp_path / "interrupted"
+    calls = iter(range(10 ** 6))
+
+    def dies(argv, out, err, timeout):
+        if next(calls) == 3:
+            raise KeyboardInterrupt
+        return fake_llama(n=200)(argv, out, err, timeout)
+
+    with pytest.raises(KeyboardInterrupt):
+        run(root, plan, "a", **{**kw, "run_proc": dies})
+    assert [(a["id"], a["status"], a["valid"]) for a in sq.formal_attempts(root, "q1-metal")] == [("a", "running", False)]
+    run(root, plan, "b", **kw)
+    with pytest.raises(sq.StageQError, match="already has formal attempts"):
+        run(root, plan, "c", **kw)
+
+
+def test_a_superseded_attempt_needs_a_committed_decision_log_naming_both_sessions(frozen_root, tmp_path):
+    plan = formal("q1-metal", frozen_root)
+    kw = dict(expected_plan=plan, pins=PINS, hash_file=pinned_hash, run_proc=fake_llama(n=200))
+    root = tmp_path / "repo"
+    run(root, plan, "old", **kw)
+    log = root / "docs" / "decisions" / "999-supersede.md"
+    log.parent.mkdir(parents=True)
+    log.write_text("old is superseded by new because ...\n")
+    sup = {"old": "docs/decisions/999-supersede.md"}
+    with pytest.raises(sq.StageQError, match="not committed"):
+        run(root, plan, "new", superseded=sup, tracked=lambda p: False, **kw)
+    with pytest.raises(sq.StageQError, match="does not name both"):
+        run(root, plan, "other", superseded=sup, tracked=lambda p: True, **kw)
+    with pytest.raises(sq.StageQError, match="not a decision log"):
+        run(root, plan, "new", superseded={"old": "README.md"}, tracked=lambda p: True, **kw)
+    s = run(root, plan, "new", superseded=sup, tracked=lambda p: True, **kw)
+    assert s["status"] == "finished" and s["superseded"] == sup
+
+
+def test_sessions_are_never_nested_and_plans_never_written_into_results(tmp_path):
+    plan = sq.build_plan(PINS, part="q1-cuda", mode="pilot")
+    with pytest.raises(sq.StageQError, match="results/stage_q/<session id>"):
+        run(tmp_path, plan, "s", out_dir=tmp_path / "results" / "stage_q" / "a" / "s")
+    out = ROOT / "results" / "stage_q" / "plan-test-should-not-exist.json"
+    assert sq.main(["plan", "--part", "q2", "--mode", "pilot", "--out", str(out)]) == 2 and not out.exists()
+    (tmp_path / "results" / "stage_q" / "saved").mkdir(parents=True)
+    (tmp_path / "results" / "stage_q" / "saved" / "plan.json").write_text(json.dumps({**plan, "mode": "formal"}))
+    assert sq.formal_attempts(tmp_path, "q1-cuda") == []                            # a saved plan ran nothing
+
+
+def test_the_pilot_records_each_kld_base_size(tmp_path):
+    plan = sq.build_plan(PINS, part="q1-cuda", mode="pilot")
+    base = tmp_path / "d" / "kld" / "s"
+    base.mkdir(parents=True)
+    for size in ("4B", "9B"):
+        (base / f"stage-q-{size}.kld").write_bytes(b"x" * 1234)
+    run(tmp_path, plan, "s", delete_file=lambda path: None)
+    rows = {json.loads(x)["job_id"]: json.loads(x)
+            for x in (tmp_path / "results" / "stage_q" / "s" / "rows.jsonl").read_text().splitlines()}
+    assert rows["kld_base-4B"]["base_bytes"] == 1234 and rows["kld_base-4B"]["need_gib"] > 0
+    assert rows["delete_kld-9B"]["base_bytes"] == 1234 and rows["delete_kld-9B"]["deleted"] is True

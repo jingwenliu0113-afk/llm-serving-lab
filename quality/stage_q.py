@@ -13,7 +13,12 @@ Parts (each its own session):
 - q2 (wsl2-cuda, GPU lock): per context (2048, 8192) and size, a full-test KLD base -> self-KLD -> three quants ->
   delete, with -c set to the context (the rest of 005's flags unchanged).
 Formal plans need pins freeze.nvidia (as run_quality) and, from the freeze on, configs/stage_q.toml's freeze; a pilot
-runs PILOT_CHUNKS per job and records markers, time and disk.
+runs PILOT_CHUNKS per job and records markers, time and disk (each KLD base's bytes).
+Attempts (040 補記 14): a session directory is exactly results/stage_q/<id>; a session.json stub (status running) is
+written before the first job and replaced atomically, so an interrupted session is still an attempt; a run refused
+before its first job is status refused and is not one. A formal run refuses when its part already has a valid formal
+session (finished, env valid) or two attempts, except attempts superseded by a git-tracked decision log under
+docs/decisions/ that names both session ids (--superseded <id>=<log>).
 
 Usage:
     python quality/stage_q.py plan --part q1-metal --mode formal --out plan.json
@@ -29,6 +34,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import time
 import tomllib
@@ -279,11 +285,60 @@ def mac_problems(rec: dict) -> list:
 
 
 def output_problems(out_dir, *, repo_root=ROOT) -> list:
-    root = Path(repo_root).resolve().joinpath(*RESULTS)
-    out = Path(out_dir).resolve()
-    if out == root or root not in out.parents:
-        return [f"{out_dir} is not a session directory under results/stage_q/ (040)"]
+    """A session directory is exactly results/stage_q/<id> (no nesting: every attempt is visible)."""
+    if Path(out_dir).resolve().parent != Path(repo_root).resolve().joinpath(*RESULTS):
+        return [f"{out_dir} is not results/stage_q/<session id> (040)"]
     return []
+
+
+def _read_json(path: Path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def formal_attempts(root, part: str) -> list:
+    """Every formal attempt of `part` under results/stage_q, oldest first (040 補記 14): a directory whose session.json
+    (final or the running stub) or, when that is unreadable, plan.json is a formal one of the part; a plan saved alone
+    and runs refused before their first job are left out. valid = finished and env valid; an unreadable session.json
+    is a void attempt, oldest (fail closed)."""
+    base = Path(root).joinpath(*RESULTS)
+    out = []
+    for d in sorted({f.parent for name in ("session.json", "plan.json") for f in base.rglob(name)} - {base}):
+        s = _read_json(d / "session.json")
+        if not isinstance(s, dict) and not any(x.name != "plan.json" for x in d.iterdir()):
+            continue
+        head = s if isinstance(s, dict) else _read_json(d / "plan.json")
+        if not isinstance(head, dict) or (head.get("stage"), head.get("mode"), head.get("part")) != \
+                (STAGE, "formal", part):
+            continue
+        s = s if isinstance(s, dict) else {}
+        if s.get("status") == "refused":
+            continue
+        out.append({"dir": d, "id": d.name, "started_at": s.get("started_at") or "", "status": s.get("status"),
+                    "valid": s.get("status") == "finished" and s.get("env_valid") is True})
+    return sorted(out, key=lambda a: (a["started_at"], str(a["dir"])))
+
+
+def git_tracked(path) -> bool:  # pragma: no cover - git
+    return subprocess.run(["git", "-C", str(ROOT), "ls-files", "--error-unmatch", str(path)],
+                          capture_output=True).returncode == 0
+
+
+def superseded_problems(superseded: dict, new_id: str, *, root=ROOT, tracked: Callable = git_tracked) -> list:
+    """040 補記 14's exception: each superseded session id names a git-tracked decision log under docs/decisions/ whose
+    text names both that id and new_id (the decision lives outside every hashed file)."""
+    problems = []
+    for sid, log in sorted((superseded or {}).items()):
+        path = (Path(root) / log).resolve()
+        if Path(root).resolve().joinpath("docs", "decisions") not in path.parents or not path.is_file():
+            problems.append(f"--superseded {sid}: {log} is not a decision log under docs/decisions/")
+        elif not tracked(path):
+            problems.append(f"--superseded {sid}: {log} is not committed (git ls-files)")
+        elif sid not in (text := path.read_text()) or new_id not in text:
+            problems.append(f"--superseded {sid}: {log} does not name both {sid} and {new_id}")
+    return problems
 
 
 def default_gpu_lock_check() -> bool:  # pragma: no cover - /proc (WSL)
@@ -360,7 +415,8 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
                 read_power: Callable = read_mac_power, sleep: Callable = time.sleep, timeout_s: float = 6 * 3600,
                 now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(), repo_root=ROOT,
                 expected_plan: dict | None = None, pins: dict | None = None, lock_check: Callable | None = None,
-                hash_file: Callable = file_sha256) -> dict:
+                hash_file: Callable = file_sha256, size_of: Callable = os.path.getsize,
+                superseded: dict | None = None, tracked: Callable = git_tracked) -> dict:
     """One Stage Q session: run_quality's loop with 040's platform rules (q1-metal on the Mac under the Mac lock with
     the 140W adapter and one powermode; the CUDA parts under the GPU lock, both verified, not trusted). A formal plan
     must equal build_plan's (expected_plan) and its inputs pins' bytes."""
@@ -386,8 +442,33 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
     out = Path(out_dir)
     if out.exists():
         raise StageQError(f"{out} exists; sessions are never resumed or overwritten")
+    if formal:
+        bad = superseded_problems(superseded or {}, session_id, root=repo_root, tracked=tracked)
+        prior = [a for a in formal_attempts(repo_root, part) if a["id"] not in (superseded or {})]
+        if len(prior) >= 2 or any(a["valid"] for a in prior):
+            bad.append(f"{part} already has formal attempts {[a['id'] for a in prior]}: one valid session, or one "
+                       "void attempt and its rerun, at most (040 補記 14; --superseded needs a decision log)")
+        if bad:
+            raise StageQError("; ".join(bad))
     for sub in ("raw", "env"):
         (out / sub).mkdir(parents=True)
+    session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "stage": STAGE, "part": part,
+               "mode": plan["mode"], "platform": platform, "status": "running", "plan_sha256": sha256_json(plan),
+               "pins_sha256": plan.get("pins_sha256"), "mac_lock_held": mac_lock_held, "gpu_lock_held": gpu_lock_held,
+               "harness_sha256": harness_sha256(), "inputs_verified": formal, "superseded": dict(superseded or {}),
+               "started_at": now()}
+
+    def write_session():                                    # atomic: a torn write never hides the attempt
+        tmp = out / "session.json.tmp"
+        tmp.write_text(json.dumps(session, indent=1) + "\n")
+        os.replace(tmp, out / "session.json")
+
+    def refuse(why: str):
+        session.update(status="refused", refused=why)
+        write_session()
+        raise StageQError(why)
+
+    write_session()                                         # the stub: an interrupted session is still an attempt
     (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
     bin_dir, models_dir, data_dir = str(bin_dir), str(models_dir), str(data_dir)
     exe = f"{bin_dir}/llama-perplexity"
@@ -395,19 +476,15 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
     lc = (pre.get("runtime") or {}).get("llama_cpp") or {}
     want = plan["expect_build"]
     if lc.get("build_number") != want["build_number"] or lc.get("commit") != want["build_commit"]:
-        raise StageQError(f"llama.cpp build mismatch: {lc} vs {want}")
+        refuse(f"llama.cpp build mismatch: {lc} vs {want}")
     if formal:
         bad = platform_problems(pre, platform) + provenance_problems(pre, pre) + host_problems(host_of(pre), platform)
         if not bad:
             bad = input_problems(plan, pins, data_dir=data_dir, models_dir=models_dir, hash_file=hash_file)
         if bad:
-            raise StageQError("formal Stage Q run refused before it starts: " + "; ".join(bad))
+            refuse("formal Stage Q run refused before it starts: " + "; ".join(bad))
     powermode = ((pre.get("power") or {}).get("powermode")) if mac else None
-    session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "stage": STAGE, "part": part,
-               "mode": plan["mode"], "platform": platform, "plan_sha256": sha256_json(plan),
-               "pins_sha256": plan.get("pins_sha256"), "mac_lock_held": mac_lock_held, "gpu_lock_held": gpu_lock_held,
-               "powermode": powermode, "harness_sha256": harness_sha256(), "host": host_of(pre),
-               "inputs_verified": formal, "started_at": now()}
+    session.update(powermode=powermode, host=host_of(pre))
     rows, by_id, skipped, env_flags, charge_pauses = [], {}, set(), [], []
     resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace(  # noqa: E731
         "{data}", data_dir).replace("{session}", session_id)
@@ -420,10 +497,12 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
                 path = resolve(job["path"])
                 all_ok = all(by_id.get(a, {}).get("outcome") == "ok" for a in job["after"])
                 deleted = False
-                if all_ok and os.path.exists(path):
+                base_bytes = size_of(path) if os.path.exists(path) else None
+                if all_ok and base_bytes is not None:
                     delete_file(path)
                     deleted = True
                 row = {**base, "outcome": "ok" if all_ok else "error", "deleted": deleted, "path": path,
+                       "base_bytes": base_bytes,
                        "reason": None if all_ok else "KLD runs not all ok; KLD file kept for diagnosis"}
             elif kind in ("kld_base", "kld_self", "kld") and group in skipped:
                 row = {**base, "outcome": "skipped", "reason": "disk guard failed for this group's KLD file"}
@@ -461,6 +540,10 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
                 res = qp.classify(kind, code, (out / rel["stdout"]).read_text(errors="replace"),
                                   (out / rel["stderr"]).read_text(errors="replace"), job["expect"])
                 row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, **res, "disk_guard": guard, **rel}
+                if kind == "kld_base":                      # 040 補記 5: the pilot confirms the disk use
+                    kld_file = argv[argv.index("--kl-divergence-base") + 1]
+                    row.update(base_bytes=size_of(kld_file) if os.path.exists(kld_file) else None,
+                               need_gib=job["need_gib"])
             rows.append(row)
             by_id[jid] = row
             fh.write(json.dumps(row) + "\n")
@@ -468,10 +551,10 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
     outcomes = {"ok": 0, "oom": 0, "error": 0, "skipped": 0}
     for r in rows:
         outcomes[r["outcome"]] += 1
-    session.update({"finished_at": now(), "outcomes": outcomes, "env_flags": env_flags, "env_valid": not env_flags,
-                    "charge_pauses": charge_pauses})
+    session.update({"status": "finished", "finished_at": now(), "outcomes": outcomes, "env_flags": env_flags,
+                    "env_valid": not env_flags, "charge_pauses": charge_pauses})
     write_raw_manifest(out)
-    (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
+    write_session()
     return session
 
 
@@ -486,6 +569,7 @@ def main(argv: list | None = None) -> int:
     for a in ("--plan", "--bin", "--models", "--data", "--out"):
         p_run.add_argument(a, required=True)
     p_run.add_argument("--gpu-lock-held", action="store_true")
+    p_run.add_argument("--superseded", action="append", default=[], help="<session id>=docs/decisions/<log>.md")
     args = parser.parse_args(argv)
     raw, cfg_raw = (ROOT / "configs" / "pins.toml").read_bytes(), CONFIG.read_bytes()
     pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(cfg_raw.decode())
@@ -496,7 +580,10 @@ def main(argv: list | None = None) -> int:
 
     try:
         if args.cmd == "plan":
-            Path(args.out).write_text(json.dumps(plan_for(args.part, args.mode), indent=1) + "\n")
+            out = Path(args.out).resolve()
+            if ROOT.joinpath(*RESULTS).resolve() in (out, *out.parents):
+                raise StageQError("write plans outside results/stage_q (a session directory is the runner's)")
+            out.write_text(json.dumps(plan_for(args.part, args.mode), indent=1) + "\n")
             return 0
         plan = json.loads(Path(args.plan).read_text())
         expected = plan_for(plan["part"], "formal") if plan.get("mode") == "formal" else None
@@ -505,7 +592,8 @@ def main(argv: list | None = None) -> int:
                               capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"),
                               session_id=Path(args.out).name,
                               mac_lock_held=os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1",
-                              gpu_lock_held=args.gpu_lock_held, expected_plan=expected, pins=pins)
+                              gpu_lock_held=args.gpu_lock_held, expected_plan=expected, pins=pins,
+                              superseded=dict(x.split("=", 1) for x in args.superseded))
     except StageQError as exc:
         print(f"stage_q: {exc}", file=sys.stderr)
         return 2

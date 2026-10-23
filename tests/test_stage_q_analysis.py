@@ -105,8 +105,8 @@ def formal_session(root, part, rows, plan_over=None, session_over=None, sid=None
     d.mkdir(parents=True)
     plan = {**sq.build_plan(PINS, part=part, mode="formal", pins_sha256=PINS_SHA, cfg=tq.FROZEN,
                             stage_q_sha256=CFG_SHA, root=root), **(plan_over or {})}
-    session = {"stage": "Q", "part": part, "mode": "formal", "platform": sq.PARTS[part], "env_valid": True,
-               "plan_sha256": sha256_json(plan), "harness_sha256": sq.harness_sha256(),
+    session = {"stage": "Q", "part": part, "mode": "formal", "platform": sq.PARTS[part], "status": "finished",
+               "env_valid": True, "plan_sha256": sha256_json(plan), "harness_sha256": sq.harness_sha256(),
                "host": HOSTS[sq.PARTS[part]], "inputs_verified": True, "started_at": started, **(session_over or {})}
     (d / "plan.json").write_text(json.dumps(plan))
     (d / "session.json").write_text(json.dumps(session))
@@ -114,41 +114,46 @@ def formal_session(root, part, rows, plan_over=None, session_over=None, sid=None
     return d
 
 
+Q2_ROWS = [kld_row(s, q, v * 1.4, ctx=c) for c in (2048, 8192) for (s, q), v in BASE_KLD.items()]
+
+
 def sessions(root):
     cuda = [kld_row(s, q, v, ctx=512) for (s, q), v in BASE_KLD.items()]
-    q2 = [kld_row(s, q, v * 1.4, ctx=c) for c in (2048, 8192) for (s, q), v in BASE_KLD.items()]
     return {"q1-metal": formal_session(root, "q1-metal", metal()), "q1-cuda": formal_session(root, "q1-cuda", cuda),
-            "q2": formal_session(root, "q2", q2)}
+            "q2": formal_session(root, "q2", Q2_ROWS)}
 
 
-def analyze(root, cfg, paths, **kw):
-    return qa2.analyze_sessions(paths, cfg=cfg, stage_q_sha256=CFG_SHA, pins_sha256=PINS_SHA, pins=PINS, root=root,
-                                **kw)
+def analyze(root, cfg, **kw):
+    return qa2.analyze_sessions(cfg=cfg, stage_q_sha256=CFG_SHA, pins_sha256=PINS_SHA, pins=PINS, root=root, **kw)
+
+
+def verdicts(out):
+    return {k: h["verdict"] for k, h in out["hypotheses"].items()}
 
 
 def test_the_formal_sessions_give_every_hypothesis(tmp_path, pilot_root):
     root, cfg = frozen(tmp_path, pilot_root)
-    out = analyze(root, cfg, sessions(root))
-    assert {k: v["verdict"] for k, v in out["hypotheses"].items()} == {
-        "H-Q1a": "supported", "H-Q1b": "supported", "H-Q1c": "supported", "H-Q2a": "supported", "H-Q2b": "supported"}
+    sessions(root)
+    out = analyze(root, cfg)
+    assert verdicts(out) == {"H-Q1a": "supported", "H-Q1b": "supported", "H-Q1c": "supported",
+                             "H-Q2a": "supported", "H-Q2b": "supported"}
     assert out["sessions"]["q2"] == "formal-q2" and out["phase1_session"] == "formal-20261010-quality"
+    assert out["parts"]["q2"]["status"] == "analyzed" and out["parts"]["q2"]["void_before"] == []
     assert out["harness_sha256"] == sq.harness_sha256() and out["stage_q_sha256"] == CFG_SHA
 
 
-def test_a_part_not_yet_run_leaves_its_hypotheses_nt(tmp_path, pilot_root):
+def test_a_part_not_yet_run_leaves_its_hypotheses_nt_and_no_run_part_can_be_left_out(tmp_path, pilot_root):
     root, cfg = frozen(tmp_path, pilot_root)
-    paths = sessions(root)
-    out = analyze(root, cfg, {"q2": paths["q2"]})
-    v = {k: h["verdict"] for k, h in out["hypotheses"].items()}
-    assert v == {"H-Q1a": "NT", "H-Q1b": "NT", "H-Q1c": "NT", "H-Q2a": "supported", "H-Q2b": "supported"}
-    assert out["sessions"]["q1-metal"] is None
-    v = {k: h["verdict"] for k, h in analyze(root, cfg, {"q1-metal": paths["q1-metal"]})["hypotheses"].items()}
+    formal_session(root, "q2", Q2_ROWS)
+    out = analyze(root, cfg)
+    assert verdicts(out) == {"H-Q1a": "NT", "H-Q1b": "NT", "H-Q1c": "NT", "H-Q2a": "supported", "H-Q2b": "supported"}
+    assert out["sessions"]["q1-metal"] is None and out["parts"]["q1-metal"]["status"] == "not run"
+    formal_session(root, "q1-metal", metal())                                       # found without being named
+    v = verdicts(analyze(root, cfg))
     assert (v["H-Q1a"], v["H-Q1b"], v["H-Q1c"]) == ("supported", "NT", "supported")      # Q1c reads Phase 1
 
 
 @pytest.mark.parametrize("plan_over, session_over, why", [
-    ({}, {"mode": "pilot"}, "not formal"),
-    ({}, {"env_valid": False}, "env-invalid"),
     ({"part": "q1-cuda"}, {}, "part"),
     ({}, {"harness_sha256": "0" * 64}, "another harness"),
     ({"harness_sha256": "0" * 64}, {}, "another harness"),
@@ -161,32 +166,56 @@ def test_a_part_not_yet_run_leaves_its_hypotheses_nt(tmp_path, pilot_root):
 ])
 def test_a_session_that_is_not_a_frozen_formal_one_is_refused(tmp_path, pilot_root, plan_over, session_over, why):
     root, cfg = frozen(tmp_path, pilot_root)
-    d = formal_session(root, "q2", [], plan_over, session_over)
+    formal_session(root, "q2", [], plan_over, session_over)
     with pytest.raises(qa2.AnalysisError, match=why):
-        analyze(root, cfg, {"q2": d})
+        analyze(root, cfg)
 
 
-def test_only_the_first_formal_session_of_a_part_is_analyzed(tmp_path, pilot_root):
+def test_the_first_valid_formal_session_after_at_most_one_void_attempt_is_analyzed(tmp_path, pilot_root):
     root, cfg = frozen(tmp_path, pilot_root)
-    rows = [kld_row(s, q, v * 1.4, ctx=c) for c in (2048, 8192) for (s, q), v in BASE_KLD.items()]
-    first = formal_session(root, "q2", rows, sid="formal-q2-a", started="2026-10-24T00:00:00")
-    second = formal_session(root, "q2", rows, sid="formal-q2-b", started="2026-10-25T00:00:00")
-    assert analyze(root, cfg, {"q2": first})["sessions"]["q2"] == "formal-q2-a"
-    with pytest.raises(qa2.AnalysisError, match="earlier formal q2 sessions"):
-        analyze(root, cfg, {"q2": second})
+    formal_session(root, "q2", Q2_ROWS, sid="formal-q2-a", started="2026-10-24T00:00:00")
+    formal_session(root, "q2", Q2_ROWS, sid="formal-q2-b", started="2026-10-25T00:00:00")
+    assert analyze(root, cfg)["sessions"]["q2"] == "formal-q2-a"                    # a later one is never chosen
+    root, cfg = frozen(tmp_path / "void", pilot_root)
+    formal_session(root, "q2", [], session_over={"env_valid": False}, sid="v1", started="2026-10-24T00:00:00")
+    out = analyze(root, cfg)
+    assert out["sessions"]["q2"] is None and verdicts(out)["H-Q2a"] == "NT"
+    assert out["parts"]["q2"]["status"].startswith("no valid") and out["parts"]["q2"]["attempts"] == ["v1"]
+    formal_session(root, "q2", Q2_ROWS, sid="v2", started="2026-10-25T00:00:00")
+    out = analyze(root, cfg)
+    assert out["sessions"]["q2"] == "v2" and out["parts"]["q2"]["void_before"] == ["v1"]
+    (root / "results" / "stage_q" / "v2").rename(root / "results" / "stage_q" / "v3")
+    formal_session(root, "q2", [], session_over={"status": "running"}, sid="v2", started="2026-10-24T12:00:00")
+    with pytest.raises(qa2.AnalysisError, match="040 allows one rerun"):            # two void attempts before it
+        analyze(root, cfg)
+    log = root / "docs" / "decisions" / "999-q2.md"
+    log.parent.mkdir(parents=True)
+    log.write_text("v2 (an interrupted run) is superseded; v3 is analyzed.\n")
+    out = analyze(root, cfg, superseded={"v2": "docs/decisions/999-q2.md"}, tracked=lambda p: True)
+    assert out["sessions"]["q2"] == "v3" and out["parts"]["q2"]["superseded"] == ["v2"]
+    log.write_text("v2 is superseded.\n")
+    with pytest.raises(qa2.AnalysisError, match="does not name both"):
+        analyze(root, cfg, superseded={"v2": "docs/decisions/999-q2.md"}, tracked=lambda p: True)
+
+
+def test_the_bounds_include_their_endpoints_exactly():
+    assert qa2.bounded({"x": qa2._ratio(0.0012, 0.0015)}, qa2.Q1B_BOUNDS)["verdict"] == "supported"   # 0.8
+    assert qa2.bounded({"x": qa2._ratio(0.995, 1.0)}, qa2.Q1C_BOUNDS)["verdict"] == "supported"
+    assert qa2.bounded({"x": qa2._ratio(0.0011, 0.0015)}, qa2.Q1B_BOUNDS)["verdict"] == "not supported"
+    assert qa2.bounded({"x": qa2._ratio(0.0012, 0.0015)}, qa2.Q1B_BOUNDS)["ratios"]["x"] == pytest.approx(0.8)
 
 
 def test_no_analysis_before_the_freeze_or_without_its_evidence(tmp_path, pilot_root):
     root, cfg = frozen(tmp_path, pilot_root)
-    paths = sessions(root)
+    sessions(root)
     with pytest.raises(qa2.AnalysisError, match="freeze.stage_q"):
-        analyze(root, {**cfg, "freeze": {**cfg["freeze"], "stage_q": False}}, paths)
+        analyze(root, {**cfg, "freeze": {**cfg["freeze"], "stage_q": False}})
     shutil.rmtree(root / "results" / "stage_q" / "pilot-q1c")
     with pytest.raises(qa2.AnalysisError, match="pilot_q1_cuda"):
-        analyze(root, cfg, paths)
+        analyze(root, cfg)
 
 
 def test_the_cli_refuses_the_unfrozen_repo_config(tmp_path, capsys):
-    assert qa2.main(["--q2", str(tmp_path / "x"), "--out", str(ROOT / "results" / "stage_q" / "analysis.json")]) == 2
+    assert qa2.main(["--out", str(ROOT / "results" / "stage_q" / "analysis.json")]) == 2
     assert "freeze.stage_q" in capsys.readouterr().err
     assert not (ROOT / "results" / "stage_q" / "analysis.json").exists()

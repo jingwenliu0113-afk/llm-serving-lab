@@ -250,18 +250,20 @@ def _field(entry, name):
 
 def scored(ids: list, prompt_logprobs: list) -> dict:
     """vLLM prompt logprobs (per position: {token id (int or str): Logprob or {"logprob", "rank"}}) -> the actual
-    token's logprob and the rank-1 id at every scored position (tied rank-1 ids: the smallest, for both checkpoints)."""
+    token's logprob and the top-1 id at every scored position: the smallest id among the returned entries with the
+    highest logprob (vLLM V1 ranks a tied actual token 2 and the topk entry 1, so the rule reads the values, for both
+    checkpoints; a tie between two other tokens is not visible with prompt_logprobs = 1)."""
     logprobs, top1 = [], []
     for p in scored_positions():
         d = prompt_logprobs[p] or {}
         entry = d.get(ids[p], d.get(str(ids[p])))
         if entry is None:
             raise StageQ3Error(f"position {p}: no logprob for the prompt token {ids[p]}")
-        best = [int(k) for k, v in d.items() if _field(v, "rank") == 1]
-        if not best:
+        if not any(_field(v, "rank") == 1 for v in d.values()):
             raise StageQ3Error(f"position {p}: no rank-1 token")
+        top = max(float(_field(v, "logprob")) for v in d.values())
         logprobs.append(float(_field(entry, "logprob")))
-        top1.append(min(best))
+        top1.append(min(int(k) for k, v in d.items() if float(_field(v, "logprob")) == top))
     return {"logprobs": logprobs, "top1": top1}
 
 
@@ -420,12 +422,68 @@ def default_checkpoint_problems(plan: dict, pins: dict) -> list:  # pragma: no c
     return shard_problems(snap, shards)
 
 
+def encode_text(raw: bytes, encode: Callable) -> list:
+    """The test set as llama-perplexity -f reads it (common/arg.cpp pops one trailing newline; 005's
+    tokenizer_crosscheck.perplexity_prompt), encoded."""
+    text = raw.decode()
+    return list(encode(text[:-1] if text.endswith("\n") else text))
+
+
 def output_dir_problems(out_dir, *, repo_root=ROOT) -> list:
-    root = Path(repo_root).resolve().joinpath(*RESULTS)
-    out = Path(out_dir).resolve()
-    if out == root or root not in out.parents:
-        return [f"{out_dir} is not a session directory under results/stage_q/ (040)"]
+    """A session directory is exactly results/stage_q/<id> (no nesting: every attempt is visible)."""
+    if Path(out_dir).resolve().parent != Path(repo_root).resolve().joinpath(*RESULTS):
+        return [f"{out_dir} is not results/stage_q/<session id> (040)"]
     return []
+
+
+def _read_json(path: Path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def formal_attempts(root) -> list:
+    """Every formal q3 attempt under results/stage_q, oldest first (040 補記 14): a directory whose session.json (final
+    or the running stub) or, when that is unreadable, plan.json is a formal q3 one; a plan saved alone and runs refused
+    before their first job are left out. valid = finished and env valid; an unreadable session.json is a void
+    attempt, oldest (fail closed)."""
+    base = Path(root).joinpath(*RESULTS)
+    out = []
+    for d in sorted({f.parent for name in ("session.json", "plan.json") for f in base.rglob(name)} - {base}):
+        s = _read_json(d / "session.json")
+        if not isinstance(s, dict) and not any(x.name != "plan.json" for x in d.iterdir()):
+            continue
+        head = s if isinstance(s, dict) else _read_json(d / "plan.json")
+        if not isinstance(head, dict) or (head.get("stage"), head.get("mode"), head.get("part")) != \
+                (STAGE, "formal", PART):
+            continue
+        s = s if isinstance(s, dict) else {}
+        if s.get("status") == "refused":
+            continue
+        out.append({"dir": d, "id": d.name, "started_at": s.get("started_at") or "", "status": s.get("status"),
+                    "valid": s.get("status") == "finished" and s.get("env_valid") is True})
+    return sorted(out, key=lambda a: (a["started_at"], str(a["dir"])))
+
+
+def git_tracked(path) -> bool:  # pragma: no cover - git
+    return subprocess.run(["git", "-C", str(ROOT), "ls-files", "--error-unmatch", str(path)],
+                          capture_output=True).returncode == 0
+
+
+def superseded_problems(superseded: dict, new_id: str, *, root=ROOT, tracked: Callable = git_tracked) -> list:
+    """040 補記 14's exception: each superseded session id names a git-tracked decision log under docs/decisions/ whose
+    text names both that id and new_id (the decision lives outside every hashed file)."""
+    problems = []
+    for sid, log in sorted((superseded or {}).items()):
+        path = (Path(root) / log).resolve()
+        if Path(root).resolve().joinpath("docs", "decisions") not in path.parents or not path.is_file():
+            problems.append(f"--superseded {sid}: {log} is not a decision log under docs/decisions/")
+        elif not tracked(path):
+            problems.append(f"--superseded {sid}: {log} is not committed (git ls-files)")
+        elif sid not in (text := path.read_text()) or new_id not in text:
+            problems.append(f"--superseded {sid}: {log} does not name both {sid} and {new_id}")
+    return problems
 
 
 def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: str, gpu_lock_held: bool,
@@ -433,7 +491,8 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
            vllm_python: str = ".venv/bin/python", timeout_s: float = 4 * 3600,
            now: Callable = lambda: dt.datetime.now(dt.timezone.utc).isoformat(), expected_plan: dict | None = None,
            lock_check: Callable | None = None, base_env: dict | None = None, toolchain_check: Callable | None = None,
-           checkpoint_problems: Callable | None = None) -> dict:
+           checkpoint_problems: Callable | None = None, superseded: dict | None = None,
+           tracked: Callable = git_tracked) -> dict:
     """One Q3 session: both score jobs in order under the GPU lock. A formal plan must equal build_plan's
     (expected_plan); a formal session also needs the pinned vLLM, a clean env and the pinned BF16 shards."""
     if (plan.get("stage"), plan.get("part"), plan.get("platform")) != (STAGE, PART, PLATFORM):
@@ -453,6 +512,14 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
     out = Path(out_dir)
     if out.exists():
         raise StageQ3Error(f"{out} exists; sessions are never resumed or overwritten")
+    if formal:
+        bad = superseded_problems(superseded or {}, session_id, root=repo_root, tracked=tracked)
+        prior = [a for a in formal_attempts(repo_root) if a["id"] not in (superseded or {})]
+        if len(prior) >= 2 or any(a["valid"] for a in prior):
+            bad.append(f"q3 already has formal attempts {[a['id'] for a in prior]}: one valid session, or one void "
+                       "attempt and its rerun, at most (040 補記 14; --superseded needs a decision log)")
+        if bad:
+            raise StageQ3Error("; ".join(bad))
     chunks_path = Path(plan["chunks"]["path"].replace("{data}", str(data_dir)))
     try:
         chunks_sha = file_sha256(chunks_path)
@@ -470,8 +537,21 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
         raise StageQ3Error("the vLLM toolchain is incomplete (014): " + "; ".join(tool))
     for sub in ("raw", "env"):
         (out / sub).mkdir(parents=True)
+    session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "stage": STAGE, "part": PART,
+               "mode": plan["mode"], "platform": PLATFORM, "status": "running", "plan_sha256": sha256_json(plan),
+               "pins_sha256": plan.get("pins_sha256"), "gpu_lock_held": gpu_lock_held,
+               "harness_sha256": harness_sha256(), "chunks_sha256": chunks_sha, "inputs_verified": formal,
+               "superseded": dict(superseded or {}), "started_at": now()}
+
+    def write_session():                                    # atomic: a torn write never hides the attempt
+        tmp = out / "session.json.tmp"
+        tmp.write_text(json.dumps(session, indent=1) + "\n")
+        os.replace(tmp, out / "session.json")
+
+    write_session()                                         # the stub: an interrupted session is still an attempt
     (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
     pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held)
+    session.update(host=host_of(pre), vllm_version=vllm_version(pre))
     if formal:
         bad = env_problems(pre, PLATFORM) + provenance_problems(pre, pre) + host_problems(host_of(pre))
         if vllm_version(pre) != pins["vllm"]["version"]:
@@ -479,12 +559,9 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
         if not bad:
             bad = (checkpoint_problems or default_checkpoint_problems)(plan, pins)
         if bad:
+            session.update(status="refused", refused=bad)
+            write_session()
             raise StageQ3Error("formal Q3 run refused before it starts: " + "; ".join(bad))
-    session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "stage": STAGE, "part": PART,
-               "mode": plan["mode"], "platform": PLATFORM, "plan_sha256": sha256_json(plan),
-               "pins_sha256": plan.get("pins_sha256"), "gpu_lock_held": gpu_lock_held,
-               "harness_sha256": harness_sha256(), "chunks_sha256": chunks_sha, "host": host_of(pre),
-               "vllm_version": vllm_version(pre), "inputs_verified": formal, "started_at": now()}
     rows, env_flags = [], []
     with open(out / "rows.jsonl", "w") as fh:
         for job in plan["jobs"]:
@@ -530,9 +607,10 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
     outcomes = {"ok": 0, "oom": 0, "error": 0}
     for r in rows:
         outcomes[r["outcome"]] += 1
-    session.update({"finished_at": now(), "outcomes": outcomes, "env_flags": env_flags, "env_valid": not env_flags})
+    session.update({"status": "finished", "finished_at": now(), "outcomes": outcomes, "env_flags": env_flags,
+                    "env_valid": not env_flags})
     write_raw_manifest(out)
-    (out / "session.json").write_text(json.dumps(session, indent=1) + "\n")
+    write_session()
     return session
 
 
@@ -575,21 +653,11 @@ def analyze(w4a16: list | None, bf16: list | None, *, n_boot: int = qa.N_BOOT, s
                      "prediction": "supported"}}
 
 
-def _formal_sessions(root) -> list:
-    out = []
-    for f in sorted(Path(root).joinpath(*RESULTS).glob("*/session.json")):
-        try:
-            m = json.loads(f.read_text())
-        except (OSError, ValueError):
-            continue
-        if m.get("mode") == "formal" and m.get("part") == PART:
-            out.append((f.parent, m))
-    return out
-
-
-def session_problems(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, pins: dict, root=ROOT) -> list:
-    """A formal, env-valid q3 session on a WSL CUDA host with the pinned vLLM, its plan.json exactly build_plan's,
-    the pinned chunks and the first formal q3 session under root."""
+def session_problems(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, pins: dict, root=ROOT,
+                     superseded: dict | None = None, tracked: Callable = git_tracked) -> list:
+    """A finished, env-valid formal q3 session directly under results/stage_q, on a WSL CUDA host with the pinned vLLM,
+    its plan.json exactly build_plan's, the pinned chunks, and the first valid formal q3 session after at most one
+    void attempt (superseded attempts left out once a committed decision log names both ids; 040 補記 14)."""
     path = Path(path)
     try:
         meta = json.loads((path / "session.json").read_text())
@@ -600,8 +668,12 @@ def session_problems(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str,
     problems = []
     if meta.get("mode") != "formal" or plan.get("mode") != "formal":
         problems.append(f"{path.name}: mode {meta.get('mode')!r} is not formal (pilots stay masked, 040)")
+    if meta.get("status") != "finished":
+        problems.append(f"{path.name}: status {meta.get('status')!r}, not a finished session")
+    if path.resolve().parent != Path(root).resolve().joinpath(*RESULTS):
+        problems.append(f"{path}: not results/stage_q/<session id>")
     if meta.get("env_valid") is not True:
-        problems.append(f"{path.name}: the session is env-invalid (rerun it under a new id, 012)")
+        problems.append(f"{path.name}: the session is env-invalid (void: one rerun under a new id, 012)")
     if (meta.get("stage"), meta.get("part"), plan.get("part"), meta.get("platform")) != (STAGE, PART, PART, PLATFORM):
         problems.append(f"{path.name}: not a q3 session (stage / part / platform)")
     if meta.get("plan_sha256") != sha256_json(plan):
@@ -626,11 +698,14 @@ def session_problems(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str,
             problems.append(f"{path.name}: build_plan refuses its formal plan ({exc})")
         if want is not None and plan != want:
             problems.append(f"{path.name}: plan.json is not build_plan's formal q3 plan")
-        earlier = [d.name for d, m in _formal_sessions(root)
-                   if d.resolve() != path.resolve() and (m.get("started_at") or "") < (meta.get("started_at") or "")]
-        if earlier:
-            problems.append(f"{path.name}: earlier formal q3 sessions {earlier} exist (040: the first formal session "
-                            "is the one analyzed; another needs its own decision log)")
+        earlier = [a for a in formal_attempts(root) if a["dir"].resolve() != path.resolve()
+                   and a["started_at"] < (meta.get("started_at") or "") and a["id"] not in (superseded or {})]
+        if len(earlier) > 1 or any(a["valid"] for a in earlier):
+            problems.append(f"{path.name}: earlier formal q3 attempts {[a['id'] for a in earlier]} (040: the first "
+                            "valid session after at most one void attempt; another needs --superseded and its decision "
+                            "log)")
+        problems += [f"{path.name}: {p}" for p in superseded_problems(superseded or {}, path.name, root=root,
+                                                                      tracked=tracked)]
     return problems
 
 
@@ -647,7 +722,7 @@ def _scores(path: Path, row: dict, manifest: dict) -> list:
 
 
 def analyze_session(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, pins: dict, root=ROOT,
-                    n_boot: int | None = None) -> dict:
+                    n_boot: int | None = None, superseded: dict | None = None, tracked: Callable = git_tracked) -> dict:
     """H-Q3 of a formal session (040 凍結): the frozen config and its pilot, the session's provenance, and the raw
     scores checked against raw_manifest.json and the committed per-chunk NLL. An oom or error leaves H-Q3 NT."""
     problems = config_problems(cfg)
@@ -656,7 +731,8 @@ def analyze_session(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, 
     if problems:
         raise StageQ3Error("; ".join(problems))
     problems = freeze_evidence_problems(cfg, root, pins) + session_problems(
-        path, cfg=cfg, stage_q3_sha256=stage_q3_sha256, pins_sha256=pins_sha256, pins=pins, root=root)
+        path, cfg=cfg, stage_q3_sha256=stage_q3_sha256, pins_sha256=pins_sha256, pins=pins, root=root,
+        superseded=superseded, tracked=tracked)
     if problems:
         raise StageQ3Error("; ".join(problems))
     path = Path(path)
@@ -693,11 +769,13 @@ def main(argv: list | None = None) -> int:
     for a in ("--plan", "--data", "--out"):
         p.add_argument(a, required=True)
     p.add_argument("--gpu-lock-held", action="store_true")
+    p.add_argument("--superseded", action="append", default=[], help="<session id>=docs/decisions/<log>.md")
     p = sub.add_parser("score")
     for a in ("--job", "--chunks", "--out"):
         p.add_argument(a, required=True)
     p = sub.add_parser("analyze")
     p.add_argument("--session", required=True, help="results/stage_q/<formal q3 session>, raw/ fetched")
+    p.add_argument("--superseded", action="append", default=[], help="<session id>=docs/decisions/<log>.md")
     args = parser.parse_args(argv)
     raw, cfg_raw = (ROOT / "configs" / "pins.toml").read_bytes(), CONFIG.read_bytes()
     pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(cfg_raw.decode())
@@ -706,7 +784,7 @@ def main(argv: list | None = None) -> int:
         if args.cmd == "chunks":  # pragma: no cover - WSL
             text = Path(args.text).read_bytes()
             tok_sha = file_sha256(Path(args.tokenizer) / "tokenizer.json")
-            ids = _hf_encoder(args.tokenizer)(text.decode())
+            ids = encode_text(text, _hf_encoder(args.tokenizer))
             sources = {"text_sha256": hashlib.sha256(text).hexdigest(), "tokenizer_json_sha256": tok_sha,
                        "tokenizer": str(args.tokenizer)}
             bad = chunk_source_problems(text_sha256=sources["text_sha256"], tokenizer_sha256=tok_sha, tokens=len(ids),
@@ -716,12 +794,16 @@ def main(argv: list | None = None) -> int:
             print(json.dumps(build_chunks(ids, args.out, sources=sources)))
         elif args.cmd == "plan":
             plan = build_plan(pins, cfg, mode=args.mode, pins_sha256=pins_sha, stage_q3_sha256=cfg_sha)
-            Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
+            out = Path(args.out).resolve()
+            if ROOT.joinpath(*RESULTS).resolve() in (out, *out.parents):
+                raise StageQ3Error("write plans outside results/stage_q (a session directory is the runner's)")
+            out.write_text(json.dumps(plan, indent=1) + "\n")
         elif args.cmd == "analyze":
             session = Path(args.session)
             if output_dir_problems(session):
                 raise StageQ3Error("; ".join(output_dir_problems(session)))
-            result = analyze_session(session, cfg=cfg, stage_q3_sha256=cfg_sha, pins_sha256=pins_sha, pins=pins)
+            result = analyze_session(session, cfg=cfg, stage_q3_sha256=cfg_sha, pins_sha256=pins_sha, pins=pins,
+                                     superseded=dict(x.split("=", 1) for x in args.superseded))
             (session / "analysis.json").write_text(json.dumps(result, indent=1) + "\n")
             print(json.dumps({"H-Q3": result["H-Q3"]["verdict"]}))
         elif args.cmd == "run":  # pragma: no cover - WSL
@@ -733,7 +815,8 @@ def main(argv: list | None = None) -> int:
             s = run_q3(plan, data_dir=Path(args.data).resolve(), out_dir=args.out,
                        capture_env=rb.make_vllm_env_capture(ROOT / "scripts" / "env_capture.py", python),
                        session_id=Path(args.out).name, gpu_lock_held=args.gpu_lock_held,
-                       wait_idle=default_wait_idle(pins), pins=pins, vllm_python=python, expected_plan=expected)
+                       wait_idle=default_wait_idle(pins), pins=pins, vllm_python=python, expected_plan=expected,
+                       superseded=dict(x.split("=", 1) for x in args.superseded))
             print(json.dumps(s["outcomes"]))
         else:  # pragma: no cover - the child process in the vLLM venv
             score(json.loads(Path(args.job).read_text()), args.chunks, args.out)
