@@ -46,12 +46,12 @@
         包括：q1-metal 原本因 70W／140W 兩條規則同時套用而永遠無法執行；Phase 1 的 20-chunk pilot 已揭露（界線與預測不改）。
   - [x] 修正後的覆核：Q1 / Q2 確認 5 項、Q3 確認 3 項（共 4 項 must-fix），全部處理（040「修正後的覆核」）：stub 與嘗試次數、分析自己找 session、`--superseded` 機制、精確的端點、pilot 記錄 base 大小、Q3 去掉結尾換行與 V1 的平手規則。
   - [ ] pilot：q1-cuda、q2（RTX，**等 GPU 空閒**）；q1-metal（Mac；plan 已可建立，lock 釋放時在 `tools/with-mac-lock` 下執行；2026-10-23 08:0x 曾因 incident-investigator 重新取得 lock 而放棄）。
-  - [ ] Q3：需要下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**等使用者同意**；
+  - [ ] Q3：下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**使用者 2026-10-23 同意**；下載會讀寫 WSL 的網路與磁碟，**等 Stage D 正式鏈結束、GPU 空閒**；
         之後在 WSL 產生 chunk 檔並 pin sha256 → pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性）→ 凍結。
   - 觀察：Mac 的 140W adapter 目前只協商到 94 W（20 V × 4.69 A；名稱檢查會通過）。可能是線材或連接埠的限制，重負載時電池可能下降（016 的充電閘門會處理）。
 - **Stage E**（decision 041，DRAFT 第 3 版；PREREGISTRATION §11）：
   - [x] 第 2 版經審查（44 項確認）與設計 workflow（3 位設計者、3 位評審）後改寫為第 3 版（`6db1512`），設計前看過的重算在 `results/stage_e/prereg-tally/`。
-  - [ ] **等使用者決定**（041 §6）：A1 E1 的換 seed 探針、A2 allocator 不操弄、A3 PC 作為能力檢查、A4 E2 只能給條件式結論。
+  - [x] 041 §6 的 A1–A4：使用者 2026-10-23 決定都採建議的選項（A1 做換 seed 探針、A2 allocator 不操弄、A3 PC 為能力檢查、A4 接受條件式結論）。
   - [x] harness：E3（`320343a`）、E1-D（`1450a3c`）、E2（`a7a5e44`）；每個部分有自己的設定檔與凍結。
   - [x] E1-D 與 E3 的 harness 審查：確認 34 項，全部修正（E1-D `4f83e06`、E3 `c41c073`）。
   - [x] 修正後的覆核：確認 9 項（E3 的 plan 雜湊含 `[freeze]` 為 must-fix），全部修正（`13d7a74`）。
@@ -65,7 +65,7 @@
   - [x] E2 harness 審查：確認 18 項，全部修正（smoke 綁定設計並改為 12 次 boot、通過條件補齊、停止規則、重跑上限、R / Λ / L̄q、incomplete 的代換規則等；041 修訂紀錄「E2 harness 審查」）。
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
   - [ ] E2（**等 GPU 空閒**，WSL）：原始碼核對（prefix caching 路徑、warmup 來源、`vllm:prefix_cache_hits_total`、`cache_config_info` 的 `mamba_cache_mode` 標籤、span 的 cached-token 欄位、`num_requests_waiting`）→ `stage_e2_datasets.py` 產生共享前綴 dataset 並 pin sha256 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
-  - [ ] E1-P：等 A1。
+  - [ ] E1-P（A1 已決定做）：harness（041 §1.6–1.7）→ 審查 → smoke（GPU）→ 凍結 → 正式（約 2.5 h，上限 3 h）。
 
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
 

@@ -501,7 +501,7 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
 - **Q2（長 context）**：RTX，`-c 2048` 與 `-c 8192`，完整的 test set。
   - H-Q2a：兩個 context、兩個 size 的 KLD 順序（8 個檢定，Holm）；
   - H-Q2b：KLD(c) ÷ KLD(512) 在 [0.5, 2.0]。
-- **Q3（W4A16）**：vLLM 中 W4A16 對 BF16 的 PPL 與配對 ΔNLL；H-Q3：PPL 比 − 1 ≤ 2%。BF16 checkpoint 需要下載（約 19.3 GB），等使用者同意。
+- **Q3（W4A16）**：vLLM 中 W4A16 對 BF16 的 PPL 與配對 ΔNLL；H-Q3：PPL 比 − 1 ≤ 2%。BF16 checkpoint 需要下載（約 19.3 GB），使用者 2026-10-23 同意。
   - Q3 有自己的設定檔與凍結（`configs/stage_q3.toml`、`freeze.stage_q3`）；chunk 檔的 sha256 在凍結前 pin 住。
 - **凍結的證據**：每個部分（q1-metal、q1-cuda、q2）一個通過的 pilot（每個 job 10 chunks、全部 ok），而且是同一個 harness（`harness_sha256`）。
 - **判定**：順序沿用 005（缺格為 NT；全部顯著且方向正確為 supported；其他為 not supported）；界線以超出優先（任一超出為 not supported，否則缺格為 NT）。
@@ -511,13 +511,13 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
 
 ## 11. Stage E addendum：機制（decision 037、041）
 
-**狀態：DRAFT**（041 第 3 版；第 6 節的四個範圍決定等使用者決定）；**E1-D 已凍結（2026-10-23，041 §1.7）**，E1-P、E2、E3 仍為 DRAFT。各部分各自凍結（各自的設定檔 `configs/stage_e1.toml`、`stage_e2.toml`、`stage_e3.toml`：`freeze.e1`、`e1p`、`e2`、`e3_cuda`、`e3_metal`）；凍結前沒有任何 Stage E 數據。
+**狀態：DRAFT**（041 第 3 版；第 6 節的四個範圍決定，使用者 2026-10-23 都採建議的選項）；**E1-D 已凍結（2026-10-23，041 §1.7）**，E1-P、E2、E3 仍為 DRAFT。各部分各自凍結（各自的設定檔 `configs/stage_e1.toml`、`stage_e2.toml`、`stage_e3.toml`：`freeze.e1`、`e1p`、`e2`、`e3_cuda`、`e3_metal`）；凍結前沒有任何 Stage E 數據。
 本節只摘要；完整規則、揭露與修訂紀錄見 decision 041。第 1–10 節不變，H-A2、H-B4、Advanced 與 C0 的判定不受影響。
 
 - **共通**：判定只有 supported、not supported、NT（NT 不等於 not supported，會換列時標 incomplete）；判定只用同一 session 的數字；只分析第一個有效的正式 session。
 - **E1（探索性）**：
   - E1-D（桌面分析，0 GPU）：以事先定義的 L1–L5（F 尖峰、多一個 decode-only step、前一組提早完成、提早到達、多等一個 prefill step）在三組既有數據上重現滑移的鏈；
-  - E1-P（換 seed 探針，約 2.5 h GPU，等使用者決定）：觸發和 prompt 內容還是位置綁定，以 Jaccard 讀法描述。
+  - E1-P（換 seed 探針，約 2.5 h GPU，使用者 2026-10-23 決定做）：觸發和 prompt 內容還是位置綁定，以 Jaccard 讀法描述。
 - **E2（正式，RTX）**：為什麼 T 在 2K、C 25 無效？候選為負載（S）、T × KV（V）與 threshold 太大（Th）。
   - 格子：B0 / T / T256 在 C 25；B0 / T 在 C 8 的 4 GiB 與 2.5 GiB；共享前綴的 PC 關 / 開；48 次 boot。
   - T 有效 = 024 A5 類別 ∈ {M, P} 且 m ≥ 0.20；H-C0 閘門以 `h_b4_values` 判定；KV 操弄以 gate-zone 份額與 uniform 特異性檢查。

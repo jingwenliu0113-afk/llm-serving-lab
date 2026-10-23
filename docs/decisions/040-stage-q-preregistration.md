@@ -123,7 +123,7 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
    - 尚未執行的部分，其 hypothesis 為 NT（Q1 的 Mac 部分可能因為 Mac lock 較晚執行）。
 7. **Q3 的 BF16 checkpoint**：
    - Mac 沒有保留 9B 的 safetensors（`models/hf` 只有 tokenizer 與設定），所以需要從 HF 下載 `Qwen/Qwen3.5-9B@c2022362`（19,329,393,661 B，pins 有每個 shard 的 sha256）。
-   - 下載量大，先取得使用者同意。Q3 的 harness 可以先寫，pilot 與正式數據在下載之後。
+   - 下載量大，先取得使用者同意（使用者 2026-10-23 同意）。Q3 的 harness 可以先寫，pilot 與正式數據在下載之後；下載排在 GPU 正式 session 之外。
 8. **Q3 的 harness**（`quality/stage_q3.py`，`configs/stage_q3.toml`）：
    - **獨立的凍結**：Q3 用另一個 runtime，又要等下載，所以有自己的 `freeze.stage_q3` 與 pilot，不拖住 Q1 / Q2 的凍結。
    - **chunk 檔**：在 WSL 以 pin 住的 tokenizer 編碼 `wiki.test.raw`（不加 special token；和 llama-perplexity 的 `-f` 及 005 的交叉核對一樣先去掉一個結尾換行），切成 ⌊n ÷ 512⌋ 個 512-token chunk。
