@@ -393,9 +393,31 @@ def test_only_the_first_valid_formal_q3_session_after_one_void_attempt_is_analyz
     log.parent.mkdir(parents=True)
     log.write_text("formal-q3 is superseded by formal-q3-b.\n")
     (out / "session.json").write_text(json.dumps({**json.loads((out / "session.json").read_text()), "env_valid": True}))
-    a = analyze_session(root, cfg, later, n_boot=50, superseded={"formal-q3": "docs/decisions/999-q3.md"},
-                        tracked=lambda p: True)
+    meta = json.loads((later / "session.json").read_text())                          # what formal-q3-b's run recorded
+    (later / "session.json").write_text(json.dumps({**meta, "superseded": {"formal-q3": "docs/decisions/999-q3.md"}}))
+    a = analyze_session(root, cfg, later, n_boot=50, tracked=lambda p: True)
     assert a["session"] == "formal-q3-b"
+    q = q3.analyze_q3(cfg=cfg, stage_q3_sha256="q" * 64, pins_sha256=PINS_SHA, pins=PINS, root=root, n_boot=50,
+                      tracked=lambda p: True)
+    assert q["session"] == "formal-q3-b" and q["q3"]["superseded"] == {"formal-q3": "formal-q3-b"}
+    with pytest.raises(q3.StageQ3Error, match="not committed"):
+        analyze_session(root, cfg, later, n_boot=50, tracked=lambda p: False)
+
+
+def test_the_q3_analysis_finds_its_session_or_reports_nt(tmp_path):
+    root, cfg = with_pilot(tmp_path)
+    kw = dict(cfg=cfg, stage_q3_sha256="q" * 64, pins_sha256=PINS_SHA, pins=PINS, root=root, n_boot=50)
+    assert q3.analyze_q3(**kw)["H-Q3"] == {"verdict": "NT", "why": "not run"}
+    plan = q3.build_plan(PINS, cfg, mode="formal", stage_q3_sha256="q" * 64, pins_sha256=PINS_SHA, root=root)
+    busy = iter([(True, {}), (False, {"problems": ["not idle"]})])
+    s = run(root, plan, "v1", expected_plan=plan, wait_idle=lambda: next(busy),
+            run_proc=fake_score({"score-w4a16": -2.01, "score-bf16": -2.0}))
+    assert s["env_valid"] is False                                                    # gpu_not_idle voids it (031)
+    out = q3.analyze_q3(**kw)
+    assert out["H-Q3"]["verdict"] == "NT" and out["q3"]["attempts"] == ["v1"]
+    run(root, plan, "v2", expected_plan=plan, run_proc=fake_score({"score-w4a16": -2.01, "score-bf16": -2.0}))
+    out = q3.analyze_q3(**kw)
+    assert out["session"] == "v2" and out["q3"]["void_before"] == ["v1"] and out["H-Q3"]["verdict"] == "supported"
 
 
 def test_a_formal_q3_run_counts_its_attempts(tmp_path):
@@ -435,3 +457,16 @@ def test_the_analysis_refuses_what_040_does_not_allow(tmp_path):
     scores.unlink()
     with pytest.raises(q3.StageQ3Error, match="fetch"):
         analyze_session(root, cfg, out)
+
+
+def test_a_log_counts_as_committed_on_the_wsl_copy_through_its_deploy_manifest(tmp_path):
+    log = tmp_path / "docs" / "decisions" / "999-x.md"
+    log.parent.mkdir(parents=True)
+    log.write_text("a supersedes b\n")
+    assert q3.git_tracked(log, root=tmp_path) is False                                # no .git, no manifest
+    sha = hashlib.sha256(log.read_bytes()).hexdigest()
+    (tmp_path / "DEPLOY_MANIFEST.json").write_text(json.dumps({"files": {"docs/decisions/999-x.md": sha}}))
+    assert q3.git_tracked(log, root=tmp_path) is True
+    log.write_text("edited after the deploy\n")
+    assert q3.git_tracked(log, root=tmp_path) is False
+

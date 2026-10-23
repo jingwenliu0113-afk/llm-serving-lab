@@ -61,7 +61,7 @@
         `python benchmarks/stage_e1.py fetch-list | while read -r args; do tools/rtx/fetch_raw.sh $args; done`
         → `python benchmarks/stage_e1.py analyze --out results/stage_e/e1-<date>/e1.json` → 結果文件（描述，不是檢定）。
   - [x] E3 的兩個 Q4_0 已產生並 pin（2026-10-23，Mac lock 下；4B `ee05b023…` 2,543,899,584 B，9B `2dfcbfd3…` 5,313,356,768 B）。
-  - [ ] E3：`produce_gguf_e3.py sync` 傳到 WSL（約 7.9 GB，**等 GPU 空閒**，不在正式 session 期間讀寫 WSL）→ 兩個平台的 pilot → 凍結 → 正式（每個平台最多兩次嘗試）。
+  - [ ] E3：`produce_gguf_e3.py sync` 傳到 WSL（約 7.9 GB，**等 GPU 空閒**，不在正式 session 期間讀寫 WSL）→ 兩個平台的 pilot → 凍結（兩個旗標）→ `tools/rtx/push_session.sh stage_e <Mac pilot id>` → 正式（每個平台最多兩次嘗試）。
   - [x] E2 harness 審查：確認 18 項，全部修正（smoke 綁定設計並改為 12 次 boot、通過條件補齊、停止規則、重跑上限、R / Λ / L̄q、incomplete 的代換規則等；041 修訂紀錄「E2 harness 審查」）。
   - [ ] E2（**等 GPU 空閒**，WSL）：原始碼核對（prefix caching 路徑、warmup 來源、`vllm:prefix_cache_hits_total`、`cache_config_info` 的 `mamba_cache_mode` 標籤、span 的 cached-token 欄位、`num_requests_waiting`）→ `stage_e2_datasets.py` 產生共享前綴 dataset 並 pin sha256 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
   - [ ] E1-P：等 A1。

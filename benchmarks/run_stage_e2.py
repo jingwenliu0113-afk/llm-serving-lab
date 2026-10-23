@@ -225,7 +225,11 @@ class E2Harness(rc._Harness):
         after = after if code1 == 200 else ""
         t_after = self.wall()
         record.update(t_before=t_before, t_after=t_after)
-        mem = self.gpu_sample().get("mem_used_mib")               # 041 v3 §2.9: the server's memory after its bench
+        try:                                                      # 041 v3 §2.9: the server's memory after its bench
+            mem = self.gpu_sample().get("mem_used_mib")
+        except Exception as exc:  # noqa: BLE001 - descriptive (run_adv.mem_probe): never costs Y or the session
+            row.setdefault("mem_probe_errors", []).append(f"after the bench: {type(exc).__name__}: {exc}")
+            mem = None
         idle_mib = (record.get("idle") or {}).get("idle_mib")
         row.update(mem_after_bench_mib=mem,
                    mem_increment_mib=None if mem is None or idle_mib is None else mem - idle_mib)
@@ -425,15 +429,15 @@ def run_session(plan: dict, *, pins: dict, cfg: dict, pins_sha256: str, out_dir,
     pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=True)
     session["host"] = {"system": (pre.get("os") or {}).get("system"), "wsl": (pre.get("os") or {}).get("wsl"),
                        "nvidia": bool((pre.get("gpu") or {}).get("nvidia"))}
+    got = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
+    session["vllm_version"] = got
+    bad = [] if got == pins["vllm"]["version"] else [f"vLLM {got!r}, not the pinned {pins['vllm']['version']}"]
     if formal:
-        bad = env_problems(pre, "wsl2-cuda") + provenance_problems(pre, pre) + e2p.host_problems(session["host"])
-        got = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
-        if got != pins["vllm"]["version"]:
-            bad.append(f"vLLM {got!r}, not the pinned {pins['vllm']['version']}")
-        if bad:
-            session.update(status="refused", refused=bad)
-            write_session()
-            raise RunError("formal E2 session refused before it starts: " + "; ".join(bad))
+        bad += env_problems(pre, "wsl2-cuda") + provenance_problems(pre, pre) + e2p.host_problems(session["host"])
+    if bad:
+        session.update(status="refused", refused=bad)
+        write_session()
+        raise RunError(f"{mode} E2 session refused before it starts: " + "; ".join(bad))
     rows = []
     with open(out / "rows.jsonl", "w") as fh:
         h = E2Harness(plan={**plan, "server_ready_timeout_s": plan.get("server_ready_timeout_s", ra.STARTUP_TIMEOUT_S)},

@@ -17,15 +17,14 @@ kld_test and holm (imported, never changed).
 
 Formal sessions only (040 凍結): configs/stage_q.toml frozen with its pilot evidence. The analysis finds each part's
 session itself (040 補記 14; no part can be left out): its formal attempts under results/stage_q
-(stage_q.formal_attempts, minus those superseded by a committed decision log naming both ids), the first valid one,
-after at most one void attempt; that session must be finished, env-valid, of its part on its platform's host,
+(stage_q.formal_attempts, minus those a later attempt recorded as superseded when it ran, each checked against its
+committed decision log naming both ids), the first valid one, after at most one void attempt; that session must be finished, env-valid, of its part on its platform's host,
 directly under results/stage_q, with plan.json exactly build_plan's formal plan. A part with no formal attempt leaves
 its hypotheses NT ("not run"); a part whose attempts are all void leaves them NT and lists the attempts. Bounds
 compare exact decimal ratios.
 
 Usage:
-    python quality/stage_q_analysis.py --out results/stage_q/analysis-<date>.json \
-        [--superseded <id>=docs/decisions/<log>]
+    python quality/stage_q_analysis.py --out results/stage_q/analysis-<date>.json
 """
 
 from __future__ import annotations
@@ -190,14 +189,20 @@ def session_problems(path, part: str, *, stage_q_sha256: str, pins_sha256: str, 
     return problems
 
 
-def part_session(part: str, *, root, superseded: dict, tracked) -> tuple:
-    """(the session dir to analyze or None, record): the part's first valid formal attempt after at most one void one,
-    superseded attempts left out once their decision log names both ids (040 補記 14)."""
+def part_session(part: str, *, root, tracked) -> tuple:
+    """(the session dir to analyze or None, record): the part's first valid formal attempt after at most one void one.
+    Superseded attempts are the ones a later attempt recorded when it ran (never chosen here), each checked against
+    its committed decision log (040 補記 14); a superseded valid session needs a valid replacement."""
     attempts = sq.formal_attempts(root, part)
-    kept = [a for a in attempts if a["id"] not in superseded]
-    gone = [a["id"] for a in attempts if a["id"] in superseded]
+    bad = sq.recorded_supersede_problems(attempts, root=root, tracked=tracked)
+    if bad:
+        raise AnalysisError(f"{part}: " + "; ".join(bad))
+    sup = sq.recorded_supersedes(attempts)
+    kept = [a for a in attempts if a["id"] not in sup]
+    record = {"attempts": [a["id"] for a in kept], "superseded": {sid: by for sid, (_, by) in sorted(sup.items())}}
     valid = [i for i, a in enumerate(kept) if a["valid"]]
-    record = {"attempts": [a["id"] for a in kept], "superseded": gone}
+    if not valid and any(a["valid"] for a in attempts if a["id"] in sup):
+        raise AnalysisError(f"{part}: a valid session was superseded, but no valid formal session replaces it")
     if not kept:
         return None, {**record, "status": "not run"}
     if not valid:
@@ -206,9 +211,6 @@ def part_session(part: str, *, root, superseded: dict, tracked) -> tuple:
     if valid[0] > 1:
         raise AnalysisError(f"{part}: {valid[0]} void attempts {record['attempts'][:valid[0]]} before {first['id']}; "
                             "040 allows one rerun")
-    bad = sq.superseded_problems({k: superseded[k] for k in gone}, first["id"], root=root, tracked=tracked)
-    if bad:
-        raise AnalysisError("; ".join(bad))
     return first["dir"], {**record, "status": "analyzed", "session": first["id"],
                           "void_before": [a["id"] for a in kept[:valid[0]]]}
 
@@ -227,7 +229,7 @@ def phase1_problems(path) -> list:
 
 
 def analyze_sessions(*, cfg: dict, stage_q_sha256: str, pins_sha256: str, pins: dict, root=sq.ROOT,
-                     superseded: dict | None = None, tracked=sq.git_tracked) -> dict:
+                     tracked=sq.git_tracked) -> dict:
     """Every part's session found under root (part_session). Refuses (AnalysisError) unless 040 凍結 holds."""
     problems = [f"configs/stage_q.toml: {p}" for p in sq.config_problems(cfg)]
     if not problems and cfg["freeze"]["stage_q"] is not True:
@@ -237,7 +239,7 @@ def analyze_sessions(*, cfg: dict, stage_q_sha256: str, pins_sha256: str, pins: 
     problems += [f"freeze evidence: {p}" for p in sq.freeze_evidence_problems(cfg, root, pins)]
     paths, records = {}, {}
     for part in sq.PARTS:
-        path, records[part] = part_session(part, root=root, superseded=superseded or {}, tracked=tracked)
+        path, records[part] = part_session(part, root=root, tracked=tracked)
         if path is not None:
             paths[part] = path
             problems += session_problems(path, part, stage_q_sha256=stage_q_sha256, pins_sha256=pins_sha256,
@@ -258,7 +260,6 @@ def analyze_sessions(*, cfg: dict, stage_q_sha256: str, pins_sha256: str, pins: 
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description="Stage Q hypotheses (040) from its formal sessions")
     parser.add_argument("--out", required=True, help="results/stage_q/<name>.json (a new file)")
-    parser.add_argument("--superseded", action="append", default=[], help="<session id>=docs/decisions/<log>.md")
     args = parser.parse_args(argv)
     out = Path(args.out).resolve()
     cfg_raw, pins_raw = sq.CONFIG.read_bytes(), (sq.ROOT / "configs" / "pins.toml").read_bytes()
@@ -268,8 +269,7 @@ def main(argv: list | None = None) -> int:
         result = analyze_sessions(cfg=tomllib.loads(cfg_raw.decode()),
                                   stage_q_sha256=hashlib.sha256(cfg_raw).hexdigest(),
                                   pins_sha256=hashlib.sha256(pins_raw).hexdigest(),
-                                  pins=tomllib.loads(pins_raw.decode()),
-                                  superseded=dict(x.split("=", 1) for x in args.superseded))
+                                  pins=tomllib.loads(pins_raw.decode()))
     except AnalysisError as exc:
         print(f"stage_q_analysis: {exc}", file=sys.stderr)
         return 2

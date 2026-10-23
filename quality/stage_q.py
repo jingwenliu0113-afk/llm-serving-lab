@@ -34,6 +34,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -317,13 +318,22 @@ def formal_attempts(root, part: str) -> list:
         if s.get("status") == "refused":
             continue
         out.append({"dir": d, "id": d.name, "started_at": s.get("started_at") or "", "status": s.get("status"),
-                    "valid": s.get("status") == "finished" and s.get("env_valid") is True})
+                    "valid": s.get("status") == "finished" and s.get("env_valid") is True,
+                    "superseded": dict(s.get("superseded") or {})})
     return sorted(out, key=lambda a: (a["started_at"], str(a["dir"])))
 
 
-def git_tracked(path) -> bool:  # pragma: no cover - git
-    return subprocess.run(["git", "-C", str(ROOT), "ls-files", "--error-unmatch", str(path)],
-                          capture_output=True).returncode == 0
+def git_tracked(path, root=ROOT) -> bool:
+    """Committed: tracked by git here; on the WSL copy (deploy_bundle: no .git), listed in DEPLOY_MANIFEST.json with
+    exactly these bytes."""
+    root, path = Path(root).resolve(), Path(path).resolve()
+    if (root / ".git").exists():  # pragma: no cover - git
+        return subprocess.run(["git", "-C", str(root), "ls-files", "--error-unmatch", str(path)],
+                              capture_output=True).returncode == 0
+    manifest = _read_json(root / "DEPLOY_MANIFEST.json")
+    if not isinstance(manifest, dict) or root not in path.parents:
+        return False
+    return (manifest.get("files") or {}).get(path.relative_to(root).as_posix()) == file_sha256(path)
 
 
 def superseded_problems(superseded: dict, new_id: str, *, root=ROOT, tracked: Callable = git_tracked) -> list:
@@ -336,9 +346,25 @@ def superseded_problems(superseded: dict, new_id: str, *, root=ROOT, tracked: Ca
             problems.append(f"--superseded {sid}: {log} is not a decision log under docs/decisions/")
         elif not tracked(path):
             problems.append(f"--superseded {sid}: {log} is not committed (git ls-files)")
-        elif sid not in (text := path.read_text()) or new_id not in text:
+        elif not (_names(text := path.read_text(), sid) and _names(text, new_id)):
             problems.append(f"--superseded {sid}: {log} does not name both {sid} and {new_id}")
     return problems
+
+
+def _names(text: str, sid: str) -> bool:
+    """sid as a whole token (a rerun's id often extends the first one's, e.g. -c1 -> -c1b)."""
+    return re.search(rf"(?<![\w-]){re.escape(sid)}(?![\w-])", text) is not None
+
+
+def recorded_supersedes(attempts: list) -> dict:
+    """{superseded id: (decision log, the attempt that recorded it)} from the attempts' session.json (each run records
+    its --superseded), so the analysis cannot choose them afterwards."""
+    return {sid: (log, a["id"]) for a in attempts for sid, log in a["superseded"].items()}
+
+
+def recorded_supersede_problems(attempts: list, *, root=ROOT, tracked: Callable = git_tracked) -> list:
+    return [p for sid, (log, by) in sorted(recorded_supersedes(attempts).items())
+            for p in superseded_problems({sid: log}, by, root=root, tracked=tracked)]
 
 
 def default_gpu_lock_check() -> bool:  # pragma: no cover - /proc (WSL)
@@ -444,7 +470,9 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
         raise StageQError(f"{out} exists; sessions are never resumed or overwritten")
     if formal:
         bad = superseded_problems(superseded or {}, session_id, root=repo_root, tracked=tracked)
-        prior = [a for a in formal_attempts(repo_root, part) if a["id"] not in (superseded or {})]
+        attempts = formal_attempts(repo_root, part)
+        gone = set(superseded or {}) | set(recorded_supersedes(attempts))
+        prior = [a for a in attempts if a["id"] not in gone]
         if len(prior) >= 2 or any(a["valid"] for a in prior):
             bad.append(f"{part} already has formal attempts {[a['id'] for a in prior]}: one valid session, or one "
                        "void attempt and its rerun, at most (040 補記 14; --superseded needs a decision log)")

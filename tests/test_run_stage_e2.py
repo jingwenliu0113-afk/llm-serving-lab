@@ -385,3 +385,31 @@ def test_refusals(tmp_path):
     (tmp_path / "other.jsonl").write_text("not the pinned one\n")
     with pytest.raises(re2.RunError, match="sha256"):
         session(root, {**ds, "mixed:2048": str(tmp_path / "other.jsonl")}, pins, cfg, plan, mode="formal", sid="d")
+
+
+def test_a_failed_memory_probe_costs_neither_the_row_nor_the_session(tmp_path):
+    root, ds, pins, cfg, plan = formal_setup(tmp_path)
+
+    class FlakySmi(World):
+        def gpu_sample(self):
+            if self.point.startswith("bench:"):
+                raise RuntimeError("nvidia-smi timed out")
+            return super().gpu_sample()
+
+    s, _ = session(root, ds, pins, cfg, plan, mode="formal", sid="f", world=FlakySmi(tmp_path / "wf"))
+    rows = rows_of(root, "f")
+    assert s["status"] == "finished" and all(r["valid"] for r in rows)
+    assert all(r["mem_increment_mib"] is None and r["mem_probe_errors"] for r in rows)
+
+
+def test_a_smoke_on_another_vllm_is_refused(tmp_path):
+    class OldVllm(Env):
+        def __call__(self, out_path, gpu_lock_held):
+            rec = super().__call__(out_path, gpu_lock_held)
+            rec["runtime"]["vllm"]["vllm"] = "0.29.0"
+            return rec
+
+    root, ds, pins, cfg = setup(tmp_path)
+    with pytest.raises(re2.RunError, match="0.29.0"):
+        session(root, ds, pins, cfg, e2.smoke_plan(pins, cfg), mode="smoke", capture_env=OldVllm())
+    assert json.loads((root / "results" / "stage_e" / "s" / "session.json").read_text())["status"] == "refused"

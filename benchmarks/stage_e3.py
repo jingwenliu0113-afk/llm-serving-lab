@@ -12,7 +12,8 @@ with every comparison inside it.
   platforms share the harness and [e3], so a formal plan on either needs both freezes and both pilots (041 v3 §3.7):
   no platform's formal session can be stranded by a harness fix the other platform's pilot forces. A plan records
   stage_e3_sha256 = the config's content without [freeze]. A pilot commits no speed: its full rows go to
-  raw/rows.full.jsonl (git-ignored), rows.jsonl keeps the job identity and outcome only.
+  raw/rows.full.jsonl and its per-job env captures to raw/env/ (git-ignored; their timestamps give each job's wall
+  time), rows.jsonl keeps the job identity and outcome only.
 - The runner: the Mac under the Mac heavy lock (owner verified) with 037 §4's rules (the Apple 140W adapter, one
   powermode, AC, battery, thermal; run_core_a's 70 W rule does not apply to Phase 3), the RTX under the GPU lock
   (verified) with the session-start B (stage_b.measure_baseline, before the session directory exists). Before the
@@ -512,6 +513,8 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
             charge_pauses.append({"job_id": None, **pause})
     t0, paused, cap_reached = clock(), 0.0, False
     full = open(out / "raw" / "rows.full.jsonl", "w") if not formal else None
+    env_dir = "env" if formal else "raw/env"               # a pilot's per-job captures carry its job times
+    (out / env_dir).mkdir(exist_ok=True)
 
     def emit(fh, row):                                      # a pilot commits no speed (041 v3 §3.7: 結果遮蔽)
         if full is not None:
@@ -544,7 +547,7 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
             job_timeout = timeout_s if end else min(timeout_s, max(plan["cap_s"] - elapsed, 0) + CAP_MARGIN_S)
             argv = [a.replace("{bin}", bin_dir).replace("{models}", models_dir) for a in job["argv"]]
             rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
-                   "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json"}
+                   "env_before": f"{env_dir}/{jid}.before.json", "env_after": f"{env_dir}/{jid}.after.json"}
             env_before = capture_env(llama_bin=llama_bin, out_path=out / rel["env_before"], gpu_lock_held=not mac)
             code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], job_timeout)
             env_after = capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=not mac)

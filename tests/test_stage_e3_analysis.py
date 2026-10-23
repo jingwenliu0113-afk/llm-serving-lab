@@ -178,7 +178,9 @@ def test_a_session_stays_analyzable_when_only_freeze_flags_or_pins_bytes_change(
     both = te.pinned(e3.PLATFORMS)
     plan = e3.build_plan(PINS, both, platform="wsl2-cuda", mode="formal", pins_sha256="old pins", root=root)
     assert te.run(root, plan, "formal-rtx", expected_plan=plan, cfg=both)["env_valid"]
-    renamed = {**both, "freeze": {**both["freeze"], "pilot_e3_metal": "pilot-e3_metal"}}  # pins.toml moved on too
+    shutil.copytree(root / "results" / "stage_e" / "pilot-e3_metal", root / "results" / "stage_e" / "pilot-e3_metal-b")
+    renamed = {**both, "freeze": {**both["freeze"], "pilot_e3_metal": "pilot-e3_metal-b"}}  # pins.toml moved on too
+    assert renamed != both and e3.config_sha256(renamed) == plan["stage_e3_sha256"] != e3.sha256_json(renamed)
     assert ea.session_problems(root / "results" / "stage_e" / "formal-rtx", pins=PINS, cfg=renamed, root=root) == []
     (root / "results" / "stage_e" / "saved").mkdir()                              # a plan saved alone ran nothing
     (root / "results" / "stage_e" / "saved" / "plan.json").write_text(json.dumps(plan))

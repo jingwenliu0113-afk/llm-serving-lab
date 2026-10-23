@@ -77,11 +77,11 @@ def cell(rows: list, name: str) -> dict:
           and (r.get("one_hz") or {}).get("gate_zone") is not None]
     beta = [r["beta"] for r in rows if r["cell"] == name and r["mix"] == "mixed" and r.get("valid")
             and r.get("beta") is not None]
-    pre = [r["preemptions"] for r in rows if r["cell"] == name and r.get("valid") and r.get("preemptions") is not None]
+    pre = [r.get("preemptions") for r in rows if r["cell"] == name and r.get("valid")]
     return {"U": U and U["mean"], "U_se": U and U["se"], "M": M and M["mean"], "M_se": M and M["se"], "rho": rho,
             "rho_se": rho_se, "gate_zone": aa.cell_stats(dict(enumerate(gz))) if len(gz) >= aa.RESTARTS else None,
             "beta": statistics.mean(beta) if len(beta) >= aa.RESTARTS else None,
-            "preemptions_total": sum(pre) if pre else None,
+            "preemptions_total": sum(pre) if len(pre) == 2 * aa.RESTARTS and None not in pre else None,
             "n_valid": {mix: len(_values(rows, name, mix, "short_class_p95_ttft_ms")) for mix in e2p.MIX2}}
 
 
@@ -90,10 +90,13 @@ def _valid(rows: list, name: str, mix: str) -> list:
 
 
 def describe(rows: list, name: str, mix: str) -> dict:
-    """041 v3 §2.2's descriptive quantities of one (cell, mix): mean / SE over its valid restarts (None if one lacks
-    it)."""
+    """041 v3 §2.2's descriptive quantities of one (cell, mix): mean / SE over its 3 valid restarts, None with fewer
+    or when one lacks the value; the decomposition's fields only when all 3 pass A10 (024:64, adv_analysis)."""
     v = _valid(rows, name, mix)
-    return {"n_valid": len(v), **{k: aa._mean_se([aa._field(r, *path) for r in v]) for k, path in DESCRIPTIVE.items()}}
+    full, dec_ok = len(v) == aa.RESTARTS, len(v) == aa.RESTARTS and all(aa._decomp_ok(r) for r in v)
+    return {"n_valid": len(v), **{k: aa._mean_se([aa._field(r, *path) for r in v])
+                                  if (dec_ok if path[0] == "decomp" else full) else None
+                                  for k, path in DESCRIPTIVE.items()}}
 
 
 def r3_path(rows: list) -> str:
@@ -105,9 +108,11 @@ def r3_path(rows: list) -> str:
     if pre > 0 and R > 0:
         return "over-commit"
     if pre == 0:
-        shares = [aa._field(r, "decomp", "q_shares") for r in _valid(rows, "B0@8k", "mixed")]
-        if len(shares) < aa.RESTARTS or not all(isinstance(q, dict) and q.get("HOL-long") is not None
-                                                and q.get("KV-short") is not None for q in shares):
+        b = _valid(rows, "B0@8k", "mixed")
+        shares = [aa._field(r, "decomp", "q_shares") for r in b]
+        if len(shares) < aa.RESTARTS or not all(aa._decomp_ok(r) for r in b) or not all(
+                isinstance(q, dict) and q.get("HOL-long") is not None and q.get("KV-short") is not None
+                for q in shares):
             return "NT"
         if statistics.mean(q["HOL-long"] + q["KV-short"] for q in shares) >= HOL_SHARE - aa.TOL:
             return "HOL"

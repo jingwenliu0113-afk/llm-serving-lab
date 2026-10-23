@@ -2,6 +2,7 @@
 rules (Mac lock, the 140W adapter, one powermode; GPU lock for the CUDA parts; both verified), the freeze and its
 pilot evidence."""
 
+import hashlib
 import json
 import shutil
 import tomllib
@@ -385,3 +386,16 @@ def test_the_pilot_records_each_kld_base_size(tmp_path):
             for x in (tmp_path / "results" / "stage_q" / "s" / "rows.jsonl").read_text().splitlines()}
     assert rows["kld_base-4B"]["base_bytes"] == 1234 and rows["kld_base-4B"]["need_gib"] > 0
     assert rows["delete_kld-9B"]["base_bytes"] == 1234 and rows["delete_kld-9B"]["deleted"] is True
+
+
+def test_a_log_counts_as_committed_on_the_wsl_copy_through_its_deploy_manifest(tmp_path):
+    log = tmp_path / "docs" / "decisions" / "999-x.md"
+    log.parent.mkdir(parents=True)
+    log.write_text("a supersedes b\n")
+    assert sq.git_tracked(log, root=tmp_path) is False                                # no .git, no manifest
+    sha = hashlib.sha256(log.read_bytes()).hexdigest()
+    (tmp_path / "DEPLOY_MANIFEST.json").write_text(json.dumps({"files": {"docs/decisions/999-x.md": sha}}))
+    assert sq.git_tracked(log, root=tmp_path) is True
+    log.write_text("edited after the deploy\n")
+    assert sq.git_tracked(log, root=tmp_path) is False
+

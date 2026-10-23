@@ -17,7 +17,8 @@ CFG = tomllib.loads((ROOT / "configs" / "stage_e2.toml").read_text())
 SPREAD = (0.99, 1.0, 1.01)
 
 
-def rows_for(cells, *, beta=None, gate_zone=None, missing=(), preempt=None, recompute=None, shares=None):
+def rows_for(cells, *, beta=None, gate_zone=None, missing=(), preempt=None, recompute=None, shares=None,
+             a10_invalid=()):
     """cells: {cell: (U, M)} (shared cells: (Y,)); every restart valid with a 1 % spread; recompute: R per cell
     (default 0); shares: B0 cells' HOL-long + KV-short (split evenly)."""
     beta, gate_zone, preempt = beta or {}, gate_zone or {}, preempt or {}
@@ -34,7 +35,8 @@ def rows_for(cells, *, beta=None, gate_zone=None, missing=(), preempt=None, reco
                             "beta": beta.get(name, 0.5), "preemptions": preempt.get(name, 0),
                             "recompute_tokens": recompute.get(name, 0), "kv_peak": 0.5, "budget_full_share": 0.4,
                             "lq_short": 2.0, "total_token_throughput": 5e3,
-                            "decomp": {"q_shares": {"budget-long": 0.5, "HOL-long": h, "KV-short": h},
+                            "decomp": {"valid": name not in a10_invalid,
+                                       "q_shares": {"budget-long": 0.5, "HOL-long": h, "KV-short": h},
                                        "unexplained_break_share": 0.01},
                             "one_hz": {"gate_zone": gate_zone.get(name, 0.1) * k, "kv_full_while_waiting": 0.0}})
     return out
@@ -69,7 +71,8 @@ def test_t_failing_only_under_kv_pressure_reads_r3():
 @pytest.mark.parametrize("kw, path", [
     (dict(preempt={"T@8k": 40}, recompute={"T@8k": 0}), "unresolved"),             # preemptions but no recompute
     (dict(shares={"B0@8k": 0.7}), "HOL"), (dict(shares={"B0@8k": 0.3}), "unresolved"),
-    (dict(recompute={"T@8k": None}), "NT")])
+    (dict(recompute={"T@8k": None}), "NT"),
+    (dict(shares={"B0@8k": 0.7}, a10_invalid=("B0@8k",)), "NT")])                 # shares need A10 (024:64)
 def test_r3s_paths_follow_041(kw, path):
     a = analyze(**R3_KW, **kw)
     assert a["row"]["row"] == "R3" and a["row"]["path"] == path
@@ -81,6 +84,13 @@ def test_the_descriptive_block_and_the_allocator_bound():
     assert d["n_valid"] == 3 and d["recompute_tokens"]["mean"] == 5000 and d["preemptions"]["mean"] == 40
     assert d["budget_full_share"]["mean"] == 0.4 and d["lq_short"]["mean"] == 2.0 and d["q_share_hol_long"]["mean"] == 0.1
     assert d["long_class_p95_ttft_ms"] is None and set(a["descriptive"]) >= {"PC-on/shared", "B0@8k/uniform"}
+    assert a["cells"]["T@8k"]["preemptions_total"] == 6 * 40
+    a = ea.analyze(rows_for(BASE, missing=(("T@8k", "mixed", 3),), a10_invalid=("B0@8",)), CFG)
+    two = a["descriptive"]["T@8k/mixed"]                                              # 2 valid restarts: nothing
+    assert two["n_valid"] == 2 and two["recompute_tokens"] is None and two["preemptions"] is None
+    assert a["cells"]["T@8k"]["preemptions_total"] is None
+    b8 = a["descriptive"]["B0@8/mixed"]                                               # A10-invalid: no shares
+    assert b8["q_share_hol_long"] is None and b8["unexplained_break_share"] is None and b8["kv_peak"]["mean"] == 0.5
     assert a["allocator"] == {"status": "未操弄，未檢驗", "waste_upper_bound": 0.031, "source": "024 A13"}
 
 

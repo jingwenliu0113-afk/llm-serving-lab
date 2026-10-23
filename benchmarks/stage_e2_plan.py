@@ -364,6 +364,8 @@ def smoke_problems(path, pins: dict, cfg: dict) -> list:
         problems.append(f"{path.name}: not a finished, passed E2 smoke")
     if s.get("env_valid") is not True:
         problems.append(f"{path.name}: env not valid ({s.get('env_flags')})")
+    if s.get("vllm_version") != pins["vllm"]["version"]:
+        problems.append(f"{path.name}: ran vLLM {s.get('vllm_version')!r}, not the pinned {pins['vllm']['version']}")
     problems += [f"{path.name}: {p}" for p in host_problems(s.get("host"))]
     if s.get("harness_sha256") != harness_sha256():
         problems.append(f"{path.name}: ran another harness (harness_sha256)")

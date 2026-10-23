@@ -245,6 +245,8 @@ def test_a_pilot_commits_no_speed(tmp_path):
     for f in (out / "rows.jsonl", out / "session.json"):
         text = f.read_text()
         assert "avg_ts" not in text and "wall_s" not in text and "tok_s" not in text, f
+    assert [x.name for x in (out / "env").iterdir()] == ["preflight.json"]            # per-job captures: raw/env
+    assert len(list((out / "raw" / "env").glob("*.json"))) == 2 * len(plan["jobs"])
 
 
 def test_plans_are_never_written_into_results_stage_e(tmp_path):

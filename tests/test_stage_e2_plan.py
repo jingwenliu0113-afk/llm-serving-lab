@@ -141,6 +141,7 @@ def test_formal_plans_need_the_freeze_and_a_passed_smoke_of_this_design(tmp_path
             ({"status": "running"}, None, "finished, passed"),
             ({"env_valid": False}, None, "env not valid"),
             ({"host": {"system": "Darwin", "wsl": False, "nvidia": False}}, None, "host"),
+            ({"vllm_version": "0.29.0"}, None, "pinned"),
             ({"datasets_sha256": {**s["datasets_sha256"], "shared:2048": "0" * 64}}, None, "datasets"),
             ({"smoke": {**sm, "covered": sm["covered"][:-1]}}, None, "cover"),
             ({"smoke": {**sm, "measured_blocks": {**sm["measured_blocks"], "PC": 200}}}, None, "measured blocks"),

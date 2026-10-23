@@ -167,7 +167,7 @@
 - **負載 β**（只用於條件）：mixed bench 時間窗內，1 Hz 取樣中 `num_requests_waiting > 0` 的份額，3 次平均。β_ok：β(B0@25) − β(B0@8) ≥ 0.20。
 - **KV 操弄有效（KV_ok）**：B0@8k 的 mixed gate-zone 份額（025 的 1 Hz 定義）高於 B0@8 並超出 noise（`exceeds`），而且 uniform 特異性 |ln(U_8k/U_8)| ≤ 0.10。
 - **描述量**（每格都報告，不改判定）：f、m、u、類別；preemption 總數（**T@8 必報**：C 8 時 3 個長類同時在場為 233 / 247 個 block）；重算 token R = Σ ctx_tok − Δvllm:prompt_tokens_total（prompt_tokens 不計重算）；KV 峰值、kv_full_while_waiting、gate-zone 份額；B0 格的分解（budget-long、HOL-long、KV-short）；mixed 的 total token throughput；長類 P95；Λ（滿 2,048 token 的 step 時間份額）與 L̄q（平均排隊中的短類數）；交互作用 I_KV = (ρ_B0@8 − ρ_T@8) − (ρ_B0@8k − ρ_T@8k)，附 SE；allocator 的 block 粒度浪費上界與 unexplained-break 份額，寫成「未操弄，未檢驗」（024 A13）。
-  - 計算方式：R 的 Σ ctx_tok 取 bench 時間窗內的 step（和 Δprompt_tokens 一樣含 warmup）；Λ = 時間窗內相鄰 step 的區間 (t_{j−1}, t_j] 中，step j 的 ctx_tok + gen_tok ≥ 2,048 的區間長度份額；L̄q = 短類主 request 的 Q 加總 ÷ 時間窗長度（Little's law）；每個 (cell, mix) 報 3 次有效 restart 的平均與 SE（缺任一次時不報）；allocator 上界用 024 A13 的 0.031。
+  - 計算方式：每格只在 3 次 restart 都有效時報（少於 3 次不報）；分解的份額（tail、q_shares、unexplained-break）還要 3 次分解都通過 A10（024:64）；R 的 Σ ctx_tok 取 bench 時間窗內的 step（和 Δprompt_tokens 一樣含 warmup）；Λ = 時間窗內相鄰 step 的區間 (t_{j−1}, t_j] 中，step j 的 ctx_tok + gen_tok ≥ 2,048 的區間長度份額；L̄q = 短類主 request 的 Q 加總 ÷ 時間窗長度（Little's law）；每個 (cell, mix) 報 3 次有效 restart 的平均與 SE（缺任一次時不報）；allocator 上界用 024 A13 的 0.031。
 
 ### 2.3 condition
 
@@ -244,7 +244,7 @@
 | R5 | T@8 為 E，但 B0@8k 的 H-C0 失敗或 KV_ok 不成立 | KV 對比不成立，只記「T 在 C 8 有效」 |
 | R6 | 其他（含 NT） | 照實報告，不解讀；有 NT 時標 incomplete |
 
-- **R3 的子標籤**：T@8k 的 preemption > 0 而且 R > 0 → over-commit 路徑；preemption = 0 而且 B0@8k 的 HOL-long 加 KV-short 份額 ≥ 0.5 → HOL 路徑；其他 → 路徑未分辨。preemption 取 T@8k mixed 3 次有效 restart 的加總，R 取其平均；份額取 B0@8k mixed 3 次的平均；任一缺值時子標籤為 NT。
+- **R3 的子標籤**：T@8k 的 preemption > 0 而且 R > 0 → over-commit 路徑；preemption = 0 而且 B0@8k 的 HOL-long 加 KV-short 份額 ≥ 0.5 → HOL 路徑；其他 → 路徑未分辨。preemption 取 T@8k mixed 3 次有效 restart 的加總，R 取其平均；份額取 B0@8k mixed 3 次的平均，而且 3 次的分解都要通過 A10；任一缺值或分解無效時子標籤為 NT。
 - **incomplete**：主列的某個輸入為 NT（參照的 H-C0、T 的判定、KV_ok）時，把它換成每一個可能的確定值重新套用解讀表，主列會改變才標 incomplete；R0c 一律 incomplete；R6 有任何 NT 時標 incomplete。H-C0 失敗是確定的結果，不是 NT。β_ok 為 NT 時，R2 與 R4 的讀法改為「β_ok NT，負載差無法判讀」並標 incomplete。
 - **T256 附註**：T256@25 為 E → 較小的 threshold 在 C 25 有效，T512 的失效和 threshold 大小有關，與 S、V 的預測都不符；主列若是 R3 或 R4，加註「機制解讀只適用於 T512」。T256@25 為 I → 沒有鑑別力（T256 自己的切段與 preemption 也有成本）。NT → incomplete。
 - **H-E2k** 單獨報告，回答 037 的「其他 KV 劑量」；主表用的是 KV_ok。
@@ -264,14 +264,14 @@
 - 有效性：024 A1 加 031（閒置判定、spill），再加 K2.5 的 155 個 block、T 與 T256 的 chunk 檢查、PC 的命中檢查、mixed dataset 的 sha256。同一格出現無效 run 後，不再跑該格剩下的 restart（024）。
 - 閒置判定的上限：B0、T、K2.5 沿用 F_peak 15,157 MiB；T256 與 PC-on 由 smoke 量 bench 後的增量，超過 15,157 + 128 MiB 時，凍結前另寫 decision log 改用實測值。
 - 停止規則：不提前停止，也不依結果決定任何事；連續 3 次 boot 沒有就緒時停止（session 記 stopped，剩下的 boot 記為 skipped，該 session 作廢）；持有 lock 的上限 7.5 h（約預估的 1.75 倍），到上限時在 boot 之間停止，沒跑完的格為 NT。
-- 記憶體：每次 boot 在 bench 之後、teardown 之前量一次 nvidia-smi 的 memory.used，減去該 boot 閒置窗的 idle_mib，記為增量。
+- 記憶體：每次 boot 在 bench 之後、teardown 之前量一次 nvidia-smi 的 memory.used，減去該 boot 閒置窗的 idle_mib，記為增量；量不到時記為 None 並記錄錯誤（描述量，不影響 Y 與 session；smoke 的記憶體條件因此不通過）。
 - 重跑（§0）：session 目錄只能是 `results/stage_e/<id>`；第一個 boot 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），中斷的 session 也是一次嘗試，讀不到時以 `plan.json` 判定為作廢的嘗試；在第一個 boot 之前被拒絕的（status refused）不算。已有一個有效的正式 session（finished、env 有效、沒有 stopped），或已有兩次嘗試時，runner 拒絕開始，分析也只接受「之前最多一次作廢嘗試」的第一個有效 session。plan 記錄的 `stage_e2_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊。
 
 ### 2.10 E2 的凍結證據
 
 - **WSL 原始碼核對**（CPU，不需要 GPU lock）：hybrid 模型的 prefix caching 路徑（mamba_cache_mode、block size）；custom dataset 的 warmup 來源（serve.py:840-868）；/metrics 中 prefix cache 計數器的名稱；span 是否帶 cached-token 欄位；1 Hz 取樣中 `num_requests_waiting` 的來源。
 - **smoke**：設計中每個 (condition, mix) 一次 boot（12 次：B0、T、T256、K2.5、TK2.5 的 uniform 與 mixed，PC-off、PC-on 的共享前綴），`rc.mini_num_prompts(20)`。smoke 之前要先 pin 共享前綴 dataset 的 sha256；smoke 的 plan 必須恰好是 build_plan 的 smoke plan，datasets 都要符合 pin。通過條件：涵蓋全部 12 個 (cell, mix)；每次 boot 有效（non-default args 恰好符合、FLASH_ATTN、block 數 K2.5 155、其他含 PC 都是 248、block_size 528）；chunk 檢查；PC-on 命中符合、PC-off 為 0；PC-off 與 PC-on 的 mamba_cache_mode 有值；A10 (a)(b)(d) 通過，(c) 通過或豁免（有 preemption，或 PC）；T256 與 PC-on 的 bench 後記憶體增量 ≤ 15,157 + 128 MiB（否則依 2.9 另寫 decision log）；沒有 spill；teardown 乾淨；有 derived；env 有效。延遲遮蔽，不看：bench 結果、spans、OTLP、Prometheus 文字檔、steps、series 都刪除，session.json 不留 bench 時間窗與 startup 時間。
-- 凍結證據（`smoke_problems`）：smoke 跑完而且通過、env 有效、WSL CUDA host、相同 harness、plan 等於目前設定下的 smoke plan、datasets 等於 pin、涵蓋全部 (cell, mix)、量到的 block 數等於預期。
+- 凍結證據（`smoke_problems`）：smoke 跑完而且通過、env 有效、WSL CUDA host、pins 的 vLLM（smoke 也在開始前核對版本）、相同 harness、plan 等於目前設定下的 smoke plan、datasets 等於 pin、涵蓋全部 (cell, mix)、量到的 block 數等於預期。
 
 ### 2.11 能交付與不能交付
 
@@ -360,7 +360,7 @@
 
 ### 3.7 凍結證據
 
-每個平台一次 pilot：兩個 Q4_0 加 4B-Q4_K_M，L 2048，各 1 次，加 sentinel；結果遮蔽（commit 的 rows.jsonl 只留 job 的身分與結果，完整的列在 git-ignored 的 `raw/rows.full.jsonl`；session.json 的 sentinel 只留漂移）。兩個平台共用 harness 與 `[e3]`，所以任一平台的正式 plan 都要兩個 freeze 旗標都是 true、兩個 pilot 都通過：先跑完的平台不會因為另一個平台的 pilot 逼出的 harness 修正而無法分析、也無法重跑。通過條件（`stage_e3.pilot_problems`）：session 跑完；每個 job ok（含每列的模型身分）；8 個 GGUF 的 sha256 與 header 都相符；env 有效（Mac 為 Apple 140W 並記錄協商瓦數；RTX 已量 B 且沒有 drift）；plan 是 build_plan 在此設定下的 pilot plan（含上限與參數數）；記錄的 `harness_sha256` 等於目前的 harness。
+每個平台一次 pilot：兩個 Q4_0 加 4B-Q4_K_M，L 2048，各 1 次，加 sentinel；結果遮蔽（commit 的 rows.jsonl 只留 job 的身分與結果，完整的列在 git-ignored 的 `raw/rows.full.jsonl`，每個 job 前後的 env capture 也放在 `raw/env/`，因為它們的時間戳等於 job 的時間；session.json 的 sentinel 只留漂移）。RTX 的正式 plan 要在 WSL 上核對 Mac 的 pilot，所以凍結 commit 之後先以 `tools/rtx/push_session.sh stage_e <Mac pilot id>` 把它（不含 raw/）放到 WSL。兩個平台共用 harness 與 `[e3]`，所以任一平台的正式 plan 都要兩個 freeze 旗標都是 true、兩個 pilot 都通過：先跑完的平台不會因為另一個平台的 pilot 逼出的 harness 修正而無法分析、也無法重跑。通過條件（`stage_e3.pilot_problems`）：session 跑完；每個 job ok（含每列的模型身分）；8 個 GGUF 的 sha256 與 header 都相符；env 有效（Mac 為 Apple 140W 並記錄協商瓦數；RTX 已量 B 且沒有 drift）；plan 是 build_plan 在此設定下的 pilot plan（含上限與參數數）；記錄的 `harness_sha256` 等於目前的 harness。
 
 ## 4. 時數
 
@@ -475,3 +475,8 @@
   - pilot 把兩個 Q4_0 的 tok/s 寫進會 commit 的 rows.jsonl → pilot 的 rows.jsonl 只留身分與結果（3.7）。
   - 存在 `results/stage_e/` 的 plan 檔會被算成作廢的嘗試 → 只有 plan.json 的目錄不算，plan 指令拒絕寫進 `results/stage_e/`。
   - 分析的 `--out` 可以覆寫既有 session → 只接受新的 session 目錄，並記錄輸入的 sha256；E2 的分析同樣改為寫到新的 session 目錄（§0）。
+
+### 第三輪覆核（2026-10-23，smoke 與 pilot 之前）
+
+- E2（確認 4 項）：R3 的 HOL 路徑與描述量用了 A10 無效的分解份額、描述量在少於 3 次 restart 時仍報平均 → 依 2.2、2.7 修正；bench 後的 nvidia-smi 失敗會中止整個 session → 改為記錄錯誤；smoke 沒有核對 vLLM 版本 → smoke 也核對，凍結證據加上版本。
+- E3（確認 3 項）：pilot 的逐 job env capture 帶有 job 的時間 → 移到 `raw/env/`；RTX 的正式 plan 需要 Mac 的 pilot 在 WSL 上，沒有支援的步驟 → `tools/rtx/push_session.sh`（3.7）；一個測試沒有真正改到 `[freeze]` → 修正。

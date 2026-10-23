@@ -191,11 +191,30 @@ def test_the_first_valid_formal_session_after_at_most_one_void_attempt_is_analyz
     log = root / "docs" / "decisions" / "999-q2.md"
     log.parent.mkdir(parents=True)
     log.write_text("v2 (an interrupted run) is superseded; v3 is analyzed.\n")
-    out = analyze(root, cfg, superseded={"v2": "docs/decisions/999-q2.md"}, tracked=lambda p: True)
-    assert out["sessions"]["q2"] == "v3" and out["parts"]["q2"]["superseded"] == ["v2"]
+    v3 = root / "results" / "stage_q" / "v3" / "session.json"                       # what v3's run recorded
+    v3.write_text(json.dumps({**json.loads(v3.read_text()), "superseded": {"v2": "docs/decisions/999-q2.md"}}))
+    out = analyze(root, cfg, tracked=lambda p: True)
+    assert out["sessions"]["q2"] == "v3" and out["parts"]["q2"]["superseded"] == {"v2": "v3"}
+    with pytest.raises(qa2.AnalysisError, match="not committed"):
+        analyze(root, cfg, tracked=lambda p: False)
     log.write_text("v2 is superseded.\n")
     with pytest.raises(qa2.AnalysisError, match="does not name both"):
-        analyze(root, cfg, superseded={"v2": "docs/decisions/999-q2.md"}, tracked=lambda p: True)
+        analyze(root, cfg, tracked=lambda p: True)
+
+
+def test_no_supersede_can_hide_a_valid_session(tmp_path, pilot_root):
+    root, cfg = frozen(tmp_path, pilot_root)
+    formal_session(root, "q2", Q2_ROWS, sid="formal-q2", started="2026-10-24T00:00:00")
+    log = root / "docs" / "decisions" / "999-q2.md"
+    log.parent.mkdir(parents=True)
+    log.write_text("formal-q2 is superseded by formal-q2b.\n")
+    formal_session(root, "q2", [], session_over={"env_valid": False, "superseded": {"formal-q2": str(
+        log.relative_to(root))}}, sid="formal-q2b", started="2026-10-25T00:00:00")
+    with pytest.raises(qa2.AnalysisError, match="no valid formal session replaces it"):
+        analyze(root, cfg, tracked=lambda p: True)
+    log.write_text("formal-q2b supersedes nothing here.\n")                         # -q2 is only a prefix of -q2b
+    with pytest.raises(qa2.AnalysisError, match="does not name both"):
+        analyze(root, cfg, tracked=lambda p: True)
 
 
 def test_the_bounds_include_their_endpoints_exactly():
