@@ -10,6 +10,7 @@ import pytest
 import adv_plan as ap
 import capacity_plan as cp
 import stage_e2_plan as e2
+import test_run_stage_e2 as tre2
 
 ROOT = Path(__file__).resolve().parent.parent
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
@@ -21,17 +22,28 @@ B0_LOG = ROOT / "results" / "capacity" / "c0-step0" / "raw" / "formal-20261011-a
 
 
 def frozen(smoke="smoke-e2"):
-    e = {**CFG["e2"], "expected_blocks": {**CFG["e2"]["expected_blocks"], "PC": 248},
-         "shared_prefix": {**CFG["e2"]["shared_prefix"], "sha256": "s" * 64, "common_prefix": 1630}}
+    e = {**CFG["e2"], "shared_prefix": {**CFG["e2"]["shared_prefix"], "sha256": "s" * 64, "common_prefix": 1630}}
     return {**CFG, "freeze": {"e2": True, "smoke_e2": smoke}, "e2": e}
 
 
 def test_the_repo_config_is_well_formed_and_unfrozen():
     assert e2.config_problems(CFG, PINS) == [] and CFG["freeze"] == {"e2": False, "smoke_e2": ""}
+    assert CFG["e2"]["expected_blocks"] == {"B0": 248, "T": 248, "T256": 248, "K25": 155, "TK25": 155, "PC": 248}
     assert e2.config_problems(frozen(), PINS) == []
-    unmeasured = {**frozen(), "e2": {**frozen()["e2"], "expected_blocks": CFG["e2"]["expected_blocks"]}}
-    assert any("PC must be measured" in p for p in e2.config_problems(unmeasured, PINS))
+    for pc in (200, 248.0, True):
+        bad = {**CFG, "e2": {**CFG["e2"], "expected_blocks": {**CFG["e2"]["expected_blocks"], "PC": pc}}}
+        assert any("expected_blocks" in p for p in e2.config_problems(bad, PINS)), pc
     assert e2.config_problems({**CFG, "e2": {**CFG["e2"], "kv25_bytes": 2 * 2 ** 30}}, PINS)
+    unpinned = {**frozen(), "e2": {**frozen()["e2"], "shared_prefix": CFG["e2"]["shared_prefix"]}}
+    assert any("shared_prefix" in p for p in e2.config_problems(unpinned, PINS))
+    with pytest.raises(e2.PlanError, match="pinned first"):
+        e2.smoke_plan(PINS, CFG)                                                    # the dataset comes before the smoke
+
+
+def test_a_plan_pins_the_configs_content_without_freeze():
+    a, b = frozen(), {**frozen(), "freeze": {"e2": False, "smoke_e2": ""}}
+    assert e2.config_sha256(a) == e2.config_sha256(b) != e2.config_sha256({**a, "e2": {**a["e2"], "t256": 128}})
+    assert e2.smoke_plan(PINS, b)["stage_e2_sha256"] == e2.config_sha256(a)
 
 
 def test_b0_and_t_are_exactly_advanceds_servers():
@@ -100,17 +112,8 @@ def test_timeouts_follow_030_and_double_for_chunked_conditions():
     assert e2.timeout_s("PC", "shared", 25) == cp.bench_timeout_s(2048, "uniform", 25, cp.TAU1_S)
 
 
-def smoke_session(root, sid="smoke-e2", **over):
-    d = root / "results" / "stage_e" / sid
-    d.mkdir(parents=True)
-    s = {"stage": "E2", "mode": "smoke", "smoke": {"ok": True}, "harness_sha256": e2.harness_sha256(),
-         "host": {"system": "Linux", "wsl": True, "nvidia": True}, **over}
-    (d / "session.json").write_text(json.dumps(s))
-
-
 def test_the_formal_plan_has_48_boots_in_three_shuffled_blocks(tmp_path):
-    smoke_session(tmp_path)
-    p = e2.build_plan(PINS, frozen(), mode="formal", root=tmp_path)
+    _, _, _, _, p = tre2.formal_setup(tmp_path)
     assert len(p["boots"]) == 48 and [b["block"] for b in p["boots"]] == [1] * 16 + [2] * 16 + [3] * 16
     cells = {(b["cell"], b["mix"]) for b in p["boots"] if b["block"] == 1}
     assert len(cells) == 16 and ("PC-on", "shared") in cells and ("PC-on", "uniform") not in cells
@@ -123,19 +126,37 @@ def test_the_formal_plan_has_48_boots_in_three_shuffled_blocks(tmp_path):
     assert p["cap_s"] == 7.5 * 3600 and p["harness_sha256"] == e2.harness_sha256()
 
 
-def test_formal_plans_need_the_freeze_and_a_passed_smoke(tmp_path):
+def test_formal_plans_need_the_freeze_and_a_passed_smoke_of_this_design(tmp_path):
+    root, ds, pins, cfg, _ = tre2.formal_setup(tmp_path)
     with pytest.raises(e2.PlanError, match="freeze.e2"):
-        e2.build_plan(PINS, CFG, mode="formal", root=tmp_path)
+        e2.build_plan(pins, {**cfg, "freeze": {"e2": False, "smoke_e2": ""}}, mode="formal", root=root)
     with pytest.raises(e2.PlanError, match="smoke first"):
-        e2.build_plan(PINS, frozen(), mode="formal", root=tmp_path)
-    smoke_session(tmp_path, harness_sha256="0" * 64)
-    with pytest.raises(e2.PlanError, match="another harness"):
-        e2.build_plan(PINS, frozen(), mode="formal", root=tmp_path)
+        e2.build_plan(pins, {**cfg, "freeze": {"e2": True, "smoke_e2": "none"}}, mode="formal", root=root)
+    d = root / "results" / "stage_e" / "smoke-e2"
+    s, plan = json.loads((d / "session.json").read_text()), json.loads((d / "plan.json").read_text())
+    trimmed = {**plan, "boots": plan["boots"][-2:]}
+    sm = s["smoke"]
+    for over_s, over_plan, why in (
+            ({"harness_sha256": "0" * 64}, None, "another harness"),
+            ({"status": "running"}, None, "finished, passed"),
+            ({"env_valid": False}, None, "env not valid"),
+            ({"host": {"system": "Darwin", "wsl": False, "nvidia": False}}, None, "host"),
+            ({"datasets_sha256": {**s["datasets_sha256"], "shared:2048": "0" * 64}}, None, "datasets"),
+            ({"smoke": {**sm, "covered": sm["covered"][:-1]}}, None, "cover"),
+            ({"smoke": {**sm, "measured_blocks": {**sm["measured_blocks"], "PC": 200}}}, None, "measured blocks"),
+            ({"plan_sha256": e2.sha256_json(trimmed)}, trimmed, "smoke plan"),
+            ({}, trimmed, "plan_sha256")):
+        (d / "session.json").write_text(json.dumps({**s, **over_s}))
+        (d / "plan.json").write_text(json.dumps(over_plan or plan))
+        with pytest.raises(e2.PlanError, match=why):
+            e2.build_plan(pins, cfg, mode="formal", root=root)
+    (d / "session.json").write_text(json.dumps(s))
+    (d / "plan.json").write_text(json.dumps(plan))
+    assert e2.build_plan(pins, cfg, mode="formal", root=root)["boots"]
 
 
-def test_the_smoke_plan_has_one_boot_per_condition_and_mix_type():
-    import run_capacity as rc
-    with rc.mini_num_prompts(e2.SMOKE_N):
-        p = e2.build_plan(PINS, CFG, mode="smoke")
+def test_the_smoke_plan_has_one_boot_per_condition_and_mix_of_the_design():
+    p = e2.smoke_plan(PINS, frozen())
+    design = {(e2._cell(c)[1], m) for c, _, _, mixes in e2.CELLS for m in mixes}
     assert [(b["cell"], b["mix"]) for b in p["boots"]] == list(e2.SMOKE) and {b["N"] for b in p["boots"]} == {20}
-    assert {b["cond"] for b in p["boots"]} == set(e2.CONDITIONS) and p["cap_s"] is None
+    assert {(b["cond"], b["mix"]) for b in p["boots"]} == design and len(design) == 12 and p["cap_s"] is None

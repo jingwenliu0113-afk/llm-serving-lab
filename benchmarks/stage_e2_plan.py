@@ -14,8 +14,10 @@ Random(sha256("<seed>:stage_e:E2:block:<r>")).
 Timeouts: capacity_plan.bench_timeout_s(2048, mix, C, TAU1_S) (shared as uniform), doubled for T, T256 and TK25 (039).
 Mixed: the pinned data/core_b/mixed-2048.jsonl (--disable-shuffle; C 8 reads its first 200 rows). Shared: the pinned
 shared-prefix dataset (stage_e2_datasets.py).
-Formal plans need freeze.e2, every expected block count measured and the passed smoke (mode smoke, smoke.ok, this
-harness, a WSL CUDA host).
+Smoke plans need the shared-prefix dataset pinned (sha256, common prefix); a plan records stage_e2_sha256 = the
+config's content without [freeze]. Formal plans need freeze.e2 and the passed smoke: finished, smoke.ok with every
+SMOKE (cell, mix) covered, env valid, a WSL CUDA host, this harness, its plan exactly build_plan's smoke plan, its
+datasets the pinned ones and its measured block counts the expected ones (041 v3 §2.10).
 
 Usage:
     python benchmarks/stage_e2_plan.py --mode smoke --out plan.json
@@ -41,6 +43,7 @@ import capacity_plan as cp  # noqa: E402
 import core_b_plan as bp  # noqa: E402
 import coreb_smoke as smoke  # noqa: E402
 import run_adv as ra  # noqa: E402
+from run_core_a import sha256_json  # noqa: E402
 
 SCHEMA_VERSION = 1
 STAGE = "E2"
@@ -54,9 +57,10 @@ MIX2 = ("uniform", "mixed")
 CELLS = (("B0@25", "B0", 25, MIX2), ("T@25", "T", 25, MIX2), ("T256@25", "T256", 25, MIX2),
          ("B0@8", "B0", 8, MIX2), ("T@8", "T", 8, MIX2), ("B0@8k", "K25", 8, MIX2), ("T@8k", "TK25", 8, MIX2),
          ("PC-off", "B0", 25, ("shared",)), ("PC-on", "PC", 25, ("shared",)))
-# the smoke: one boot per condition and mix type, each at its formal C (041 v3 §2.10)
-SMOKE = (("B0@8", "uniform"), ("B0@25", "mixed"), ("T@25", "mixed"), ("T256@25", "mixed"), ("B0@8k", "mixed"),
-         ("T@8k", "mixed"), ("PC-off", "shared"), ("PC-on", "shared"))
+# the smoke: one boot per (condition, mix) of the design, each at a formal C of that condition (041 v3 §2.10)
+SMOKE = (("B0@8", "uniform"), ("B0@25", "mixed"), ("T@8", "uniform"), ("T@25", "mixed"), ("T256@25", "uniform"),
+         ("T256@25", "mixed"), ("B0@8k", "uniform"), ("B0@8k", "mixed"), ("T@8k", "uniform"), ("T@8k", "mixed"),
+         ("PC-off", "shared"), ("PC-on", "shared"))
 SMOKE_N = 20
 WATCHED_KEYS = ra.WATCHED_KEYS + ("enable_prefix_caching",)
 HARNESS_FILES = ("benchmarks/stage_e2_plan.py", "benchmarks/run_stage_e2.py", "benchmarks/stage_e2_analysis.py",
@@ -93,10 +97,10 @@ def config_problems(cfg: dict, pins: dict) -> list:
     if e["kv25_bytes"] != 10 * ap.KV_STEP or (lo, hi) != (155, 155):
         problems.append(f"e2.kv25_bytes {e['kv25_bytes']} is not 2.5 GiB with exactly 155 blocks ({lo}, {hi})")
     want = {"B0": sb["num_gpu_blocks"], "T": sb["num_gpu_blocks"], "T256": sb["num_gpu_blocks"], "K25": 155,
-            "TK25": 155}
+            "TK25": 155, "PC": sb["num_gpu_blocks"]}
     eb = e["expected_blocks"]
-    if set(eb) != set(CONDITIONS) or any(eb[k] != v for k, v in want.items()) or not isinstance(eb["PC"], int):
-        problems.append(f"e2.expected_blocks {eb} are not {want} plus PC (the smoke measures PC)")
+    if set(eb) != set(CONDITIONS) or any(type(eb[k]) is not int or eb[k] != v for k, v in want.items()):
+        problems.append(f"e2.expected_blocks {eb} are not 041 v3 §2.10's {want}")
     if (e["m_effective"], e["beta_gap"], e["specificity"]) != (0.20, 0.20, 0.10):
         problems.append("e2.m_effective / beta_gap / specificity are not 041 v3 §2.2's (0.20, 0.20, 0.10)")
     sp = e["shared_prefix"]
@@ -108,11 +112,20 @@ def config_problems(cfg: dict, pins: dict) -> list:
     elif f["e2"]:
         if not f["smoke_e2"]:
             problems.append("freeze.smoke_e2 must name the passed smoke once freeze.e2 is true")
-        if not eb["PC"]:
-            problems.append("e2.expected_blocks.PC must be measured (smoke) before the freeze")
-        if len(str(sp.get("sha256") or "")) != 64 or (sp.get("common_prefix") or 0) < sp["min_shared"]:
-            problems.append("e2.shared_prefix sha256 / common_prefix must be pinned before the freeze")
+        problems += shared_pin_problems(cfg)
     return problems
+
+
+def shared_pin_problems(cfg: dict) -> list:
+    sp = cfg["e2"]["shared_prefix"]
+    if len(str(sp.get("sha256") or "")) != 64 or (sp.get("common_prefix") or 0) < sp["min_shared"]:
+        return ["e2.shared_prefix sha256 / common_prefix must be pinned first (stage_e2_datasets.py, before the smoke)"]
+    return []
+
+
+def config_sha256(cfg: dict) -> str:
+    """configs/stage_e2.toml's content without [freeze] (comments and the freeze never change a plan)."""
+    return sha256_json({k: v for k, v in cfg.items() if k != "freeze"})
 
 
 # ---------------------------------------------------------------- conditions
@@ -201,11 +214,8 @@ _RE_CACHE_INFO = re.compile(r"vllm:cache_config_info\{([^}]*)\}")
 
 def prefix_caching_label(metrics_text: str):
     """enable_prefix_caching of /metrics' vllm:cache_config_info (True / False), or None when absent."""
-    m = _RE_CACHE_INFO.search(metrics_text or "")
-    if not m:
-        return None
-    v = re.search(r'enable_prefix_caching="(\w+)"', m.group(1))
-    return None if not v else v.group(1) == "True"
+    v = cache_info_label(metrics_text, "enable_prefix_caching")
+    return None if v is None else v == "True"
 
 
 # ---------------------------------------------------------------- clients
@@ -254,20 +264,19 @@ def _boot(cell: str, mix: str, restart: int, block: int, cfg: dict) -> dict:
                                                                         "shared": "shared:2048"}.get(mix)}
 
 
-def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = None,
-               stage_e2_sha256: str | None = None, root=ROOT) -> dict:
-    """mode "smoke" (SMOKE, one boot each, built under run_capacity.mini_num_prompts(SMOKE_N) by the runner) or
+def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = None, root=ROOT) -> dict:
+    """mode "smoke" (SMOKE, one boot each, built under run_capacity.mini_num_prompts(SMOKE_N): smoke_plan) or
     "formal" (every cell x mix x 3 restarts; needs freeze.e2 and the passed smoke under root)."""
     if mode not in ("smoke", "formal"):
         raise PlanError(f"unknown mode {mode!r}")
-    problems = config_problems(cfg, pins)
+    problems = config_problems(cfg, pins) + shared_pin_problems(cfg)
     if problems:
-        raise PlanError("configs/stage_e2.toml: " + "; ".join(problems))
+        raise PlanError("configs/stage_e2.toml: " + "; ".join(dict.fromkeys(problems)))
     e = cfg["e2"]
     if mode == "formal":
         if cfg["freeze"]["e2"] is not True:
             raise PlanError("formal E2 plans need freeze.e2 = true (041 凍結)")
-        evidence = smoke_problems(Path(root).joinpath(*RESULTS, cfg["freeze"]["smoke_e2"]))
+        evidence = smoke_problems(Path(root).joinpath(*RESULTS, cfg["freeze"]["smoke_e2"]), pins, cfg)
         if evidence:
             raise PlanError("formal E2 plans need the passed smoke first: " + "; ".join(evidence))
         boots = []
@@ -279,7 +288,7 @@ def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = No
     else:
         boots = [_boot(cell, mix, 1, 1, cfg) for cell, mix in SMOKE]
     return {"schema_version": SCHEMA_VERSION, "stage": STAGE, "mode": mode, "decision": "041 v3 §2", "seed": e["seed"],
-            "derived_from": ap.DERIVED_FROM, "pins_sha256": pins_sha256, "stage_e2_sha256": stage_e2_sha256,
+            "derived_from": ap.DERIVED_FROM, "pins_sha256": pins_sha256, "stage_e2_sha256": config_sha256(cfg),
             "harness_sha256": harness_sha256(), "expected_blocks": dict(e["expected_blocks"]),
             "block_size": pins["stage_b"]["block_size"],
             "thresholds": {c: threshold(c, pins, cfg) for c in CONDITIONS if threshold(c, pins, cfg)},
@@ -289,42 +298,101 @@ def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = No
             "cap_s": e["cap_hours"] * 3600 if mode == "formal" else None, "boots": boots}
 
 
+def _read_json(path: Path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def formal_attempts(root=ROOT) -> list:
+    """Every formal E2 attempt under results/stage_e, oldest first (041 v3 §0: one rerun of a void session, only the
+    first valid one analyzed): a directory whose session.json (final or the running stub) or, when that is unreadable,
+    plan.json is a formal E2 one; runs refused before their first boot are left out. valid = finished, env valid and
+    not stopped (three boots never ready); an unreadable session.json is a void attempt, oldest (fail closed)."""
+    out = []
+    dirs = {f.parent for name in ("session.json", "plan.json") for f in Path(root).joinpath(*RESULTS).rglob(name)}
+    for d in sorted(dirs):
+        s = _read_json(d / "session.json")
+        head = s if isinstance(s, dict) else _read_json(d / "plan.json")
+        if not isinstance(head, dict) or (head.get("stage"), head.get("mode")) != (STAGE, "formal"):
+            continue
+        s = s if isinstance(s, dict) else {}
+        if s.get("status") == "refused":
+            continue
+        valid = s.get("status") == "finished" and s.get("env_valid") is True and not s.get("stopped")
+        out.append({"dir": d, "started_at": s.get("started_at") or "", "valid": valid})
+    return sorted(out, key=lambda a: (a["started_at"], str(a["dir"])))
+
+
+def cache_info_label(metrics_text: str, key: str):
+    """A label of /metrics' vllm:cache_config_info (its string value), or None when absent."""
+    m = _RE_CACHE_INFO.search(metrics_text or "")
+    v = re.search(rf'(?:^|,){re.escape(key)}="([^"]*)"', m.group(1)) if m else None
+    return v.group(1) if v else None
+
+
 def host_problems(host: dict | None) -> list:
     want = {"system": "Linux", "wsl": True, "nvidia": True}
     return [] if host == want else [f"ran on host {host!r}, not a WSL CUDA host"]
 
 
-def smoke_problems(path) -> list:
+def smoke_plan(pins: dict, cfg: dict, *, pins_sha256: str | None = None) -> dict:
+    import run_capacity as rc
+    with rc.mini_num_prompts(SMOKE_N):
+        return build_plan(pins, cfg, mode="smoke", pins_sha256=pins_sha256)
+
+
+def _without(plan: dict, *keys) -> dict:
+    return {k: v for k, v in plan.items() if k not in keys}
+
+
+def smoke_problems(path, pins: dict, cfg: dict) -> list:
+    """041 v3 §2.10's freeze evidence: the smoke at path is a finished, passed run of this design."""
     path = Path(path)
     try:
         s = json.loads((path / "session.json").read_text())
+        plan = json.loads((path / "plan.json").read_text())
     except (OSError, ValueError) as exc:
-        return [f"{path.name}: no readable session.json ({exc})"]
+        return [f"{path.name}: no readable session.json / plan.json ({exc})"]
     problems = []
-    if (s.get("stage"), s.get("mode"), (s.get("smoke") or {}).get("ok")) != (STAGE, "smoke", True):
-        problems.append(f"{path.name}: not a passed E2 smoke")
+    smoke = s.get("smoke") or {}
+    if (s.get("stage"), s.get("mode"), s.get("status"), smoke.get("ok")) != (STAGE, "smoke", "finished", True):
+        problems.append(f"{path.name}: not a finished, passed E2 smoke")
+    if s.get("env_valid") is not True:
+        problems.append(f"{path.name}: env not valid ({s.get('env_flags')})")
     problems += [f"{path.name}: {p}" for p in host_problems(s.get("host"))]
     if s.get("harness_sha256") != harness_sha256():
         problems.append(f"{path.name}: ran another harness (harness_sha256)")
+    if s.get("plan_sha256") != sha256_json(plan):
+        problems.append(f"{path.name}: plan.json is not the plan the smoke ran (plan_sha256)")
+    try:
+        want = smoke_plan(pins, cfg)
+    except PlanError as exc:
+        return problems + [f"{path.name}: no smoke plan under this config ({exc})"]
+    if _without(plan, "pins_sha256") != _without(want, "pins_sha256"):
+        problems.append(f"{path.name}: its plan is not build_plan's smoke plan under this config")
+    if s.get("datasets_sha256") != want["datasets_sha256"]:
+        problems.append(f"{path.name}: its datasets are not the pinned ones ({s.get('datasets_sha256')})")
+    if sorted(map(tuple, smoke.get("covered") or [])) != sorted(SMOKE):
+        problems.append(f"{path.name}: the smoke did not cover every SMOKE (cell, mix)")
+    if smoke.get("measured_blocks") != {c: want["expected_blocks"][c] for c in CONDITIONS}:
+        problems.append(f"{path.name}: measured blocks {smoke.get('measured_blocks')} are not the expected ones")
     return problems
 
 
 def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
-    import run_capacity as rc
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--mode", required=True, choices=["smoke", "formal"])
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
-    raw, cfg_raw = (ROOT / "configs" / "pins.toml").read_bytes(), CONFIG.read_bytes()
-    pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(cfg_raw.decode())
+    raw = (ROOT / "configs" / "pins.toml").read_bytes()
+    pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(CONFIG.read_text())
     try:
         if args.mode == "smoke":
-            with rc.mini_num_prompts(SMOKE_N):
-                plan = build_plan(pins, cfg, mode="smoke", pins_sha256=hashlib.sha256(raw).hexdigest(),
-                                  stage_e2_sha256=hashlib.sha256(cfg_raw).hexdigest())
+            plan = smoke_plan(pins, cfg, pins_sha256=hashlib.sha256(raw).hexdigest())
         else:
-            plan = build_plan(pins, cfg, mode="formal", pins_sha256=hashlib.sha256(raw).hexdigest(),
-                              stage_e2_sha256=hashlib.sha256(cfg_raw).hexdigest())
+            plan = build_plan(pins, cfg, mode="formal", pins_sha256=hashlib.sha256(raw).hexdigest())
     except PlanError as exc:
         print(f"stage_e2_plan: {exc}", file=sys.stderr)
         return 2

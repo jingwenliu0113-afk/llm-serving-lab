@@ -167,6 +167,7 @@
 - **負載 β**（只用於條件）：mixed bench 時間窗內，1 Hz 取樣中 `num_requests_waiting > 0` 的份額，3 次平均。β_ok：β(B0@25) − β(B0@8) ≥ 0.20。
 - **KV 操弄有效（KV_ok）**：B0@8k 的 mixed gate-zone 份額（025 的 1 Hz 定義）高於 B0@8 並超出 noise（`exceeds`），而且 uniform 特異性 |ln(U_8k/U_8)| ≤ 0.10。
 - **描述量**（每格都報告，不改判定）：f、m、u、類別；preemption 總數（**T@8 必報**：C 8 時 3 個長類同時在場為 233 / 247 個 block）；重算 token R = Σ ctx_tok − Δvllm:prompt_tokens_total（prompt_tokens 不計重算）；KV 峰值、kv_full_while_waiting、gate-zone 份額；B0 格的分解（budget-long、HOL-long、KV-short）；mixed 的 total token throughput；長類 P95；Λ（滿 2,048 token 的 step 時間份額）與 L̄q（平均排隊中的短類數）；交互作用 I_KV = (ρ_B0@8 − ρ_T@8) − (ρ_B0@8k − ρ_T@8k)，附 SE；allocator 的 block 粒度浪費上界與 unexplained-break 份額，寫成「未操弄，未檢驗」（024 A13）。
+  - 計算方式：R 的 Σ ctx_tok 取 bench 時間窗內的 step（和 Δprompt_tokens 一樣含 warmup）；Λ = 時間窗內相鄰 step 的區間 (t_{j−1}, t_j] 中，step j 的 ctx_tok + gen_tok ≥ 2,048 的區間長度份額；L̄q = 短類主 request 的 Q 加總 ÷ 時間窗長度（Little's law）；每個 (cell, mix) 報 3 次有效 restart 的平均與 SE（缺任一次時不報）；allocator 上界用 024 A13 的 0.031。
 
 ### 2.3 condition
 
@@ -179,7 +180,7 @@
 | T256 | `--long-prefill-token-threshold 256` | 248 / 528 | 每個 step：ctx_tok ≤ 256 × ctx_req |
 | K2.5 | `--kv-cache-memory-bytes 2684354560` | 155 / 528（`blocks_bounds`） | /metrics 的 block 數 |
 | TK2.5 | T 加 K2.5 | 155 / 528 | 兩項都檢查 |
-| PC | 唯一的 `--no-enable-prefix-caching` 換成 `--enable-prefix-caching` | smoke 確認 | 命中檢查（2.8） |
+| PC | 唯一的 `--no-enable-prefix-caching` 換成 `--enable-prefix-caching` | 248 / 528（smoke 確認） | 命中檢查（2.8） |
 
 - non-default args 必須恰好是該 condition 的 key 加兩個觀測 key；`enable_prefix_caching` 只有 PC 為 True。
 - T 在所有 condition 都固定為 512；依 024 的規則，K2.5 下 n = 2，算出的 T 是 682，這裡不跟著改，只讓 KV 變動（揭露）。
@@ -221,12 +222,12 @@
 
 | id | 內容 | 預測 |
 |---|---|---|
-| H-E2-0 | 每個 B0 參照都重現 H-B4（`h_b4_values` 通過） | supported（C 25 已知 +445%；C 8 只有 Stage C 不同 session 的 M2K C 4 +587%） |
+| H-E2-0 | 每個 B0 參照都重現 H-B4（`h_b4_values` 通過）；任一參照失敗為 not supported，否則任一為 NT 時為 NT；同時列出各參照的狀態 | supported（C 25 已知 +445%；C 8 只有 Stage C 不同 session 的 M2K C 4 +587%） |
 | H-E2-R | T@25 為 I（在同一 session 重現 025） | supported（025：N，m 0.069） |
 | H-E2a | T@8 為 E | supported（S、V、Th 都這樣預測） |
 | H-E2b | T@8k 為 I | 不預測（V 預測 supported；S、Th 預測 not supported） |
 | H-E2c | T256@25 為 E | 不預測（Th 預測 supported；S、V 預測 not supported） |
-| H-E2k | B0 在 C 8 的 KV 劑量效果，完全照 024 A7(i)：a = ρ_8k/ρ_8 − 1 ≥ 0.20、uρ、m_up、\|ln(U_8k/U_8)\| ≤ 0.10 | supported，信心低（025 在 C 25 的 K3 只有 a 0.123） |
+| H-E2k | B0 在 C 8 的 KV 劑量效果，完全照 024 A7(i)：a = ρ_8k/ρ_8 − 1 ≥ 0.20、uρ、m_up、\|ln(U_8k/U_8)\| ≤ 0.10；ρ_8 ≤ 0 時相對劑量沒有定義，記為 NT | supported，信心低（025 在 C 25 的 K3 只有 a 0.123） |
 | H-E2e | 共享前綴 uniform：Y_on ≤ 0.8 × Y_off，且超出 noise | supported；只要有命中幾乎必然成立，這是能力檢查，不是機制檢驗 |
 
 ### 2.7 解讀表（依序取第一個符合的列）
@@ -243,7 +244,8 @@
 | R5 | T@8 為 E，但 B0@8k 的 H-C0 失敗或 KV_ok 不成立 | KV 對比不成立，只記「T 在 C 8 有效」 |
 | R6 | 其他（含 NT） | 照實報告，不解讀；有 NT 時標 incomplete |
 
-- **R3 的子標籤**：T@8k 的 preemption > 0 而且 R > 0 → over-commit 路徑；preemption = 0 而且 B0@8k 的 HOL-long 加 KV-short 份額 ≥ 0.5 → HOL 路徑；其他 → 路徑未分辨。
+- **R3 的子標籤**：T@8k 的 preemption > 0 而且 R > 0 → over-commit 路徑；preemption = 0 而且 B0@8k 的 HOL-long 加 KV-short 份額 ≥ 0.5 → HOL 路徑；其他 → 路徑未分辨。preemption 取 T@8k mixed 3 次有效 restart 的加總，R 取其平均；份額取 B0@8k mixed 3 次的平均；任一缺值時子標籤為 NT。
+- **incomplete**：主列的某個輸入為 NT（參照的 H-C0、T 的判定、KV_ok）時，把它換成每一個可能的確定值重新套用解讀表，主列會改變才標 incomplete；R0c 一律 incomplete；R6 有任何 NT 時標 incomplete。H-C0 失敗是確定的結果，不是 NT。β_ok 為 NT 時，R2 與 R4 的讀法改為「β_ok NT，負載差無法判讀」並標 incomplete。
 - **T256 附註**：T256@25 為 E → 較小的 threshold 在 C 25 有效，T512 的失效和 threshold 大小有關，與 S、V 的預測都不符；主列若是 R3 或 R4，加註「機制解讀只適用於 T512」。T256@25 為 I → 沒有鑑別力（T256 自己的切段與 preemption 也有成本）。NT → incomplete。
 - **H-E2k** 單獨報告，回答 037 的「其他 KV 劑量」；主表用的是 KV_ok。
 - I_KV、Λ、L̄q 與 025 尾端分解的觀測簽名只作描述，不決定任何列。
@@ -253,19 +255,23 @@
 - 問題：在這個 hybrid（GDN）模型與 vLLM 0.30.0 上，共享前綴時 prefix caching 能否縮短短類 TTFT？所有基準都關閉 PC，所以它不是已觀察到的 H-B4 的成因。
 - 處理的定義：PC 的 flag，加上 vLLM 因此改變的 hybrid cache 模式（024:194）；smoke 記錄 mamba_cache_mode 與 attention block size。
 - dataset（WSL、CPU 產生）：只呼叫一次 `RandomDataset.sample(num_requests = N + warmup, prefix_len, input_len, range_ratio = 0)`，seed 20261008；以 server 的 tokenizer 驗證每列恰好 1,920 token、所有列的共同 token-id 前綴 ≥ 3 × block_size（528 時 1,584），否則不寫檔；實測的共同前綴長度與 sha256 pin 在該部分的設定檔。
-- 命中檢查（每次 boot）：span 有 cached-token 欄位時（smoke 確認），≥ 95% 的主 request 命中 1,584 token；否則 Δprefix_cache_hits ≥ 0.95 × N × 1,584 且 ≤ (N + warmup + 1) × 1,584；PC-off 必須為 0；不符合時該 run 無效。
+- 命中檢查（每次 boot）：span 有 cached-token 欄位時（名稱含 cached 與 token；smoke 記錄名稱），N 個主 request 都要有值，≥ 95% 命中 1,584 token；否則 Δprefix_cache_hits ≥ 0.95 × N × 1,584 且 ≤ (N + warmup + 1) × 1,584；PC-off 必須為 0（兩種來源都檢查）；不符合時該 run 無效。
+- mamba_cache_mode 取自 /metrics 的 `vllm:cache_config_info` 標籤（WSL 原始碼核對確認標籤名稱）；smoke 中 PC-off 與 PC-on 都必須有值。
 - block_size 若不是 528：另寫 decision log 並重做 dataset，不臨時改設計。
 
 ### 2.9 有效性與停止規則
 
 - 有效性：024 A1 加 031（閒置判定、spill），再加 K2.5 的 155 個 block、T 與 T256 的 chunk 檢查、PC 的命中檢查、mixed dataset 的 sha256。同一格出現無效 run 後，不再跑該格剩下的 restart（024）。
 - 閒置判定的上限：B0、T、K2.5 沿用 F_peak 15,157 MiB；T256 與 PC-on 由 smoke 量 bench 後的增量，超過 15,157 + 128 MiB 時，凍結前另寫 decision log 改用實測值。
-- 停止規則：不提前停止，也不依結果決定任何事；連續 3 次 boot 沒有就緒時停止；持有 lock 的上限 7.5 h（約預估的 1.75 倍），到上限時在 boot 之間停止，沒跑完的格為 NT。
+- 停止規則：不提前停止，也不依結果決定任何事；連續 3 次 boot 沒有就緒時停止（session 記 stopped，剩下的 boot 記為 skipped，該 session 作廢）；持有 lock 的上限 7.5 h（約預估的 1.75 倍），到上限時在 boot 之間停止，沒跑完的格為 NT。
+- 記憶體：每次 boot 在 bench 之後、teardown 之前量一次 nvidia-smi 的 memory.used，減去該 boot 閒置窗的 idle_mib，記為增量。
+- 重跑（§0）：session 目錄只能是 `results/stage_e/<id>`；第一個 boot 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），中斷的 session 也是一次嘗試，讀不到時以 `plan.json` 判定為作廢的嘗試；在第一個 boot 之前被拒絕的（status refused）不算。已有一個有效的正式 session（finished、env 有效、沒有 stopped），或已有兩次嘗試時，runner 拒絕開始，分析也只接受「之前最多一次作廢嘗試」的第一個有效 session。plan 記錄的 `stage_e2_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊。
 
 ### 2.10 E2 的凍結證據
 
 - **WSL 原始碼核對**（CPU，不需要 GPU lock）：hybrid 模型的 prefix caching 路徑（mamba_cache_mode、block size）；custom dataset 的 warmup 來源（serve.py:840-868）；/metrics 中 prefix cache 計數器的名稱；span 是否帶 cached-token 欄位；1 Hz 取樣中 `num_requests_waiting` 的來源。
-- **smoke**：每個 (condition, mix 類型) 一次 boot，`rc.mini_num_prompts(20)`，約 9 次 boot。通過條件：non-default args 恰好符合、FLASH_ATTN；block 數（K2.5 155，其他 248）、block_size 528；chunk 檢查；PC-on 命中符合、PC-off 為 0、記錄 mamba_cache_mode；span 對齊，A10 (a)(b)(d) 通過（有 preemption 或 PC 時 (c) 豁免）；T256 與 PC-on 的記憶體增量在上限內；沒有 spill；teardown 乾淨；derived schema 正確；延遲遮蔽，不看。
+- **smoke**：設計中每個 (condition, mix) 一次 boot（12 次：B0、T、T256、K2.5、TK2.5 的 uniform 與 mixed，PC-off、PC-on 的共享前綴），`rc.mini_num_prompts(20)`。smoke 之前要先 pin 共享前綴 dataset 的 sha256；smoke 的 plan 必須恰好是 build_plan 的 smoke plan，datasets 都要符合 pin。通過條件：涵蓋全部 12 個 (cell, mix)；每次 boot 有效（non-default args 恰好符合、FLASH_ATTN、block 數 K2.5 155、其他含 PC 都是 248、block_size 528）；chunk 檢查；PC-on 命中符合、PC-off 為 0；PC-off 與 PC-on 的 mamba_cache_mode 有值；A10 (a)(b)(d) 通過，(c) 通過或豁免（有 preemption，或 PC）；T256 與 PC-on 的 bench 後記憶體增量 ≤ 15,157 + 128 MiB（否則依 2.9 另寫 decision log）；沒有 spill；teardown 乾淨；有 derived；env 有效。延遲遮蔽，不看：bench 結果、spans、OTLP、Prometheus 文字檔、steps、series 都刪除，session.json 不留 bench 時間窗與 startup 時間。
+- 凍結證據（`smoke_problems`）：smoke 跑完而且通過、env 有效、WSL CUDA host、相同 harness、plan 等於目前設定下的 smoke plan、datasets 等於 pin、涵蓋全部 (cell, mix)、量到的 block 數等於預期。
 
 ### 2.11 能交付與不能交付
 
@@ -450,3 +456,13 @@
   - 另外加上兩個描述欄位：g 1–23 的計數分布與「最近時間戳減 s」的範圍，讓 T、TG 的時序是否和 B0、G、K3 相同可以直接看出。
   - 覆核確認：下一個時間戳至少在 s 之後 44 ms（不會多算下一個 step）；position 0 的 Q 在 15 個 run 都 ≤ 0.015 ms；T、TG 正常組的 F 為 24.8–29.1 ms，和 B0 相同。
 - 之後凍結 E1-D（1.7）。
+
+### E2 harness 審查（2026-10-23，smoke 與凍結之前）
+
+- 一個審查 workflow（3 位審查者分別看 plan、runner、analysis，每項由一個 agent 嘗試反駁）確認 18 項，沒有被反駁的；全部處理：
+  - smoke 沒有綁定設計：縮減的 smoke plan、改過的 expected_blocks、別的 dataset 都能通過凍結 → smoke plan 必須等於 build_plan 的，共享前綴 dataset 先 pin，凍結證據逐項核對（2.10）。smoke 改為 12 次 boot，涵蓋設計中每個 (condition, mix)（原文「約 9 次」）。
+  - smoke 的通過條件缺 A10、teardown、mamba_cache_mode 與記憶體增量（原本記錄的其實是 KV 使用率）；PC 不跑 A10 → 全部補上，PC 用 B0 的 knob、(c) 豁免（2.10）。PC 的 block 數固定為 248（2.3、2.10）。
+  - 「連續 3 次 boot 沒有就緒時停止」沒有實作；重跑上限沒有強制；session 目錄可以巢狀 → 實作，並比照 E3 寫 stub 與數嘗試次數（2.9）。
+  - R、Λ、L̄q 沒有計算，R3 的子標籤只看 preemption；描述量大多沒有報 → 實作並定義計算方式（2.2、2.7）。
+  - incomplete 把 H-C0 失敗當成 NT，也沒有照「NT 能否改變主列」判斷；β_ok 為 NT 時被讀成不成立；H-E2k 在 ρ_8 ≤ 0 時仍判定；H-E2-0 沒有三值判定；T256 的「只適用於 T512」附註沒有加 → 全部依 2.6、2.7 修正。
+  - smoke 的延遲遮蔽不足 → 補上（2.10）。

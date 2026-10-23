@@ -10,15 +10,24 @@ frozen functions, every contrast inside the session.
 - H-C0 gate per reference: core_b_analysis.h_b4_values (>= 20 % and beyond noise).
 - beta_ok: beta(B0@25) - beta(B0@8) >= beta_gap (beta: share of 1 Hz samples with waiting > 0, mixed).
 - KV_ok: B0@8k's mixed gate-zone share exceeds B0@8's beyond noise and |ln(U_8k / U_8)| <= specificity.
-- H-E2k: 024 A7(i) at C 8: a = rho_8k / rho_8 - 1 >= 0.20, u_rho, m_up and the uniform specificity.
+- H-E2k: 024 A7(i) at C 8: a = rho_8k / rho_8 - 1 >= 0.20, u_rho, m_up and the uniform specificity; NT when
+  rho_8 <= 0 (the relative dose is undefined).
+- H-E2-0: not supported if a reference's H-C0 fails, else NT if one is NT, else supported (statuses kept).
 - H-E2e: shared-prefix short-class P95 TTFT with PC on <= 0.8 x off and beyond noise.
-- The interpretation table R0-R6 (first match), R3's sub-labels and the T256 note.
+- The interpretation table R0-R6 (first match); incomplete when a row's NT input could change the row (every value it
+  could take is substituted), for R0c, and for R6 with any NT; beta_ok NT gives its own R2 / R4 reading. R3's path:
+  over-commit when T@8k's mixed preemptions > 0 and its mean R > 0, HOL when they are 0 and B0@8k's mean mixed
+  HOL-long + KV-short share >= 0.5, else unresolved (NT on a missing input). T256: its note, and the T512-only
+  caveat on R3 / R4.
+- Descriptive per (cell, mix), mean / SE over the valid restarts: throughput, long-class P95, KV peak, the 1 Hz
+  shares, preemptions, R, Lambda, Lq, the B0 tail shares and the unexplained-break share; the allocator bound is
+  reported as 024 A13's, 未操弄，未檢驗.
+- A formal session is analyzed only if it is the first valid one after at most one void attempt (041 v3 §0).
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import statistics
@@ -34,6 +43,16 @@ import stage_e2_plan as e2p  # noqa: E402
 
 REFERENCE = {"T@25": "B0@25", "T256@25": "B0@25", "T@8": "B0@8", "T@8k": "B0@8k"}
 PC_FACTOR = 0.8
+HOL_SHARE = 0.5                                         # 041 v3 §2.7: R3's HOL path
+DESCRIPTIVE = {"total_token_throughput": ("total_token_throughput",),
+               "long_class_p95_ttft_ms": ("long_class_p95_ttft_ms",), "kv_peak": ("kv_peak",),
+               "kv_full_while_waiting": ("one_hz", "kv_full_while_waiting"), "gate_zone": ("one_hz", "gate_zone"),
+               "preemptions": ("preemptions",), "recompute_tokens": ("recompute_tokens",),
+               "budget_full_share": ("budget_full_share",), "lq_short": ("lq_short",),
+               "unexplained_break_share": ("decomp", "unexplained_break_share"),
+               "q_share_budget_long": ("decomp", "q_shares", "budget-long"),
+               "q_share_hol_long": ("decomp", "q_shares", "HOL-long"),
+               "q_share_kv_short": ("decomp", "q_shares", "KV-short")}
 
 
 class AnalysisError(RuntimeError):
@@ -59,6 +78,35 @@ def cell(rows: list, name: str) -> dict:
             "beta": statistics.mean(beta) if len(beta) >= aa.RESTARTS else None,
             "preemptions_total": sum(pre) if pre else None,
             "n_valid": {mix: len(_values(rows, name, mix, "short_class_p95_ttft_ms")) for mix in e2p.MIX2}}
+
+
+def _valid(rows: list, name: str, mix: str) -> list:
+    return [r for r in rows if r["cell"] == name and r["mix"] == mix and r.get("valid")]
+
+
+def describe(rows: list, name: str, mix: str) -> dict:
+    """041 v3 §2.2's descriptive quantities of one (cell, mix): mean / SE over its valid restarts (None if one lacks
+    it)."""
+    v = _valid(rows, name, mix)
+    return {"n_valid": len(v), **{k: aa._mean_se([aa._field(r, *path) for r in v]) for k, path in DESCRIPTIVE.items()}}
+
+
+def r3_path(rows: list) -> str:
+    """041 v3 §2.7's R3 sub-label from T@8k's and B0@8k's mixed restarts."""
+    t = _valid(rows, "T@8k", "mixed")
+    if len(t) < aa.RESTARTS or any(r.get("preemptions") is None or r.get("recompute_tokens") is None for r in t):
+        return "NT"
+    pre, R = sum(r["preemptions"] for r in t), statistics.mean(r["recompute_tokens"] for r in t)
+    if pre > 0 and R > 0:
+        return "over-commit"
+    if pre == 0:
+        shares = [aa._field(r, "decomp", "q_shares") for r in _valid(rows, "B0@8k", "mixed")]
+        if len(shares) < aa.RESTARTS or not all(isinstance(q, dict) and q.get("HOL-long") is not None
+                                                and q.get("KV-short") is not None for q in shares):
+            return "NT"
+        if statistics.mean(q["HOL-long"] + q["KV-short"] for q in shares) >= HOL_SHARE - aa.TOL:
+            return "HOL"
+    return "unresolved"
 
 
 def gate(rows: list, name: str, C: int) -> dict:
@@ -110,7 +158,9 @@ def analyze(rows: list, cfg: dict) -> dict:
         aa.exceeds(g8k["mean"], g8k["se"], g8["mean"], g8["se"]) and spec
     hk = {"verdict": "NT"}
     c8, c8k = cells["B0@8"], cells["B0@8k"]
-    if c8["rho"] and c8k["rho"] is not None and spec is not None:
+    if c8["rho"] is not None and c8["rho"] <= 0:
+        hk["why"] = "rho_8 <= 0: the relative dose a = rho_8k / rho_8 - 1 is undefined"
+    elif c8["rho"] is not None and c8k["rho"] is not None and spec is not None:
         a = c8k["rho"] / c8["rho"] - 1
         u_rho = aa.exceeds(c8k["rho"], c8k["rho_se"], c8["rho"], c8["rho_se"])
         m_up = aa.exceeds(c8k["M"], c8k["M_se"], c8["M"], c8["M_se"])
@@ -123,13 +173,19 @@ def analyze(rows: list, cfg: dict) -> dict:
         "verdict": "supported" if on["mean"] <= PC_FACTOR * off["mean"] and aa.exceeds(off["mean"], off["se"],
                                                                                        on["mean"], on["se"])
         else "not supported"}
-    hyp = {"H-E2-0": {r: gates[r]["status"] for r in gates},
+    statuses = {r: gates[r]["status"] for r in gates}
+    h0 = "not supported" if "fails" in statuses.values() else "NT" if "NT" in statuses.values() else "supported"
+    hyp = {"H-E2-0": {"verdict": h0, "by_reference": statuses},
            "H-E2-R": _verdict(vs["T@25"], want="I"), "H-E2a": _verdict(vs["T@8"], want="E"),
            "H-E2b": _verdict(vs["T@8k"], want="I"), "H-E2c": _verdict(vs["T256@25"], want="E"), "H-E2k": hk,
            "H-E2e": he}
     out = {"cells": cells, "gates": gates, "versus": vs, "beta_ok": beta_ok, "kv_ok": kv_ok, "hypotheses": hyp,
-           "interaction_I_KV": _interaction(cells)}
-    out["row"] = interpret(out)
+           "interaction_I_KV": _interaction(cells),
+           "descriptive": {f"{name}/{mix}": describe(rows, name, mix) for name, _, _, mixes in e2p.CELLS
+                           for mix in mixes},
+           "allocator": {"status": aa.ALLOCATOR_STATUS, "waste_upper_bound": aa.ALLOCATOR_WASTE_BOUND,
+                         "source": "024 A13"}}
+    out["row"] = interpret(out, r3=r3_path(rows))
     return out
 
 
@@ -147,40 +203,120 @@ def _interaction(cells: dict):
     return {"value": i, "se": math.sqrt(sum(cells[k]["rho_se"] ** 2 for k in keys))}
 
 
-def interpret(a: dict) -> dict:
-    g, v = a["gates"], a["versus"]
-    ev = {k: x["verdict"] for k, x in v.items()}
-    if g["B0@25"]["status"] == "fails":
-        row = ("R0", "C 25 did not reproduce H-B4 in the session; no attribution")
-    elif ev["T@25"] == "E":
-        row = ("R0b", "025's N was not reproduced in the session; E2's question does not arise")
-    elif "NT" in (g["B0@25"]["status"], ev["T@25"]) or ev["T@25"] == "gate fails":
-        row = ("R0c", "incomplete")
-    elif g["B0@8"]["status"] == "fails":
-        row = ("R1", "no 2K penalty at C 8; neither the load nor the KV contrast can be tested")
-    elif ev["T@8"] == "I":
-        row = ("R2", "T fails at C 8 too, with less load and KV unconstrained: neither S nor V is necessary"
-               if a["beta_ok"] else "T fails at C 8 too; the load difference is not enough")
-    elif ev["T@8"] == "E" and a["kv_ok"] and ev["T@8k"] == "I":
-        row = ("R3", "KV pressure alone makes T fail at C 8's load: supports V; S not necessary")
-    elif ev["T@8"] == "E" and a["kv_ok"] and ev["T@8k"] == "E":
-        row = ("R4", "C 8's rebuilt KV structure is not enough; C 25's failure needs a C-related factor"
-               + ("; consistent with S (not separable from a load x KV interaction)" if a["beta_ok"] else
-                  "; S not interpreted (beta_ok fails)"))
-    elif ev["T@8"] == "E" and (g["B0@8k"]["status"] == "fails" or a["kv_ok"] is False):
-        row = ("R5", "the KV contrast fails; only 'T works at C 8'")
-    else:
-        row = ("R6", "other: reported, not interpreted")
-    nt = any(x in ("NT", "gate fails") for x in ev.values())
-    out = {"row": row[0], "reading": row[1], "incomplete": nt and row[0] not in ("R0c",)}
-    if row[0] == "R3":
-        t8k = a["cells"]["T@8k"]
-        out["path"] = "over-commit" if (t8k["preemptions_total"] or 0) > 0 else "unresolved"
+def table(g: dict, ev: dict, kv_ok) -> str:
+    """041 v3 §2.7's first matching row for given reference statuses, verdicts and KV_ok."""
+    if g["B0@25"] == "fails":
+        return "R0"
+    if ev["T@25"] == "E":
+        return "R0b"
+    if "NT" in (g["B0@25"], ev["T@25"]) or ev["T@25"] == "gate fails":
+        return "R0c"
+    if g["B0@8"] == "fails":
+        return "R1"
+    if ev["T@8"] == "I":
+        return "R2"
+    if ev["T@8"] == "E" and kv_ok and ev["T@8k"] == "I":
+        return "R3"
+    if ev["T@8"] == "E" and kv_ok and ev["T@8k"] == "E":
+        return "R4"
+    if ev["T@8"] == "E" and (g["B0@8k"] == "fails" or kv_ok is False):
+        return "R5"
+    return "R6"
+
+
+def _options(status: str, verdict: str) -> list:
+    """Every determined (reference status, verdict) an NT pair could turn out to be."""
+    if status == "NT":
+        return [("passes", "E"), ("passes", "I"), ("fails", "gate fails")]
+    if verdict == "NT":
+        return [(status, "E"), (status, "I")]
+    return [(status, verdict)]
+
+
+def possible_rows(g: dict, ev: dict, kv_ok) -> set:
+    out = set()
+    for s25, v25 in _options(g["B0@25"], ev["T@25"]):
+        for s8, v8 in _options(g["B0@8"], ev["T@8"]):
+            for s8k, v8k in _options(g["B0@8k"], ev["T@8k"]):
+                for kv in ((True, False) if kv_ok is None else (kv_ok,)):
+                    out.add(table({"B0@25": s25, "B0@8": s8, "B0@8k": s8k},
+                                  {"T@25": v25, "T@8": v8, "T@8k": v8k}, kv))
+    return out
+
+
+READINGS = {
+    "R0": "C 25 did not reproduce H-B4 in the session; no attribution",
+    "R0b": "025's N was not reproduced in the session; E2's question does not arise",
+    "R0c": "incomplete",
+    "R1": "no 2K penalty at C 8; neither the load nor the KV contrast can be tested",
+    "R2": {True: "T fails at C 8 too, with less load and KV unconstrained: neither S nor V is necessary",
+           False: "T fails at C 8 too; the load difference is not enough",
+           None: "T fails at C 8 too; beta_ok NT, the load difference is not readable"},
+    "R3": "KV pressure alone makes T fail at C 8's load: supports V; S not necessary",
+    "R4": {True: "C 8's rebuilt KV structure is not enough; C 25's failure needs a C-related factor; consistent with S "
+                 "(not separable from a load x KV interaction)",
+           False: "C 8's rebuilt KV structure is not enough; C 25's failure needs a C-related factor; S not "
+                  "interpreted (beta_ok fails)",
+           None: "C 8's rebuilt KV structure is not enough; C 25's failure needs a C-related factor; S not "
+                 "interpreted (beta_ok NT)"},
+    "R5": "the KV contrast fails; only 'T works at C 8'",
+    "R6": "other: reported, not interpreted",
+}
+T512_ONLY = "the mechanism reading applies to T512 only"
+
+
+def interpret(a: dict, r3: str = "NT") -> dict:
+    g = {k: v["status"] for k, v in a["gates"].items()}
+    ev = {k: x["verdict"] for k, x in a["versus"].items()}
+    row = table(g, ev, a["kv_ok"])
+    reading = READINGS[row]
+    if isinstance(reading, dict):
+        reading = reading[a["beta_ok"]]
+    nt = "NT" in g.values() or any(v == "NT" for k, v in ev.items() if k != "T256@25") or a["kv_ok"] is None
+    incomplete = row == "R0c" or len(possible_rows(g, ev, a["kv_ok"])) > 1 or (row == "R6" and nt) or \
+        (row in ("R2", "R4") and a["beta_ok"] is None)
+    out = {"row": row, "reading": reading, "incomplete": incomplete}
+    if row == "R3":
+        out["path"] = r3
     note = ev["T256@25"]
     out["t256_note"] = {"E": "a smaller threshold works at C 25: T512's failure depends on the threshold size (matches "
                              "neither S nor V)", "I": "no evidence on the threshold size (T256 has its own costs)"}.get(
         note, "incomplete")
+    if note == "E" and row in ("R3", "R4"):
+        out["t512_only"] = T512_ONLY
     return out
+
+
+def session_problems(path, *, pins: dict, cfg: dict, root=ROOT) -> list:
+    """The session is a finished, env-valid formal E2 session of this harness, config and design, not stopped, directly
+    under results/stage_e, and the first valid one after at most one void attempt (041 v3 §0)."""
+    path = Path(path)
+    s, plan = e2p._read_json(path / "session.json"), e2p._read_json(path / "plan.json")
+    if not isinstance(s, dict) or not isinstance(plan, dict):
+        return [f"{path}: no readable session.json / plan.json"]
+    problems = []
+    if (s.get("stage"), s.get("mode"), s.get("status")) != (e2p.STAGE, "formal", "finished"):
+        return [f"{path.name}: not a finished formal E2 session"]
+    if path.resolve().parent != Path(root).resolve().joinpath(*e2p.RESULTS):
+        problems.append(f"{path}: not results/stage_e/<session id>")
+    if s.get("env_valid") is not True or s.get("stopped"):
+        problems.append(f"{path.name}: env-invalid or stopped ({s.get('stopped')}): void, one rerun (041 v3 §0)")
+    if s.get("harness_sha256") != e2p.harness_sha256() or s.get("plan_sha256") != e2p.sha256_json(plan):
+        problems.append(f"{path.name}: harness_sha256 / plan_sha256 do not match")
+    if s.get("stage_e2_sha256") != e2p.config_sha256(cfg):
+        problems.append(f"{path.name}: configs/stage_e2.toml's content changed since the session")
+    try:
+        want = e2p.build_plan(pins, cfg, mode="formal", root=root)
+        if e2p._without(plan, "pins_sha256") != e2p._without(want, "pins_sha256"):
+            problems.append(f"{path.name}: plan.json is not build_plan's formal plan")
+    except e2p.PlanError as exc:
+        problems.append(f"{path.name}: build_plan refuses its formal plan ({exc})")
+    earlier = [x for x in e2p.formal_attempts(root)
+               if x["dir"].resolve() != path.resolve() and x["started_at"] < (s.get("started_at") or "")]
+    if len(earlier) > 1 or any(x["valid"] for x in earlier):
+        problems.append(f"{path.name}: earlier formal E2 attempts {[x['dir'].name for x in earlier]} (only the first "
+                        "valid session, after at most one void attempt, is analyzed)")
+    return problems
 
 
 def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
@@ -188,15 +324,14 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     parser.add_argument("--session", required=True)
     args = parser.parse_args(argv)
     session = Path(args.session)
-    s = json.loads((session / "session.json").read_text())
-    cfg_raw = e2p.CONFIG.read_bytes()
-    if (s.get("mode"), s.get("env_valid"), s.get("harness_sha256"), s.get("stage_e2_sha256")) != \
-            ("formal", True, e2p.harness_sha256(), hashlib.sha256(cfg_raw).hexdigest()):
-        print("stage_e2_analysis: not a formal, env-valid session of this harness and configs/stage_e2.toml",
-              file=sys.stderr)
+    pins = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
+    cfg = tomllib.loads(e2p.CONFIG.read_text())
+    problems = session_problems(session, pins=pins, cfg=cfg)
+    if problems:
+        print("stage_e2_analysis: " + "; ".join(problems), file=sys.stderr)
         return 2
     rows = [json.loads(x) for x in (session / "rows.jsonl").read_text().splitlines() if x.strip()]
-    out = analyze(rows, tomllib.loads(cfg_raw.decode()))
+    out = analyze(rows, cfg)
     (session / "analysis.json").write_text(json.dumps(out, indent=1, default=str) + "\n")
     print(json.dumps({"row": out["row"]["row"]}))
     return 0

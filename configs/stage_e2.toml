@@ -14,7 +14,7 @@ L = 2048
 restarts = 3
 kv25_bytes = 2684354560                                   # K2.5: 10 x 256 MiB; adv_plan.blocks_bounds gives 155 exactly
 t256 = 256                                                # T256's --long-prefill-token-threshold
-expected_blocks = { B0 = 248, T = 248, T256 = 248, K25 = 155, TK25 = 155, PC = 0 }   # PC: measured by the smoke
+expected_blocks = { B0 = 248, T = 248, T256 = 248, K25 = 155, TK25 = 155, PC = 248 }   # 041 v3 §2.10; smoke-checked
 m_effective = 0.20                                        # E: category M / P and ln(M0 / Mc) >= 0.20 (041 v3 §2.2)
 beta_gap = 0.20                                           # beta(B0@25) - beta(B0@8) >= 0.20
 specificity = 0.10                                        # |ln(U_8k / U_8)| <= 0.10 (KV_ok, H-E2k)
