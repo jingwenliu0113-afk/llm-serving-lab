@@ -426,19 +426,25 @@ def run_session(plan: dict, *, pins: dict, cfg: dict, pins_sha256: str, out_dir,
         os.replace(tmp, out / "session.json")
 
     write_session()                                         # the stub: an interrupted session is still an attempt
-    (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
-    pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=True)
-    session["host"] = {"system": (pre.get("os") or {}).get("system"), "wsl": (pre.get("os") or {}).get("wsl"),
-                       "nvidia": bool((pre.get("gpu") or {}).get("nvidia"))}
-    got = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
-    session["vllm_version"] = got
-    bad = [] if got == pins["vllm"]["version"] else [f"vLLM {got!r}, not the pinned {pins['vllm']['version']}"]
-    if formal:
-        bad += env_problems(pre, "wsl2-cuda") + provenance_problems(pre, pre) + e2p.host_problems(session["host"])
-    if bad:
-        session.update(status="refused", refused=bad)
+    try:                                    # until the first boot no server can have started: any end here is refused
+        (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
+        pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=True)
+        session["host"] = {"system": (pre.get("os") or {}).get("system"), "wsl": (pre.get("os") or {}).get("wsl"),
+                           "nvidia": bool((pre.get("gpu") or {}).get("nvidia"))}
+        got = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
+        session["vllm_version"] = got
+        bad = [] if got == pins["vllm"]["version"] else [f"vLLM {got!r}, not the pinned {pins['vllm']['version']}"]
+        if formal:
+            bad += env_problems(pre, "wsl2-cuda") + provenance_problems(pre, pre) + e2p.host_problems(session["host"])
+        if bad:
+            session["refused"] = bad
+            raise RunError(f"{mode} E2 session refused before it starts: " + "; ".join(bad))
+    except BaseException as exc:
+        session["status"] = "refused"
+        if "refused" not in session:
+            session["aborted"] = f"{type(exc).__name__}: {exc}"
         write_session()
-        raise RunError(f"{mode} E2 session refused before it starts: " + "; ".join(bad))
+        raise
     rows = []
     with open(out / "rows.jsonl", "w") as fh:
         h = E2Harness(plan={**plan, "server_ready_timeout_s": plan.get("server_ready_timeout_s", ra.STARTUP_TIMEOUT_S)},

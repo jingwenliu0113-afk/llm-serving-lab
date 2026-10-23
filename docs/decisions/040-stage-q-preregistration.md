@@ -254,3 +254,9 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 | 36 | log 的路徑照輸入記錄，在 WSL 上用絕對路徑時，Mac 的分析永遠讀不到 | 補記 14：只接受 repo 內的相對路徑 |
 | 37 | 有效 session 可以被作廢的 session 或它自己取代 | 補記 14：不能取代自己，被取代的必須是較早的嘗試；文字改為「之後必須有有效的 session 被分析」 |
 | 38 | Q3 的分析在凍結前仍會寫出 NT | 補記 14：凍結前一律拒絕 |
+
+### E1-P 審查順帶發現（2026-10-23，pilot 之前）
+
+| # | 發現 | 處理 |
+|---|---|---|
+| 39 | runner 先寫 `running` 的 stub 再做 preflight（env 擷取、輸入核對）；這段期間被中斷，session 會留在 `running`，被算成一次作廢的嘗試，但其實沒有任何工作執行過 | 補記 14：從 stub 到第一個工作之前的任何結束都記為 `refused`（不算嘗試）。Q1 / Q2（`quality/stage_q.py`）與 Q3（`quality/stage_q3.py`）都改；E2、E3 同樣修正（041 修訂紀錄） |

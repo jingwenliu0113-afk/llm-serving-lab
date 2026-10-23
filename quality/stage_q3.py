@@ -587,19 +587,25 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
         os.replace(tmp, out / "session.json")
 
     write_session()                                         # the stub: an interrupted session is still an attempt
-    (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
-    pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held)
-    session.update(host=host_of(pre), vllm_version=vllm_version(pre))
-    if formal:
-        bad = env_problems(pre, PLATFORM) + provenance_problems(pre, pre) + host_problems(host_of(pre))
-        if vllm_version(pre) != pins["vllm"]["version"]:
-            bad.append(f"vLLM {vllm_version(pre)!r}, not the pinned {pins['vllm']['version']} (040: one runtime)")
-        if not bad:
-            bad = (checkpoint_problems or default_checkpoint_problems)(plan, pins)
-        if bad:
-            session.update(status="refused", refused=bad)
+    try:                                    # before the first job nothing ran: any end here is refused
+        (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
+        pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held)
+        session.update(host=host_of(pre), vllm_version=vllm_version(pre))
+        if formal:
+            bad = env_problems(pre, PLATFORM) + provenance_problems(pre, pre) + host_problems(host_of(pre))
+            if vllm_version(pre) != pins["vllm"]["version"]:
+                bad.append(f"vLLM {vllm_version(pre)!r}, not the pinned {pins['vllm']['version']} (040: one runtime)")
+            if not bad:
+                bad = (checkpoint_problems or default_checkpoint_problems)(plan, pins)
+            if bad:
+                session.update(status="refused", refused=bad)
+                write_session()
+                raise StageQ3Error("formal Q3 run refused before it starts: " + "; ".join(bad))
+    except BaseException as exc:
+        if session["status"] != "refused":
+            session.update(status="refused", refused=[f"interrupted before the first job: {type(exc).__name__}: {exc}"])
             write_session()
-            raise StageQ3Error("formal Q3 run refused before it starts: " + "; ".join(bad))
+        raise
     rows, env_flags = [], []
     with open(out / "rows.jsonl", "w") as fh:
         for job in plan["jobs"]:

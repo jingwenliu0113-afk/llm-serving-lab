@@ -438,3 +438,15 @@ def test_an_abort_before_any_server_started_is_not_an_attempt(tmp_path):
     session(root, ds, pins, cfg, plan, mode="formal", sid="ok", world=World(tmp_path / "wo"))
     assert [a["dir"].name for a in e2.formal_attempts(root)] == ["ok"]
 
+
+
+def test_an_interrupt_during_the_preflight_is_refused_not_an_attempt(tmp_path):
+    root, ds, pins, cfg, plan = formal_setup(tmp_path)
+
+    def interrupted(**kw):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        session(root, ds, pins, cfg, plan, mode="formal", sid="f", capture_env=interrupted)
+    s = json.loads((root / "results" / "stage_e" / "f" / "session.json").read_text())
+    assert s["status"] == "refused" and "KeyboardInterrupt" in s["aborted"] and e2.formal_attempts(root) == []

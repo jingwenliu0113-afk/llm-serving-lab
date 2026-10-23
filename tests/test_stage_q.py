@@ -403,3 +403,17 @@ def test_a_log_counts_as_committed_on_the_wsl_copy_through_its_deploy_manifest(t
     log.write_text("edited after the deploy\n")
     assert sq.git_tracked(log, root=tmp_path) is False
 
+
+
+def test_an_interrupt_before_the_first_job_is_refused_not_an_attempt(frozen_root, tmp_path):
+    plan = formal("q1-metal", frozen_root)
+
+    def interrupted(**kw):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        run(tmp_path, plan, "a", capture=interrupted, expected_plan=plan, pins=PINS, hash_file=pinned_hash,
+            run_proc=fake_llama(n=200))
+    s = json.loads((tmp_path / "results" / "stage_q" / "a" / "session.json").read_text())
+    assert s["status"] == "refused" and "KeyboardInterrupt" in s["refused"]
+    assert sq.formal_attempts(tmp_path, "q1-metal") == []

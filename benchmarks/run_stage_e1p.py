@@ -27,9 +27,11 @@ problem, an output that is not a new results/stage_e/<id>; a formal session also
 variables in the caller's env, a non-WSL-CUDA host, another vLLM, env / provenance problems at the preflight, or when
 results/stage_e already holds a valid formal E1-P session or two attempts (stage_e1p_plan.formal_attempts). A
 session.json stub (status running) is written first and replaced atomically; status refused when no server ever
-started, aborted after a harness failure, finished otherwise (a stop rule included). Smoke mode checks 041 v3 §1.7
-(smoke_checks) and then masks the latencies (bench results, logs, spans, Prometheus scrapes, steps, series, the
-derived latencies and e1 files, the rows' and boots' latency fields).
+started (an interrupt during the preflight, a stop before the first start or a sampler that never ran included),
+aborted after a harness failure, finished otherwise (a stop rule included). A smoke writes no latency outside raw/ at
+any time (rows.jsonl gets MASK_ROW_KEYS, derived/ idx / cls; the full requests and e1 files go to raw/), checks 041
+v3 §1.7 on the rows it keeps in memory (smoke_checks), then masks the rest (mask_smoke: the boots' latency fields and
+raw/'s latency files).
 
 Usage (WSL, research checkout, tools/rtx/gpu_status.sh FREE):
     flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_e1p.py --plan plan.json \\
@@ -73,10 +75,10 @@ DERIVED_KEYS = ("idx", "cls", "client_ttft_ms", "arrival", "Q_ms", "P_ms", "serv
 MASK_ROW_KEYS = ("boot", "bench", "position", "tag", "seed_label", "seed", "prefix", "L", "mix", "C", "N", "ok",
                  "reasons", "timeout", "stopped_hot", "stopped_telemetry", "not_run", "healthy_after_bench",
                  "num_gpu_blocks", "spans_main", "f_computable", "input_lens_8064", "n_steps_window",
-                 "derived_schema_ok", "derived", "e1", "e1_error", "spill")
+                 "derived_schema_ok", "derived", "e1_ok", "e1_error", "spill")
 MASK_DERIVED_KEYS = ("idx", "cls")
 SMOKE_LATENCY_RAW = ("*.bench.json", "*.bench.log", "*.spans.jsonl", "*.metrics.before.txt", "*.metrics.after.txt",
-                     "*.steps.jsonl", "*.series.jsonl")
+                     "*.steps.jsonl", "*.series.jsonl", "*-requests.jsonl", "*-e1.json")
 
 
 class RunError(RuntimeError):
@@ -113,7 +115,8 @@ def span_problems(aligned: dict, reqs: list, N: int) -> list:
 def bench_e1(reqs: list, steps: list, e1cfg: dict, *, full: bool) -> dict:
     """E1-D's frozen per-run quantities on one bench (stage_e1): the position-0 F spikes with the anchored step count
     and, at Core's N (full), the slip episodes with L1-L5 (L3 from the span e2e, L4 from the server arrivals) and the
-    client's send lags."""
+    client's send lags. An empty step window is no steps (the step-based parts are None), not zero steps."""
+    steps = steps or None
     out = {"f_spikes": se1.f_spikes(reqs, steps, e1cfg), "episodes": None, "l1_in_normal_groups": None,
            "n_dec_median": None}
     if full:
@@ -157,13 +160,18 @@ class E1PRun:
         self.startup_timeout_s, self.cap_s = startup_timeout_s, plan["cap_s"]
         self.base = f"http://127.0.0.1:{pp.PORT}"
         self.rows, self.env_flags = [], []
+        # a smoke writes no latency outside raw/ at any time (041 v3 §1.7): its rows.jsonl gets MASK_ROW_KEYS only,
+        # its derived requests idx / cls only; the full requests and the e1 files go to raw/ for its checks
+        self.smoke = not formal
+        self.e1_dir = self.raw if self.smoke else self.derived
 
     def elapsed(self) -> float:
         return self.now() - self.t_start
 
     def emit(self, row: dict) -> dict:
         self.rows.append(row)
-        self.rows_fh.write(json.dumps(row) + "\n")
+        kept = {k: row[k] for k in MASK_ROW_KEYS if k in row} if self.smoke else row
+        self.rows_fh.write(json.dumps(kept) + "\n")
         self.rows_fh.flush()
         return row
 
@@ -277,6 +285,10 @@ class E1PRun:
                     errors = list(getattr(receiver, "errors", None) or [])
                     if errors:
                         rec["receiver_errors"] = errors
+                    # the receiver's own main count matches no E1-P id (its prefix is the boot's, the ids carry the
+                    # bench's): spans are counted per bench by prefix (spans_main), so "main" is left out
+                    stats = getattr(receiver, "stats", None)
+                    rec["receiver"] = {k: v for k, v in (stats() if stats else {}).items() if k != "main"}
                     smi_problems = smi.stop() or []
                     samples = smi.samples()
                     (self.derived / f"{tag}-smi.jsonl").write_text("".join(json.dumps(s) + "\n" for s in samples))
@@ -298,53 +310,15 @@ class E1PRun:
         receiver = self.receiver_factory(self.raw / f"{tag}.otlp", self.raw / f"{tag}.spans.jsonl", f"e1p-b{b}-")
         proc, stop, done, why = None, None, 0, None
         try:
-            receiver.start()
-            proc = self.popen(argv, env, self.raw / f"{tag}.server.log")
-            rec["server_started"] = True
-            self.checked_start(tag, proc, rec, smi)
-            self.check_log(proc, "during the server start")
-            if smi.halt.is_set():
-                stop = self.halted(smi, f"during the start of {tag}")
-            elif rec.get("cut_at_cap"):
-                stop = Stop("cap", f"the start of {tag} was cut at the cap {self.cap_s:.0f} s: no bench")
-            elif not rec["startup_ok"]:
-                why = "the server start failed: " + "; ".join(rec["reasons"])
+            if smi.halt.is_set():                  # no thermometer, no server (028 rule 6): stopped before any start
+                stop = self.halted(smi, f"before the start of {tag}")
             else:
-                try:
-                    ready = guard.check("ready")
-                except gi.SharedUsageError as exc:
-                    stop = Stop("spill_unreadable", f"the shared usage after {tag} became ready is unreadable ({exc}): "
-                                                    "the 031 spill guard cannot be applied; no bench, stopped")
-                else:
-                    if ready["spilled"]:
-                        why = f"the boot stopped before its first bench: {rc.spill_reason(ready, guard)}"
-                for bench in benches:
-                    if stop is not None or why is not None:
-                        break
-                    if self.elapsed() + self.plan["timeout_s"] > self.cap_s:
-                        stop = Stop("cap", f"elapsed {self.elapsed():.0f} s + the {self.plan['timeout_s']} s bench "
-                                           f"timeout > cap {self.cap_s:.0f} s: no new bench (028 hard cap)")
-                        break
-                    row, end = self.bench_once(bench, tag, proc, smi, receiver)
-                    if not smi.halt.is_set():
-                        stop = self.guarded(row, guard)
-                    else:                              # 88 C / lost telemetry: torn down at once, no reading, so
-                        row["ok"] = False              # nothing shows the bench did not spill (031: fail closed)
-                        row["reasons"].append("no 031 spill reading after the bench: the stop tore the server down at "
-                                              "once (031: fail closed)")
-                    self.emit(row)
-                    done = bench["bench"]
-                    if smi.halt.is_set():
-                        stop = self.halted(smi, f"in {row['tag']}")
-                        break
-                    if stop is not None:
-                        break
-                    if (row.get("spill") or {}).get("spilled"):
-                        why = f"the boot stopped after a spill in {row['tag']} (031)"
-                        break
-                    if end:
-                        why = f"the boot ended after {row['tag']} ({'; '.join(row['reasons'])})"
-                        break
+                receiver.start()
+                proc = self.popen(argv, env, self.raw / f"{tag}.server.log")
+                rec["server_started"] = True
+                self.checked_start(tag, proc, rec, smi)
+                self.check_log(proc, "during the server start")
+                stop, why, done = self.run_benches(tag, rec, benches, proc, smi, receiver, guard)
         finally:
             rec["spill"] = guard.record()
             self.teardown(tag, proc, rec, smi, receiver)
@@ -358,6 +332,47 @@ class E1PRun:
         invalid = sum(not r["ok"] for r in self.rows if r["boot"] == b)
         rec.update(t_end=self.wall(), n_valid=len(benches) - invalid, failed=not rec["startup_ok"] or invalid >= 2)
         return stop
+
+    def run_benches(self, tag: str, rec: dict, benches: list, proc, smi, receiver, guard) -> tuple:
+        """After the start: the start's verdict, the ready spill reading and the benches in order; (stop, why the boot
+        ended early, the last bench run)."""
+        if smi.halt.is_set():
+            return self.halted(smi, f"during the start of {tag}"), None, 0
+        if rec.get("cut_at_cap"):
+            return Stop("cap", f"the start of {tag} was cut at the cap {self.cap_s:.0f} s: no bench"), None, 0
+        if not rec["startup_ok"]:
+            return None, "the server start failed: " + "; ".join(rec["reasons"]), 0
+        try:
+            ready = guard.check("ready")
+        except gi.SharedUsageError as exc:
+            return Stop("spill_unreadable", f"the shared usage after {tag} became ready is unreadable ({exc}): the "
+                                            "031 spill guard cannot be applied; no bench, stopped"), None, 0
+        if ready["spilled"]:
+            return None, f"the boot stopped before its first bench: {rc.spill_reason(ready, guard)}", 0
+        done = 0
+        for bench in benches:
+            if self.elapsed() + self.plan["timeout_s"] > self.cap_s:
+                return Stop("cap", f"elapsed {self.elapsed():.0f} s + the {self.plan['timeout_s']} s bench timeout > "
+                                   f"cap {self.cap_s:.0f} s: no new bench (028 hard cap)"), None, done
+            row, end = self.bench_once(bench, tag, proc, smi, receiver)
+            stop = None
+            if not smi.halt.is_set():
+                stop = self.guarded(row, guard)
+            else:                              # 88 C / lost telemetry: torn down at once, no reading, so nothing
+                row["ok"] = False              # shows the bench did not spill (031: fail closed)
+                row["reasons"].append("no 031 spill reading after the bench: the stop tore the server down at once "
+                                      "(031: fail closed)")
+            self.emit(row)
+            done = bench["bench"]
+            if smi.halt.is_set():
+                return self.halted(smi, f"in {row['tag']}"), None, done
+            if stop is not None:
+                return stop, None, done
+            if (row.get("spill") or {}).get("spilled"):
+                return None, f"the boot stopped after a spill in {row['tag']} (031)", done
+            if end:
+                return None, f"the boot ended after {row['tag']} ({'; '.join(row['reasons'])})", done
+        return None, None, done
 
     # ---------------------------------------------------------- bench
     def bench_once(self, bench: dict, boot_tag: str, proc, smi, receiver) -> tuple:
@@ -429,7 +444,11 @@ class E1PRun:
             aligned = ad.align(ad.llm_request_records(receiver.read_spans()), res, prefix=prefix, L=pp.L)
             reqs = derived_rows(aligned, res)
             dpath = self.derived / f"{tag}-requests.jsonl"
-            dpath.write_text("".join(json.dumps(q) + "\n" for q in reqs))
+            if self.smoke:                    # the full rows only in raw/, derived/ gets idx / cls (041 v3 §1.7)
+                (self.raw / f"{tag}-requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
+                dpath.write_text("".join(json.dumps({k: q[k] for k in MASK_DERIVED_KEYS}) + "\n" for q in reqs))
+            else:
+                dpath.write_text("".join(json.dumps(q) + "\n" for q in reqs))
             row["derived"] = dpath.relative_to(self.out).as_posix()
             row["derived_sha256"] = hashlib.sha256(dpath.read_bytes()).hexdigest()
             row["derived_schema_ok"] = len(reqs) == N and all(tuple(q) == DERIVED_KEYS for q in reqs)
@@ -439,10 +458,10 @@ class E1PRun:
             if not missing:
                 try:
                     e1 = bench_e1(reqs, window, self.e1cfg, full=N == bp.num_prompts(pp.C))
-                    epath = self.derived / f"{tag}-e1.json"
+                    epath = self.e1_dir / f"{tag}-e1.json"
                     epath.write_text(json.dumps(e1, indent=1) + "\n")
-                    row["e1"] = epath.relative_to(self.out).as_posix()
-                    row["e1_sha256"] = hashlib.sha256(epath.read_bytes()).hexdigest()
+                    row.update(e1=epath.relative_to(self.out).as_posix(), e1_ok=True,
+                               e1_sha256=hashlib.sha256(epath.read_bytes()).hexdigest())
                 except Exception as exc:  # noqa: BLE001 - the descriptive layer never costs a measured bench
                     row["e1_error"] = f"{type(exc).__name__}: {exc}"
         if not healthy:
@@ -470,8 +489,8 @@ def smoke_checks(plan: dict, rows: list, session: dict) -> dict:
               "f_computable": all(r.get("f_computable") is True for r in run),
               "steps_in_window": all((r.get("n_steps_window") or 0) > 0 for r in run),
               "input_lens_8064": all(r.get("input_lens_8064") is True for r in run),
-              "derived_schema": all(r.get("derived_schema_ok") is True and r.get("e1") and not r.get("e1_error")
-                                    for r in run),
+              "derived_schema": all(r.get("derived_schema_ok") is True and r.get("e1_ok") is True
+                                    and not r.get("e1_error") for r in run),
               "blocks": all(r.get("num_gpu_blocks") == plan["expected_blocks"] for r in run),
               "no_spill": not any((r.get("spill") or {}).get("spilled") for r in rows),
               "smi": bool(smi) and all(s.get("n_samples") and "temp_c" not in s.get("fields_missing", ["temp_c"])
@@ -481,29 +500,29 @@ def smoke_checks(plan: dict, rows: list, session: dict) -> dict:
 
 
 def mask_smoke(out: Path, session: dict) -> list:
-    """The smoke's latencies leave the session (041 v3 §1.7: not looked at): bench results and logs, spans and OTLP
-    bodies, Prometheus scrapes, steps and series leave raw/; the derived rows keep idx / cls, the e1 files go; rows keep
-    MASK_ROW_KEYS; the boots lose their latency fields (adv_smoke._drop_latency) and their wall-clock window. Server
-    logs and the nvidia-smi samples stay (raw/ is git-ignored)."""
-    gone, raw, derived = [], out / "raw", out / "derived"
-    for pattern in SMOKE_LATENCY_RAW:
-        for p in sorted(raw.glob(pattern)):
-            p.unlink()
-            gone.append(p.relative_to(out).as_posix())
-    for d in sorted(raw.glob("*.otlp")):
-        shutil.rmtree(d)
-        gone.append(d.relative_to(out).as_posix())
-    for p in sorted(derived.glob("*-e1.json")):
-        p.unlink()
-        gone.append(p.relative_to(out).as_posix())
-    for p in sorted(derived.glob("*-requests.jsonl")):
-        keep = [{k: q.get(k) for k in MASK_DERIVED_KEYS} for q in map(json.loads, p.read_text().splitlines())]
-        p.write_text("".join(json.dumps(q) + "\n" for q in keep))
-    rows = [json.loads(x) for x in (out / "rows.jsonl").read_text().splitlines() if x.strip()]
-    (out / "rows.jsonl").write_text("".join(json.dumps({k: r[k] for k in MASK_ROW_KEYS if k in r}) + "\n"
-                                            for r in rows))
+    """The smoke's latencies leave the session (041 v3 §1.7: not looked at). rows.jsonl and derived/ never held one
+    (E1PRun writes them masked: MASK_ROW_KEYS, idx / cls); here the boots lose their latency fields
+    (adv_smoke._drop_latency) and their wall-clock window, then the latency files leave raw/ (bench results and logs,
+    spans and OTLP bodies, Prometheus scrapes, steps, series, the full requests and the e1 files). What went is
+    recorded; a file that could not go is recorded too (raw/ is git-ignored and never fetched). Server logs and the
+    nvidia-smi samples stay."""
     session["boots"] = {tag: {k: v for k, v in rec.items() if k not in ("t_start", "t_end")}   # the boot's window
                         for tag, rec in adv_smoke._drop_latency(session["boots"]).items()}
+    raw, gone, errors = out / "raw", [], []
+    targets = [p for pattern in SMOKE_LATENCY_RAW for p in sorted(raw.glob(pattern))] + sorted(raw.glob("*.otlp"))
+    for p in targets:
+        rel = p.relative_to(out).as_posix()
+        try:
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+            gone.append(rel)
+        except OSError as exc:
+            errors.append(f"{rel}: {exc}")
+    session["masked"] = gone
+    if errors:
+        session["mask_errors"] = errors
     return gone
 
 
@@ -569,28 +588,34 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
         os.replace(tmp, out / "session.json")
 
     write_session()                                         # the stub: an interrupted session is still an attempt
-    (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
-    pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=True)
-    session["host"] = {"system": (pre.get("os") or {}).get("system"), "wsl": (pre.get("os") or {}).get("wsl"),
-                       "nvidia": bool((pre.get("gpu") or {}).get("nvidia"))}
-    session["versions"] = rcp.runtime_versions(pre, pins)
-    got = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
-    session["vllm_version"] = got
-    bad = [] if got == pins["vllm"]["version"] else [f"vLLM {got!r}, not the pinned {pins['vllm']['version']}"]
-    if formal:
-        bad += env_problems(pre, "wsl2-cuda") + provenance_problems(pre, pre) + pp.host_problems(session["host"])
-    if bad:
-        session.update(status="refused", refused=bad)
+    try:                                    # until the first boot no server can have started: any end here is refused
+        (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
+        pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=True)
+        session["host"] = {"system": (pre.get("os") or {}).get("system"), "wsl": (pre.get("os") or {}).get("wsl"),
+                           "nvidia": bool((pre.get("gpu") or {}).get("nvidia"))}
+        session["versions"] = rcp.runtime_versions(pre, pins)
+        got = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
+        session["vllm_version"] = got
+        bad = [] if got == pins["vllm"]["version"] else [f"vLLM {got!r}, not the pinned {pins['vllm']['version']}"]
+        if formal:
+            bad += env_problems(pre, "wsl2-cuda") + provenance_problems(pre, pre) + pp.host_problems(session["host"])
+        if bad:
+            session["refused"] = bad
+            raise RunError(f"{mode} E1-P session refused before it starts: " + "; ".join(bad))
+        fh = open(out / "rows.jsonl", "w")
+        run = E1PRun(plan=plan, pins=pins, out=out, session=session, e1cfg=e1cfg, formal=formal, pre=pre, rows_fh=fh,
+                     popen=popen, signal_group=signal_group, group_alive=group_alive, http_get=http_get,
+                     run_bench=run_bench, gpu_sample=gpu_sample, compute_apps=compute_apps,
+                     shared_usage=shared_usage, start_smi=start_smi, receiver_factory=receiver_factory,
+                     lock_held_check=lock_held_check, capture_env=capture_env, base_env=pp.strip_env(base_env),
+                     vllm_bin=vllm_bin, sample_interval=sample_interval, now=now, sleep=sleep, wall=wall,
+                     t_start=t_start, startup_timeout_s=startup_timeout_s)
+    except BaseException as exc:
+        session["status"] = "refused"
+        if "refused" not in session:
+            session["aborted"] = f"{type(exc).__name__}: {exc}"
         write_session()
-        raise RunError(f"{mode} E1-P session refused before it starts: " + "; ".join(bad))
-    fh = open(out / "rows.jsonl", "w")
-    run = E1PRun(plan=plan, pins=pins, out=out, session=session, e1cfg=e1cfg, formal=formal, pre=pre, rows_fh=fh,
-                 popen=popen, signal_group=signal_group, group_alive=group_alive, http_get=http_get,
-                 run_bench=run_bench, gpu_sample=gpu_sample, compute_apps=compute_apps, shared_usage=shared_usage,
-                 start_smi=start_smi, receiver_factory=receiver_factory, lock_held_check=lock_held_check,
-                 capture_env=capture_env, base_env=pp.strip_env(base_env), vllm_bin=vllm_bin,
-                 sample_interval=sample_interval, now=now, sleep=sleep, wall=wall, t_start=t_start,
-                 startup_timeout_s=startup_timeout_s)
+        raise
     b = 0
     try:
         for boot in plan["boots"]:
@@ -661,7 +686,7 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI, WSL o
                         gpu_lock_held=args.gpu_lock_held,
                         capture_env=rb.make_vllm_env_capture(ROOT / "scripts" / "env_capture.py"), t_start=t_start,
                         vllm_bin=args.vllm_bin)
-    except (RunError, pp.PlanError) as exc:
+    except (RunError, ra.RunError, rc.RunError, pp.PlanError) as exc:
         print(f"run_stage_e1p: {exc}", file=sys.stderr)
         return 2
     finally:

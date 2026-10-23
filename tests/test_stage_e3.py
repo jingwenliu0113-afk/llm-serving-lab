@@ -517,3 +517,18 @@ def test_the_time_cap_counts_measurement_only_and_skips_the_rest(frozen_root, tm
     s = run(root, plan, "p", expected_plan=plan, cfg=cfg, sleep=t.sleep, clock=t.clock,
             read_power=Battery(low_at=1, polls=70), capture_env=env("macos-metal"))
     assert s["charge_pauses"][0]["job_id"] is None and s["outcomes"]["skipped"] == 0       # before the clock starts
+
+
+def test_an_interrupt_before_the_first_job_is_refused_not_an_attempt(frozen_root, tmp_path):
+    root = tmp_path / "r"
+    shutil.copytree(frozen_root, root)
+    plan, cfg = formal(root)
+
+    def interrupted(**kw):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        run(root, plan, "f1", expected_plan=plan, cfg=cfg, capture_env=interrupted)
+    s = json.loads((root / "results" / "stage_e" / "f1" / "session.json").read_text())
+    assert s["status"] == "refused" and "KeyboardInterrupt" in s["refused"][0]
+    assert e3.formal_attempts(root, "wsl2-cuda") == []

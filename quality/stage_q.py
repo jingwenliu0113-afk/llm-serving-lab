@@ -507,22 +507,29 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
         raise StageQError(why)
 
     write_session()                                         # the stub: an interrupted session is still an attempt
-    (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
-    bin_dir, models_dir, data_dir = str(bin_dir), str(models_dir), str(data_dir)
-    exe = f"{bin_dir}/llama-perplexity"
-    pre = capture_env(llama_bin=exe, out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held)
-    lc = (pre.get("runtime") or {}).get("llama_cpp") or {}
-    want = plan["expect_build"]
-    if lc.get("build_number") != want["build_number"] or lc.get("commit") != want["build_commit"]:
-        refuse(f"llama.cpp build mismatch: {lc} vs {want}")
-    if formal:
-        bad = platform_problems(pre, platform) + provenance_problems(pre, pre) + host_problems(host_of(pre), platform)
-        if not bad:
-            bad = input_problems(plan, pins, data_dir=data_dir, models_dir=models_dir, hash_file=hash_file)
-        if bad:
-            refuse("formal Stage Q run refused before it starts: " + "; ".join(bad))
-    powermode = ((pre.get("power") or {}).get("powermode")) if mac else None
-    session.update(powermode=powermode, host=host_of(pre))
+    try:                                    # before the first job nothing ran: any end here is refused
+        (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
+        bin_dir, models_dir, data_dir = str(bin_dir), str(models_dir), str(data_dir)
+        exe = f"{bin_dir}/llama-perplexity"
+        pre = capture_env(llama_bin=exe, out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held)
+        lc = (pre.get("runtime") or {}).get("llama_cpp") or {}
+        want = plan["expect_build"]
+        if lc.get("build_number") != want["build_number"] or lc.get("commit") != want["build_commit"]:
+            refuse(f"llama.cpp build mismatch: {lc} vs {want}")
+        if formal:
+            bad = platform_problems(pre, platform) + provenance_problems(pre, pre) + \
+                host_problems(host_of(pre), platform)
+            if not bad:
+                bad = input_problems(plan, pins, data_dir=data_dir, models_dir=models_dir, hash_file=hash_file)
+            if bad:
+                refuse("formal Stage Q run refused before it starts: " + "; ".join(bad))
+        powermode = ((pre.get("power") or {}).get("powermode")) if mac else None
+        session.update(powermode=powermode, host=host_of(pre))
+    except BaseException as exc:
+        if session["status"] != "refused":
+            session.update(status="refused", refused=f"interrupted before the first job: {type(exc).__name__}: {exc}")
+            write_session()
+        raise
     rows, by_id, skipped, env_flags, charge_pauses = [], {}, set(), [], []
     resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace(  # noqa: E731
         "{data}", data_dir).replace("{session}", session_id)

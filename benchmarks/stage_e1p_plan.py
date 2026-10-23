@@ -14,9 +14,12 @@ timeout (pins [advanced]), a boot fails when its server does not start or >= 2 o
 failed boot stops the session, no new boot when elapsed + 30 min > cap, no bench whose timeout could pass the cap,
 GPU >= 88 C stops at once. The cap is 3.0 h of holding the lock with the smoke included: a formal plan's cap_s is
 3.0 h minus the passed smoke's elapsed_s (041 v3 §1.6, §4).
-Formal plans need freeze.e1p and the passed smoke (freeze.smoke_e1p): finished, smoke.ok, env valid, a WSL CUDA
-host, the pinned vLLM, this harness, its plan exactly the smoke plan under this config. A plan records
-stage_e1p_sha256 (the config without [freeze]) and stage_e1_sha256 (E1-D's frozen config, whose links it uses).
+Every plan needs the passed seed check (results/stage_e/e1p-seed-check/seed_check.json from
+stage_e1p_seed_check.py: vLLM's own sampler gave both seeds' 200 formal prompts 8,064 tokens and A != B) and E1-D's
+frozen stage_e1 (config and code pin). Formal plans also need freeze.e1p and the passed smoke (freeze.smoke_e1p, a
+session id): finished, smoke.ok, env valid, a WSL CUDA host, the pinned vLLM, these pins (when given), this harness,
+its plan exactly the smoke plan under this config. A plan records stage_e1p_sha256 (the config without [freeze]),
+stage_e1_sha256 (E1-D's frozen config, whose links it uses) and seed_check_sha256.
 
 Usage:
     python benchmarks/stage_e1p_plan.py --mode smoke --out plan.json
@@ -28,6 +31,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -62,6 +66,9 @@ E1P_VALUES = {"seeds": {"A": bp.SEED, "B": 20261023}, "boots": rcp.BOOTS, "order
               "min_spikes": 5, "a_prior": [32, 64, 88, 128, 176, 192], "j_content_max": 0.2, "j_position_min": 0.5}
 # a stop of the environment, not of the probe (041 v3 §1.6): such a session is void, like an env-invalid one
 ENV_STOPS = ("lock", "gpu_not_idle", "gpu_check", "spill_unreadable", "telemetry")
+SEED_CHECK = ("results", "stage_e", "e1p-seed-check", "seed_check.json")
+SEED_CHECK_SCRIPT = "benchmarks/stage_e1p_seed_check.py"
+_RE_SESSION_ID = re.compile(r"(?!\.+$)[A-Za-z0-9._-]+")
 
 
 class PlanError(bp.PlanError):
@@ -100,8 +107,9 @@ def config_problems(cfg: dict) -> list:
     f = cfg["freeze"]
     if not isinstance(f["e1p"], bool) or not isinstance(f["smoke_e1p"], str):
         problems.append("freeze.e1p must be a bool and freeze.smoke_e1p a string")
-    elif f["e1p"] and not f["smoke_e1p"]:
-        problems.append("freeze.smoke_e1p must name the passed smoke once freeze.e1p is true")
+    elif f["e1p"] and not _RE_SESSION_ID.fullmatch(f["smoke_e1p"]):
+        problems.append("freeze.smoke_e1p must name the passed smoke (a session id under results/stage_e) once "
+                        "freeze.e1p is true")
     return problems
 
 
@@ -111,12 +119,44 @@ def config_sha256(cfg: dict) -> str:
 
 
 def e1_config(root=ROOT) -> dict:
-    """E1-D's frozen configs/stage_e1.toml (L1-L5's thresholds), checked and read only."""
+    """E1-D's frozen configs/stage_e1.toml (L1-L5's thresholds), checked and read only, with stage_e1.py (whose
+    functions E1-P runs) still the frozen harness it pins."""
     cfg = tomllib.loads((Path(root) / "configs" / "stage_e1.toml").read_text())
     problems = se1.config_problems(cfg)
     if problems or cfg["freeze"]["e1"] is not True:
         raise PlanError("configs/stage_e1.toml is not E1-D's frozen config: " + "; ".join(problems or ["not frozen"]))
+    if se1.harness_sha256(root) != cfg["freeze"]["e1_harness_sha256"]:
+        raise PlanError("benchmarks/stage_e1.py / c0_analysis.py are not the harness E1-D froze (e1_harness_sha256)")
     return cfg
+
+
+# ---------------------------------------------------------------- the seed check (041 v3 §1.7, before the smoke)
+
+def seed_check_sha256(root=ROOT) -> str:
+    return hashlib.sha256((Path(root) / SEED_CHECK_SCRIPT).read_bytes()).hexdigest()
+
+
+def seed_check_problems(pins: dict, cfg: dict, root=ROOT) -> list:
+    """The committed seed check (stage_e1p_seed_check.py, CPU only on WSL): vLLM's own sampler, for both seeds at the
+    formal N, gave every prompt 8,064 tokens and different prompts for A and B. Without it no plan is built: one bad
+    seed-B prompt among the formal 200 would invalidate every seed-B bench and stop the only formal session, and
+    identical prompts would read as position-locked."""
+    path = Path(root).joinpath(*SEED_CHECK)
+    rec = _read_json(path)
+    if not isinstance(rec, dict):
+        return [f"no readable seed check at {Path(*SEED_CHECK)} (run benchmarks/stage_e1p_seed_check.py on WSL)"]
+    problems = []
+    if rec.get("ok") is not True:
+        problems.append(f"the seed check did not pass ({rec.get('problems')})")
+    if rec.get("vllm_version") != pins["vllm"]["version"]:
+        problems.append(f"the seed check ran vLLM {rec.get('vllm_version')!r}, not {pins['vllm']['version']}")
+    if rec.get("script_sha256") != seed_check_sha256():
+        problems.append("the seed check was made by another stage_e1p_seed_check.py (script_sha256)")
+    seeds = {x: (rec.get("seeds") or {}).get(x, {}).get("seed") for x in ("A", "B")}
+    if seeds != cfg["e1p"]["seeds"] or (rec.get("N"), rec.get("input_len")) != (bp.num_prompts(C), L - bp.N_GEN):
+        problems.append(f"the seed check covers seeds {seeds} at N {rec.get('N')}, input {rec.get('input_len')}; "
+                        f"the design needs {cfg['e1p']['seeds']} at N {bp.num_prompts(C)}, input {L - bp.N_GEN}")
+    return problems
 
 
 # ---------------------------------------------------------------- server and client
@@ -165,13 +205,16 @@ def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = No
     problems = config_problems(cfg)
     if problems:
         raise PlanError("configs/stage_e1p.toml: " + "; ".join(problems))
+    problems = seed_check_problems(pins, cfg, root)
+    if problems:
+        raise PlanError("E1-P plans need the passed seed check first (041 v3 §1.7): " + "; ".join(problems))
     e, sb, adv = cfg["e1p"], pins["stage_b"], pins["advanced"]
     cap_s, smoke_ref = e["cap_hours"] * 3600, None
     if mode == "formal":
         if cfg["freeze"]["e1p"] is not True:
             raise PlanError("formal E1-P plans need freeze.e1p = true (041 v3 §1.7 凍結)")
         path = Path(root).joinpath(*RESULTS, cfg["freeze"]["smoke_e1p"])
-        evidence = smoke_problems(path, pins, cfg, root=root)
+        evidence = smoke_problems(path, pins, cfg, root=root, pins_sha256=pins_sha256)
         if evidence:
             raise PlanError("formal E1-P plans need the passed smoke first: " + "; ".join(evidence))
         elapsed = _read_json(path / "session.json")["elapsed_s"]
@@ -185,6 +228,7 @@ def build_plan(pins: dict, cfg: dict, *, mode: str, pins_sha256: str | None = No
             "derived_from": ap.DERIVED_FROM, "L": L, "mix": MIX, "C": C, "warmup": bp.num_warmups(C),
             "seeds": dict(e["seeds"]), "pins_sha256": pins_sha256, "stage_e1p_sha256": config_sha256(cfg),
             "stage_e1_sha256": sha256_json(e1_config()), "harness_sha256": harness_sha256(),
+            "seed_check_sha256": hashlib.sha256(Path(root).joinpath(*SEED_CHECK).read_bytes()).hexdigest(),
             "kv_cache_memory_bytes": sb["kv_cache_memory_bytes"], "expected_blocks": sb["num_gpu_blocks"],
             "block_size": sb["block_size"], "gpu_memory_utilization": sb["gpu_memory_utilization"],
             "gdn_prefill_backend": sb["gdn_prefill_backend"], "timeout_s": adv["timeouts_s"][f"{MIX}_{L}"],
@@ -209,13 +253,16 @@ def host_problems(host: dict | None) -> list:
     return [] if host == want else [f"ran on host {host!r}, not a WSL CUDA host"]
 
 
-def smoke_problems(path, pins: dict, cfg: dict, *, root=ROOT) -> list:
-    """041 v3 §1.7's freeze evidence: the smoke at path is a finished, passed run of this design and harness."""
+def smoke_problems(path, pins: dict, cfg: dict, *, root=ROOT, pins_sha256: str | None = None) -> list:
+    """041 v3 §1.7's freeze evidence: the smoke at path is a finished, passed run of this design and harness (and,
+    when pins_sha256 is given, of these pins)."""
     path = Path(path)
     s, plan = _read_json(path / "session.json"), _read_json(path / "plan.json")
     if not isinstance(s, dict) or not isinstance(plan, dict):
         return [f"{path.name}: no readable session.json / plan.json"]
     problems = []
+    if pins_sha256 is not None and s.get("pins_sha256") != pins_sha256:
+        problems.append(f"{path.name}: ran under another configs/pins.toml (pins_sha256)")
     smoke = s.get("smoke") or {}
     if (s.get("stage"), s.get("mode"), s.get("status"), smoke.get("ok")) != (STAGE, "smoke", "finished", True):
         problems.append(f"{path.name}: not a finished, passed E1-P smoke")

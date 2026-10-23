@@ -472,3 +472,16 @@ def test_a_log_counts_as_committed_on_the_wsl_copy_through_its_deploy_manifest(t
     log.write_text("edited after the deploy\n")
     assert q3.git_tracked(log, root=tmp_path) is False
 
+
+
+def test_an_interrupt_before_the_first_job_is_refused_not_an_attempt(tmp_path):
+    root, cfg = with_pilot(tmp_path)
+    plan = q3.build_plan(PINS, cfg, mode="formal", root=root)
+
+    def interrupted(**kw):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        run(root, plan, "f", expected_plan=plan, capture_env=interrupted)
+    s = json.loads((root / "results" / "stage_q" / "f" / "session.json").read_text())
+    assert s["status"] == "refused" and "KeyboardInterrupt" in s["refused"][0] and q3.formal_attempts(root) == []

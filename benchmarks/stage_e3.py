@@ -483,34 +483,40 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
         os.replace(tmp, out / "session.json")
 
     write_session()                                         # the stub: an interrupted run is still an attempt
-    (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
-    bin_dir, models_dir = str(bin_dir), str(models_dir)
-    llama_bin = f"{bin_dir}/llama-bench"
-    pre = capture_env(llama_bin=llama_bin, out_path=out / "env" / "preflight.json", gpu_lock_held=not mac)
-    session.update({"host": host_of(pre), "powermode": ((pre.get("power") or {}).get("powermode")) if mac else None,
-                    "ac_adapter": ((pre.get("power") or {}).get("ac_adapter")) if mac else None})
-    lc = (pre.get("runtime") or {}).get("llama_cpp") or {}
-    refuse = [] if lc.get("build_number") == want["build_number"] and lc.get("commit") == want["build_commit"] else \
-        [f"llama.cpp build mismatch: {lc} vs {want}"]
-    if formal:
-        refuse += platform_problems(pre, platform) + provenance_problems(pre, pre) + \
-            host_problems(host_of(pre), platform)
-    if refuse:
-        session.update({"status": "refused", "refused": refuse})
-        write_session()
-        raise StageE3Error("E3 run refused before its first job: " + "; ".join(refuse))
-    powermode = session["powermode"]
-    params = plan["params"]
-    bench_expect = {"build_commit": want["build_commit"], "n_threads": params["n_thr"], "poll": params["poll"],
-                    "reps": params["bench_r"]}
-    rows, env_flags, charge_pauses = [], [], []
-    if session_b and session_b.get("drift"):
-        env_flags.append({"job_id": None, "phase": "preflight",
-                          "reason": f"session B {session_b.get('b_mib')} MiB drifted from the frozen B (§4)"})
-    if mac:
-        pause = charge_gate(read_power, sleep)              # before the clock starts
-        if pause:
-            charge_pauses.append({"job_id": None, **pause})
+    try:                                    # before the first job nothing ran: any end here is refused
+        (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
+        bin_dir, models_dir = str(bin_dir), str(models_dir)
+        llama_bin = f"{bin_dir}/llama-bench"
+        pre = capture_env(llama_bin=llama_bin, out_path=out / "env" / "preflight.json", gpu_lock_held=not mac)
+        session.update({"host": host_of(pre), "powermode": ((pre.get("power") or {}).get("powermode")) if mac else None,
+                        "ac_adapter": ((pre.get("power") or {}).get("ac_adapter")) if mac else None})
+        lc = (pre.get("runtime") or {}).get("llama_cpp") or {}
+        same = lc.get("build_number") == want["build_number"] and lc.get("commit") == want["build_commit"]
+        refuse = [] if same else [f"llama.cpp build mismatch: {lc} vs {want}"]
+        if formal:
+            refuse += platform_problems(pre, platform) + provenance_problems(pre, pre) + \
+                host_problems(host_of(pre), platform)
+        if refuse:
+            session.update({"status": "refused", "refused": refuse})
+            write_session()
+            raise StageE3Error("E3 run refused before its first job: " + "; ".join(refuse))
+        powermode = session["powermode"]
+        params = plan["params"]
+        bench_expect = {"build_commit": want["build_commit"], "n_threads": params["n_thr"], "poll": params["poll"],
+                        "reps": params["bench_r"]}
+        rows, env_flags, charge_pauses = [], [], []
+        if session_b and session_b.get("drift"):
+            env_flags.append({"job_id": None, "phase": "preflight",
+                              "reason": f"session B {session_b.get('b_mib')} MiB drifted from the frozen B (§4)"})
+        if mac:
+            pause = charge_gate(read_power, sleep)              # before the clock starts
+            if pause:
+                charge_pauses.append({"job_id": None, **pause})
+    except BaseException as exc:
+        if session["status"] != "refused":
+            session.update(status="refused", refused=[f"interrupted before the first job: {type(exc).__name__}: {exc}"])
+            write_session()
+        raise
     t0, paused, cap_reached = clock(), 0.0, False
     full = open(out / "raw" / "rows.full.jsonl", "w") if not formal else None
     env_dir = "env" if formal else "raw/env"               # a pilot's per-job captures carry its job times

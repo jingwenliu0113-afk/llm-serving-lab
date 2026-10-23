@@ -14,6 +14,10 @@ Reading (041 v3 §1.6, the first row that holds):
 - J(A_in, B_in) <= j_content_max: content-locked;
 - J >= j_position_min: position- / time-locked;
 - otherwise 無法判定.
+Beside the reading (041 v3 §1.7): the data it stands on (data_summary: the session's stop and outcomes, planned and
+valid benches per seed, the benches left out and why, valid benches without E1-D's quantities); when a seed has fewer
+valid benches than repeat_min, a few_spikes row carries a note that the data, not the spikes, are too few. Int-keyed
+counts are written as [key, value] pairs.
 
 Usage:
     tools/rtx/fetch_all_sessions.sh stage_e                       # first: every WSL session, without raw/
@@ -59,38 +63,47 @@ def jaccard(a: set, b: set):
     return len(a & b) / len(union) if union else None
 
 
+def _pairs(d: dict) -> list:
+    """An int-keyed count as sorted [key, value] pairs (JSON keeps them ints)."""
+    return [[k, v] for k, v in sorted(d.items())]
+
+
 def seed_summary(benches: list, cfg: dict, e1cfg: dict) -> dict:
-    """benches: [{"tag", "position", "spikes": [idx], "e1": the runner's e1 file or None}] of one seed's valid
-    benches."""
+    """benches: [{"tag", "position", "spikes": [idx], "e1": the runner's e1 file or None, "e1_error"}] of one seed's
+    valid benches. Episodes (段) and slip groups are counted separately: one group can hold two episodes."""
     e = cfg["e1p"]
     counts = collections.Counter(i for b in benches for i in set(b["spikes"]))
     with_e1 = [b for b in benches if b["e1"] and b["e1"].get("episodes") is not None]
-    slips, spike_slip = {}, {"spikes": 0, "in_slip_groups": 0, "slips": 0, "slips_with_spike": 0}
+    by_pos, agree = {}, {"spikes": 0, "spikes_in_slip_groups": 0, "slip_groups": 0, "slip_groups_with_spike": 0}
     for b in with_e1:
         ks = {x["k"] for x in b["e1"]["episodes"]}
-        spike_slip["spikes"] += len(b["spikes"])
-        spike_slip["in_slip_groups"] += sum(i // C in ks for i in b["spikes"])
-        spike_slip["slips"] += len(ks)
-        spike_slip["slips_with_spike"] += sum(C * k in b["spikes"] for k in ks)
-        slips.setdefault(b["position"], []).append(len(b["e1"]["episodes"]))
+        agree["spikes"] += len(b["spikes"])
+        agree["spikes_in_slip_groups"] += sum(i // C in ks for i in b["spikes"])
+        agree["slip_groups"] += len(ks)
+        agree["slip_groups_with_spike"] += sum(C * k in b["spikes"] for k in ks)
+        by_pos.setdefault(b["position"], []).append(len(b["e1"]["episodes"]))
     n_eps = sum(len(b["e1"]["episodes"]) for b in with_e1)
-    return {"benches": len(benches), "spikes": sum(len(b["spikes"]) for b in benches), "episodes": n_eps,
-            "spike_idx_counts": dict(sorted(counts.items())),
-            "repeated": {i: c for i, c in sorted(counts.items()) if c >= e["repeat_min"]},
+    chain = se1.chain_summary([b["e1"] for b in with_e1], e1cfg) if with_e1 else None
+    if chain:
+        chain = {**chain, "start_idx": _pairs(chain["start_idx"])}
+    return {"benches": len(benches), "spikes": sum(len(b["spikes"]) for b in benches),
+            "spike_idx_counts": _pairs(counts),
+            "repeated": [[i, c] for i, c in sorted(counts.items()) if c >= e["repeat_min"]],
             "per_bench": [{"tag": b["tag"], "position": b["position"], "spike_idx": b["spikes"],
-                           "episodes": None if not (b["e1"] and b["e1"].get("episodes") is not None)
-                           else [x["start_idx"] for x in b["e1"]["episodes"]]} for b in benches],
-            "benches_with_episodes": len(with_e1),
+                           "episodes": [x["start_idx"] for x in b["e1"]["episodes"]] if b in with_e1 else None,
+                           "e1_error": b.get("e1_error")} for b in benches],
+            "benches_with_episodes": len(with_e1), "episodes": n_eps,
             "slip_rate": n_eps / len(with_e1) if with_e1 else None,
-            "slips_by_position": {p: {"benches": len(v), "episodes": sum(v)} for p, v in sorted(slips.items())},
-            "spike_slip": spike_slip,
-            "chain": se1.chain_summary([b["e1"] for b in with_e1], e1cfg) if with_e1 else None}
+            "slips_by_position": [{"position": p, "benches": len(v), "episodes": sum(v)} for p, v in
+                                  sorted(by_pos.items())],
+            "spike_slip": agree, "chain": chain}
 
 
 def reading(seeds: dict, cfg: dict) -> dict:
     """041 v3 §1.6's table over the two seeds' summaries, in order."""
     e = cfg["e1p"]
-    a, b, prior = set(seeds["A"]["repeated"]), set(seeds["B"]["repeated"]), set(e["a_prior"])
+    a, b = {i for i, _ in seeds["A"]["repeated"]}, {i for i, _ in seeds["B"]["repeated"]}
+    prior = set(e["a_prior"])
     j = jaccard(a, b)
     if any(s["spikes"] < e["min_spikes"] for s in seeds.values()) or not a or not b:
         row = "few_spikes"
@@ -106,15 +119,35 @@ def reading(seeds: dict, cfg: dict) -> dict:
             "A_in_and_prior": sorted(a & prior), "descriptive_only": True}
 
 
+def data_summary(session: dict, plan: dict, rows: list, cfg: dict) -> dict:
+    """What the reading stands on (041 v3 §1.7): the session's stop and outcomes, the planned and valid benches per
+    seed, the benches left out with their reasons, the valid ones without E1-D's quantities. insufficient_data: a seed
+    with fewer valid benches than repeat_min can have no repeated position, so a few_spikes row then says too little
+    data, not too few spikes."""
+    planned = collections.Counter(x["seed_label"] for boot in plan["boots"] for x in boot["benches"])
+    valid = collections.Counter(r["seed_label"] for r in rows if r.get("ok") and not r.get("not_run"))
+    out = {"stopped": session.get("stopped"), "outcomes": session.get("outcomes"),
+           "planned": {x: planned[x] for x in ("A", "B")}, "valid": {x: valid[x] for x in ("A", "B")},
+           "excluded": {x: [{"tag": r["tag"], "not_run": bool(r.get("not_run")), "reasons": r.get("reasons")}
+                            for r in rows if r["seed_label"] == x and not (r.get("ok") and not r.get("not_run"))]
+                        for x in ("A", "B")},
+           "without_e1": {x: [{"tag": r["tag"], "e1_error": r.get("e1_error")} for r in rows
+                              if r["seed_label"] == x and r.get("ok") and not r.get("e1")] for x in ("A", "B")}}
+    out["insufficient_data"] = any(out["valid"][x] < cfg["e1p"]["repeat_min"] for x in ("A", "B"))
+    out["incomplete_session"] = out["stopped"] is not None or out["valid"] != out["planned"]
+    return out
+
+
 # ---------------------------------------------------------------- inputs
 
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def session_problems(path, *, pins: dict, cfg: dict, root=ROOT) -> list:
-    """The session is a finished, env-valid formal E1-P session of this harness, config and design, directly under
-    results/stage_e, not stopped by an environment rule, and its rows.jsonl the one it recorded."""
+def session_problems(path, *, pins: dict, cfg: dict, root=ROOT, pins_sha256: str | None = None) -> list:
+    """The session is a finished, env-valid formal E1-P session of this harness, config, design (and, when
+    pins_sha256 is given, these pins), directly under results/stage_e, not stopped by an environment rule, and its
+    rows.jsonl the one it recorded."""
     path = Path(path)
     s, plan = pp._read_json(path / "session.json"), pp._read_json(path / "plan.json")
     if not isinstance(s, dict) or not isinstance(plan, dict):
@@ -130,6 +163,8 @@ def session_problems(path, *, pins: dict, cfg: dict, root=ROOT) -> list:
         problems.append(f"{path.name}: harness_sha256 / plan_sha256 do not match")
     if s.get("stage_e1p_sha256") != pp.config_sha256(cfg):
         problems.append(f"{path.name}: configs/stage_e1p.toml's content changed since the session")
+    if pins_sha256 is not None and (s.get("pins_sha256"), plan.get("pins_sha256")) != (pins_sha256, pins_sha256):
+        problems.append(f"{path.name}: ran under another configs/pins.toml (pins_sha256)")
     rows = path / "rows.jsonl"
     if not rows.is_file() or s.get("rows_sha256") != _sha(rows):
         problems.append(f"{path.name}: rows.jsonl is not the one the session recorded (rows_sha256)")
@@ -153,18 +188,21 @@ def first_valid_session(root=ROOT) -> Path:
     raise AnalysisError(f"no valid formal E1-P session under results/stage_e ({[a['dir'].name for a in attempts]})")
 
 
-def load_benches(path: Path, cfg: dict, used: dict) -> tuple:
-    """(benches by seed label, problems): every valid row's derived requests (and e1 file) against its recorded
-    sha256; a spike set that differs from the runner's f_spikes is a problem."""
+def _rows(path: Path) -> list:
+    return [json.loads(x) for x in (path / "rows.jsonl").read_text().splitlines() if x.strip()]
+
+
+def load_benches(path: Path, rows: list, cfg: dict, used: dict) -> tuple:
+    """(valid benches by seed label, problems): every valid row's derived requests (and e1 file) present and equal
+    to the sha256 its row recorded; a runner spike set that differs from the derived F's is a problem."""
     f = cfg["e1p"]["f_spike_ms"]
     by_seed, problems = {"A": [], "B": []}, []
-    for line in (path / "rows.jsonl").read_text().splitlines():
-        r = json.loads(line)
+    for r in rows:
         if not r.get("ok") or r.get("not_run"):
             continue
         dpath = path / r["derived"]
-        if _sha(dpath) != r.get("derived_sha256"):
-            problems.append(f"{r['tag']}: {r['derived']} is not the file the row recorded")
+        if not dpath.is_file() or _sha(dpath) != r.get("derived_sha256"):
+            problems.append(f"{r['tag']}: {r['derived']} is missing or not the file the row recorded")
             continue
         used[r["derived"]] = r["derived_sha256"]
         reqs = sorted((json.loads(x) for x in dpath.read_text().splitlines() if x.strip()), key=lambda q: q["idx"])
@@ -172,30 +210,36 @@ def load_benches(path: Path, cfg: dict, used: dict) -> tuple:
         e1 = None
         if r.get("e1"):
             epath = path / r["e1"]
-            if _sha(epath) != r.get("e1_sha256"):
-                problems.append(f"{r['tag']}: {r['e1']} is not the file the row recorded")
+            if not epath.is_file() or _sha(epath) != r.get("e1_sha256"):
+                problems.append(f"{r['tag']}: {r['e1']} is missing or not the file the row recorded")
             else:
                 used[r["e1"]] = r["e1_sha256"]
                 e1 = json.loads(epath.read_text())
                 if [C * g for g in e1["f_spikes"]["spike_groups"]] != spikes:
                     problems.append(f"{r['tag']}: the runner's f_spikes {e1['f_spikes']['spike_groups']} differ from "
                                     f"the derived F's spikes {spikes}")
-        by_seed[r["seed_label"]].append({"tag": r["tag"], "position": r["position"], "spikes": spikes, "e1": e1})
+        by_seed[r["seed_label"]].append({"tag": r["tag"], "position": r["position"], "spikes": spikes, "e1": e1,
+                                         "e1_error": r.get("e1_error")})
     return by_seed, problems
 
 
 def analyze(path: Path, cfg: dict, e1cfg: dict) -> dict:
-    used = {}
-    by_seed, problems = load_benches(path, cfg, used)
+    used, rows = {}, _rows(path)
+    by_seed, problems = load_benches(path, rows, cfg, used)
     if problems:
         raise AnalysisError("; ".join(problems))
     seeds = {x: seed_summary(by_seed[x], cfg, e1cfg) for x in ("A", "B")}
+    data = data_summary(pp._read_json(path / "session.json"), pp._read_json(path / "plan.json"), rows, cfg)
+    read = reading(seeds, cfg)
+    if read["row"] == "few_spikes" and data["insufficient_data"]:
+        read["note"] = "a seed has fewer valid benches than repeat_min: too little data, not too few spikes"
     n = sum(s["benches_with_episodes"] for s in seeds.values())
     return {"stage": pp.STAGE, "decision": "041 v3 §1.6", "descriptive_only": True, "session": path.name,
-            "reading": reading(seeds, cfg), "seeds": seeds,
+            "reading": read, "data": data, "seeds": seeds,
             "slip_rate_all": sum(s["episodes"] for s in seeds.values()) / n if n else None,
             "earlier_slip_rates": {"C0": 0.21, "Advanced": 0.89, "Core": 2.67,          # 041 v3 §1.6: context only
                                    "note": "episodes per bench in other sessions and on other servers"},
+            "stage_e1_harness_sha256": se1.harness_sha256(),
             "inputs_sha256": {**{x: _sha(path / x) for x in ("session.json", "plan.json", "rows.jsonl")}, **used}}
 
 
@@ -215,11 +259,11 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     if bad:
         print("stage_e1p_analysis: --out " + "; ".join(bad), file=sys.stderr)
         return 2
-    pins = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
-    cfg = tomllib.loads(pp.CONFIG.read_text())
+    raw = (ROOT / "configs" / "pins.toml").read_bytes()
+    pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(pp.CONFIG.read_text())
     try:
         session = first_valid_session()
-        problems = session_problems(session, pins=pins, cfg=cfg)
+        problems = session_problems(session, pins=pins, cfg=cfg, pins_sha256=hashlib.sha256(raw).hexdigest())
         if problems:
             raise AnalysisError("; ".join(problems))
         out = {**analyze(session, cfg, pp.e1_config()), "harness_sha256": pp.harness_sha256(),

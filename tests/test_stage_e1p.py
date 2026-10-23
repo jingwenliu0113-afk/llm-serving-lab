@@ -1,8 +1,11 @@
-"""Tests for the Stage E1-P harness (decision 041 v3 §1.6-1.7): the plans and the freeze evidence (stage_e1p_plan),
-whole sessions against a fake WSL (run_stage_e1p: server log, /metrics, OTLP spans, the iteration log, `vllm bench
-serve` with its seed, the nvidia-smi sampler, 031 idle and spill readings; no GPU), the smoke's checks and masking,
-the stop rules, the rerun limit, and the reading (stage_e1p_analysis)."""
+"""Tests for the Stage E1-P harness (decision 041 v3 §1.6-1.7): the seed check, the plans and the freeze evidence
+(stage_e1p_seed_check, stage_e1p_plan), whole sessions against a fake WSL (run_stage_e1p: server log, /metrics, an
+OTLP receiver that writes its files, the iteration log, `vllm bench serve` with its seed, the nvidia-smi sampler, 031
+idle and spill readings; no GPU), the smoke's checks and masking, the stop rules, the rerun limit, and the reading
+(stage_e1p_analysis)."""
 
+import copy
+import hashlib
 import json
 import tomllib
 from pathlib import Path
@@ -10,11 +13,13 @@ from pathlib import Path
 import pytest
 
 import adv_plan as ap
+import adv_smoke
 import core_b_plan as bp
 import run_stage_e1p as r1p
 import stage_e1 as se1
 import stage_e1p_analysis as an
 import stage_e1p_plan as pp
+import stage_e1p_seed_check as sc
 import test_run_c0_probe as tc0
 import test_run_stage_d as td
 import test_run_stage_e2 as tre2
@@ -30,19 +35,48 @@ SMI = {"pstate": "P1", "sm_mhz": 2800.0, "mem_mhz": 14000.0, "power_w": 250.0, "
        "mem_used_mib": 15000.0, "event_reasons": 0}
 
 
+def seed_record(**over):
+    rec = {"stage": "E1P", "check": "seed", "vllm_version": PINS["vllm"]["version"],
+           "script_sha256": pp.seed_check_sha256(), "N": 200, "input_len": 8064,
+           "seeds": {"A": {"seed": 20261008, "n": 200, "prompt_len_ok": 200, "prompts_sha256": "a" * 64},
+                     "B": {"seed": 20261023, "n": 200, "prompt_len_ok": 200, "prompts_sha256": "b" * 64}},
+           "ok": True, "problems": []}
+    return {**rec, **over}
+
+
+def write_seed_check(root, **over):
+    path = Path(root).joinpath(*pp.SEED_CHECK)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(seed_record(**over)))
+
+
 class Receiver:
-    def __init__(self, world):
-        self.world, self.records, self.errors = world, [], []
+    """OtlpReceiver's files: a body under raw_dir at start, decoded records appended to spans_path."""
+
+    def __init__(self, world, raw_dir, spans_path):
+        self.world, self.raw_dir, self.spans_path = world, Path(raw_dir), Path(spans_path)
+        self.records, self.errors = [], []
 
     def start(self):
+        self.raw_dir.mkdir(parents=True, exist_ok=True)
+        (self.raw_dir / "00001.pb").write_bytes(b"\x0a\x00")
         self.world.receiver = self
         return self
+
+    def add(self, recs):
+        self.records += recs
+        with open(self.spans_path, "a") as fh:
+            fh.writelines(json.dumps(r) + "\n" for r in recs)
 
     def close(self):
         return []
 
     def raise_if_failed(self):
         pass
+
+    def stats(self):
+        return {"posts": 1, "spans": len(self.records), "llm_request": len(self.records), "main": 0,
+                "decode_errors": [], "errors": []}
 
     def read_spans(self):
         return list(self.records)
@@ -51,15 +85,17 @@ class Receiver:
 class World(td.World):
     """td.World's clock, idle and spill readings with an observed-B0 server. spikes[seed label]: idx whose F is 50 ms
     (else 10 ms); slips[tag]: slipped groups (c0 test's cycle); behave[tag] in {"timeout", "hot", "exit", "unhealthy",
-    "no_spans", "short_lens", "no_steps"}; never_ready: boot labels whose /health never answers ("*": all);
-    nd_edit: edits of the logged non-default args; smi_temp: the sampler's temperature (None: never reported)."""
+    "no_spans", "short_lens", "no_steps", "raise", "peek"} ("peek" records the committed files of the session mid-run);
+    never_ready: boot labels whose /health never answers ("*": all); nd_edit: edits of the logged non-default args;
+    smi_temp: the sampler's temperature (None: never reported); smi_dead: the sampler never started."""
 
     def __init__(self, tmp_path, *, spikes=SPIKES, slips=None, behave=None, never_ready=(), nd_edit=None,
-                 smi_temp=66.0, bench_s=None, spill_at=()):
+                 smi_temp=66.0, bench_s=None, spill_at=(), smi_dead=False):
         super().__init__(tmp_path, spill_at=spill_at)
         self.spikes, self.slips, self.behave = spikes, slips or {}, behave or {}
         self.never_ready, self.nd_edit, self.smi_temp, self.bench_s = set(never_ready), nd_edit or {}, smi_temp, \
             bench_s
+        self.smi_dead, self.peeked = smi_dead, None
         self.step, self.receiver, self.server_log, self.smi, self.unhealthy = 0, None, None, None, False
         self.smi_samples, self.bench_argvs = [], []
 
@@ -68,6 +104,8 @@ class World(td.World):
 
     def start_smi(self, path):
         smi = tc0.FakeSmi(self, path)
+        if self.smi_dead:
+            smi.lose("the nvidia-smi sampler did not start: OSError")
         self.smi_samples = [{"t": self.wall(), **SMI, "temp_c": self.smi_temp}]
         return smi
 
@@ -98,6 +136,13 @@ class World(td.World):
                      f'num_gpu_blocks="248"}} 1.0\nvllm:num_requests_running{{{lab}}} 8.0\n'
                      f"vllm:num_requests_waiting{{{lab}}} 0.0\nvllm:kv_cache_usage_perc{{{lab}}} 0.4\n")
 
+    def peek(self, out):
+        """What a hard kill now would leave outside raw/ (what fetch_session.sh fetches)."""
+        rows = [json.loads(x) for x in (out / "rows.jsonl").read_text().splitlines() if x.strip()]
+        derived = {p.name: [json.loads(x) for x in p.read_text().splitlines()] for p in (out / "derived").glob(
+            "*-requests.jsonl")}
+        return {"rows": rows, "derived": derived, "derived_files": sorted(p.name for p in (out / "derived").iterdir())}
+
     def run_bench(self, argv, log_path, env, timeout_s, stop):
         self.bench_argvs.append(argv)
         a = dict(zip(argv, argv[1:]))
@@ -106,6 +151,10 @@ class World(td.World):
         how = self.behave.get(tag)
         Path(log_path).write_text("log\n")
         t0 = self.wall()
+        if how == "peek":
+            self.peeked = self.peek(Path(a["--result-dir"]).parent)
+        if how == "raise":
+            raise r1p.RunError("a harness failure in the bench")
         if how == "timeout":
             self.t += timeout_s
             return -9, True, False
@@ -127,7 +176,7 @@ class World(td.World):
                          "completion_tokens": 128})
         if how == "no_spans":
             recs = recs[:-1]
-        self.receiver.records += recs + [{"id": "cmpl-warmup-0", "arrival": t0, "Q": q, "P": p, "server_ttft": 1.0}]
+        self.receiver.add(recs + [{"id": "cmpl-warmup-0", "arrival": t0, "Q": q, "P": p, "server_ttft": 1.0}])
         lens = [8000 if how == "short_lens" and i % 2 else 8064 for i in range(n)]
         res = {"completed": n, "failed": 0, "duration": 0.2 * n, "request_throughput": 5.0, "output_throughput": 300.0,
                "total_token_throughput": 4e4, "input_lens": lens, "output_lens": [128] * n, "ttfts": ttfts,
@@ -150,6 +199,7 @@ class World(td.World):
 def setup(tmp_path):
     root = tmp_path / "repo"
     (root / "results" / "stage_e").mkdir(parents=True)
+    write_seed_check(root)
     return root
 
 
@@ -159,17 +209,18 @@ def session(root, plan, *, mode, world=None, sid="s", **kw):
     args = dict(pins=PINS, pins_sha256="p" * 64, out_dir=root / "results" / "stage_e" / sid, session_id=sid,
                 mode=mode, expected_plan=plan, popen=w.popen, signal_group=w.signal_group, group_alive=w.group_alive,
                 http_get=w.http_get, run_bench=w.run_bench, gpu_sample=w.gpu_sample, compute_apps=w.compute_apps,
-                shared_usage=w.shared_usage, start_smi=w.start_smi, receiver_factory=lambda raw, spans, pre:
-                Receiver(w), lock_held_check=lambda: True, gpu_lock_held=True, capture_env=tre2.Env(), t_start=w.now(),
-                vllm_bin="/v", base_env=BASE_ENV, toolchain_check=lambda env: [], sample_interval=None, now=w.now,
-                sleep=w.sleep, wall=w.wall, clock=lambda: f"2026-10-24T{sid}-{next(stamp):06d}", repo_root=root)
+                shared_usage=w.shared_usage, start_smi=w.start_smi,
+                receiver_factory=lambda raw, spans, pre: Receiver(w, raw, spans), lock_held_check=lambda: True,
+                gpu_lock_held=True, capture_env=tre2.Env(), t_start=w.now(), vllm_bin="/v", base_env=BASE_ENV,
+                toolchain_check=lambda env: [], sample_interval=None, now=w.now, sleep=w.sleep, wall=w.wall,
+                clock=lambda: f"2026-10-24T{sid}-{next(stamp):06d}", repo_root=root)
     args.update(kw)
     return r1p.run_session(plan, **args), w
 
 
 def smoke(tmp_path, world=None, sid="smoke-e1p", **kw):
     root = setup(tmp_path)
-    s, w = session(root, pp.build_plan(PINS, CFG, mode="smoke"), mode="smoke", world=world, sid=sid, **kw)
+    s, w = session(root, pp.build_plan(PINS, CFG, mode="smoke", root=root), mode="smoke", world=world, sid=sid, **kw)
     return s, root, w
 
 
@@ -183,16 +234,27 @@ def formal_setup(tmp_path):
     return root, pp.build_plan(PINS, frozen(), mode="formal", root=root)
 
 
+def sdir(root, sid):
+    return root / "results" / "stage_e" / sid
+
+
 def rows_of(root, sid):
-    return [json.loads(x) for x in (root / "results" / "stage_e" / sid / "rows.jsonl").read_text().splitlines()]
+    return [json.loads(x) for x in (sdir(root, sid) / "rows.jsonl").read_text().splitlines()]
 
 
-# ---------------------------------------------------------------- config and plans
+def lock_stop_after(n):
+    """lock_held_check answers True n times (the session's own check, then the boots'), then False."""
+    calls = iter([True] * n + [False] * 99)
+    return lambda: next(calls)
+
+
+# ---------------------------------------------------------------- config, seed check and plans
 
 def test_the_repo_config_is_041s_and_unfrozen():
     assert pp.config_problems(CFG) == [] and CFG["freeze"] == {"e1p": False, "smoke_e1p": ""}
     assert pp.config_problems(frozen()) == []
-    assert pp.config_problems({**CFG, "freeze": {"e1p": True, "smoke_e1p": ""}})
+    for sid in ("", "..", ".", "../x", "a/b", "x y"):
+        assert pp.config_problems(frozen(sid)), sid
     for key, bad in (("seeds", {"A": 20261008, "B": 20261008}), ("order_even", ["A", "B", "B", "A"]),
                      ("f_spike_ms", 35), ("cap_hours", 3.5), ("a_prior", [32, 64]), ("j_content_max", 0.25)):
         assert any(key in p for p in pp.config_problems({**CFG, "e1p": {**CFG["e1p"], key: bad}})), key
@@ -200,13 +262,53 @@ def test_the_repo_config_is_041s_and_unfrozen():
     assert pp.e1_config()["freeze"]["e1"] is True and se1.config_problems(pp.e1_config()) == []
 
 
-def test_a_plan_pins_the_configs_content_without_freeze():
+def test_e1_d_must_still_be_its_frozen_harness(monkeypatch):
+    monkeypatch.setattr(se1, "harness_sha256", lambda root=None: "0" * 64)
+    with pytest.raises(pp.PlanError, match="e1_harness_sha256"):
+        pp.e1_config()
+
+
+def test_a_plan_pins_the_configs_content_without_freeze(tmp_path):
+    root = setup(tmp_path)
     a, b = frozen(), CFG
     assert pp.config_sha256(a) == pp.config_sha256(b) != pp.config_sha256({**b, "e1p": {**b["e1p"], "boots": 5}})
-    p = pp.build_plan(PINS, CFG, mode="smoke")
+    p = pp.build_plan(PINS, CFG, mode="smoke", root=root)
     assert p["stage_e1p_sha256"] == pp.config_sha256(CFG) and p["harness_sha256"] == pp.harness_sha256()
     assert p["stage_e1_sha256"] == pp.sha256_json(E1CFG)
-    assert set(pp.HARNESS_FILES) >= {"benchmarks/run_c0_probe.py", "benchmarks/c0_analysis.py"}
+    assert p["seed_check_sha256"] == hashlib.sha256(root.joinpath(*pp.SEED_CHECK).read_bytes()).hexdigest()
+    assert set(pp.HARNESS_FILES) == {"benchmarks/stage_e1p_plan.py", "benchmarks/run_stage_e1p.py",
+                                     "benchmarks/stage_e1p_analysis.py", "benchmarks/run_c0_probe.py",
+                                     "benchmarks/c0_analysis.py"}
+
+
+@pytest.mark.parametrize("over, why", [
+    (None, "no readable seed check"), ({"ok": False, "problems": ["seed B: 199 of 200"]}, "did not pass"),
+    ({"vllm_version": "0.29.0"}, "0.29.0"), ({"script_sha256": "0" * 64}, "script_sha256"),
+    ({"N": 16}, "N 16"),
+    ({"seeds": {"A": {"seed": 20261008}, "B": {"seed": 20261024}}}, "20261024")])
+def test_every_plan_needs_the_passed_seed_check_of_this_script_and_design(tmp_path, over, why):
+    root = tmp_path / "repo"
+    if over is not None:
+        write_seed_check(root, **over)
+    for mode in ("smoke", "formal"):
+        with pytest.raises(pp.PlanError, match=why):
+            pp.build_plan(PINS, frozen(), mode=mode, root=root)
+
+
+def test_the_seed_check_needs_every_prompt_at_8064_and_different_prompts_per_seed():
+    def prompts(tag, n=200, bad=()):
+        return [(f"{tag}{i}", 8000 if i in bad else 8064) for i in range(n)]
+
+    ok = sc.check({"A": (1, prompts("a")), "B": (2, prompts("b"))}, N=200, input_len=8064, encode_len=lambda p: 8064)
+    assert ok["ok"] is True and ok["seeds"]["B"]["prompt_len_ok"] == 200 and ok["seeds"]["A"]["retokenized_ok"] == 200
+    short = sc.check({"A": (1, prompts("a")), "B": (2, prompts("b", bad=(7,)))}, N=200, input_len=8064,
+                     encode_len=lambda p: 8064)
+    assert short["ok"] is False and short["seeds"]["B"]["prompt_lens_other"] == [8000] and "seed B" in short[
+        "problems"][0]
+    same = sc.check({"A": (1, prompts("x")), "B": (2, prompts("x"))}, N=200, input_len=8064, encode_len=len)
+    assert same["ok"] is False and "same prompts" in same["problems"][0] and same["seeds"]["A"]["retokenized_ok"] == 0
+    assert sc.check({"A": (1, prompts("a", n=16)), "B": (2, prompts("b"))}, N=200, input_len=8064,
+                    encode_len=len)["ok"] is False
 
 
 def test_the_server_is_advanceds_observed_b0_and_the_client_changes_only_seed_n_and_prefix():
@@ -225,8 +327,8 @@ def test_the_server_is_advanceds_observed_b0_and_the_client_changes_only_seed_n_
     assert diff == {"--num-prompts": ("200", "16"), "--seed": ("20261008", "20261023")}
 
 
-def test_the_smoke_plan_is_one_boot_of_a_then_b_at_n_16():
-    p = pp.build_plan(PINS, CFG, mode="smoke")
+def test_the_smoke_plan_is_one_boot_of_a_then_b_at_n_16(tmp_path):
+    p = pp.build_plan(PINS, CFG, mode="smoke", root=setup(tmp_path))
     assert [(x["tag"], x["seed_label"], x["seed"], x["N"]) for x in p["boots"][0]["benches"]] == [
         ("b1-n1", "A", 20261008, 16), ("b1-n2", "B", 20261023, 16)]
     assert len(p["boots"]) == 1 and p["cap_s"] == 3.0 * 3600 and p["timeout_s"] == 720 and p["smoke"] is None
@@ -244,18 +346,21 @@ def test_formal_plans_need_the_freeze_and_a_passed_smoke_and_take_its_time_off_t
         pos = sorted(x["bench"] for x in benches if x["seed_label"] == label)
         assert pos == [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]
     assert {x["N"] for x in benches} == {200}
-    smoke_s = json.loads((root / "results" / "stage_e" / "smoke-e1p" / "session.json").read_text())
+    smoke_s = json.loads((sdir(root, "smoke-e1p") / "session.json").read_text())
     assert p["smoke"] == {"session": "smoke-e1p", "elapsed_s": smoke_s["elapsed_s"]}
     assert p["cap_s"] == int(3.0 * 3600 - smoke_s["elapsed_s"]) and 0 < smoke_s["elapsed_s"] < 3600
     with pytest.raises(pp.PlanError, match="freeze.e1p"):
         pp.build_plan(PINS, CFG, mode="formal", root=root)
     with pytest.raises(pp.PlanError, match="smoke first"):
         pp.build_plan(PINS, frozen("none"), mode="formal", root=root)
+    assert pp.build_plan(PINS, frozen(), mode="formal", root=root, pins_sha256="p" * 64)["pins_sha256"] == "p" * 64
+    with pytest.raises(pp.PlanError, match="pins_sha256"):
+        pp.build_plan(PINS, frozen(), mode="formal", root=root, pins_sha256="q" * 64)
 
 
 def test_the_smoke_evidence_must_be_this_designs_passed_smoke(tmp_path):
     root, _ = formal_setup(tmp_path)
-    d = root / "results" / "stage_e" / "smoke-e1p"
+    d = sdir(root, "smoke-e1p")
     s, plan = json.loads((d / "session.json").read_text()), json.loads((d / "plan.json").read_text())
     other = {**plan, "boots": [{**plan["boots"][0], "benches": plan["boots"][0]["benches"][:1]}]}
     for over_s, over_plan, why in (
@@ -276,9 +381,26 @@ def test_the_smoke_evidence_must_be_this_designs_passed_smoke(tmp_path):
     (d / "session.json").write_text(json.dumps(s))
     (d / "plan.json").write_text(json.dumps(plan))
     assert pp.build_plan(PINS, frozen(), mode="formal", root=root)["boots"]
+    write_seed_check(root, prompts_sha256="x")                       # another record: the smoke's plan differs
+    with pytest.raises(pp.PlanError, match="smoke plan"):
+        pp.build_plan(PINS, frozen(), mode="formal", root=root)
 
 
 # ---------------------------------------------------------------- smoke sessions
+
+def no_latency(root, sid):
+    """Every committed file of a smoke (rows.jsonl, derived/, session.json's boots, smoke.json) without a latency
+    key; the session's own elapsed_s / elapsed_at_start_s (the cap's bookkeeping) are its only timing."""
+    out = sdir(root, sid)
+    saved = json.loads((out / "session.json").read_text())
+    found = adv_smoke.latency_keys(rows_of(root, sid)) + adv_smoke.latency_keys(saved["boots"])
+    found += adv_smoke.latency_keys(json.loads((out / "smoke.json").read_text()))
+    for p in (out / "derived").glob("*-requests.jsonl"):
+        found += adv_smoke.latency_keys([json.loads(x) for x in p.read_text().splitlines()])
+    top = [k for k in adv_smoke.latency_keys({k: v for k, v in saved.items() if k != "boots"})
+           if k.split(".")[0] not in ("elapsed_s", "elapsed_at_start_s")]
+    return found + top
+
 
 def test_a_smoke_runs_seed_a_then_b_checks_041s_conditions_and_masks_the_latencies(tmp_path):
     s, root, w = smoke(tmp_path)
@@ -288,27 +410,66 @@ def test_a_smoke_runs_seed_a_then_b_checks_041s_conditions_and_masks_the_latenci
     seeds = [a[a.index("--seed") + 1] for a in w.bench_argvs]
     assert seeds == ["20261008", "20261023"] and {a[a.index("--num-prompts") + 1] for a in w.bench_argvs} == {"16"}
     assert [a[-1] for a in w.bench_argvs] == ["e1p-b1-n1-", "e1p-b1-n2-"] and len(w.server_argvs) == 1
-    out = root / "results" / "stage_e" / "smoke-e1p"
-    for pattern in r1p.SMOKE_LATENCY_RAW + ("*.otlp",):
-        assert not list((out / "raw").glob(pattern)), pattern
-    assert not list((out / "derived").glob("*-e1.json"))
+    out = sdir(root, "smoke-e1p")
+    assert sorted(p.name for p in (out / "raw").iterdir()) == ["b1.server.log"]       # (the fake sampler writes none)
+    assert "raw/b1.otlp" in s["masked"] and "raw/b1.spans.jsonl" in s["masked"] and "raw/b1-n1-e1.json" in s["masked"]
+    assert sorted(p.name for p in (out / "derived").iterdir()) == ["b1-n1-requests.jsonl", "b1-n2-requests.jsonl",
+                                                                    "b1-smi.jsonl"]
     req = (out / "derived" / "b1-n1-requests.jsonl").read_text().splitlines()
     assert len(req) == 16 and set(json.loads(req[0])) == {"idx", "cls"}
     rows = rows_of(root, "smoke-e1p")
-    assert all(set(r) <= set(r1p.MASK_ROW_KEYS) for r in rows) and all(r["ok"] for r in rows)
+    assert all(r["ok"] and r["e1_ok"] for r in rows) and no_latency(root, "smoke-e1p") == []
     saved = json.loads((out / "session.json").read_text())
-    assert not any(k in boot for boot in saved["boots"].values() for k in ("startup_s", "t_start", "t_end"))
     assert saved["elapsed_s"] == s["elapsed_s"] > 0 and (out / "smoke.json").is_file()
-    assert (out / "derived" / "b1-smi.jsonl").is_file() and saved["boots"]["b1"]["smi_summary"]["temp_max_c"] == 66.0
+    assert saved["boots"]["b1"]["smi_summary"]["temp_max_c"] == 66.0 and "main" not in saved["boots"]["b1"]["receiver"]
+
+
+def test_a_smoke_never_leaves_a_latency_outside_raw_even_mid_run(tmp_path):
+    s, root, w = smoke(tmp_path, world=World(tmp_path / "w", behave={"b1-n2": "peek"}))
+    seen = w.peeked
+    assert s["smoke"]["ok"] is True and adv_smoke.latency_keys(seen["rows"]) == [] and len(seen["rows"]) == 1
+    assert seen["derived_files"] == ["b1-n1-requests.jsonl"] and set(seen["derived"]["b1-n1-requests.jsonl"][0]) == {
+        "idx", "cls"}
+
+
+def test_an_aborted_smoke_is_masked_and_fails(tmp_path):
+    with pytest.raises(r1p.RunError, match="harness failure"):
+        smoke(tmp_path, world=World(tmp_path / "w", behave={"b1-n2": "raise"}))
+    root = tmp_path / "repo"
+    saved = json.loads((sdir(root, "smoke-e1p") / "session.json").read_text())
+    assert saved["status"] == "aborted" and saved["smoke"]["ok"] is False and no_latency(root, "smoke-e1p") == []
+    assert not list((sdir(root, "smoke-e1p") / "raw").glob("*-e1.json"))
 
 
 @pytest.mark.parametrize("world_kw, failed", [
     (dict(behave={"b1-n2": "no_spans"}), "spans"), (dict(behave={"b1-n2": "no_spans"}), "f_computable"),
     (dict(behave={"b1-n2": "short_lens"}), "input_lens_8064"), (dict(behave={"b1-n1": "no_steps"}), "steps_in_window"),
-    (dict(smi_temp=None), "smi"), (dict(behave={"b1-n1": "exit"}), "every_bench_valid")])
+    (dict(smi_temp=None), "smi"), (dict(behave={"b1-n1": "exit"}), "every_bench_valid"),
+    (dict(spill_at=("bench:b1-n1",)), "no_spill")])
 def test_each_smoke_condition_can_fail_it(tmp_path, world_kw, failed):
     s, _, _ = smoke(tmp_path, world=World(tmp_path / "w", **world_kw))
     assert s["smoke"]["ok"] is False and s["smoke"]["checks"][failed] is False
+
+
+def test_the_smoke_checks_on_rows_cover_coverage_schema_blocks_stops_and_teardown(tmp_path):
+    root = setup(tmp_path)
+    plan = pp.build_plan(PINS, CFG, mode="smoke", root=root)
+    rows = [{"tag": t, "seed_label": x, "N": 16, "ok": True, "spans_main": 16, "f_computable": True,
+             "n_steps_window": 5, "input_lens_8064": True, "derived_schema_ok": True, "e1_ok": True,
+             "num_gpu_blocks": 248} for t, x in (("b1-n1", "A"), ("b1-n2", "B"))]
+    sess = {"boots": {"b1": {"startup_ok": True, "smi_summary": {"n_samples": 3, "fields_missing": []}}},
+            "stopped": None}
+    assert r1p.smoke_checks(plan, rows, sess)["ok"] is True
+    for edit, failed in ((lambda r, s: r.pop(), "covered"), (lambda r, s: r.reverse(), "covered"),
+                         (lambda r, s: r[0].update(e1_ok=False), "derived_schema"),
+                         (lambda r, s: r[0].update(e1_error="x"), "derived_schema"),
+                         (lambda r, s: r[1].update(num_gpu_blocks=200), "blocks"),
+                         (lambda r, s: s.update(stopped={"rule": "cap"}), "not_stopped"),
+                         (lambda r, s: s.update(teardown_problems=[{"boot": "b1"}]), "teardown_clean"),
+                         (lambda r, s: s["boots"]["b1"].update(startup_ok=False), "startup")):
+        r, s = copy.deepcopy(rows), copy.deepcopy(sess)
+        edit(r, s)
+        assert r1p.smoke_checks(plan, r, s)["checks"][failed] is False, failed
 
 
 def test_a_smoke_whose_server_never_starts_fails_and_records_why(tmp_path):
@@ -330,7 +491,7 @@ def test_a_formal_session_runs_24_benches_with_their_spikes_and_e1_files(tmp_pat
     rows = rows_of(root, "f")
     assert s["status"] == "finished" and s["stopped"] is None and len(rows) == 24 and all(r["ok"] for r in rows)
     assert len(w.server_argvs) == 6 and s["cap_s"] == plan["cap_s"]
-    out = root / "results" / "stage_e" / "f"
+    out = sdir(root, "f")
     e1 = json.loads((out / "derived" / "b1-n1-e1.json").read_text())
     assert e1["f_spikes"]["spike_groups"] == [4, 8, 11]                         # seed A at 32, 64, 88
     assert [x["start_idx"] for x in e1["episodes"]] == [65] and e1["episodes"][0]["links"]["L1"] is True
@@ -338,6 +499,10 @@ def test_a_formal_session_runs_24_benches_with_their_spikes_and_e1_files(tmp_pat
     assert b["f_spikes"]["spike_groups"] == [5, 15, 20]                         # seed B at 40, 120, 160
     r = next(x for x in rows if x["tag"] == "b1-n1")
     assert r["spans_main"] == 200 and r["n_steps_window"] > 0 and r["input_lens_8064"] is True
+    assert r["t_before"] < r["t_after"] and set(json.loads((out / "derived" / "b1-n1-requests.jsonl").read_text(
+    ).splitlines()[0])) == set(r1p.DERIVED_KEYS)
+    assert (out / "raw" / "b1.spans.jsonl").is_file() and (out / "raw" / "b1.otlp" / "00001.pb").is_file()
+    assert s["boots"]["b1"]["receiver"]["spans"] > 800 and "main" not in s["boots"]["b1"]["receiver"]
     assert pp.formal_attempts(root)[0]["valid"] is True
     with pytest.raises(r1p.RunError, match="already exist"):
         session(root, plan, mode="formal", sid="f2")
@@ -351,7 +516,7 @@ def test_the_runs_plan_and_lock_are_checked_before_anything_is_written(tmp_path)
                     (dict(toolchain_check=lambda env: ["nvcc"]), "toolchain")):
         with pytest.raises(r1p.RunError, match=why):
             session(root, plan, mode="formal", sid="g", **kw)
-        assert not (root / "results" / "stage_e" / "g").exists()
+        assert not sdir(root, "g").exists()
     with pytest.raises(r1p.RunError, match="results/stage_e"):
         session(root, plan, mode="formal", sid="g", out_dir=root / "results" / "g")
 
@@ -395,13 +560,36 @@ def test_no_server_started_is_refused_and_an_environment_stop_voids_the_session(
     busy.compute_apps = lambda: [{"pid": 9, "name": "other", "used_mib": 3000}]
     s, _ = session(root, plan, mode="formal", world=busy, sid="f1")
     assert s["status"] == "refused" and s["stopped"]["rule"] == "gpu_not_idle" and pp.formal_attempts(root) == []
-    w = World(tmp_path / "w2")
-    calls = iter([True] * 3 + [False] * 99)          # the session, boot 1, boot 2; boot 3 stops
-    s, _ = session(root, plan, mode="formal", world=w, sid="f2", lock_held_check=lambda: next(calls))
+    s, w = session(root, plan, mode="formal", world=World(tmp_path / "w0", smi_dead=True), sid="f0")
+    assert s["status"] == "refused" and s["stopped"]["rule"] == "telemetry" and w.server_argvs == []
+    assert pp.formal_attempts(root) == []
+    s, _ = session(root, plan, mode="formal", sid="f2", lock_held_check=lock_stop_after(3))  # boot 3 stops
     assert s["status"] == "finished" and s["stopped"]["rule"] == "lock"
     assert [a["valid"] for a in pp.formal_attempts(root)] == [False]
     s, _ = session(root, plan, mode="formal", sid="f3")
     assert s["stopped"] is None and [a["valid"] for a in pp.formal_attempts(root)] == [False, True]
+
+
+def test_an_interrupt_during_the_preflight_is_refused_not_an_attempt(tmp_path):
+    root, plan = formal_setup(tmp_path)
+
+    def interrupted(**kw):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        session(root, plan, mode="formal", sid="f", capture_env=interrupted)
+    saved = json.loads((sdir(root, "f") / "session.json").read_text())
+    assert saved["status"] == "refused" and "KeyboardInterrupt" in saved["aborted"] and pp.formal_attempts(root) == []
+
+
+def test_two_void_attempts_end_the_formal_runs(tmp_path):
+    root, plan = formal_setup(tmp_path)
+    for sid in ("v1", "v2"):
+        s, _ = session(root, plan, mode="formal", sid=sid, lock_held_check=lock_stop_after(2))
+        assert s["stopped"]["rule"] == "lock" and s["status"] == "finished"
+    assert [a["valid"] for a in pp.formal_attempts(root)] == [False, False]
+    with pytest.raises(r1p.RunError, match="already exist"):
+        session(root, plan, mode="formal", sid="v3")
 
 
 def test_the_per_bench_quantities_use_e1ds_frozen_functions():
@@ -414,6 +602,8 @@ def test_the_per_bench_quantities_use_e1ds_frozen_functions():
     assert full["f_spikes"] == se1.f_spikes(reqs, steps, E1CFG) and full["f_spikes"]["spike_groups"] == [2, 5]
     assert [x["k"] for x in full["episodes"]] == [8] and full["episodes"][0]["links"]["L1"] is False
     assert r1p.bench_e1(reqs[:16], steps, E1CFG, full=False)["episodes"] is None
+    empty = r1p.bench_e1(reqs, [], E1CFG, full=True)                    # no steps in the window: L2 not evaluated
+    assert empty["f_spikes"]["n_dec_anchor"] is None and empty["episodes"][0]["links"]["L2"] is None
     aligned = {"requests": [{"idx": 0, "e2e": 1.5, "F": 0.01}], "missing": [1], "duplicates": [], "unexpected": []}
     assert r1p.span_problems(aligned, [{"F_ms": None}], 2)
 
@@ -421,7 +611,7 @@ def test_the_per_bench_quantities_use_e1ds_frozen_functions():
 # ---------------------------------------------------------------- reading
 
 def summary(repeated, spikes=20):
-    return {"repeated": dict.fromkeys(repeated, 3), "spikes": spikes}
+    return {"repeated": [[i, 3] for i in repeated], "spikes": spikes}
 
 
 @pytest.mark.parametrize("a, b, spikes, row", [
@@ -441,37 +631,101 @@ def test_jaccard_and_spike_idx():
 
 
 def test_the_analysis_reads_the_first_valid_formal_session(tmp_path):
-    root, plan = formal_setup(tmp_path)
+    root, _ = formal_setup(tmp_path)
+    plan = pp.build_plan(PINS, frozen(), mode="formal", root=root, pins_sha256="p" * 64)
     world = World(tmp_path / "wf", slips={"b1-n1": (8,), "b4-n2": (8,)})
     session(root, plan, mode="formal", world=world, sid="f")
     path = an.first_valid_session(root)
     assert path.name == "f" and an.session_problems(path, pins=PINS, cfg=frozen(), root=root) == []
+    assert an.session_problems(path, pins=PINS, cfg=frozen(), root=root, pins_sha256="p" * 64) == []
+    assert any("pins_sha256" in p for p in an.session_problems(path, pins=PINS, cfg=frozen(), root=root,
+                                                                pins_sha256="q" * 64))
     out = an.analyze(path, frozen(), E1CFG)
-    assert out["reading"]["row"] == "content_locked" and out["reading"]["J"] == 0.0
+    assert json.loads(json.dumps(out)) == out                         # no int keys turn into strings
+    assert out["reading"]["row"] == "content_locked" and out["reading"]["J"] == 0.0 and "note" not in out["reading"]
     assert out["reading"]["A_in"] == [32, 64, 88] and out["reading"]["B_in"] == [40, 120, 160]
     a = out["seeds"]["A"]
-    assert a["benches"] == 12 and a["spikes"] == 36 and a["repeated"] == {32: 12, 64: 12, 88: 12}
-    assert a["slips_by_position"][1] == {"benches": 3, "episodes": 1} and a["spike_slip"]["slips_with_spike"] == 2
+    assert a["benches"] == 12 and a["spikes"] == 36 and a["repeated"] == [[32, 12], [64, 12], [88, 12]]
+    assert a["slips_by_position"][0] == {"position": 1, "benches": 3, "episodes": 1}
+    assert a["spike_slip"] == {"spikes": 36, "spikes_in_slip_groups": 2, "slip_groups": 2, "slip_groups_with_spike": 2}
+    assert a["episodes"] == 2 and a["chain"]["start_idx"] == [[65, 2]]
     assert out["slip_rate_all"] == 2 / 24 and len(out["inputs_sha256"]) == 3 + 48
+    assert out["data"]["planned"] == out["data"]["valid"] == {"A": 12, "B": 12} and out["data"]["stopped"] is None
+    assert out["data"]["insufficient_data"] is False and out["data"]["incomplete_session"] is False
+    assert out["stage_e1_harness_sha256"] == E1CFG["freeze"]["e1_harness_sha256"]
     same = World(tmp_path / "ws", spikes={"A": (32, 64, 88), "B": (32, 64, 88)})
     root2, plan2 = formal_setup(tmp_path / "two")
     session(root2, plan2, mode="formal", world=same, sid="f")
     assert an.analyze(an.first_valid_session(root2), frozen(), E1CFG)["reading"]["row"] == "position_locked"
 
 
-def test_the_analysis_refuses_changed_inputs_and_other_sessions(tmp_path):
+def test_a_session_stopped_with_too_few_valid_benches_says_so(tmp_path):
+    root, plan = formal_setup(tmp_path)
+    no_b = {f"b{b}-n{j}": "no_spans" for b, js in ((1, (2, 3)), (2, (1, 4))) for j in js}
+    s, _ = session(root, plan, mode="formal", world=World(tmp_path / "wf", behave=no_b), sid="f")
+    assert s["stopped"]["rule"] == "failed_boots"
+    out = an.analyze(an.first_valid_session(root), frozen(), E1CFG)
+    d = out["data"]
+    assert d["stopped"]["rule"] == "failed_boots" and d["valid"] == {"A": 4, "B": 0} and d["planned"]["B"] == 12
+    assert d["insufficient_data"] is True and d["incomplete_session"] is True
+    assert [x["tag"] for x in d["excluded"]["B"]][:2] == ["b1-n2", "b1-n3"] and len(d["excluded"]["B"]) == 4
+    assert out["reading"]["row"] == "few_spikes" and "too little data" in out["reading"]["note"]
+
+
+def test_first_valid_session_allows_one_void_attempt_only(tmp_path):
+    base = tmp_path / "results" / "stage_e"
+
+    def attempt(sid, started, valid):
+        (base / sid).mkdir(parents=True)
+        (base / sid / "session.json").write_text(json.dumps(
+            {"stage": "E1P", "mode": "formal", "status": "finished", "env_valid": valid, "started_at": started}))
+
+    attempt("v1", "1", False)
+    with pytest.raises(an.AnalysisError, match="no valid"):
+        an.first_valid_session(tmp_path)
+    attempt("ok", "2", True)
+    assert an.first_valid_session(tmp_path).name == "ok"
+    attempt("v0", "0", False)
+    with pytest.raises(an.AnalysisError, match="at most one rerun"):
+        an.first_valid_session(tmp_path)
+
+
+def test_the_analysis_refuses_changed_missing_or_inconsistent_inputs(tmp_path):
     root, plan = formal_setup(tmp_path)
     with pytest.raises(an.AnalysisError, match="no valid"):
         an.first_valid_session(root)
     session(root, plan, mode="formal", sid="f")
-    path = root / "results" / "stage_e" / "f"
+    path = sdir(root, "f")
+    pristine = {p: p.read_bytes() for p in path.rglob("*") if p.is_file()}
+
+    def restore():
+        for p, data in pristine.items():
+            p.write_bytes(data)
+
     d = path / "derived" / "b3-n2-requests.jsonl"
     d.write_text(d.read_text().replace('"F_ms": 10.0', '"F_ms": 99.0', 1))
     with pytest.raises(an.AnalysisError, match="b3-n2"):
         an.analyze(path, frozen(), E1CFG)
-    (path / "rows.jsonl").write_text((path / "rows.jsonl").read_text() + "\n")
+    restore()
+    (path / "derived" / "b2-n1-e1.json").unlink()
+    with pytest.raises(an.AnalysisError, match="b2-n1.*missing"):
+        an.analyze(path, frozen(), E1CFG)
+    restore()
+    e = path / "derived" / "b4-n3-e1.json"                          # the runner's spikes against the derived F
+    doc = json.loads(e.read_text())
+    doc["f_spikes"]["spike_groups"] = [1, 2]
+    e.write_text(json.dumps(doc))
+    rows = rows_of(root, "f")
+    for r in rows:
+        if r["tag"] == "b4-n3":
+            r["e1_sha256"] = hashlib.sha256(e.read_bytes()).hexdigest()
+    (path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    with pytest.raises(an.AnalysisError, match="differ from"):
+        an.analyze(path, frozen(), E1CFG)
     assert any("rows_sha256" in p for p in an.session_problems(path, pins=PINS, cfg=frozen(), root=root))
+    restore()
+    assert an.session_problems(path, pins=PINS, cfg=frozen(), root=root) == []
     assert any("changed" in p for p in an.session_problems(
         path, pins=PINS, cfg={**frozen(), "e1p": {**CFG["e1p"], "boots": 5}}, root=root))
-    assert an.out_problems(root / "results" / "stage_e" / "f" / "x.json", root=root)
-    assert an.out_problems(root / "results" / "stage_e" / "new" / "x.json", root=root) == []
+    assert an.out_problems(sdir(root, "f") / "x.json", root=root)
+    assert an.out_problems(sdir(root, "new") / "x.json", root=root) == []
