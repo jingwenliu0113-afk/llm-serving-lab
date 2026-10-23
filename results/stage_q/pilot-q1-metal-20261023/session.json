@@ -1,0 +1,33 @@
+{
+ "schema_version": 1,
+ "session_id": "pilot-q1-metal-20261023",
+ "stage": "Q",
+ "part": "q1-metal",
+ "mode": "pilot",
+ "platform": "macos-metal",
+ "status": "finished",
+ "plan_sha256": "97e0e5c83f140af12d051ea12902d4f1900d22381a06623431c97d0e5aaa8389",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "mac_lock_held": true,
+ "gpu_lock_held": false,
+ "harness_sha256": "34256f12c4294be833981074ced8eacf2537d6763851f96f3068ba85bf49633f",
+ "inputs_verified": false,
+ "superseded": {},
+ "started_at": "2026-10-23T06:16:47.063062+00:00",
+ "powermode": 2,
+ "host": {
+  "system": "Darwin",
+  "wsl": false,
+  "nvidia": false
+ },
+ "finished_at": "2026-10-23T06:21:43.800209+00:00",
+ "outcomes": {
+  "ok": 20,
+  "oom": 0,
+  "error": 0,
+  "skipped": 0
+ },
+ "env_flags": [],
+ "env_valid": true,
+ "charge_pauses": []
+}

@@ -1,0 +1,89 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/decode-4B-Q4_0-2048-r1.stderr.txt": {
+   "sha256": "0e316cf13bc5f6afa23c02d75c5cb566cdbcb88e6d50809f675ac27550506874",
+   "size_bytes": 124746
+  },
+  "raw/decode-4B-Q4_0-2048-r1.stdout.txt": {
+   "sha256": "ca856c4270baa1351b0625da5ab2fccdcbccbc1cf1bb0df8d82f3d3337c16d68",
+   "size_bytes": 1147
+  },
+  "raw/decode-4B-Q4_K_M-2048-r1.stderr.txt": {
+   "sha256": "cc89c6cca7c12d627ba226bc0fa572b196c22b9b7a9a9def222eb24af0591b79",
+   "size_bytes": 125072
+  },
+  "raw/decode-4B-Q4_K_M-2048-r1.stdout.txt": {
+   "sha256": "b95dd1770072870d5e5b7e78b54b19dd395b509762094b2bf345a4c6ce6f5488",
+   "size_bytes": 1158
+  },
+  "raw/decode-9B-Q4_0-2048-r1.stderr.txt": {
+   "sha256": "8ca7b6778919a1847a999df357c79cdfab6a61ebb191a4928791aaa44e64b471",
+   "size_bytes": 124708
+  },
+  "raw/decode-9B-Q4_0-2048-r1.stdout.txt": {
+   "sha256": "c640d4e3d4c6087faf604435b047cacfaa42c77422462d290a452f84fdbe912c",
+   "size_bytes": 1146
+  },
+  "raw/env/decode-4B-Q4_0-2048-r1.after.json": {
+   "sha256": "09a2c0ddfdd7cbe2ec851d7e8484c1e9252a0bf1376ae63a7b733326a6719343",
+   "size_bytes": 2139
+  },
+  "raw/env/decode-4B-Q4_0-2048-r1.before.json": {
+   "sha256": "40761f6496c6a1db61b1e93da6a455c75da78871725b2fe72a40247939a90b44",
+   "size_bytes": 2140
+  },
+  "raw/env/decode-4B-Q4_K_M-2048-r1.after.json": {
+   "sha256": "fc2adbb388fc7b6e17b91f9d70eda16a9307318869a31e12f9eb15a7f1a8f516",
+   "size_bytes": 2140
+  },
+  "raw/env/decode-4B-Q4_K_M-2048-r1.before.json": {
+   "sha256": "b4eb01dac3fff2f3a78ec01a8c573ab428e88255eed2be53cf6a0e1f0270116c",
+   "size_bytes": 2141
+  },
+  "raw/env/decode-9B-Q4_0-2048-r1.after.json": {
+   "sha256": "838c26b357738667ca68faefc74a5654b3b00936393e5a139c38cf9c92371c29",
+   "size_bytes": 2140
+  },
+  "raw/env/decode-9B-Q4_0-2048-r1.before.json": {
+   "sha256": "84886edc323fe361bcc4eedd8c4b3caea2c8408dbf561ffa1d3fec614d610963",
+   "size_bytes": 2138
+  },
+  "raw/env/sentinel-end.after.json": {
+   "sha256": "bee04b6cde5f177cc6d0b314c0980325a5f17975f99095b5c2c1651c9762785e",
+   "size_bytes": 2132
+  },
+  "raw/env/sentinel-end.before.json": {
+   "sha256": "f87e12d758edece77fad56f245f873a721f76c034b41f870d6798200acb588c7",
+   "size_bytes": 2136
+  },
+  "raw/env/sentinel-start.after.json": {
+   "sha256": "968a17a9846a02f2b17cff3f36bd992fb140b6244c57866cbdc92a87ab10075a",
+   "size_bytes": 2142
+  },
+  "raw/env/sentinel-start.before.json": {
+   "sha256": "900f5d87537fb365f63f1e0836f58d0f67df4cf3a586859247ca741f6b5ff363",
+   "size_bytes": 2142
+  },
+  "raw/rows.full.jsonl": {
+   "sha256": "e700f702cfe658075ba994905f777de6e976199010e73232bccfec389af5022a",
+   "size_bytes": 5785
+  },
+  "raw/sentinel-end.stderr.txt": {
+   "sha256": "e1fe95adae526f568e3a53f0997e42b7dea8dbbb4820776ef9daccc4a6541d5a",
+   "size_bytes": 125072
+  },
+  "raw/sentinel-end.stdout.txt": {
+   "sha256": "4f8e5f8f61afc658179dfb19186fb5609d9ca47beeed635c9071aff2efa1aa84",
+   "size_bytes": 1158
+  },
+  "raw/sentinel-start.stderr.txt": {
+   "sha256": "084f6ba3a4e287fc3c482822674f1040cf82391dc74664ff4213ae822f7212c0",
+   "size_bytes": 125072
+  },
+  "raw/sentinel-start.stdout.txt": {
+   "sha256": "f20f3e129104b69c9608c58495f7580f7b80e31a6c9cf63db2b7baf98f3fb8b8",
+   "size_bytes": 1158
+  }
+ }
+}

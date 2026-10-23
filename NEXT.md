@@ -45,7 +45,8 @@
   - [x] 審查（5 個審查者、每項由兩個 agent 嘗試反駁；33 項確認）全部處理（`0ec7b92`、`fd832e4`），見 040 的審查表。
         包括：q1-metal 原本因 70W／140W 兩條規則同時套用而永遠無法執行；Phase 1 的 20-chunk pilot 已揭露（界線與預測不改）。
   - [x] 修正後的覆核：Q1 / Q2 確認 5 項、Q3 確認 3 項（共 4 項 must-fix），全部處理（040「修正後的覆核」）：stub 與嘗試次數、分析自己找 session、`--superseded` 機制、精確的端點、pilot 記錄 base 大小、Q3 去掉結尾換行與 V1 的平手規則。
-  - [ ] pilot：q1-cuda、q2（RTX，**等 GPU 空閒**）；q1-metal（Mac；plan 已可建立，lock 釋放時在 `tools/with-mac-lock` 下執行；2026-10-23 08:0x 曾因 incident-investigator 重新取得 lock 而放棄）。
+  - [x] q1-metal pilot（Mac lock 下，2026-10-23 06:16Z）：`results/stage_q/pilot-q1-metal-20261023`，20 個 job 全部 ok，`pilot_problems` 通過，harness `34256f12…` 等於目前的版本。
+  - [ ] pilot：q1-cuda、q2（RTX，**等 GPU 空閒**）→ 三個 pilot 齊了才凍結（`freeze.stage_q` 與三個 pilot id）；凍結後 Stage Q 的 harness 不能再改。
   - [ ] Q3：下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**使用者 2026-10-23 同意**；下載會讀寫 WSL 的網路與磁碟，**等 Stage D 正式鏈結束、GPU 空閒**；
         之後在 WSL 產生 chunk 檔並 pin sha256 → pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性）→ 凍結。
   - 觀察：Mac 的 140W adapter 目前只協商到 94 W（20 V × 4.69 A；名稱檢查會通過）。可能是線材或連接埠的限制，重負載時電池可能下降（016 的充電閘門會處理）。
@@ -61,7 +62,9 @@
         `python benchmarks/stage_e1.py fetch-list | while read -r args; do tools/rtx/fetch_raw.sh $args; done`
         → `python benchmarks/stage_e1.py analyze --out results/stage_e/e1-<date>/e1.json` → 結果文件（描述，不是檢定）。
   - [x] E3 的兩個 Q4_0 已產生並 pin（2026-10-23，Mac lock 下；4B `ee05b023…` 2,543,899,584 B，9B `2dfcbfd3…` 5,313,356,768 B）。
-  - [ ] E3：`produce_gguf_e3.py sync` 傳到 WSL（約 7.9 GB，**等 GPU 空閒**，不在正式 session 期間讀寫 WSL）→ 兩個平台的 pilot → 凍結（兩個旗標）→ `tools/rtx/push_session.sh stage_e <Mac pilot id>` → 正式（每個平台最多兩次嘗試）。
+  - [x] E3 Mac pilot（Mac lock 下，2026-10-23 06:2xZ）：`results/stage_e/pilot-e3-metal-20261023`，5 個 job ok、sentinel 正常、env 有效（140W adapter，協商 94 W），`pilot_problems` 通過，harness `85b9842c…` 等於目前的版本。結果已遮蔽。
+  - [ ] E3：`produce_gguf_e3.py sync` 傳到 WSL（約 7.9 GB，**等 GPU 空閒**，不在正式 session 期間讀寫 WSL）→ RTX pilot → 兩個旗標一起凍結（Mac 先不凍：任一平台的正式 plan 都要兩個旗標與兩個 pilot，先凍沒有好處）→ `tools/rtx/push_session.sh stage_e pilot-e3-metal-20261023` → 正式（每個平台最多兩次嘗試）。
+  - 注意：Stage Q 與 E3 的 Mac pilot 已綁定目前的 `stage_q.py` / `stage_e3.py`；若之後必須修改，pilot 要重跑。
   - [x] E2 harness 審查：確認 18 項，全部修正（smoke 綁定設計並改為 12 次 boot、通過條件補齊、停止規則、重跑上限、R / Λ / L̄q、incomplete 的代換規則等；041 修訂紀錄「E2 harness 審查」）。
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
   - [ ] E2（**等 GPU 空閒**，WSL）：原始碼核對（prefix caching 路徑、warmup 來源、`vllm:prefix_cache_hits_total`、`cache_config_info` 的 `mamba_cache_mode` 標籤、span 的 cached-token 欄位、`num_requests_waiting`）→ `stage_e2_datasets.py` 產生共享前綴 dataset 並 pin sha256 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。

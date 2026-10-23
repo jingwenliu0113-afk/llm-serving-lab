@@ -1,0 +1,64 @@
+{
+ "schema_version": 1,
+ "session_id": "pilot-e3-metal-20261023",
+ "stage": "E3",
+ "platform": "macos-metal",
+ "mode": "pilot",
+ "seed": 20261008,
+ "plan_sha256": "fb28f91eb2f3d27ac1da4f849df46ef2a7ee63f935a655c60530b1106fe56082",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "harness_sha256": "85b9842c081355a157a2f7f1c24ffaa7585011546cb016a5cf061c87de957ac3",
+ "status": "finished",
+ "lock_held": true,
+ "ggufs_sha256": {
+  "Qwen3.5-4B-Q8_0.gguf": "1b394dc7df6b08c1d85f4e011f63addd5533235f587a179ab5ccfa80cb58c8fb",
+  "Qwen3.5-4B-Q6_K.gguf": "76f08dad592b65db1238388749d0975b1198b62356dfaca6de5e904313546f10",
+  "Qwen3.5-4B-Q4_K_M.gguf": "cb62d0b611b093bc43e0d51774dda5bf1b234e565198d18da78043ca045e71ea",
+  "Qwen3.5-9B-Q8_0.gguf": "19aab081cfac94e7c861a662f9a8efc8959b18c5c05f5162bf2ae108e5755783",
+  "Qwen3.5-9B-Q6_K.gguf": "4203c13192721bab3b2f7c8af1b2c1bfba6147549242efcae62c8e83648aad82",
+  "Qwen3.5-9B-Q4_K_M.gguf": "27152c4ef594a908cabfcc6efc09c864763e9e1fb56ca71a3b2c9e247bebda22",
+  "Qwen3.5-4B-Q4_0.gguf": "ee05b023e1c47ec9ebae15edaaf9bb8cdd052dd61e438ef316bbc524c53989d5",
+  "Qwen3.5-9B-Q4_0.gguf": "2dfcbfd3c382830e0454f8105823df437d0a258425f84b396b171868f9e495cf"
+ },
+ "header_verified": {
+  "4B-Q4_0": true,
+  "4B-Q4_K_M": true,
+  "4B-Q6_K": true,
+  "4B-Q8_0": true,
+  "9B-Q4_0": true,
+  "9B-Q4_K_M": true,
+  "9B-Q6_K": true,
+  "9B-Q8_0": true
+ },
+ "session_b": null,
+ "started_at": "2026-10-23T06:22:01.103666+00:00",
+ "host": {
+  "system": "Darwin",
+  "wsl": false,
+  "nvidia": false
+ },
+ "powermode": 2,
+ "ac_adapter": {
+  "wattage_w": 94,
+  "manufacturer": "Apple Inc.",
+  "name": "140W USB-C Power Adapter"
+ },
+ "finished_at": "2026-10-23T06:25:43.918510+00:00",
+ "outcomes": {
+  "ok": 5,
+  "oom": 0,
+  "error": 0,
+  "skipped": 0
+ },
+ "sentinel": {
+  "drift": false,
+  "drift_pct": 0.0879,
+  "threshold_pct": 3.0
+ },
+ "sentinel_ok": true,
+ "cap_reached": false,
+ "measured_s": 222.6559075830155,
+ "env_flags": [],
+ "env_valid": true,
+ "charge_pauses": []
+}
