@@ -445,3 +445,64 @@ def test_the_refused_window_ends_when_the_first_job_process_starts(frozen_root, 
     assert sq.refused_why(RuntimeError("x")).startswith("failed before the first job: RuntimeError")
     with pytest.raises(SystemExit, match="143"):
         sq._exit_on_signal(15, None)
+
+
+def test_a_run_whose_every_disk_guard_fails_starts_no_job_and_is_refused(frozen_root, tmp_path):
+    plan = formal("q1-cuda", frozen_root)
+
+    def never(*a):
+        raise AssertionError("no job process may start")
+
+    s = run(tmp_path, plan, "a", expected_plan=plan, pins=PINS, hash_file=pinned_hash, run_proc=never,
+            disk_ok=lambda path, need: {"ok": False, "free_gib": 10})
+    assert s["status"] == "refused" and s["refused"].startswith("no job process started: ")
+    assert "disk guard failed: {" in s["refused"]
+    assert s["outcomes"]["skipped"] > 0 and sq.formal_attempts(tmp_path, "q1-cuda") == []
+
+
+def test_the_first_jobs_env_capture_is_inside_the_refused_window_and_its_process_is_not(frozen_root, tmp_path):
+    plan = formal("q1-metal", frozen_root)
+    kw = dict(expected_plan=plan, pins=PINS, hash_file=pinned_hash)
+    calls = []
+
+    def second_capture_exits(**a):
+        calls.append(a)
+        if len(calls) == 2:                                    # the first job's env_before
+            raise SystemExit(143)
+        return env("macos-metal")(**a)
+
+    with pytest.raises(SystemExit):
+        run(tmp_path / "a", plan, "a", capture=second_capture_exits, run_proc=fake_llama(n=200), **kw)
+    s = json.loads((tmp_path / "a" / "results" / "stage_q" / "a" / "session.json").read_text())
+    assert s["status"] == "refused" and s["refused"].startswith("interrupted before the first job: SystemExit")
+
+    def first_job_interrupted(*a):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        run(tmp_path / "b", plan, "b", run_proc=first_job_interrupted, **kw)
+    assert [a["status"] for a in sq.formal_attempts(tmp_path / "b", "q1-metal")] == ["running"]
+
+
+@pytest.mark.parametrize("exc, how", [(SystemExit(143), "interrupted"), (KeyboardInterrupt(), "interrupted"),
+                                      (OSError("disk"), "failed")])
+def test_refused_why_tells_an_interrupt_from_a_failure(exc, how):
+    assert sq.refused_why(exc).startswith(f"{how} before the first job: {type(exc).__name__}")
+
+
+def test_signals_exit_raises_on_sigterm_and_sighup_keeps_an_inherited_ignore_and_restores():
+    import signal
+    before = {sig: signal.getsignal(sig) for sig in (signal.SIGHUP, signal.SIGTERM)}
+    try:
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)                 # as under nohup
+        with sq.signals_exit():
+            assert signal.getsignal(signal.SIGTERM) is sq._exit_on_signal
+            assert signal.getsignal(signal.SIGHUP) is signal.SIG_IGN
+        assert signal.getsignal(signal.SIGTERM) == before[signal.SIGTERM]
+        signal.signal(signal.SIGHUP, signal.SIG_DFL)
+        with sq.signals_exit():
+            assert signal.getsignal(signal.SIGHUP) is sq._exit_on_signal
+        assert signal.getsignal(signal.SIGHUP) is signal.SIG_DFL
+    finally:
+        for sig, handler in before.items():
+            signal.signal(sig, handler)

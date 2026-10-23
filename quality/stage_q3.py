@@ -35,6 +35,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -855,6 +856,19 @@ def _exit_on_signal(signum, frame):
     raise SystemExit(128 + signum)  # as coreb_smoke: SIGHUP / SIGTERM run the run's except / finally blocks
 
 
+@contextlib.contextmanager
+def signals_exit():
+    """While a run is in progress SIGHUP / SIGTERM raise SystemExit (so its records are written and its child is
+    killed); an inherited SIG_IGN (nohup) is kept; the previous handlers come back afterwards."""
+    previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)
+                if signal.getsignal(sig) is not signal.SIG_IGN}
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+
+
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -909,16 +923,12 @@ def main(argv: list | None = None) -> int:
             expected = build_plan(pins, cfg, mode="formal", pins_sha256=pins_sha, stage_q3_sha256=cfg_sha) \
                 if plan.get("mode") == "formal" else None
             python = str(ROOT / ".venv" / "bin" / "python")
-            previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)}
-            try:              # a SIGTERM / SIGHUP reaches default_run_proc as SystemExit: the scorer's group is killed
+            with signals_exit():      # a SIGTERM / SIGHUP reaches default_run_proc as SystemExit: the group is killed
                 s = run_q3(plan, data_dir=Path(args.data).resolve(), out_dir=args.out,
                            capture_env=rb.make_vllm_env_capture(ROOT / "scripts" / "env_capture.py", python),
                            session_id=Path(args.out).name, gpu_lock_held=args.gpu_lock_held,
                            wait_idle=default_wait_idle(pins), pins=pins, vllm_python=python, expected_plan=expected,
                            superseded=dict(x.split("=", 1) for x in args.superseded))
-            finally:
-                for sig, handler in previous.items():
-                    signal.signal(sig, handler)
             print(json.dumps(s["outcomes"]))
         else:  # pragma: no cover - the child process in the vLLM venv
             score(json.loads(Path(args.job).read_text()), args.chunks, args.out)

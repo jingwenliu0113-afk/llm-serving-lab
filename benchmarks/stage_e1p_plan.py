@@ -158,6 +158,8 @@ def seed_check_problems(pins: dict, cfg: dict, root=ROOT) -> list:
     if not isinstance(rec, dict):
         return [f"no readable seed check at {Path(*SEED_CHECK)} (run benchmarks/stage_e1p_seed_check.py on WSL)"]
     problems = []
+    if (rec.get("stage"), rec.get("check")) != (STAGE, "seed"):
+        problems.append(f"{Path(*SEED_CHECK)} is not an E1-P seed check")
     if rec.get("ok") is not True:
         problems.append(f"the seed check did not pass ({rec.get('problems')})")
     if rec.get("vllm_version") != pins["vllm"]["version"]:
@@ -167,7 +169,11 @@ def seed_check_problems(pins: dict, cfg: dict, root=ROOT) -> list:
     if rec.get("input_len") != L - bp.N_GEN:
         problems.append(f"the seed check's input_len {rec.get('input_len')!r} is not {L - bp.N_GEN}")
     checks = rec.get("checks")
-    by_n = {c.get("N"): c for c in checks if isinstance(c, dict)} if isinstance(checks, list) else {}
+    ns = [c.get("N") for c in checks if isinstance(c, dict)] if isinstance(checks, list) else None
+    if ns is None or len(ns) != len(checks) or sorted(map(repr, ns)) != sorted(map(repr, seed_check_ns(cfg))):
+        problems.append(f"the seed check's checks are not one record per N {seed_check_ns(cfg)} ({ns!r})")
+        return problems                     # malformed: fail closed, nothing below would mean anything
+    by_n = {c["N"]: c for c in checks}
     argv = rec.get("argv") if isinstance(rec.get("argv"), dict) else {}
     for N in seed_check_ns(cfg):
         c = by_n.get(N)
@@ -182,7 +188,8 @@ def seed_check_problems(pins: dict, cfg: dict, root=ROOT) -> list:
                 problems.append(f"the seed check at N {N}, seed {x}: seed {got.get('seed')!r}, "
                                 f"{got.get('server_tokens_ok')!r} of {got.get('n')!r} prompts at {L - bp.N_GEN} "
                                 f"tokens (needs seed {seed}, all {N})")
-            if (argv.get(str(N)) or {}).get(x) != seed_check_argv(pins, x, seed, N):
+            sampled = argv.get(str(N))
+            if not isinstance(sampled, dict) or sampled.get(x) != seed_check_argv(pins, x, seed, N):
                 problems.append(f"the seed check at N {N}, seed {x} sampled another bench argv than the harness "
                                 "builds now")
         if seeds["A"].get("prompts_sha256") in (None, seeds["B"].get("prompts_sha256")):

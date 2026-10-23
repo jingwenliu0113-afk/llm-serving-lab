@@ -490,3 +490,34 @@ def test_an_interrupt_before_the_first_job_is_refused_not_an_attempt(tmp_path):
 def test_a_sigterm_or_sighup_becomes_systemexit():
     with pytest.raises(SystemExit, match="143"):
         q3._exit_on_signal(15, None)
+
+
+@pytest.mark.parametrize("exc, how", [(SystemExit(143), "interrupted"), (OSError("x"), "failed")])
+def test_refused_why_tells_an_interrupt_from_a_failure(exc, how):
+    assert q3.refused_why(exc).startswith(f"{how} before the first job: {type(exc).__name__}")
+
+
+def test_a_runner_stopped_by_sigterm_kills_the_scorers_whole_group(tmp_path):
+    import os
+    import signal
+    import time
+    pidfile = tmp_path / "bg.pid"
+    argv = ["sh", "-c", f"sleep 60 & echo $! > {pidfile}; wait"]       # a scorer with a child of its own
+    previous = signal.signal(signal.SIGALRM, lambda s, f: (_ for _ in ()).throw(SystemExit(143)))
+    try:
+        with q3.signals_exit():
+            signal.setitimer(signal.ITIMER_REAL, 1.0)                 # stands in for the SIGTERM
+            with pytest.raises(SystemExit):
+                q3.default_run_proc(argv, tmp_path / "o", tmp_path / "e", 30, dict(os.environ))
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+    pid = int(pidfile.read_text())
+    for _ in range(40):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError(f"the scorer's child {pid} outlived the runner")

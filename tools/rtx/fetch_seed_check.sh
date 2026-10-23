@@ -9,14 +9,16 @@ REL=results/stage_e/e1p-seed-check/seed_check.json
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 DEST="$REPO/$REL"
 [ -e "$DEST" ] && { echo "refusing: $DEST already exists"; exit 3; }
-REMOTE=$(ssh -o BatchMode=yes -o ConnectTimeout=30 gpu-server \
-  "wsl.exe -d Ubuntu-22.04 -- bash -lc \"cd ~/llm-serving-lab && sha256sum $REL\"" 2>/dev/null | tr -d '\r' | cut -d' ' -f1)
-[ ${#REMOTE} -eq 64 ] || { echo "no seed check on WSL ($REL)"; exit 4; }
-mkdir -p "$(dirname "$DEST")"
-TMP="$DEST.tmp"
-ssh -o BatchMode=yes -o ConnectTimeout=30 gpu-server \
-  "wsl.exe -d Ubuntu-22.04 -- bash -lc \"cd ~/llm-serving-lab && cat $REL\"" 2>/dev/null > "$TMP"
+remote() {
+  ssh -o BatchMode=yes -o ConnectTimeout=30 gpu-server "wsl.exe -d Ubuntu-22.04 -- bash -lc \"cd ~/llm-serving-lab && $1\""
+}
+REMOTE=$(remote "sha256sum $REL" | tr -d '\r' | cut -d' ' -f1) || REMOTE=
+[ ${#REMOTE} -eq 64 ] || { echo "no seed check on WSL ($REL), or gpu-server unreachable"; exit 4; }
+TMP=$(mktemp)                                   # outside results/: a failed copy never sits next to the record
+trap 'rm -f "$TMP"' EXIT
+remote "cat $REL" > "$TMP" || { echo "copy failed"; exit 4; }
 LOCAL=$(shasum -a 256 "$TMP" | cut -d' ' -f1)
-[ "$LOCAL" = "$REMOTE" ] || { rm -f "$TMP"; echo "sha256 mismatch: local $LOCAL, remote $REMOTE"; exit 5; }
-mv "$TMP" "$DEST"
+[ "$LOCAL" = "$REMOTE" ] || { echo "sha256 mismatch: local $LOCAL, remote $REMOTE"; exit 5; }
+mkdir -p "$(dirname "$DEST")"
+cp "$TMP" "$DEST"
 echo "$REL $LOCAL"

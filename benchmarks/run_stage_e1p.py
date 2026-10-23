@@ -328,7 +328,8 @@ class E1PRun:
         receiver = self.receiver_factory(self.raw / f"{tag}.otlp", self.raw / f"{tag}.spans.jsonl", f"e1p-b{b}-")
         proc, stop, done, why = None, None, 0, None
         try:
-            if not self.smi_ready(smi):            # no thermometer, no server (028 rule 6): stopped before any start
+            ready = self.smi_ready(smi)
+            if not ready or smi.halt.is_set():     # no thermometer, no server (028 rule 6): stopped before any start
                 stop = self.halted(smi, f"before the start of {tag}") if smi.halt.is_set() else Stop(
                     "telemetry", f"no temperature from nvidia-smi within {SMI_FIRST_S:.0f} s of its start, before "
                                  f"{tag}'s server: the 88 C stop (028 stop rule 6) cannot be applied; stopped")

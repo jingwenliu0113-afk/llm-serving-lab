@@ -15,8 +15,10 @@ Parts (each its own session):
 Formal plans need pins freeze.nvidia (as run_quality) and, from the freeze on, configs/stage_q.toml's freeze; a pilot
 runs PILOT_CHUNKS per job and records markers, time and disk (each KLD base's bytes).
 Attempts (040 補記 14): a session directory is exactly results/stage_q/<id>; a session.json stub (status running) is
-written before the first job and replaced atomically, so an interrupted session is still an attempt; a run refused
-before its first job is status refused and is not one. A formal run refuses when its part already has a valid formal
+written before the first job and replaced atomically. An attempt begins when the first job's process starts: a run
+that ends before that (refused, a failed or interrupted preflight, the first job's charge gate or env capture) or
+that never starts one (every disk guard failed) is status refused and is not one; SIGHUP / SIGTERM become SystemExit
+during a run (signals_exit), so these records are written. A formal run refuses when its part already has a valid formal
 session (finished, env valid) or two attempts, except attempts superseded by a git-tracked decision log under
 docs/decisions/ that names both session ids (--superseded <id>=<log>).
 
@@ -30,6 +32,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -537,16 +540,16 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
             session.update(status="refused", refused=refused_why(exc))
             write_session()
         raise
-    rows, by_id, skipped, env_flags, charge_pauses = [], {}, set(), [], []
-    resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace(  # noqa: E731
-        "{data}", data_dir).replace("{session}", session_id)
     started = []                            # 040 #39 / 041: refused until the first job's process starts
 
     def run_job(*a):
-        started.append(True)
+        started.append(True)                # before the launch: an open / exec failure counts too (conservative)
         return run_proc(*a)
 
     try:
+        rows, by_id, skipped, env_flags, charge_pauses = [], {}, set(), [], []
+        resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace(  # noqa: E731
+            "{data}", data_dir).replace("{session}", session_id)
         with open(out / "rows.jsonl", "w") as fh:
             for job in plan["jobs"]:
                 jid, kind, size = job["id"], job["kind"], job["size"]
@@ -618,6 +621,9 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
         outcomes[r["outcome"]] += 1
     session.update({"status": "finished", "finished_at": now(), "outcomes": outcomes, "env_flags": env_flags,
                     "env_valid": not env_flags, "charge_pauses": charge_pauses})
+    if not started:                         # 040 #45: no job process ever ran (e.g. every disk guard failed)
+        why = sorted({str(r.get("reason")) for r in rows if r.get("reason")})
+        session.update(status="refused", refused="no job process started: " + "; ".join(why))
     write_raw_manifest(out)
     write_session()
     return session
@@ -625,6 +631,19 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
 
 def _exit_on_signal(signum, frame):
     raise SystemExit(128 + signum)  # as coreb_smoke: SIGHUP / SIGTERM run the run's except / finally blocks
+
+
+@contextlib.contextmanager
+def signals_exit():
+    """While a run is in progress SIGHUP / SIGTERM raise SystemExit (so its records are written and its child is
+    killed); an inherited SIG_IGN (nohup) is kept; the previous handlers come back afterwards."""
+    previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)
+                if signal.getsignal(sig) is not signal.SIG_IGN}
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
 
 
 def main(argv: list | None = None) -> int:
@@ -656,8 +675,7 @@ def main(argv: list | None = None) -> int:
             return 0
         plan = json.loads(Path(args.plan).read_text())
         expected = plan_for(plan["part"], "formal") if plan.get("mode") == "formal" else None
-        previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)}
-        try:
+        with signals_exit():
             summary = run_stage_q(plan, bin_dir=Path(args.bin).resolve(), models_dir=Path(args.models).resolve(),
                                   data_dir=Path(args.data).resolve(), out_dir=args.out,
                                   capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"),
@@ -665,9 +683,6 @@ def main(argv: list | None = None) -> int:
                                   mac_lock_held=os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1",
                                   gpu_lock_held=args.gpu_lock_held, expected_plan=expected, pins=pins,
                                   superseded=dict(x.split("=", 1) for x in args.superseded))
-        finally:
-            for sig, handler in previous.items():
-                signal.signal(sig, handler)
     except StageQError as exc:
         print(f"stage_q: {exc}", file=sys.stderr)
         return 2

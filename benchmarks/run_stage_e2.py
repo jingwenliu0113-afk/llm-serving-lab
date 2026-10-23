@@ -447,6 +447,8 @@ def run_session(plan: dict, *, pins: dict, cfg: dict, pins_sha256: str, out_dir,
                       lock_held_check=lock_held_check, capture_env=capture_env, base_env=e2p.strip_env(base_env),
                       vllm_bin=vllm_bin, sample_interval=sample_interval, now=now, sleep=sleep, clock=clock, cfg=cfg,
                       datasets=datasets, receiver_factory=receiver_factory, wall=wall)
+        invalid_cells, t0, not_ready = {}, now(), 0
+        ctx = rc.mini_num_prompts(e2p.SMOKE_N) if mode == "smoke" else contextlib.nullcontext()
     except BaseException as exc:
         session["status"] = "refused"
         if "refused" not in session:
@@ -455,8 +457,6 @@ def run_session(plan: dict, *, pins: dict, cfg: dict, pins_sha256: str, out_dir,
         raise
     rows = []
     with fh:
-        invalid_cells, t0, not_ready = {}, now(), 0
-        ctx = rc.mini_num_prompts(e2p.SMOKE_N) if mode == "smoke" else contextlib.nullcontext()
         try:
             with ctx:
                 for boot in plan["boots"]:

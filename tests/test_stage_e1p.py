@@ -87,6 +87,15 @@ class Receiver:
         return list(self.records)
 
 
+class TimedSmi(tc0.FakeSmi):
+    """FakeSmi that records when it was stopped and returns the world's sampler problems."""
+
+    def stop(self):
+        super().stop()
+        self.world.smi_stopped_at = self.world.t
+        return list(self.world.smi_stop_problems)
+
+
 class World(td.World):
     """td.World's clock, idle and spill readings with an observed-B0 server. spikes[seed label]: idx whose F is 50 ms
     (else 10 ms); slips[tag]: slipped groups (c0 test's cycle); behave[tag] in {"timeout", "hot", "exit", "unhealthy",
@@ -96,14 +105,15 @@ class World(td.World):
 
     def __init__(self, tmp_path, *, spikes=SPIKES, slips=None, behave=None, never_ready=(), nd_edit=None,
                  smi_temp=66.0, bench_s=None, spill_at=(), smi_dead=False, smi_silent=False, env_fail=None,
-                 hot_at_teardown=False):
+                 hot_at_teardown=False, smi_hot_at_boot=None, smi_stop_problems=()):
         super().__init__(tmp_path, spill_at=spill_at)
         self.spikes, self.slips, self.behave = spikes, slips or {}, behave or {}
         self.never_ready, self.nd_edit, self.smi_temp, self.bench_s = set(never_ready), nd_edit or {}, smi_temp, \
             bench_s
         self.smi_dead, self.smi_silent, self.env_fail, self.hot_at_teardown = smi_dead, smi_silent, env_fail, \
             hot_at_teardown
-        self.peeked = None
+        self.peeked, self.smi_hot_at_boot, self.smi_stop_problems = None, smi_hot_at_boot, smi_stop_problems
+        self.smis, self.smi_started_at, self.smi_stopped_at = 0, None, None
         self.step, self.receiver, self.server_log, self.smi, self.unhealthy = 0, None, None, None, False
         self.smi_samples, self.bench_argvs = [], []
 
@@ -111,9 +121,13 @@ class World(td.World):
         return 1.79e9 + self.t
 
     def start_smi(self, path):
-        smi = tc0.FakeSmi(self, path)
+        smi = TimedSmi(self, path)
+        self.smis += 1
+        self.smi_started_at = self.t
         if self.smi_dead:
             smi.lose("the nvidia-smi sampler did not start: OSError")
+        if self.smi_hot_at_boot == self.smis:                   # >= 88 C before the server starts
+            smi.flag_hot()
         self.smi_samples = [] if self.smi_silent else [{"t": self.wall(), **SMI, "temp_c": self.smi_temp}]
         return smi
 
@@ -341,12 +355,20 @@ def _drop_n(N):
 @pytest.mark.parametrize("edit, why", [
     (None, "no readable seed check"), (_edit(ok=False, problems=["x"]), "did not pass"),
     (_edit(vllm_version="0.29.0"), "0.29.0"), (_edit(script_sha256="0" * 64), "script_sha256"),
-    (_edit(input_len=8000), "input_len"), (_drop_n(16), "no A / B record at N 16"),
-    (_edit(checks="x"), "no A / B record at N 200"), (_seed(200, "B", server_tokens_ok=199), "199 of 200"),
-    (_seed(16, "A", n=15), "of 15 prompts"), (_seed(200, "B", seed=20261024), "seed 20261024"),
-    (_seed(200, "B", prompts_sha256="a" * 64), "same prompts"),
-    (lambda rec: rec["argv"]["200"]["B"].append("--random-prefix-len"), "another bench argv"),
-    (lambda rec: rec["checks"][0]["seeds"].update(A=None), "no A / B record")])
+    (_edit(input_len=8000), "input_len"), (_edit(check="other"), "not an E1-P seed check"),
+    (_drop_n(16), "one record per N"), (_edit(checks="x"), "one record per N"),
+    (lambda rec: rec["checks"].append(dict(rec["checks"][0])), "one record per N"),
+    (lambda rec: rec["checks"][0].update(N=[200]), "one record per N"),
+    (lambda rec: rec["checks"][0].update(N=200.0), "one record per N"),
+    (_seed(200, "B", server_tokens_ok=199), "199 of 200"), (_seed(16, "A", n=15), "of 15 prompts"),
+    (_seed(200, "A", n=199, server_tokens_ok=199), "199 of 199"),
+    (_seed(200, "B", seed=20261024), "seed 20261024"), (_seed(16, "B", seed=20261024), "N 16, seed B"),
+    (_seed(200, "B", prompts_sha256="a" * 64), "same prompts"), (_seed(16, "B", prompts_sha256="a" * 64), "N 16"),
+    (_seed(200, "A", prompts_sha256=None), "same prompts"),
+    (lambda rec: rec["checks"][0]["seeds"].update(C={}), "no A / B record"),
+    (lambda rec: rec["checks"][0]["seeds"].update(A=None), "no A / B record"),
+    (lambda rec: rec["argv"].update({"200": ["x"]}), "another bench argv"),
+    (lambda rec: rec["argv"]["200"]["B"].append("--random-prefix-len"), "another bench argv")])
 def test_every_plan_needs_the_passed_seed_check_of_this_script_argv_and_design(tmp_path, edit, why):
     root = tmp_path / "repo"
     if edit is not None:
@@ -356,6 +378,30 @@ def test_every_plan_needs_the_passed_seed_check_of_this_script_argv_and_design(t
     for mode in ("smoke", "formal"):
         with pytest.raises(pp.PlanError, match=why):
             pp.build_plan(PINS, frozen(), mode=mode, root=root)
+
+
+@pytest.mark.parametrize("N, label", [(200, "A"), (200, "B"), (16, "A"), (16, "B")])
+def test_the_seed_check_must_have_sampled_the_argv_the_harness_builds_now(tmp_path, N, label):
+    root = tmp_path / "repo"
+    rec = seed_record()
+    rec["argv"][str(N)][label] = rec["argv"][str(N)][label][:-1] + ["other-prefix-"]
+    write_seed_check(root, rec)
+    with pytest.raises(pp.PlanError, match=f"N {N}, seed {label} sampled another bench argv"):
+        pp.build_plan(PINS, CFG, mode="smoke", root=root)
+
+
+def _sampling_args(argv):
+    """A bench argv without what samples nothing: the binary, the request-id prefix and the result paths."""
+    drop = {"--request-id-prefix", "--result-dir", "--result-filename"}
+    out, skip = [], False
+    for a in argv[1:]:
+        if skip:
+            skip = False
+        elif a in drop:
+            skip = True
+        else:
+            out.append(a)
+    return out
 
 
 def test_the_seed_check_needs_every_prompt_at_8064_on_the_server_and_different_prompts_per_seed():
@@ -479,6 +525,8 @@ def test_a_smoke_runs_seed_a_then_b_checks_041s_conditions_and_masks_the_latenci
     seeds = [a[a.index("--seed") + 1] for a in w.bench_argvs]
     assert seeds == ["20261008", "20261023"] and {a[a.index("--num-prompts") + 1] for a in w.bench_argvs} == {"16"}
     assert [a[-1] for a in w.bench_argvs] == ["e1p-b1-n1-", "e1p-b1-n2-"] and len(w.server_argvs) == 1
+    for argv, (x, seed) in zip(w.bench_argvs, (("A", 20261008), ("B", 20261023))):   # what the seed check sampled
+        assert _sampling_args(argv) == _sampling_args(pp.seed_check_argv(PINS, x, seed, 16))
     out = sdir(root, "smoke-e1p")
     assert sorted(p.name for p in (out / "raw").iterdir()) == ["b1-smi.jsonl", "b1.server.log", "env"]
     assert sorted(p.name for p in (out / "raw" / "env").iterdir()) == ["b1.after.json", "b1.before.json"]
@@ -523,11 +571,27 @@ def test_each_smoke_condition_can_fail_it(tmp_path, world_kw, failed):
     assert s["smoke"]["ok"] is False and s["smoke"]["checks"][failed] is False
 
 
-@pytest.mark.parametrize("world_kw", [dict(smi_temp=None), dict(smi_silent=True), dict(smi_dead=True)])
-def test_no_server_starts_without_a_first_temperature(tmp_path, world_kw):
+@pytest.mark.parametrize("world_kw, rule", [
+    (dict(smi_temp=None), "telemetry"), (dict(smi_silent=True), "telemetry"), (dict(smi_dead=True), "telemetry"),
+    (dict(smi_hot_at_boot=1), "temperature")])
+def test_no_server_starts_without_a_first_temperature(tmp_path, world_kw, rule):
     s, _, w = smoke(tmp_path, world=World(tmp_path / "w", **world_kw))
-    assert w.server_argvs == [] and s["status"] == "refused" and s["stopped"]["rule"] == "telemetry"
+    assert w.server_argvs == [] and s["status"] == "refused" and s["stopped"]["rule"] == rule
     assert s["smoke"]["ok"] is False
+    if world_kw.get("smi_silent"):                                  # it waited exactly SMI_FIRST_S for one
+        assert w.smi_stopped_at - w.smi_started_at == r1p.SMI_FIRST_S
+
+
+def test_88c_before_a_later_boots_server_is_a_valid_temperature_stop(tmp_path):
+    root, plan = formal_setup(tmp_path)
+    s, w = session(root, plan, mode="formal", world=World(tmp_path / "wf", smi_hot_at_boot=2), sid="f")
+    assert s["stopped"]["rule"] == "temperature" and s["stopped"]["boot"] == 2 and len(w.server_argvs) == 1
+    assert s["status"] == "finished" and [a["valid"] for a in pp.formal_attempts(root)] == [True]
+
+
+def test_sampler_problems_fail_the_smoke(tmp_path):
+    s, _, _ = smoke(tmp_path, world=World(tmp_path / "w", smi_stop_problems=["the nvidia-smi reader is still open"]))
+    assert s["smoke"]["ok"] is False and s["smoke"]["checks"]["smi"] is False
 
 
 def test_the_smoke_checks_on_rows_cover_coverage_schema_blocks_stops_and_teardown(tmp_path):
@@ -581,6 +645,14 @@ def test_a_formal_session_runs_24_benches_with_their_spikes_and_e1_files(tmp_pat
     assert r["t_before"] < r["t_after"] and set(json.loads((out / "derived" / "b1-n1-requests.jsonl").read_text(
     ).splitlines()[0])) == set(r1p.DERIVED_KEYS)
     assert (out / "raw" / "b1.spans.jsonl").is_file() and (out / "raw" / "b1.otlp" / "00001.pb").is_file()
+    assert sorted(p.name for p in (out / "env").iterdir()) == sorted(["preflight.json"] + [
+        f"b{b}.{w}.json" for b in range(1, 7) for w in ("after", "before")])
+    assert sorted(p.name for p in (out / "derived").glob("*-smi.jsonl")) == [f"b{b}-smi.jsonl" for b in range(1, 7)]
+    assert s["boots"]["b1"]["smi"] == "derived/b1-smi.jsonl" and not (out / "raw" / "env").exists()
+    seeds = CFG["e1p"]["seeds"]
+    for argv in w.bench_argvs:                                      # what the seed check sampled
+        x = SEED_LABEL[int(argv[argv.index("--seed") + 1])]
+        assert _sampling_args(argv) == _sampling_args(pp.seed_check_argv(PINS, x, seeds[x], 200))
     assert s["boots"]["b1"]["receiver"]["spans"] > 800 and "main" not in s["boots"]["b1"]["receiver"]
     assert pp.formal_attempts(root)[0]["valid"] is True
     with pytest.raises(r1p.RunError, match="already exist"):
@@ -821,6 +893,7 @@ def test_a_session_stopped_with_too_few_valid_benches_says_so(tmp_path):
     assert [x["tag"] for x in d["excluded"]["B"]][:2] == ["b1-n2", "b1-n3"] and len(d["excluded"]["B"]) == 12
     never = [x for x in d["excluded"]["A"] if x["reasons"][0].startswith("its boot never started")]
     assert len(d["excluded"]["A"]) == len(never) == 8 and "2 failed boots" in never[0]["reasons"][0]
+    assert all(x["not_run"] is True for x in never)
     assert out["reading"]["row"] == "few_spikes" and "too little data" in out["reading"]["note"]
 
 

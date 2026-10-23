@@ -270,3 +270,15 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 | 42 | Q3 第一個 job 的閒置判定被中斷時留在 `running` | 不改程式：補記 14 規定閒置判定屬於 job，失敗即作廢；寫進本文 |
 | 43 | preflight 的任何例外都記成「interrupted」 | 中斷（KeyboardInterrupt / SystemExit）記為 interrupted，其他記為 failed，都附上例外 |
 | 44 | 本文與 stub 的註解仍寫「中斷的 session 一律是一次嘗試」 | 補記 14 本文與四個 runner 的註解改寫 |
+
+第三次覆核（2026-10-23，pilot 之前）確認以下各項，全部處理：
+
+| # | 發現 | 處理 |
+|---|---|---|
+| 45 | Q1 / Q2 若每個 KLD base 的磁碟檢查都失敗，一個 job 都沒執行，session 卻記為 finished、有效，用掉該部分唯一的正式 session | 補記 14：沒有任何 job 程序啟動過的 session 記為 refused（附上原因） |
+| 46 | SIGHUP 的處理會蓋掉繼承來的 SIG_IGN（nohup），原本能撐過斷線的 run 會中止 | `signals_exit`：繼承的 SIG_IGN 保持不變 |
+| 47 | 兩段 try 之間還有幾行不在 refused 的範圍（E3 的計時與 pilot 檔、Stage Q 的設定、E2 的 pre-try） | 併入範圍；`started` 在 run_proc 之前設定（啟動前的 open / exec 失敗算一次嘗試，保守） |
+| 48 | Stage Q、E3 的 module 說明仍寫中斷一律算一次嘗試 | 改寫 |
+| 49 | 測試缺口：第一個 job 的 env 擷取與程序、磁碟全部失敗、訊號處理（含 Q3 scorer 的 process group 被殺）、`refused_why`、E3 Mac 第一個 job 的充電閘門、E2 harness 建構 | 補上測試 |
+
+不修、只記錄（剩餘風險）：訊號剛好在 `Popen` 建立子程序、`proc` 尚未綁定的瞬間到達時，子程序可能留下（Q3 的 scorer、E2 的 vLLM server），E2 也可能把已啟動 server 的 session 記為 refused。這段時間是微秒到毫秒。若要封住，得在建立程序前封鎖訊號，但子程序會繼承被封鎖的訊號，vLLM 的關閉流程可能因此出問題，風險比要解決的問題大。發生時，`tools/rtx/gpu_status.sh` 與下一次的 031 閒置判定都會看到佔用 GPU 的程序。

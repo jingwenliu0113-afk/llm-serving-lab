@@ -141,7 +141,7 @@
     - **更正**：本節第一版寫「存下的 input_lens 是 request 的 `prompt_len`」，讀錯了；實際是 server 的 `usage.prompt_tokens`（第二輪審查發現）。所以檢查改以 server 端的計數為準。
   - 「上限 3.0 h（含 smoke）」：smoke 必須在凍結之前跑，所以是另一個 session；正式 plan 的上限 = 3.0 h − smoke 記錄的 `elapsed_s`（拿到 lock 起算）。作廢後的重跑（§0）用同一個上限，所以 E1-P 持有 lock 的最壞情況是 smoke + 2 ×（3.0 h − smoke）。
   - bench 無效的條件在 028 / C0 之外多兩項：有主 request 沒有 span 或算不出 F（F 是這個探針的量）、input_lens 不全是 8,064。boot 失敗與停止規則照 028。
-  - 每次 boot 在啟動 server 之前，要先收到 nvidia-smi 取樣器的第一個溫度（最多等 10 s）；收不到、或取樣器已停止，就以 telemetry 停止，不啟動 server（88 °C 的停止規則只讀它）。
+  - 每次 boot 在啟動 server 之前，要先收到 nvidia-smi 取樣器的第一個溫度（最多等 10 s），啟動前再確認一次取樣器沒有停止；收不到或已停止就不啟動 server（88 °C 的停止規則只讀它）：已達 88 °C 記為 temperature，其他記為 telemetry。
   - session 狀態：沒有任何 server 啟動過，記為 `refused`，不算嘗試。包括 preflight 期間被中斷、第一次 boot 前就因停止規則結束、nvidia-smi 的取樣器沒有送出第一個溫度。因環境而停（lock、gpu_not_idle、gpu_check、spill_unreadable、telemetry）的 session 作廢，可用新 id 重跑一次（§0）。因 cap、88 °C、2 次失敗的 boot 而停的 session 有效，照現有數據分析，不補跑（028）。
   - 每個 bench 的描述量由 runner 用 E1-D 凍結的函式算（`stage_e1.f_spikes` 與 N 200 時的 `stage_e1.bench_episodes`），寫在 `derived/<bench>-e1.json`；時間窗內沒有 step 時，step 相關的部分為 None（不是 0 個 step）。step 紀錄留在 raw/。L3 用 span 的 e2e，L4 用 server 的 arrival，送出延遲只用 client 的時鐘。1 Hz 的 /metrics 序列照 Advanced（024）。每次 boot 記錄 OTLP receiver 的統計（posts、spans、decode / 儲存錯誤）。
   - smoke 在任何時刻都不把延遲寫到 raw/ 以外：rows.jsonl 只寫遮蔽後的欄位、derived/ 只寫 idx / cls，完整的 request 與 e1 檔寫在 raw/，供 smoke 的檢查使用，最後刪除（`session.json` 的 `masked` 列出刪掉的檔）。每次 boot 前後的 env 擷取與 nvidia-smi 的樣本（帶有 boot 與 bench 的時間）也寫在 raw/（同 E3 的 pilot）；遮蔽時 boot 紀錄去掉延遲欄位、時間窗與啟動時的 log 行。所以即使被強制終止，取回的檔案中也沒有延遲。
@@ -540,4 +540,11 @@
   - E2、E3、Stage Q、Q3（040 #40–#44）：refused 的邊界改在第一個 job 的程序啟動時（E3、Stage Q）；E2 的 rows.jsonl 與 harness 建構移進 preflight 的範圍；E3、Stage Q、Q3 的 `run` 把 SIGHUP / SIGTERM 轉成 SystemExit（Q3 被殺時 scorer 不會留在 GPU 上）；例外分為 interrupted 與 failed；文字與註解改寫。
   - 測試：作廢的嘗試（中止、只剩 stub、讀不到的 session.json）、每一種環境停止（gpu_not_idle、gpu_check、spill_unreadable、telemetry）都作廢而 cap / 88 °C / failed_boots 有效、F 缺值與重複的 span、bench 之後與 teardown 期間的溫度停止、boot 1 之前的中斷、insufficient_data 的邊界、session 端的 pins_sha256。
 - 被反駁的 2 項：seed 檢查應改用 server 端的計數（反駁的理由是此 tokenizer 下兩者相同；但 vLLM 的實際讀法確實是 server 端的計數，所以仍改用它，並更正文件）；module 的說明仍寫 e1 檔在 derived/（同一段說明已寫明 smoke 的例外）。
+
+### 第三次覆核（2026-10-23，smoke 與 pilot 之前）
+
+- 3 個面向（四個 runner 的 refused 範圍與訊號、E1-P、測試）對修正（8b9e8fd）審查與反駁。確認的項目沒有 must-fix，全部處理：
+  - E1-P：seed 檢查的紀錄格式錯誤（重複或型別不對的 N、argv 不是 dict、stage / check 不符）一律拒絕；server 啟動前再確認一次取樣器沒有停止；seed 檢查在非 pin 的 vLLM 下不寫紀錄；`fetch_seed_check.sh` 在失敗時給出訊息，暫存檔不放在 results/ 下。
+  - E2、E3、Stage Q、Q3：見 040 #45–#49（沒有 job 程序啟動過的 Stage Q session 記為 refused、保留繼承的 SIG_IGN、refused 範圍涵蓋兩段 try 之間、module 說明）。剩餘風險（程序建立瞬間的訊號）只記錄、不修，理由見 040。
+  - 測試：seed 檢查與 runner 的 bench argv 逐一比對（smoke 與正式）、每個 N 與 seed 的竄改、server 啟動前已達 88 °C（第 2 次 boot 時為有效的 temperature 停止）與 10 s 的等待、取樣器的問題讓 smoke 失敗、正式 session 的 env / smi 位置、從未開始的 bench 的 not_run。
 

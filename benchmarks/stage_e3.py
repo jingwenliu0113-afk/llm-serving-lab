@@ -19,8 +19,9 @@ with every comparison inside it.
   (verified) with the session-start B (stage_b.measure_baseline, before the session directory exists). Before the
   first job: all eight GGUFs' sha256 against their pins and their headers (produce_gguf_e3.header_facts) against
   configs/stage_e3.toml; a formal run also needs at most one earlier void attempt on its platform (a session.json stub
-  is written first, so an interrupted run counts). Core A's 30 s idle between jobs, charge gate (Mac, also once
-  before the clock starts), env capture around each job, core_a_parse.classify_bench and each row's model_filename /
+  is written first; an attempt begins when the first job's process starts, anything that ends earlier is status
+  refused; SIGHUP / SIGTERM become SystemExit during a run, signals_exit). Core A's 30 s idle between jobs, charge
+  gate (Mac, also once before the clock starts), env capture around each job, core_a_parse.classify_bench and each row's model_filename /
   model_size / model_type against the config; sentinel drift > 3 % marks the session. The time cap counts
   measurement only (from the first job, charge pauses subtracted); it skips what is left, never the end sentinel.
 
@@ -34,6 +35,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -524,26 +526,26 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
             session.update(status="refused", refused=[refused_why(exc)])
             write_session()
         raise
-    t0, paused, cap_reached = clock(), 0.0, False
-    full = open(out / "raw" / "rows.full.jsonl", "w") if not formal else None
-    env_dir = "env" if formal else "raw/env"               # a pilot's per-job captures carry its job times
-    (out / env_dir).mkdir(exist_ok=True)
-
-    def emit(fh, row):                                      # a pilot commits no speed (041 v3 §3.7: 結果遮蔽)
-        if full is not None:
-            full.write(json.dumps(row) + "\n")
-            full.flush()
-            row = {k: row[k] for k in PILOT_ROW_KEYS if k in row}
-        fh.write(json.dumps(row) + "\n")
-        fh.flush()
-
     started = []                            # 040 #39 / 041: refused until the first job's process starts
 
     def run_job(*a):
-        started.append(True)
+        started.append(True)                # before the launch: an open / exec failure counts too (conservative)
         return run_proc(*a)
 
     try:
+        t0, paused, cap_reached = clock(), 0.0, False
+        full = open(out / "raw" / "rows.full.jsonl", "w") if not formal else None
+        env_dir = "env" if formal else "raw/env"               # a pilot's per-job captures carry its job times
+        (out / env_dir).mkdir(exist_ok=True)
+
+        def emit(fh, row):                                      # a pilot commits no speed (041 v3 §3.7: 結果遮蔽)
+            if full is not None:
+                full.write(json.dumps(row) + "\n")
+                full.flush()
+                row = {k: row[k] for k in PILOT_ROW_KEYS if k in row}
+            fh.write(json.dumps(row) + "\n")
+            fh.flush()
+
         with open(out / "rows.jsonl", "w") as fh:
             for i, job in enumerate(plan["jobs"]):
                 jid, end = job["id"], job.get("position") == "end"
@@ -621,6 +623,19 @@ def _exit_on_signal(signum, frame):
     raise SystemExit(128 + signum)  # as coreb_smoke: SIGHUP / SIGTERM run the run's except / finally blocks
 
 
+@contextlib.contextmanager
+def signals_exit():
+    """While a run is in progress SIGHUP / SIGTERM raise SystemExit (so its records are written and its child is
+    killed); an inherited SIG_IGN (nohup) is kept; the previous handlers come back afterwards."""
+    previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)
+                if signal.getsignal(sig) is not signal.SIG_IGN}
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+
+
 def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -654,17 +669,13 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
             measure_b = lambda frozen: stage_b.measure_baseline(  # noqa: E731
                 query=stage_b.nvidia_query, compute_apps=stage_b.nvidia_compute_apps, sleep=time.sleep,
                 frozen_b_mib=frozen)
-        previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)}
-        try:
+        with signals_exit():
             s = run_e3(plan, bin_dir=Path(args.bin).resolve(), models_dir=Path(args.models).resolve(),
                        out_dir=args.out, capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"),
                        session_id=Path(args.out).name,
                        lock_held=(os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1") if platform == "macos-metal"
                        else args.gpu_lock_held, pins=pins, cfg=cfg, measure_b=measure_b,
                        expected_plan=plan_for(platform, plan.get("mode")))
-        finally:
-            for sig, handler in previous.items():
-                signal.signal(sig, handler)
     except StageE3Error as exc:
         print(f"stage_e3: {exc}", file=sys.stderr)
         return 2

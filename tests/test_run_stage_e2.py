@@ -450,3 +450,16 @@ def test_an_interrupt_during_the_preflight_is_refused_not_an_attempt(tmp_path):
         session(root, ds, pins, cfg, plan, mode="formal", sid="f", capture_env=interrupted)
     s = json.loads((root / "results" / "stage_e" / "f" / "session.json").read_text())
     assert s["status"] == "refused" and "KeyboardInterrupt" in s["aborted"] and e2.formal_attempts(root) == []
+
+
+def test_a_failure_building_the_harness_is_refused_not_an_attempt(tmp_path, monkeypatch):
+    root, ds, pins, cfg, plan = formal_setup(tmp_path)
+
+    def broken(self, **kw):
+        raise RuntimeError("harness")
+
+    monkeypatch.setattr(re2.E2Harness, "__init__", broken)
+    with pytest.raises(RuntimeError):
+        session(root, ds, pins, cfg, plan, mode="formal", sid="f")
+    s = json.loads((root / "results" / "stage_e" / "f" / "session.json").read_text())
+    assert s["status"] == "refused" and "RuntimeError" in s["aborted"] and e2.formal_attempts(root) == []

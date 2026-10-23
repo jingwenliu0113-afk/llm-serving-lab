@@ -65,7 +65,7 @@
   - [x] E2 harness 審查：確認 18 項，全部修正（smoke 綁定設計並改為 12 次 boot、通過條件補齊、停止規則、重跑上限、R / Λ / L̄q、incomplete 的代換規則等；041 修訂紀錄「E2 harness 審查」）。
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
   - [ ] E2（**等 GPU 空閒**，WSL）：原始碼核對（prefix caching 路徑、warmup 來源、`vllm:prefix_cache_hits_total`、`cache_config_info` 的 `mamba_cache_mode` 標籤、span 的 cached-token 欄位、`num_requests_waiting`）→ `stage_e2_datasets.py` 產生共享前綴 dataset 並 pin sha256 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
-  - [x] E1-P harness 寫成並審查（2026-10-23，DRAFT）：`configs/stage_e1p.toml`、`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`、`stage_e1p_seed_check.py`、`tests/test_stage_e1p.py`；兩輪審查（各 28 項，沒有 must-fix）全部處理（041 修訂紀錄「E1-P harness 審查」「E1-P 修正後的覆核」；E2、E3、Stage Q、Q3 的中斷與 SIGTERM 一併修正，040 #39–#44）。
+  - [x] E1-P harness 寫成並審查（2026-10-23，DRAFT）：`configs/stage_e1p.toml`、`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`、`stage_e1p_seed_check.py`、`tests/test_stage_e1p.py`；三輪審查（都沒有 must-fix）全部處理（041 修訂紀錄「E1-P harness 審查」「E1-P 修正後的覆核」「第三次覆核」；E2、E3、Stage Q、Q3 的中斷、SIGTERM 與 refused 範圍一併修正，040 #39–#49）。
   - [ ] E1-P（**等 GPU 空閒**，WSL）：
         1. seed 檢查（只用 CPU，`flock -n` 下）：`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e1p_seed_check.py` → Mac 上 `tools/rtx/fetch_seed_check.sh`（核對 sha256）→ commit。不通過時（seed B 有 prompt 不是 8,064，或 A、B 相同）要另寫 decision log 換 seed，不能自行改。
         2. smoke：`python benchmarks/stage_e1p_plan.py --mode smoke --out ~/e1p-smoke-plan.json`，`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_e1p.py --plan ~/e1p-smoke-plan.json --out results/stage_e/smoke-e1p-<date> --gpu-lock-held --smoke`

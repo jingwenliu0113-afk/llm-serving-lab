@@ -109,6 +109,10 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - WSL only
         return 2
     os.environ.update(bp.bench_env())
     import vllm
+    if vllm.__version__ != pins["vllm"]["version"]:                # no record that no plan could use
+        print(f"stage_e1p_seed_check: vLLM {vllm.__version__}, not the pinned {pins['vllm']['version']}; nothing "
+              "written", file=sys.stderr)
+        return 2
     sample, input_len = vllm_sampler(), pp.L - bp.N_GEN
     checks, argvs = [], {}
     for N in pp.seed_check_ns(cfg):
@@ -124,7 +128,7 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - WSL only
            "problems": [p for c in checks for p in c["problems"]]}
     out.parent.mkdir(parents=True)
     out.write_text(json.dumps(rec, indent=1) + "\n")
-    print(json.dumps({"ok": rec["ok"], "problems": rec["problems"],
+    print(json.dumps({"ok": rec["ok"], "vllm_version": rec["vllm_version"], "problems": rec["problems"],
                       "checks": [{"N": c["N"], **{x: s["server_tokens_ok"] for x, s in c["seeds"].items()}}
                                  for c in checks]}))
     return 0 if rec["ok"] else 1

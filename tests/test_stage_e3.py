@@ -562,3 +562,27 @@ def test_the_refused_window_ends_when_the_first_job_process_starts(frozen_root, 
     assert [a["valid"] for a in e3.formal_attempts(root, "wsl2-cuda")] == [False] and len(calls) == 1
     with pytest.raises(SystemExit, match="129"):
         e3._exit_on_signal(1, None)
+
+
+def test_an_interrupt_in_the_mac_first_jobs_charge_gate_is_refused(frozen_root, tmp_path):
+    root = tmp_path / "r"
+    shutil.copytree(frozen_root, root)
+    plan, cfg = formal(root, "macos-metal")
+    reads = []
+
+    def power():                                                # the preflight gate passes, the first job's raises
+        reads.append(1)
+        if len(reads) > 1:
+            raise KeyboardInterrupt
+        return {"source": "AC", "battery_pct": 90}
+
+    with pytest.raises(KeyboardInterrupt):
+        run(root, plan, "m1", expected_plan=plan, cfg=cfg, read_power=power)
+    s = json.loads((root / "results" / "stage_e" / "m1" / "session.json").read_text())
+    assert s["status"] == "refused" and s["refused"][0].startswith("interrupted before the first job")
+    assert e3.formal_attempts(root, "macos-metal") == []
+
+
+@pytest.mark.parametrize("exc, how", [(SystemExit(143), "interrupted"), (OSError("x"), "failed")])
+def test_refused_why_tells_an_interrupt_from_a_failure(exc, how):
+    assert e3.refused_why(exc).startswith(f"{how} before the first job: {type(exc).__name__}")
