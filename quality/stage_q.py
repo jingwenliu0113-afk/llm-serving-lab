@@ -35,6 +35,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -299,6 +300,12 @@ def _read_json(path: Path):
         return None
 
 
+def refused_why(exc: BaseException) -> str:
+    """Why a run that ended before its first job's process is refused (040 #39): interrupted or failed, and how."""
+    how = "interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed"
+    return f"{how} before the first job: {type(exc).__name__}: {exc}"
+
+
 def formal_attempts(root, part: str) -> list:
     """Every formal attempt of `part` under results/stage_q, oldest first (040 補記 14): a directory whose session.json
     (final or the running stub) or, when that is unreadable, plan.json is a formal one of the part; a plan saved alone
@@ -506,7 +513,7 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
         write_session()
         raise StageQError(why)
 
-    write_session()                                         # the stub: an interrupted session is still an attempt
+    write_session()                                         # the stub: once work started, an interrupt is an attempt
     try:                                    # before the first job nothing ran: any end here is refused
         (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
         bin_dir, models_dir, data_dir = str(bin_dir), str(models_dir), str(data_dir)
@@ -527,72 +534,85 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
         session.update(powermode=powermode, host=host_of(pre))
     except BaseException as exc:
         if session["status"] != "refused":
-            session.update(status="refused", refused=f"interrupted before the first job: {type(exc).__name__}: {exc}")
+            session.update(status="refused", refused=refused_why(exc))
             write_session()
         raise
     rows, by_id, skipped, env_flags, charge_pauses = [], {}, set(), [], []
     resolve = lambda a: a.replace("{bin}", bin_dir).replace("{models}", models_dir).replace(  # noqa: E731
         "{data}", data_dir).replace("{session}", session_id)
-    with open(out / "rows.jsonl", "w") as fh:
-        for job in plan["jobs"]:
-            jid, kind, size = job["id"], job["kind"], job["size"]
-            group = (size, job.get("ctx"))
-            base = {"job_id": jid, "kind": kind, "size": size, "point": job.get("point"), "ctx": job.get("ctx")}
-            if kind == "delete_kld":
-                path = resolve(job["path"])
-                all_ok = all(by_id.get(a, {}).get("outcome") == "ok" for a in job["after"])
-                deleted = False
-                base_bytes = size_of(path) if os.path.exists(path) else None
-                if all_ok and base_bytes is not None:
-                    delete_file(path)
-                    deleted = True
-                row = {**base, "outcome": "ok" if all_ok else "error", "deleted": deleted, "path": path,
-                       "base_bytes": base_bytes,
-                       "reason": None if all_ok else "KLD runs not all ok; KLD file kept for diagnosis"}
-            elif kind in ("kld_base", "kld_self", "kld") and group in skipped:
-                row = {**base, "outcome": "skipped", "reason": "disk guard failed for this group's KLD file"}
-            elif kind in ("kld_self", "kld") and by_id.get(job["base"], {}).get("outcome") != "ok":
-                row = {**base, "outcome": "skipped", "reason": f"its base job {job['base']} is not ok"}
-            else:
-                guard = None
-                if kind == "kld_base":
-                    guard = disk_ok(Path(data_dir) / "kld", job["need_gib"])
-                    if not guard.get("ok"):
-                        skipped.add(group)
-                        row = {**base, "outcome": "skipped", "reason": f"disk guard failed: {guard}"}
-                        rows.append(row); by_id[jid] = row; fh.write(json.dumps(row) + "\n"); fh.flush()
-                        continue
-                argv = [resolve(a) for a in job["argv"]]
-                if kind == "kld_base":
-                    Path(argv[argv.index("--kl-divergence-base") + 1]).parent.mkdir(parents=True, exist_ok=True)
-                rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
-                       "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json"}
-                pause = charge_gate(read_power, sleep) if mac else None
-                if pause:
-                    charge_pauses.append({"job_id": jid, **pause})
-                env_before = capture_env(llama_bin=exe, out_path=out / rel["env_before"], gpu_lock_held=gpu_lock_held)
-                code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
-                env_after = capture_env(llama_bin=exe, out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
-                for phase, rec in (("before", env_before), ("after", env_after)):
-                    flags_ = platform_problems(rec, platform)
-                    if formal:
-                        flags_ += provenance_problems(rec, pre)
-                        if mac:
-                            if ((rec.get("power") or {}).get("powermode")) != powermode:
-                                flags_.append(f"powermode changed to {(rec.get('power') or {}).get('powermode')!r} "
-                                              f"from {powermode!r} (one powermode per session, 019)")
-                    env_flags.extend({"job_id": jid, "phase": phase, "reason": why} for why in flags_)
-                res = qp.classify(kind, code, (out / rel["stdout"]).read_text(errors="replace"),
-                                  (out / rel["stderr"]).read_text(errors="replace"), job["expect"])
-                row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, **res, "disk_guard": guard, **rel}
-                if kind == "kld_base":                      # 040 補記 5: the pilot confirms the disk use
-                    kld_file = argv[argv.index("--kl-divergence-base") + 1]
-                    row.update(base_bytes=size_of(kld_file) if os.path.exists(kld_file) else None,
-                               need_gib=job["need_gib"])
-            rows.append(row)
-            by_id[jid] = row
-            fh.write(json.dumps(row) + "\n")
-            fh.flush()
+    started = []                            # 040 #39 / 041: refused until the first job's process starts
+
+    def run_job(*a):
+        started.append(True)
+        return run_proc(*a)
+
+    try:
+        with open(out / "rows.jsonl", "w") as fh:
+            for job in plan["jobs"]:
+                jid, kind, size = job["id"], job["kind"], job["size"]
+                group = (size, job.get("ctx"))
+                base = {"job_id": jid, "kind": kind, "size": size, "point": job.get("point"), "ctx": job.get("ctx")}
+                if kind == "delete_kld":
+                    path = resolve(job["path"])
+                    all_ok = all(by_id.get(a, {}).get("outcome") == "ok" for a in job["after"])
+                    deleted = False
+                    base_bytes = size_of(path) if os.path.exists(path) else None
+                    if all_ok and base_bytes is not None:
+                        delete_file(path)
+                        deleted = True
+                    row = {**base, "outcome": "ok" if all_ok else "error", "deleted": deleted, "path": path,
+                           "base_bytes": base_bytes,
+                           "reason": None if all_ok else "KLD runs not all ok; KLD file kept for diagnosis"}
+                elif kind in ("kld_base", "kld_self", "kld") and group in skipped:
+                    row = {**base, "outcome": "skipped", "reason": "disk guard failed for this group's KLD file"}
+                elif kind in ("kld_self", "kld") and by_id.get(job["base"], {}).get("outcome") != "ok":
+                    row = {**base, "outcome": "skipped", "reason": f"its base job {job['base']} is not ok"}
+                else:
+                    guard = None
+                    if kind == "kld_base":
+                        guard = disk_ok(Path(data_dir) / "kld", job["need_gib"])
+                        if not guard.get("ok"):
+                            skipped.add(group)
+                            row = {**base, "outcome": "skipped", "reason": f"disk guard failed: {guard}"}
+                            rows.append(row); by_id[jid] = row; fh.write(json.dumps(row) + "\n"); fh.flush()
+                            continue
+                    argv = [resolve(a) for a in job["argv"]]
+                    if kind == "kld_base":
+                        Path(argv[argv.index("--kl-divergence-base") + 1]).parent.mkdir(parents=True, exist_ok=True)
+                    rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
+                           "env_before": f"env/{jid}.before.json", "env_after": f"env/{jid}.after.json"}
+                    pause = charge_gate(read_power, sleep) if mac else None
+                    if pause:
+                        charge_pauses.append({"job_id": jid, **pause})
+                    env_before = capture_env(llama_bin=exe, out_path=out / rel["env_before"],
+                                             gpu_lock_held=gpu_lock_held)
+                    code, wall = run_job(argv, out / rel["stdout"], out / rel["stderr"], timeout_s)
+                    env_after = capture_env(llama_bin=exe, out_path=out / rel["env_after"], gpu_lock_held=gpu_lock_held)
+                    for phase, rec in (("before", env_before), ("after", env_after)):
+                        flags_ = platform_problems(rec, platform)
+                        if formal:
+                            flags_ += provenance_problems(rec, pre)
+                            if mac:
+                                if ((rec.get("power") or {}).get("powermode")) != powermode:
+                                    flags_.append(f"powermode changed to {(rec.get('power') or {}).get('powermode')!r} "
+                                                  f"from {powermode!r} (one powermode per session, 019)")
+                        env_flags.extend({"job_id": jid, "phase": phase, "reason": why} for why in flags_)
+                    res = qp.classify(kind, code, (out / rel["stdout"]).read_text(errors="replace"),
+                                      (out / rel["stderr"]).read_text(errors="replace"), job["expect"])
+                    row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, **res, "disk_guard": guard, **rel}
+                    if kind == "kld_base":                      # 040 補記 5: the pilot confirms the disk use
+                        kld_file = argv[argv.index("--kl-divergence-base") + 1]
+                        row.update(base_bytes=size_of(kld_file) if os.path.exists(kld_file) else None,
+                                   need_gib=job["need_gib"])
+                rows.append(row)
+                by_id[jid] = row
+                fh.write(json.dumps(row) + "\n")
+                fh.flush()
+    except BaseException as exc:
+        if not started:
+            session.update(status="refused", refused=refused_why(exc))
+            write_session()
+        raise
     outcomes = {"ok": 0, "oom": 0, "error": 0, "skipped": 0}
     for r in rows:
         outcomes[r["outcome"]] += 1
@@ -601,6 +621,10 @@ def run_stage_q(plan: dict, *, bin_dir, models_dir, data_dir, out_dir, capture_e
     write_raw_manifest(out)
     write_session()
     return session
+
+
+def _exit_on_signal(signum, frame):
+    raise SystemExit(128 + signum)  # as coreb_smoke: SIGHUP / SIGTERM run the run's except / finally blocks
 
 
 def main(argv: list | None = None) -> int:
@@ -632,13 +656,18 @@ def main(argv: list | None = None) -> int:
             return 0
         plan = json.loads(Path(args.plan).read_text())
         expected = plan_for(plan["part"], "formal") if plan.get("mode") == "formal" else None
-        summary = run_stage_q(plan, bin_dir=Path(args.bin).resolve(), models_dir=Path(args.models).resolve(),
-                              data_dir=Path(args.data).resolve(), out_dir=args.out,
-                              capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"),
-                              session_id=Path(args.out).name,
-                              mac_lock_held=os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1",
-                              gpu_lock_held=args.gpu_lock_held, expected_plan=expected, pins=pins,
-                              superseded=dict(x.split("=", 1) for x in args.superseded))
+        previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)}
+        try:
+            summary = run_stage_q(plan, bin_dir=Path(args.bin).resolve(), models_dir=Path(args.models).resolve(),
+                                  data_dir=Path(args.data).resolve(), out_dir=args.out,
+                                  capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"),
+                                  session_id=Path(args.out).name,
+                                  mac_lock_held=os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1",
+                                  gpu_lock_held=args.gpu_lock_held, expected_plan=expected, pins=pins,
+                                  superseded=dict(x.split("=", 1) for x in args.superseded))
+        finally:
+            for sig, handler in previous.items():
+                signal.signal(sig, handler)
     except StageQError as exc:
         print(f"stage_q: {exc}", file=sys.stderr)
         return 2

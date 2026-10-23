@@ -15,10 +15,10 @@ failed boot stops the session, no new boot when elapsed + 30 min > cap, no bench
 GPU >= 88 C stops at once. The cap is 3.0 h of holding the lock with the smoke included: a formal plan's cap_s is
 3.0 h minus the passed smoke's elapsed_s (041 v3 §1.6, §4).
 Every plan needs the passed seed check (results/stage_e/e1p-seed-check/seed_check.json from
-stage_e1p_seed_check.py: vLLM's own sampler gave both seeds' 200 formal prompts 8,064 tokens and A != B) and E1-D's
-frozen stage_e1 (config and code pin). Formal plans also need freeze.e1p and the passed smoke (freeze.smoke_e1p, a
-session id): finished, smoke.ok, env valid, a WSL CUDA host, the pinned vLLM, these pins (when given), this harness,
-its plan exactly the smoke plan under this config. A plan records stage_e1p_sha256 (the config without [freeze]),
+stage_e1p_seed_check.py: vLLM's own sampler, under the bench argv built now, gave both seeds' prompts at the formal N
+and the smoke's 8,064 server-side tokens and A != B) and E1-D's frozen stage_e1 (config and code pin). Formal plans
+also need freeze.e1p and the passed smoke (freeze.smoke_e1p, a session id): finished, smoke.ok, env valid, a WSL CUDA
+host, the pinned vLLM, these pins (when given), this harness, its plan exactly the smoke plan under this config. A plan records stage_e1p_sha256 (the config without [freeze]),
 stage_e1_sha256 (E1-D's frozen config, whose links it uses) and seed_check_sha256.
 
 Usage:
@@ -136,13 +136,25 @@ def seed_check_sha256(root=ROOT) -> str:
     return hashlib.sha256((Path(root) / SEED_CHECK_SCRIPT).read_bytes()).hexdigest()
 
 
+def seed_check_ns(cfg: dict) -> tuple:
+    """The N the seed check covers: the formal benches' and the smoke's (vLLM's padding draws depend on N, 013 §2)."""
+    return bp.num_prompts(C), cfg["e1p"]["smoke_N"]
+
+
+def seed_check_argv(pins: dict, label: str, seed: int, N: int) -> list:
+    """The bench argv the seed check samples for one seed and N (bench_argv_for; the prefix and paths sample
+    nothing)."""
+    return bench_argv_for(pins, seed=seed, N=N, prefix=f"e1p-seedcheck-{label}-", result_dir="/unused",
+                          result_filename="unused.json", vllm_bin="vllm")
+
+
 def seed_check_problems(pins: dict, cfg: dict, root=ROOT) -> list:
     """The committed seed check (stage_e1p_seed_check.py, CPU only on WSL): vLLM's own sampler, for both seeds at the
-    formal N, gave every prompt 8,064 tokens and different prompts for A and B. Without it no plan is built: one bad
-    seed-B prompt among the formal 200 would invalidate every seed-B bench and stop the only formal session, and
-    identical prompts would read as position-locked."""
-    path = Path(root).joinpath(*SEED_CHECK)
-    rec = _read_json(path)
+    formal N and the smoke's, under the bench argv the harness builds now, gave every prompt 8,064 server-side tokens
+    and different prompts for A and B. The verdict is re-derived from the per-seed counts, never taken from the
+    record's ok alone. Without it no plan is built: one bad seed-B prompt among the formal 200 would invalidate every
+    seed-B bench and stop the only formal session, and identical prompts would read as position-locked."""
+    rec = _read_json(Path(root).joinpath(*SEED_CHECK))
     if not isinstance(rec, dict):
         return [f"no readable seed check at {Path(*SEED_CHECK)} (run benchmarks/stage_e1p_seed_check.py on WSL)"]
     problems = []
@@ -152,10 +164,29 @@ def seed_check_problems(pins: dict, cfg: dict, root=ROOT) -> list:
         problems.append(f"the seed check ran vLLM {rec.get('vllm_version')!r}, not {pins['vllm']['version']}")
     if rec.get("script_sha256") != seed_check_sha256():
         problems.append("the seed check was made by another stage_e1p_seed_check.py (script_sha256)")
-    seeds = {x: (rec.get("seeds") or {}).get(x, {}).get("seed") for x in ("A", "B")}
-    if seeds != cfg["e1p"]["seeds"] or (rec.get("N"), rec.get("input_len")) != (bp.num_prompts(C), L - bp.N_GEN):
-        problems.append(f"the seed check covers seeds {seeds} at N {rec.get('N')}, input {rec.get('input_len')}; "
-                        f"the design needs {cfg['e1p']['seeds']} at N {bp.num_prompts(C)}, input {L - bp.N_GEN}")
+    if rec.get("input_len") != L - bp.N_GEN:
+        problems.append(f"the seed check's input_len {rec.get('input_len')!r} is not {L - bp.N_GEN}")
+    checks = rec.get("checks")
+    by_n = {c.get("N"): c for c in checks if isinstance(c, dict)} if isinstance(checks, list) else {}
+    argv = rec.get("argv") if isinstance(rec.get("argv"), dict) else {}
+    for N in seed_check_ns(cfg):
+        c = by_n.get(N)
+        seeds = c.get("seeds") if isinstance(c, dict) else None
+        if not isinstance(seeds, dict) or set(seeds) != {"A", "B"} or not all(isinstance(v, dict)
+                                                                                for v in seeds.values()):
+            problems.append(f"the seed check has no A / B record at N {N}")
+            continue
+        for x, seed in cfg["e1p"]["seeds"].items():
+            got = seeds[x]
+            if (got.get("seed"), got.get("n"), got.get("server_tokens_ok")) != (seed, N, N):
+                problems.append(f"the seed check at N {N}, seed {x}: seed {got.get('seed')!r}, "
+                                f"{got.get('server_tokens_ok')!r} of {got.get('n')!r} prompts at {L - bp.N_GEN} "
+                                f"tokens (needs seed {seed}, all {N})")
+            if (argv.get(str(N)) or {}).get(x) != seed_check_argv(pins, x, seed, N):
+                problems.append(f"the seed check at N {N}, seed {x} sampled another bench argv than the harness "
+                                "builds now")
+        if seeds["A"].get("prompts_sha256") in (None, seeds["B"].get("prompts_sha256")):
+            problems.append(f"the seed check at N {N}: seeds A and B drew the same prompts")
     return problems
 
 

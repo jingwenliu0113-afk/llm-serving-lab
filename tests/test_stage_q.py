@@ -417,3 +417,31 @@ def test_an_interrupt_before_the_first_job_is_refused_not_an_attempt(frozen_root
     s = json.loads((tmp_path / "results" / "stage_q" / "a" / "session.json").read_text())
     assert s["status"] == "refused" and "KeyboardInterrupt" in s["refused"]
     assert sq.formal_attempts(tmp_path, "q1-metal") == []
+
+
+def test_the_refused_window_ends_when_the_first_job_process_starts(frozen_root, tmp_path):
+    plan = formal("q1-metal", frozen_root)
+    kw = dict(expected_plan=plan, pins=PINS, hash_file=pinned_hash)
+
+    def power():
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):                     # the first job's charge gate: nothing ran yet
+        run(tmp_path / "a", plan, "a", read_power=power, run_proc=fake_llama(n=200), **kw)
+    s = json.loads((tmp_path / "a" / "results" / "stage_q" / "a" / "session.json").read_text())
+    assert s["status"] == "refused" and s["refused"].startswith("interrupted before the first job")
+    assert sq.formal_attempts(tmp_path / "a", "q1-metal") == []
+    inner, calls = fake_llama(n=200), []
+
+    def second_interrupted(*a):
+        calls.append(a)
+        if len(calls) == 2:
+            raise KeyboardInterrupt
+        return inner(*a)
+
+    with pytest.raises(KeyboardInterrupt):                     # after the first job: an attempt
+        run(tmp_path / "b", plan, "b", run_proc=second_interrupted, **kw)
+    assert [a["status"] for a in sq.formal_attempts(tmp_path / "b", "q1-metal")] == ["running"]
+    assert sq.refused_why(RuntimeError("x")).startswith("failed before the first job: RuntimeError")
+    with pytest.raises(SystemExit, match="143"):
+        sq._exit_on_signal(15, None)

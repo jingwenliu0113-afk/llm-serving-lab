@@ -532,3 +532,33 @@ def test_an_interrupt_before_the_first_job_is_refused_not_an_attempt(frozen_root
     s = json.loads((root / "results" / "stage_e" / "f1" / "session.json").read_text())
     assert s["status"] == "refused" and "KeyboardInterrupt" in s["refused"][0]
     assert e3.formal_attempts(root, "wsl2-cuda") == []
+
+
+def test_the_refused_window_ends_when_the_first_job_process_starts(frozen_root, tmp_path):
+    root = tmp_path / "r"
+    shutil.copytree(frozen_root, root)
+    plan, cfg = formal(root)
+    captures = []
+
+    def second_capture_exits(**kw):
+        captures.append(kw)
+        if len(captures) == 2:                                  # the first job's env_before, before its process
+            raise SystemExit(143)
+        return env("wsl2-cuda")(**kw)
+
+    with pytest.raises(SystemExit):
+        run(root, plan, "f1", expected_plan=plan, cfg=cfg, capture_env=second_capture_exits)
+    s = json.loads((root / "results" / "stage_e" / "f1" / "session.json").read_text())
+    assert s["status"] == "refused" and s["refused"][0].startswith("interrupted before the first job: SystemExit")
+    assert e3.formal_attempts(root, "wsl2-cuda") == []
+    calls = []
+
+    def first_job_interrupted(*a):
+        calls.append(a)
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):                     # the first job's process started: an attempt
+        run(root, plan, "f2", expected_plan=plan, cfg=cfg, run_proc=first_job_interrupted)
+    assert [a["valid"] for a in e3.formal_attempts(root, "wsl2-cuda")] == [False] and len(calls) == 1
+    with pytest.raises(SystemExit, match="129"):
+        e3._exit_on_signal(1, None)

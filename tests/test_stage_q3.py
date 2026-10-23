@@ -485,3 +485,8 @@ def test_an_interrupt_before_the_first_job_is_refused_not_an_attempt(tmp_path):
         run(root, plan, "f", expected_plan=plan, capture_env=interrupted)
     s = json.loads((root / "results" / "stage_q" / "f" / "session.json").read_text())
     assert s["status"] == "refused" and "KeyboardInterrupt" in s["refused"][0] and q3.formal_attempts(root) == []
+
+
+def test_a_sigterm_or_sighup_becomes_systemexit():
+    with pytest.raises(SystemExit, match="143"):
+        q3._exit_on_signal(15, None)

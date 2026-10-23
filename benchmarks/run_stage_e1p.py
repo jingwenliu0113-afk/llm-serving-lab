@@ -6,7 +6,8 @@
 Per boot (stage_e1p_plan's plan): no new boot when elapsed + boot_margin_s > cap_s ("cap"); this process still holds
 the lock ("lock"); the 031 idle window ("gpu_not_idle"; an nvidia-smi failure "gpu_check"); the spill guard's
 pre-boot reading ("spill_unreadable"); env capture; the nvidia-smi sampler (>= 88 C "temperature", lost telemetry
-"telemetry"); one OTLP receiver for the boot; the observed B0 server (stage_e1p_plan.server_argv_for); /health within
+"telemetry"), whose first temperature must arrive within SMI_FIRST_S before any server starts; one OTLP receiver for
+the boot; the observed B0 server (stage_e1p_plan.server_argv_for); /health within
 the startup timeout or what is left of the cap (a start cut at the cap stops "cap"); the start fails unless FLASH_ATTN,
 exactly B0's watched non-default args (run_adv.manipulation_problems) and /metrics' 248 blocks of 528
 (run_adv.blocks_problems); the ready spill reading. Then its benches in order: none whose 720 s timeout could pass the
@@ -27,11 +28,11 @@ problem, an output that is not a new results/stage_e/<id>; a formal session also
 variables in the caller's env, a non-WSL-CUDA host, another vLLM, env / provenance problems at the preflight, or when
 results/stage_e already holds a valid formal E1-P session or two attempts (stage_e1p_plan.formal_attempts). A
 session.json stub (status running) is written first and replaced atomically; status refused when no server ever
-started (an interrupt during the preflight, a stop before the first start or a sampler that never ran included),
-aborted after a harness failure, finished otherwise (a stop rule included). A smoke writes no latency outside raw/ at
-any time (rows.jsonl gets MASK_ROW_KEYS, derived/ idx / cls; the full requests and e1 files go to raw/), checks 041
-v3 §1.7 on the rows it keeps in memory (smoke_checks), then masks the rest (mask_smoke: the boots' latency fields and
-raw/'s latency files).
+started (an interrupt during the preflight, a stop before the first start or a sampler with no first temperature
+included), aborted after a harness failure, finished otherwise (a stop rule included). A smoke writes no latency
+outside raw/ at any time (rows.jsonl gets MASK_ROW_KEYS, derived/ idx / cls; the full requests, e1 files, per-boot env
+captures and nvidia-smi samples go to raw/), checks 041 v3 §1.7 on the rows it keeps in memory (smoke_checks), then
+masks the rest (mask_smoke: the boots' latency fields, window and startup lines, and raw/'s latency files).
 
 Usage (WSL, research checkout, tools/rtx/gpu_status.sh FREE):
     flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_e1p.py --plan plan.json \\
@@ -69,6 +70,7 @@ from run_core_a import env_problems, provenance_problems, sha256_json, write_raw
 
 SCHEMA_VERSION = 1
 Stop = rcp.Stop
+SMI_FIRST_S = 10.0                  # the first temperature sample before a server starts (nvidia-smi -lms 1000)
 DERIVED_KEYS = ("idx", "cls", "client_ttft_ms", "arrival", "Q_ms", "P_ms", "server_ttft_ms", "O_ms", "F_ms",
                 "prompt_tokens", "completion_tokens", "e2e_ms", "start_time", "latency_ms")
 # what a smoke keeps of a row (counts and flags; 041 v3 §1.7: the smoke's latencies are not looked at)
@@ -161,9 +163,11 @@ class E1PRun:
         self.base = f"http://127.0.0.1:{pp.PORT}"
         self.rows, self.env_flags = [], []
         # a smoke writes no latency outside raw/ at any time (041 v3 §1.7): its rows.jsonl gets MASK_ROW_KEYS only,
-        # its derived requests idx / cls only; the full requests and the e1 files go to raw/ for its checks
+        # its derived requests idx / cls only; the full requests, the e1 files, the per-boot env captures and the
+        # nvidia-smi samples (they carry the boot's and benches' times) go to raw/
         self.smoke = not formal
-        self.e1_dir = self.raw if self.smoke else self.derived
+        self.timed_dir = self.raw if self.smoke else self.derived
+        self.env_dir = self.raw / "env" if self.smoke else out / "env"
 
     def elapsed(self) -> float:
         return self.now() - self.t_start
@@ -176,7 +180,8 @@ class E1PRun:
         return row
 
     def snap(self, name: str) -> None:
-        rec = self.capture_env(out_path=self.out / "env" / name, gpu_lock_held=True)
+        self.env_dir.mkdir(parents=True, exist_ok=True)
+        rec = self.capture_env(out_path=self.env_dir / name, gpu_lock_held=True)
         self.env_flags.extend({"env": name, "reason": why} for why in env_problems(rec, "wsl2-cuda"))
         if self.formal:
             self.env_flags.extend({"env": name, "reason": why} for why in provenance_problems(rec, self.pre))
@@ -195,6 +200,18 @@ class E1PRun:
                                  "rule 6) cannot be applied; torn down and stopped")
 
     # ---------------------------------------------------------- boot
+    def smi_ready(self, smi) -> bool:
+        """The sampler's first temperature before any server (028 rule 6 reads nothing else): False when it halted or
+        sent none within SMI_FIRST_S."""
+        t0 = self.now()
+        while not smi.halt.is_set():
+            if any(x.get("temp_c") is not None for x in smi.samples()):
+                return True
+            if self.now() - t0 >= SMI_FIRST_S:
+                return False
+            self.sleep(0.5)
+        return False
+
     def pre_boot(self, b: int) -> tuple:
         """028 rules 2 / 3 with 031's idle window, then the spill guard's pre-boot reading: (idle report, guard)."""
         tag = rcp.boot_tag(b)
@@ -291,8 +308,9 @@ class E1PRun:
                     rec["receiver"] = {k: v for k, v in (stats() if stats else {}).items() if k != "main"}
                     smi_problems = smi.stop() or []
                     samples = smi.samples()
-                    (self.derived / f"{tag}-smi.jsonl").write_text("".join(json.dumps(s) + "\n" for s in samples))
-                    rec.update(smi=f"derived/{tag}-smi.jsonl", smi_summary=rcp.smi_summary(samples),
+                    spath = self.timed_dir / f"{tag}-smi.jsonl"
+                    spath.write_text("".join(json.dumps(s) + "\n" for s in samples))
+                    rec.update(smi=spath.relative_to(self.out).as_posix(), smi_summary=rcp.smi_summary(samples),
                                smi_problems=smi_problems)
                     if problems:
                         rec["teardown_problems"] = problems
@@ -310,8 +328,10 @@ class E1PRun:
         receiver = self.receiver_factory(self.raw / f"{tag}.otlp", self.raw / f"{tag}.spans.jsonl", f"e1p-b{b}-")
         proc, stop, done, why = None, None, 0, None
         try:
-            if smi.halt.is_set():                  # no thermometer, no server (028 rule 6): stopped before any start
-                stop = self.halted(smi, f"before the start of {tag}")
+            if not self.smi_ready(smi):            # no thermometer, no server (028 rule 6): stopped before any start
+                stop = self.halted(smi, f"before the start of {tag}") if smi.halt.is_set() else Stop(
+                    "telemetry", f"no temperature from nvidia-smi within {SMI_FIRST_S:.0f} s of its start, before "
+                                 f"{tag}'s server: the 88 C stop (028 stop rule 6) cannot be applied; stopped")
             else:
                 receiver.start()
                 proc = self.popen(argv, env, self.raw / f"{tag}.server.log")
@@ -458,7 +478,7 @@ class E1PRun:
             if not missing:
                 try:
                     e1 = bench_e1(reqs, window, self.e1cfg, full=N == bp.num_prompts(pp.C))
-                    epath = self.e1_dir / f"{tag}-e1.json"
+                    epath = self.timed_dir / f"{tag}-e1.json"
                     epath.write_text(json.dumps(e1, indent=1) + "\n")
                     row.update(e1=epath.relative_to(self.out).as_posix(), e1_ok=True,
                                e1_sha256=hashlib.sha256(epath.read_bytes()).hexdigest())
@@ -506,8 +526,13 @@ def mask_smoke(out: Path, session: dict) -> list:
     spans and OTLP bodies, Prometheus scrapes, steps, series, the full requests and the e1 files). What went is
     recorded; a file that could not go is recorded too (raw/ is git-ignored and never fetched). Server logs and the
     nvidia-smi samples stay."""
-    session["boots"] = {tag: {k: v for k, v in rec.items() if k not in ("t_start", "t_end")}   # the boot's window
-                        for tag, rec in adv_smoke._drop_latency(session["boots"]).items()}
+    boots = adv_smoke._drop_latency(session["boots"])
+    for rec in boots.values():
+        rec.pop("t_start", None)                            # the boot's wall-clock window
+        rec.pop("t_end", None)
+        if isinstance(rec.get("startup"), dict):            # the startup lines carry the init times
+            rec["startup"] = {k: v for k, v in rec["startup"].items() if k != "lines"}
+    session["boots"] = boots
     raw, gone, errors = out / "raw", [], []
     targets = [p for pattern in SMOKE_LATENCY_RAW for p in sorted(raw.glob(pattern))] + sorted(raw.glob("*.otlp"))
     for p in targets:
@@ -587,7 +612,7 @@ def run_session(plan: dict, *, pins: dict, pins_sha256: str, out_dir, session_id
         tmp.write_text(json.dumps(session, indent=1) + "\n")
         os.replace(tmp, out / "session.json")
 
-    write_session()                                         # the stub: an interrupted session is still an attempt
+    write_session()                                         # the stub: once work started, an interrupt is an attempt
     try:                                    # until the first boot no server can have started: any end here is refused
         (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
         pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=True)

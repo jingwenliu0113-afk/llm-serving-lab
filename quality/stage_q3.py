@@ -444,6 +444,12 @@ def _read_json(path: Path):
         return None
 
 
+def refused_why(exc: BaseException) -> str:
+    """Why a run that ended before its first job's process is refused (040 #39): interrupted or failed, and how."""
+    how = "interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed"
+    return f"{how} before the first job: {type(exc).__name__}: {exc}"
+
+
 def formal_attempts(root) -> list:
     """Every formal q3 attempt under results/stage_q, oldest first (040 補記 14): a directory whose session.json (final
     or the running stub) or, when that is unreadable, plan.json is a formal q3 one; a plan saved alone and runs refused
@@ -586,7 +592,7 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
         tmp.write_text(json.dumps(session, indent=1) + "\n")
         os.replace(tmp, out / "session.json")
 
-    write_session()                                         # the stub: an interrupted session is still an attempt
+    write_session()                                         # the stub: once work started, an interrupt is an attempt
     try:                                    # before the first job nothing ran: any end here is refused
         (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
         pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=gpu_lock_held)
@@ -603,7 +609,7 @@ def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: 
                 raise StageQ3Error("formal Q3 run refused before it starts: " + "; ".join(bad))
     except BaseException as exc:
         if session["status"] != "refused":
-            session.update(status="refused", refused=[f"interrupted before the first job: {type(exc).__name__}: {exc}"])
+            session.update(status="refused", refused=[refused_why(exc)])
             write_session()
         raise
     rows, env_flags = [], []
@@ -845,6 +851,10 @@ def _hf_encoder(snapshot: str) -> Callable:  # pragma: no cover - needs transfor
     return lambda text: tok(text, add_special_tokens=False)["input_ids"]
 
 
+def _exit_on_signal(signum, frame):
+    raise SystemExit(128 + signum)  # as coreb_smoke: SIGHUP / SIGTERM run the run's except / finally blocks
+
+
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -899,11 +909,16 @@ def main(argv: list | None = None) -> int:
             expected = build_plan(pins, cfg, mode="formal", pins_sha256=pins_sha, stage_q3_sha256=cfg_sha) \
                 if plan.get("mode") == "formal" else None
             python = str(ROOT / ".venv" / "bin" / "python")
-            s = run_q3(plan, data_dir=Path(args.data).resolve(), out_dir=args.out,
-                       capture_env=rb.make_vllm_env_capture(ROOT / "scripts" / "env_capture.py", python),
-                       session_id=Path(args.out).name, gpu_lock_held=args.gpu_lock_held,
-                       wait_idle=default_wait_idle(pins), pins=pins, vllm_python=python, expected_plan=expected,
-                       superseded=dict(x.split("=", 1) for x in args.superseded))
+            previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)}
+            try:              # a SIGTERM / SIGHUP reaches default_run_proc as SystemExit: the scorer's group is killed
+                s = run_q3(plan, data_dir=Path(args.data).resolve(), out_dir=args.out,
+                           capture_env=rb.make_vllm_env_capture(ROOT / "scripts" / "env_capture.py", python),
+                           session_id=Path(args.out).name, gpu_lock_held=args.gpu_lock_held,
+                           wait_idle=default_wait_idle(pins), pins=pins, vllm_python=python, expected_plan=expected,
+                           superseded=dict(x.split("=", 1) for x in args.superseded))
+            finally:
+                for sig, handler in previous.items():
+                    signal.signal(sig, handler)
             print(json.dumps(s["outcomes"]))
         else:  # pragma: no cover - the child process in the vLLM venv
             score(json.loads(Path(args.job).read_text()), args.chunks, args.out)

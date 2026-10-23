@@ -15,6 +15,7 @@ import pytest
 import adv_plan as ap
 import adv_smoke
 import core_b_plan as bp
+import gpu_idle as gi
 import run_stage_e1p as r1p
 import stage_e1 as se1
 import stage_e1p_analysis as an
@@ -36,18 +37,22 @@ SMI = {"pstate": "P1", "sm_mhz": 2800.0, "mem_mhz": 14000.0, "power_w": 250.0, "
 
 
 def seed_record(**over):
+    seeds = CFG["e1p"]["seeds"]
     rec = {"stage": "E1P", "check": "seed", "vllm_version": PINS["vllm"]["version"],
-           "script_sha256": pp.seed_check_sha256(), "N": 200, "input_len": 8064,
-           "seeds": {"A": {"seed": 20261008, "n": 200, "prompt_len_ok": 200, "prompts_sha256": "a" * 64},
-                     "B": {"seed": 20261023, "n": 200, "prompt_len_ok": 200, "prompts_sha256": "b" * 64}},
+           "script_sha256": pp.seed_check_sha256(), "input_len": 8064,
+           "argv": {str(N): {x: pp.seed_check_argv(PINS, x, seed, N) for x, seed in seeds.items()}
+                    for N in pp.seed_check_ns(CFG)},
+           "checks": [{"N": N, "seeds": {x: {"seed": seed, "n": N, "server_tokens_ok": N, "prompt_len_ok": N,
+                                             "prompts_sha256": x.lower() * 64} for x, seed in seeds.items()},
+                       "ok": True, "problems": []} for N in pp.seed_check_ns(CFG)],
            "ok": True, "problems": []}
     return {**rec, **over}
 
 
-def write_seed_check(root, **over):
+def write_seed_check(root, rec=None, **over):
     path = Path(root).joinpath(*pp.SEED_CHECK)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(seed_record(**over)))
+    path.write_text(json.dumps(rec if rec is not None else seed_record(**over)))
 
 
 class Receiver:
@@ -90,12 +95,15 @@ class World(td.World):
     smi_temp: the sampler's temperature (None: never reported); smi_dead: the sampler never started."""
 
     def __init__(self, tmp_path, *, spikes=SPIKES, slips=None, behave=None, never_ready=(), nd_edit=None,
-                 smi_temp=66.0, bench_s=None, spill_at=(), smi_dead=False):
+                 smi_temp=66.0, bench_s=None, spill_at=(), smi_dead=False, smi_silent=False, env_fail=None,
+                 hot_at_teardown=False):
         super().__init__(tmp_path, spill_at=spill_at)
         self.spikes, self.slips, self.behave = spikes, slips or {}, behave or {}
         self.never_ready, self.nd_edit, self.smi_temp, self.bench_s = set(never_ready), nd_edit or {}, smi_temp, \
             bench_s
-        self.smi_dead, self.peeked = smi_dead, None
+        self.smi_dead, self.smi_silent, self.env_fail, self.hot_at_teardown = smi_dead, smi_silent, env_fail, \
+            hot_at_teardown
+        self.peeked = None
         self.step, self.receiver, self.server_log, self.smi, self.unhealthy = 0, None, None, None, False
         self.smi_samples, self.bench_argvs = [], []
 
@@ -106,8 +114,33 @@ class World(td.World):
         smi = tc0.FakeSmi(self, path)
         if self.smi_dead:
             smi.lose("the nvidia-smi sampler did not start: OSError")
-        self.smi_samples = [{"t": self.wall(), **SMI, "temp_c": self.smi_temp}]
+        self.smi_samples = [] if self.smi_silent else [{"t": self.wall(), **SMI, "temp_c": self.smi_temp}]
         return smi
+
+    def after_first_boot(self):
+        return bool(self.server_argvs) and self.point == "pre"
+
+    def compute_apps(self):
+        if self.env_fail == "gpu_not_idle" and self.after_first_boot():
+            return [{"pid": 9, "name": "other", "used_mib": 3000}]
+        return []
+
+    def gpu_sample(self):
+        if self.env_fail == "gpu_check" and self.after_first_boot():
+            raise RuntimeError("nvidia-smi timed out")
+        if self.env_fail == "interrupt":
+            raise KeyboardInterrupt
+        return super().gpu_sample()
+
+    def shared_usage(self):
+        if self.env_fail == "spill_unreadable" and self.after_first_boot():
+            raise gi.SharedUsageError("no adapter")
+        return super().shared_usage()
+
+    def signal_group(self, proc, sig):
+        if self.hot_at_teardown and self.smi is not None:
+            self.smi.flag_hot()
+        super().signal_group(proc, sig)
 
     def popen(self, argv, env, log_path):
         log_path = Path(log_path)
@@ -162,6 +195,10 @@ class World(td.World):
             self.smi.flag_hot()
             self.t += 30
             return -9, False, True
+        if how == "lose":
+            self.smi.lose("the nvidia-smi sampler exited (code 9)")
+            self.t += 30
+            return -9, False, True
         if how == "exit":
             self.t += 5
             return 1, False, False
@@ -176,6 +213,10 @@ class World(td.World):
                          "completion_tokens": 128})
         if how == "no_spans":
             recs = recs[:-1]
+        if how == "no_P":
+            recs[8] = {k: v for k, v in recs[8].items() if k != "P"}
+        if how == "dup_span":
+            recs.append(dict(recs[5]))
         self.receiver.add(recs + [{"id": "cmpl-warmup-0", "arrival": t0, "Q": q, "P": p, "server_ttft": 1.0}])
         lens = [8000 if how == "short_lens" and i % 2 else 8064 for i in range(n)]
         res = {"completed": n, "failed": 0, "duration": 0.2 * n, "request_throughput": 5.0, "output_throughput": 300.0,
@@ -193,6 +234,8 @@ class World(td.World):
         self.unhealthy = how == "unhealthy"
         self.point = f"bench:{tag}"
         self.t += self.bench_s or 0.2 * n + 5
+        if how == "hot_after":                          # the bench finished, then the GPU crossed 88 C
+            self.smi.flag_hot()
         return 0, False, False
 
 
@@ -281,34 +324,60 @@ def test_a_plan_pins_the_configs_content_without_freeze(tmp_path):
                                      "benchmarks/c0_analysis.py"}
 
 
-@pytest.mark.parametrize("over, why", [
-    (None, "no readable seed check"), ({"ok": False, "problems": ["seed B: 199 of 200"]}, "did not pass"),
-    ({"vllm_version": "0.29.0"}, "0.29.0"), ({"script_sha256": "0" * 64}, "script_sha256"),
-    ({"N": 16}, "N 16"),
-    ({"seeds": {"A": {"seed": 20261008}, "B": {"seed": 20261024}}}, "20261024")])
-def test_every_plan_needs_the_passed_seed_check_of_this_script_and_design(tmp_path, over, why):
+def _edit(**over):
+    return lambda rec: rec.update(over)
+
+
+def _seed(N, x, **over):
+    def edit(rec):
+        next(c for c in rec["checks"] if c["N"] == N)["seeds"][x].update(over)
+    return edit
+
+
+def _drop_n(N):
+    return lambda rec: rec.update(checks=[c for c in rec["checks"] if c["N"] != N])
+
+
+@pytest.mark.parametrize("edit, why", [
+    (None, "no readable seed check"), (_edit(ok=False, problems=["x"]), "did not pass"),
+    (_edit(vllm_version="0.29.0"), "0.29.0"), (_edit(script_sha256="0" * 64), "script_sha256"),
+    (_edit(input_len=8000), "input_len"), (_drop_n(16), "no A / B record at N 16"),
+    (_edit(checks="x"), "no A / B record at N 200"), (_seed(200, "B", server_tokens_ok=199), "199 of 200"),
+    (_seed(16, "A", n=15), "of 15 prompts"), (_seed(200, "B", seed=20261024), "seed 20261024"),
+    (_seed(200, "B", prompts_sha256="a" * 64), "same prompts"),
+    (lambda rec: rec["argv"]["200"]["B"].append("--random-prefix-len"), "another bench argv"),
+    (lambda rec: rec["checks"][0]["seeds"].update(A=None), "no A / B record")])
+def test_every_plan_needs_the_passed_seed_check_of_this_script_argv_and_design(tmp_path, edit, why):
     root = tmp_path / "repo"
-    if over is not None:
-        write_seed_check(root, **over)
+    if edit is not None:
+        rec = seed_record()
+        edit(rec)
+        write_seed_check(root, rec)
     for mode in ("smoke", "formal"):
         with pytest.raises(pp.PlanError, match=why):
             pp.build_plan(PINS, frozen(), mode=mode, root=root)
 
 
-def test_the_seed_check_needs_every_prompt_at_8064_and_different_prompts_per_seed():
+def test_the_seed_check_needs_every_prompt_at_8064_on_the_server_and_different_prompts_per_seed():
     def prompts(tag, n=200, bad=()):
-        return [(f"{tag}{i}", 8000 if i in bad else 8064) for i in range(n)]
+        return [(f"{tag}{i}" + ("!" if i in bad else ""), 8064) for i in range(n)]
 
-    ok = sc.check({"A": (1, prompts("a")), "B": (2, prompts("b"))}, N=200, input_len=8064, encode_len=lambda p: 8064)
-    assert ok["ok"] is True and ok["seeds"]["B"]["prompt_len_ok"] == 200 and ok["seeds"]["A"]["retokenized_ok"] == 200
-    short = sc.check({"A": (1, prompts("a")), "B": (2, prompts("b", bad=(7,)))}, N=200, input_len=8064,
-                     encode_len=lambda p: 8064)
-    assert short["ok"] is False and short["seeds"]["B"]["prompt_lens_other"] == [8000] and "seed B" in short[
-        "problems"][0]
-    same = sc.check({"A": (1, prompts("x")), "B": (2, prompts("x"))}, N=200, input_len=8064, encode_len=len)
-    assert same["ok"] is False and "same prompts" in same["problems"][0] and same["seeds"]["A"]["retokenized_ok"] == 0
+    server = lambda p: 8065 if p.endswith("!") else 8064  # noqa: E731
+    ok = sc.check({"A": (1, prompts("a")), "B": (2, prompts("b"))}, N=200, input_len=8064, server_len=server)
+    assert ok["ok"] is True and ok["seeds"]["B"]["server_tokens_ok"] == 200 and ok["N"] == 200
+    bad = sc.check({"A": (1, prompts("a")), "B": (2, prompts("b", bad=(7,)))}, N=200, input_len=8064,
+                   server_len=server)
+    assert bad["ok"] is False and bad["seeds"]["B"]["server_tokens_other"] == [8065] and "seed B" in bad["problems"][0]
+    assert bad["seeds"]["B"]["prompt_len_ok"] == 200                        # the sampler's own count is descriptive
+    same = sc.check({"A": (1, prompts("x")), "B": (2, prompts("x"))}, N=200, input_len=8064, server_len=server)
+    assert same["ok"] is False and "same prompts" in same["problems"][0]
     assert sc.check({"A": (1, prompts("a", n=16)), "B": (2, prompts("b"))}, N=200, input_len=8064,
-                    encode_len=len)["ok"] is False
+                    server_len=server)["ok"] is False
+    assert pp.seed_check_ns(CFG) == (200, 16)
+    assert sc.env_problems({"PATH": "/b"}) == [] and sc.env_problems({"VLLM_USE_FASTOKENS": "1"})
+    assert sc.env_problems({"PYTORCH_CUDA_ALLOC_CONF": "x"})
+    argv = pp.seed_check_argv(PINS, "B", 20261023, 16)
+    assert argv[argv.index("--seed") + 1] == "20261023" and argv[argv.index("--num-prompts") + 1] == "16"
 
 
 def test_the_server_is_advanceds_observed_b0_and_the_client_changes_only_seed_n_and_prefix():
@@ -411,17 +480,20 @@ def test_a_smoke_runs_seed_a_then_b_checks_041s_conditions_and_masks_the_latenci
     assert seeds == ["20261008", "20261023"] and {a[a.index("--num-prompts") + 1] for a in w.bench_argvs} == {"16"}
     assert [a[-1] for a in w.bench_argvs] == ["e1p-b1-n1-", "e1p-b1-n2-"] and len(w.server_argvs) == 1
     out = sdir(root, "smoke-e1p")
-    assert sorted(p.name for p in (out / "raw").iterdir()) == ["b1.server.log"]       # (the fake sampler writes none)
+    assert sorted(p.name for p in (out / "raw").iterdir()) == ["b1-smi.jsonl", "b1.server.log", "env"]
+    assert sorted(p.name for p in (out / "raw" / "env").iterdir()) == ["b1.after.json", "b1.before.json"]
+    assert sorted(p.name for p in (out / "env").iterdir()) == ["preflight.json"]     # taken before any work
     assert "raw/b1.otlp" in s["masked"] and "raw/b1.spans.jsonl" in s["masked"] and "raw/b1-n1-e1.json" in s["masked"]
-    assert sorted(p.name for p in (out / "derived").iterdir()) == ["b1-n1-requests.jsonl", "b1-n2-requests.jsonl",
-                                                                    "b1-smi.jsonl"]
+    assert sorted(p.name for p in (out / "derived").iterdir()) == ["b1-n1-requests.jsonl", "b1-n2-requests.jsonl"]
     req = (out / "derived" / "b1-n1-requests.jsonl").read_text().splitlines()
     assert len(req) == 16 and set(json.loads(req[0])) == {"idx", "cls"}
     rows = rows_of(root, "smoke-e1p")
     assert all(r["ok"] and r["e1_ok"] for r in rows) and no_latency(root, "smoke-e1p") == []
     saved = json.loads((out / "session.json").read_text())
     assert saved["elapsed_s"] == s["elapsed_s"] > 0 and (out / "smoke.json").is_file()
-    assert saved["boots"]["b1"]["smi_summary"]["temp_max_c"] == 66.0 and "main" not in saved["boots"]["b1"]["receiver"]
+    b1 = saved["boots"]["b1"]
+    assert b1["smi_summary"]["temp_max_c"] == 66.0 and "main" not in b1["receiver"] and b1["smi"] == "raw/b1-smi.jsonl"
+    assert not {"t_start", "t_end", "startup_s"} & set(b1) and "lines" not in b1["startup"] and b1["startup"]["counts"]
 
 
 def test_a_smoke_never_leaves_a_latency_outside_raw_even_mid_run(tmp_path):
@@ -444,11 +516,18 @@ def test_an_aborted_smoke_is_masked_and_fails(tmp_path):
 @pytest.mark.parametrize("world_kw, failed", [
     (dict(behave={"b1-n2": "no_spans"}), "spans"), (dict(behave={"b1-n2": "no_spans"}), "f_computable"),
     (dict(behave={"b1-n2": "short_lens"}), "input_lens_8064"), (dict(behave={"b1-n1": "no_steps"}), "steps_in_window"),
-    (dict(smi_temp=None), "smi"), (dict(behave={"b1-n1": "exit"}), "every_bench_valid"),
+    (dict(behave={"b1-n1": "exit"}), "every_bench_valid"),
     (dict(spill_at=("bench:b1-n1",)), "no_spill")])
 def test_each_smoke_condition_can_fail_it(tmp_path, world_kw, failed):
     s, _, _ = smoke(tmp_path, world=World(tmp_path / "w", **world_kw))
     assert s["smoke"]["ok"] is False and s["smoke"]["checks"][failed] is False
+
+
+@pytest.mark.parametrize("world_kw", [dict(smi_temp=None), dict(smi_silent=True), dict(smi_dead=True)])
+def test_no_server_starts_without_a_first_temperature(tmp_path, world_kw):
+    s, _, w = smoke(tmp_path, world=World(tmp_path / "w", **world_kw))
+    assert w.server_argvs == [] and s["status"] == "refused" and s["stopped"]["rule"] == "telemetry"
+    assert s["smoke"]["ok"] is False
 
 
 def test_the_smoke_checks_on_rows_cover_coverage_schema_blocks_stops_and_teardown(tmp_path):
@@ -538,6 +617,7 @@ def test_a_hot_gpu_stops_at_once_and_a_timeout_or_unhealthy_server_ends_only_the
     s, _ = session(root, plan, mode="formal", world=World(tmp_path / "wf", behave={"b2-n3": how}), sid="f")
     rows = {r["tag"]: r for r in rows_of(root, "f")}
     assert rows["b2-n3"]["ok"] is False and rows["b2-n4"]["not_run"] is True
+    assert pp.formal_attempts(root)[0]["valid"] is True                # 028's stops: analyzed as they are
     if rule:
         assert s["stopped"]["rule"] == rule and len(rows) == 8 and rows["b2-n3"]["stopped_hot"] is True
     else:
@@ -552,6 +632,7 @@ def test_the_cap_stops_new_boots_and_benches_by_028s_margins(tmp_path):
     assert s["stopped"]["rule"] == "cap" and s["status"] == "finished"
     ran = [r for r in rows if not r["not_run"]]
     assert ran and all(r["ok"] for r in ran) and s["elapsed_s"] <= plan["cap_s"] + 1500
+    assert pp.formal_attempts(root)[0]["valid"] is True
 
 
 def test_no_server_started_is_refused_and_an_environment_stop_voids_the_session(tmp_path):
@@ -580,6 +661,70 @@ def test_an_interrupt_during_the_preflight_is_refused_not_an_attempt(tmp_path):
         session(root, plan, mode="formal", sid="f", capture_env=interrupted)
     saved = json.loads((sdir(root, "f") / "session.json").read_text())
     assert saved["status"] == "refused" and "KeyboardInterrupt" in saved["aborted"] and pp.formal_attempts(root) == []
+
+
+@pytest.mark.parametrize("world_kw, rule", [
+    (dict(env_fail="gpu_not_idle"), "gpu_not_idle"), (dict(env_fail="gpu_check"), "gpu_check"),
+    (dict(env_fail="spill_unreadable"), "spill_unreadable"), (dict(behave={"b2-n1": "lose"}), "telemetry")])
+def test_an_environment_stop_after_a_server_started_voids_the_session(tmp_path, world_kw, rule):
+    root, plan = formal_setup(tmp_path)
+    s, _ = session(root, plan, mode="formal", world=World(tmp_path / "wf", **world_kw), sid="f")
+    assert s["status"] == "finished" and s["stopped"]["rule"] == rule and s["stopped"]["boot"] == 2
+    assert [a["valid"] for a in pp.formal_attempts(root)] == [False]
+    assert any("environment" in p for p in an.session_problems(sdir(root, "f"), pins=PINS, cfg=frozen(), root=root))
+
+
+def test_an_interrupt_before_the_first_server_is_refused_not_an_attempt(tmp_path):
+    root, plan = formal_setup(tmp_path)
+    with pytest.raises(KeyboardInterrupt):
+        session(root, plan, mode="formal", world=World(tmp_path / "wf", env_fail="interrupt"), sid="f")
+    saved = json.loads((sdir(root, "f") / "session.json").read_text())
+    assert saved["status"] == "refused" and "KeyboardInterrupt" in saved["aborted"] and pp.formal_attempts(root) == []
+
+
+def test_aborted_stub_and_unreadable_formal_sessions_are_void_attempts(tmp_path):
+    root, plan = formal_setup(tmp_path)
+    with pytest.raises(r1p.RunError, match="harness failure"):
+        session(root, plan, mode="formal", world=World(tmp_path / "wa", behave={"b1-n2": "raise"}), sid="a")
+    assert json.loads((sdir(root, "a") / "session.json").read_text())["status"] == "aborted"
+    assert [a["valid"] for a in pp.formal_attempts(root)] == [False]
+    stub = sdir(root, "stub")                       # a hard kill leaves the running stub and the plan
+    stub.mkdir()
+    (stub / "plan.json").write_text(json.dumps(plan))
+    (stub / "session.json").write_text(json.dumps({"stage": "E1P", "mode": "formal", "status": "running",
+                                                   "started_at": "z"}))
+    assert [a["valid"] for a in pp.formal_attempts(root)] == [False, False]
+    with pytest.raises(r1p.RunError, match="already exist"):           # one void attempt and one rerun, no more
+        session(root, plan, mode="formal", sid="c")
+    with pytest.raises(an.AnalysisError, match="no valid"):
+        an.first_valid_session(root)
+    other = tmp_path / "other" / "results" / "stage_e"
+    (other / "x").mkdir(parents=True)
+    (other / "x" / "plan.json").write_text(json.dumps(plan))
+    (other / "x" / "session.json").write_text("{torn")                  # unreadable: void (fail closed)
+    (other / "y").mkdir()
+    (other / "y" / "plan.json").write_text(json.dumps(plan))           # a plan saved alone ran nothing
+    assert [a["valid"] for a in pp.formal_attempts(tmp_path / "other")] == [False]
+
+
+@pytest.mark.parametrize("how, why", [("no_P", "F is not computable"), ("dup_span", "duplicate")])
+def test_a_main_request_without_f_or_a_duplicated_span_invalidates_its_bench(tmp_path, how, why):
+    s, root, _ = smoke(tmp_path, world=World(tmp_path / "w", behave={"b1-n2": how}))
+    r = rows_of(root, "smoke-e1p")[1]
+    assert r["ok"] is False and r["f_computable"] is False and any(why in x for x in r["reasons"])
+    assert s["smoke"]["checks"]["f_computable"] is False
+
+
+def test_a_halt_after_a_bench_or_during_the_teardown_is_still_a_stop(tmp_path):
+    root, plan = formal_setup(tmp_path)
+    s, _ = session(root, plan, mode="formal", world=World(tmp_path / "w1", behave={"b1-n2": "hot_after"}), sid="f1")
+    rows = {r["tag"]: r for r in rows_of(root, "f1")}
+    assert s["stopped"]["rule"] == "temperature" and rows["b1-n2"]["ok"] is False
+    assert any("no 031 spill reading" in x for x in rows["b1-n2"]["reasons"]) and rows["b1-n3"]["not_run"] is True
+    root2, plan2 = formal_setup(tmp_path / "two")
+    s, _ = session(root2, plan2, mode="formal", world=World(tmp_path / "w2", hot_at_teardown=True), sid="f")
+    assert s["stopped"]["rule"] == "temperature" and "teardown of b1" in s["stopped"]["reason"]
+    assert all(r["ok"] for r in rows_of(root2, "f")) and len(rows_of(root2, "f")) == 4
 
 
 def test_two_void_attempts_end_the_formal_runs(tmp_path):
@@ -640,6 +785,11 @@ def test_the_analysis_reads_the_first_valid_formal_session(tmp_path):
     assert an.session_problems(path, pins=PINS, cfg=frozen(), root=root, pins_sha256="p" * 64) == []
     assert any("pins_sha256" in p for p in an.session_problems(path, pins=PINS, cfg=frozen(), root=root,
                                                                 pins_sha256="q" * 64))
+    saved = json.loads((path / "session.json").read_text())
+    (path / "session.json").write_text(json.dumps({**saved, "pins_sha256": "q" * 64}))   # the session's own record
+    assert any("pins_sha256" in p for p in an.session_problems(path, pins=PINS, cfg=frozen(), root=root,
+                                                                pins_sha256="p" * 64))
+    (path / "session.json").write_text(json.dumps(saved))
     out = an.analyze(path, frozen(), E1CFG)
     assert json.loads(json.dumps(out)) == out                         # no int keys turn into strings
     assert out["reading"]["row"] == "content_locked" and out["reading"]["J"] == 0.0 and "note" not in out["reading"]
@@ -668,8 +818,19 @@ def test_a_session_stopped_with_too_few_valid_benches_says_so(tmp_path):
     d = out["data"]
     assert d["stopped"]["rule"] == "failed_boots" and d["valid"] == {"A": 4, "B": 0} and d["planned"]["B"] == 12
     assert d["insufficient_data"] is True and d["incomplete_session"] is True
-    assert [x["tag"] for x in d["excluded"]["B"]][:2] == ["b1-n2", "b1-n3"] and len(d["excluded"]["B"]) == 4
+    assert [x["tag"] for x in d["excluded"]["B"]][:2] == ["b1-n2", "b1-n3"] and len(d["excluded"]["B"]) == 12
+    never = [x for x in d["excluded"]["A"] if x["reasons"][0].startswith("its boot never started")]
+    assert len(d["excluded"]["A"]) == len(never) == 8 and "2 failed boots" in never[0]["reasons"][0]
     assert out["reading"]["row"] == "few_spikes" and "too little data" in out["reading"]["note"]
+
+
+def test_insufficient_data_means_fewer_valid_benches_than_repeat_min():
+    plan = {"boots": [{"benches": [{"tag": f"t{i}", "seed_label": "AB"[i % 2]} for i in range(24)]}]}
+    rows = [{"tag": f"t{i}", "seed_label": "AB"[i % 2], "ok": i % 2 == 1 or i < 6, "reasons": []} for i in range(24)]
+    d = an.data_summary({"stopped": None, "outcomes": {}}, plan, rows, CFG)
+    assert d["valid"] == {"A": 3, "B": 12} and d["insufficient_data"] is False and d["incomplete_session"] is True
+    rows[4]["ok"] = False
+    assert an.data_summary({"stopped": None}, plan, rows, CFG)["insufficient_data"] is True
 
 
 def test_first_valid_session_allows_one_void_attempt_only(tmp_path):

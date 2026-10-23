@@ -39,6 +39,7 @@ import hashlib
 import json
 import os
 import random
+import signal
 import sys
 import time
 import tomllib
@@ -363,6 +364,12 @@ def _read_json(path: Path):
         return None
 
 
+def refused_why(exc: BaseException) -> str:
+    """Why a run that ended before its first job's process is refused (040 #39): interrupted or failed, and how."""
+    how = "interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed"
+    return f"{how} before the first job: {type(exc).__name__}: {exc}"
+
+
 def formal_attempts(repo_root, platform: str) -> list:
     """Every formal E3 attempt of the platform under results/stage_e, oldest first: a directory whose session.json
     (final or the running stub) or, when that is unreadable, plan.json is a formal E3 one for the platform; runs refused
@@ -482,7 +489,7 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
         tmp.write_text(json.dumps(session, indent=1) + "\n")
         os.replace(tmp, out / "session.json")
 
-    write_session()                                         # the stub: an interrupted run is still an attempt
+    write_session()                                         # the stub: once work started, an interrupt is an attempt
     try:                                    # before the first job nothing ran: any end here is refused
         (out / "plan.json").write_text(json.dumps(plan, indent=1) + "\n")
         bin_dir, models_dir = str(bin_dir), str(models_dir)
@@ -514,7 +521,7 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
                 charge_pauses.append({"job_id": None, **pause})
     except BaseException as exc:
         if session["status"] != "refused":
-            session.update(status="refused", refused=[f"interrupted before the first job: {type(exc).__name__}: {exc}"])
+            session.update(status="refused", refused=[refused_why(exc)])
             write_session()
         raise
     t0, paused, cap_reached = clock(), 0.0, False
@@ -530,54 +537,67 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
         fh.write(json.dumps(row) + "\n")
         fh.flush()
 
-    with open(out / "rows.jsonl", "w") as fh:
-        for i, job in enumerate(plan["jobs"]):
-            jid, end = job["id"], job.get("position") == "end"
-            base = {"job_id": jid, "kind": job["kind"], "position": job.get("position"), "size": job["size"],
-                    "quant": job["quant"], "L": job["L"], "rep": job["rep"], "model": job["model"]}
-            if not (cap_reached and not end):
-                if i:
-                    sleep(params["idle_s"])
-                if mac:
-                    pause = charge_gate(read_power, sleep)
-                    if pause:
-                        charge_pauses.append({"job_id": jid, **pause})
-                        paused += pause["waited_s"]
-                elapsed = clock() - t0 - paused             # measurement time: charge pauses do not count
-                cap_reached = cap_reached or (not end and elapsed > plan["cap_s"])
-            if cap_reached and not end:                     # the end sentinel always runs: the drift is measured
-                row = {**base, "outcome": "skipped", "reason": f"time cap {plan['cap_s']:.0f} s reached (041 v3 §3.6)"}
+    started = []                            # 040 #39 / 041: refused until the first job's process starts
+
+    def run_job(*a):
+        started.append(True)
+        return run_proc(*a)
+
+    try:
+        with open(out / "rows.jsonl", "w") as fh:
+            for i, job in enumerate(plan["jobs"]):
+                jid, end = job["id"], job.get("position") == "end"
+                base = {"job_id": jid, "kind": job["kind"], "position": job.get("position"), "size": job["size"],
+                        "quant": job["quant"], "L": job["L"], "rep": job["rep"], "model": job["model"]}
+                if not (cap_reached and not end):
+                    if i:
+                        sleep(params["idle_s"])
+                    if mac:
+                        pause = charge_gate(read_power, sleep)
+                        if pause:
+                            charge_pauses.append({"job_id": jid, **pause})
+                            paused += pause["waited_s"]
+                    elapsed = clock() - t0 - paused             # measurement time: charge pauses do not count
+                    cap_reached = cap_reached or (not end and elapsed > plan["cap_s"])
+                if cap_reached and not end:                     # the end sentinel always runs: the drift is measured
+                    row = {**base, "outcome": "skipped",
+                           "reason": f"time cap {plan['cap_s']:.0f} s reached (041 v3 §3.6)"}
+                    rows.append(row)
+                    emit(fh, row)
+                    continue
+                job_timeout = timeout_s if end else min(timeout_s, max(plan["cap_s"] - elapsed, 0) + CAP_MARGIN_S)
+                argv = [a.replace("{bin}", bin_dir).replace("{models}", models_dir) for a in job["argv"]]
+                rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
+                       "env_before": f"{env_dir}/{jid}.before.json", "env_after": f"{env_dir}/{jid}.after.json"}
+                env_before = capture_env(llama_bin=llama_bin, out_path=out / rel["env_before"], gpu_lock_held=not mac)
+                code, wall = run_job(argv, out / rel["stdout"], out / rel["stderr"], job_timeout)
+                env_after = capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=not mac)
+                for phase, rec in (("before", env_before), ("after", env_after)):
+                    why = platform_problems(rec, platform)
+                    if formal:
+                        why += provenance_problems(rec, pre)
+                    if mac and ((rec.get("power") or {}).get("powermode")) != powermode:
+                        got = (rec.get("power") or {}).get("powermode")
+                        why.append(f"powermode {got!r} != preflight {powermode!r} (one powermode per session, §4)")
+                    env_flags.extend({"job_id": jid, "phase": phase, "reason": w} for w in why)
+                stdout = (out / rel["stdout"]).read_text(errors="replace")
+                result = cap.classify_bench(code, stdout, (out / rel["stderr"]).read_text(errors="replace"),
+                                            {**bench_expect, **job["expect"]})
+                if result["outcome"] == "ok":
+                    wrong = identity_problems(stdout, job, plan["files"])
+                    if wrong:
+                        result = {**result, "outcome": "error", "stage": "identity", "reason": "; ".join(wrong)}
+                row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, "timeout_s": job_timeout,
+                       "outcome": result["outcome"], "stage": result["stage"], "reason": result["reason"],
+                       "evidence": result["evidence"], "metrics": result.get("metrics"),
+                       "summary": result.get("summary"), **rel}
                 rows.append(row)
                 emit(fh, row)
-                continue
-            job_timeout = timeout_s if end else min(timeout_s, max(plan["cap_s"] - elapsed, 0) + CAP_MARGIN_S)
-            argv = [a.replace("{bin}", bin_dir).replace("{models}", models_dir) for a in job["argv"]]
-            rel = {"stdout": f"raw/{jid}.stdout.txt", "stderr": f"raw/{jid}.stderr.txt",
-                   "env_before": f"{env_dir}/{jid}.before.json", "env_after": f"{env_dir}/{jid}.after.json"}
-            env_before = capture_env(llama_bin=llama_bin, out_path=out / rel["env_before"], gpu_lock_held=not mac)
-            code, wall = run_proc(argv, out / rel["stdout"], out / rel["stderr"], job_timeout)
-            env_after = capture_env(llama_bin=llama_bin, out_path=out / rel["env_after"], gpu_lock_held=not mac)
-            for phase, rec in (("before", env_before), ("after", env_after)):
-                why = platform_problems(rec, platform)
-                if formal:
-                    why += provenance_problems(rec, pre)
-                if mac and ((rec.get("power") or {}).get("powermode")) != powermode:
-                    why.append(f"powermode {(rec.get('power') or {}).get('powermode')!r} != preflight {powermode!r} "
-                               "(one powermode per session, §4)")
-                env_flags.extend({"job_id": jid, "phase": phase, "reason": w} for w in why)
-            stdout = (out / rel["stdout"]).read_text(errors="replace")
-            result = cap.classify_bench(code, stdout, (out / rel["stderr"]).read_text(errors="replace"),
-                                        {**bench_expect, **job["expect"]})
-            if result["outcome"] == "ok":
-                wrong = identity_problems(stdout, job, plan["files"])
-                if wrong:
-                    result = {**result, "outcome": "error", "stage": "identity", "reason": "; ".join(wrong)}
-            row = {**base, "argv": argv, "exit_code": code, "wall_s": wall, "timeout_s": job_timeout,
-                   "outcome": result["outcome"], "stage": result["stage"], "reason": result["reason"],
-                   "evidence": result["evidence"], "metrics": result.get("metrics"), "summary": result.get("summary"),
-                   **rel}
-            rows.append(row)
-            emit(fh, row)
+    except BaseException as exc:
+        if not started:
+            session.update(status="refused", refused=[refused_why(exc)])
+            write_session()
+        raise
     if full is not None:
         full.close()
     outcomes = {"ok": 0, "oom": 0, "error": 0, "skipped": 0}
@@ -596,6 +616,10 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
 
 
 # ---------------------------------------------------------------- CLI
+
+def _exit_on_signal(signum, frame):
+    raise SystemExit(128 + signum)  # as coreb_smoke: SIGHUP / SIGTERM run the run's except / finally blocks
+
 
 def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -630,11 +654,17 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
             measure_b = lambda frozen: stage_b.measure_baseline(  # noqa: E731
                 query=stage_b.nvidia_query, compute_apps=stage_b.nvidia_compute_apps, sleep=time.sleep,
                 frozen_b_mib=frozen)
-        s = run_e3(plan, bin_dir=Path(args.bin).resolve(), models_dir=Path(args.models).resolve(), out_dir=args.out,
-                   capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"), session_id=Path(args.out).name,
-                   lock_held=(os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1") if platform == "macos-metal"
-                   else args.gpu_lock_held, pins=pins, cfg=cfg, measure_b=measure_b,
-                   expected_plan=plan_for(platform, plan.get("mode")))
+        previous = {sig: signal.signal(sig, _exit_on_signal) for sig in (signal.SIGHUP, signal.SIGTERM)}
+        try:
+            s = run_e3(plan, bin_dir=Path(args.bin).resolve(), models_dir=Path(args.models).resolve(),
+                       out_dir=args.out, capture_env=make_env_capture(ROOT / "scripts" / "env_capture.py"),
+                       session_id=Path(args.out).name,
+                       lock_held=(os.environ.get("LLM_SERVING_LAB_MAC_LOCK_HELD") == "1") if platform == "macos-metal"
+                       else args.gpu_lock_held, pins=pins, cfg=cfg, measure_b=measure_b,
+                       expected_plan=plan_for(platform, plan.get("mode")))
+        finally:
+            for sig, handler in previous.items():
+                signal.signal(sig, handler)
     except StageE3Error as exc:
         print(f"stage_e3: {exc}", file=sys.stderr)
         return 2

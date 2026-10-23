@@ -166,7 +166,7 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
     - `harness_sha256` 也涵蓋 `run_quality`、`quality_parse` 與 `disk_guard`（沒有 guard test 鎖住它們）。
 14. **只分析第一個正式 session**：同一部分若有多個正式 session，分析只接受最早開始的那一個；其他的需要另寫 decision log。這是為了不能事後挑選結果（例如 OOM 之後換設定重跑）。
     - 實作（修正後覆核，2026-10-23）：
-      - 正式 session 在主 checkout 執行（Phase 1 的 Mac session 曾在 `.worktrees/` 的固定 commit 執行；worktree 的 `results/stage_q/` 看不到其他嘗試，所以 Stage Q 不這樣做）。session 目錄只能是 `results/stage_q/<id>`（不可巢狀）。第一個 job 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），所以中斷的 session 也是一次嘗試；讀不到 `session.json` 時以 `plan.json` 判定，算作廢的嘗試；只有 `plan.json` 的目錄與在第一個 job 之前被拒絕的（status refused）不算。
+      - 正式 session 在主 checkout 執行（Phase 1 的 Mac session 曾在 `.worktrees/` 的固定 commit 執行；worktree 的 `results/stage_q/` 看不到其他嘗試，所以 Stage Q 不這樣做）。session 目錄只能是 `results/stage_q/<id>`（不可巢狀）。第一個 job 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），所以第一個 job 的程序啟動之後才中斷的 session 也是一次嘗試；讀不到 `session.json` 時以 `plan.json` 判定，算作廢的嘗試。只有 `plan.json` 的目錄不算；在第一個 job 的程序啟動之前結束的也不算：被拒絕、preflight 失敗或被中斷（含第一個 job 前的充電閘門與 env 擷取），一律記為 status refused（#39、#40）。Q3 的 031 閒置判定屬於它的 job（本條：閒置判定失敗時該 job 記為 error、session 作廢），所以第一個 job 的閒置判定被中斷或失敗時 session 照樣作廢。runner 收到 SIGHUP / SIGTERM 時轉成 SystemExit，上述紀錄與 Q3 scorer 的 process group 清理都會執行（#41）。
       - 有效 = 跑完而且 env 有效。env 無效（012）的 session 作廢，可用新 id 重跑一次；一個部分已有有效的正式 session，或已有兩次嘗試時，runner 拒絕開始。
       - 分析自己從 `results/stage_q` 找出每個部分的嘗試，取第一個有效的 session（之前最多一次作廢的嘗試），不再由 CLI 指定，所以不能省略已執行的部分。
       - 「另寫 decision log」的機制：取代者在**執行時**給 `--superseded <id>=docs/decisions/<log>.md`，runner 驗證後記進它自己的 `session.json`；log 必須已 commit、以 repo 內的相對路徑 `docs/decisions/<file>` 指定（兩台機器都要讀得到）、內文以完整的 token 同時寫出被取代與取代它的 session id（重跑的 id 常是原 id 加字，子字串不算）；被取代的必須是同一部分較早開始的正式嘗試，不能取代自己。分析沒有這個參數：哪些嘗試被取代，只從各 session 的紀錄推出，並再驗證一次 log，所以看過結果後不能再選；被取代的若是有效 session，之後必須有一個有效的正式 session 被分析（取代者本身作廢時，可依本條重跑一次），否則拒絕分析。這個決定放在所有被雜湊的檔案之外，不會讓 pilot 或正式 session 失效。
@@ -260,3 +260,13 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 | # | 發現 | 處理 |
 |---|---|---|
 | 39 | runner 先寫 `running` 的 stub 再做 preflight（env 擷取、輸入核對）；這段期間被中斷，session 會留在 `running`，被算成一次作廢的嘗試，但其實沒有任何工作執行過 | 補記 14：從 stub 到第一個工作之前的任何結束都記為 `refused`（不算嘗試）。Q1 / Q2（`quality/stage_q.py`）與 Q3（`quality/stage_q3.py`）都改；E2、E3 同樣修正（041 修訂紀錄） |
+
+#39 修正後的覆核（2026-10-23，pilot 之前）確認以下各項，全部處理：
+
+| # | 發現 | 處理 |
+|---|---|---|
+| 40 | Q1 / Q2 的 refused 範圍在 job 迴圈之前就結束，第一個 job 的充電閘門（最多等 4 h）與 env 擷取被中斷仍算一次嘗試 | 補記 14：refused 的邊界改在第一個 job 的程序啟動時（`run_job`）；E3 同樣處理 |
+| 41 | Stage Q、Q3（與 E3）沒有 SIGHUP / SIGTERM 的處理，被 `kill` 時 except / finally 都不執行；Q3 的 scorer 在另一個 session，runner 被殺後會繼續佔用 VRAM，而 GPU lock 已經釋放 | `run` 期間 SIGHUP / SIGTERM 轉成 SystemExit（同 coreb_smoke）；Q3 的 `default_run_proc` 在例外時殺掉整個 process group |
+| 42 | Q3 第一個 job 的閒置判定被中斷時留在 `running` | 不改程式：補記 14 規定閒置判定屬於 job，失敗即作廢；寫進本文 |
+| 43 | preflight 的任何例外都記成「interrupted」 | 中斷（KeyboardInterrupt / SystemExit）記為 interrupted，其他記為 failed，都附上例外 |
+| 44 | 本文與 stub 的註解仍寫「中斷的 session 一律是一次嘗試」 | 補記 14 本文與四個 runner 的註解改寫 |

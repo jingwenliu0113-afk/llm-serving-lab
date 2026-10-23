@@ -124,13 +124,23 @@ def data_summary(session: dict, plan: dict, rows: list, cfg: dict) -> dict:
     seed, the benches left out with their reasons, the valid ones without E1-D's quantities. insufficient_data: a seed
     with fewer valid benches than repeat_min can have no repeated position, so a few_spikes row then says too little
     data, not too few spikes."""
-    planned = collections.Counter(x["seed_label"] for boot in plan["boots"] for x in boot["benches"])
+    benches = [x for boot in plan["boots"] for x in boot["benches"]]
+    planned = collections.Counter(x["seed_label"] for x in benches)
     valid = collections.Counter(r["seed_label"] for r in rows if r.get("ok") and not r.get("not_run"))
+    by_tag = {r["tag"]: r for r in rows}
+    stop = (session.get("stopped") or {}).get("reason")
+
+    def why(x):                                     # a planned bench: its row's reasons, or the stop before its boot
+        r = by_tag.get(x["tag"])
+        if r is None:
+            return {"tag": x["tag"], "not_run": True, "reasons": [f"its boot never started: {stop}"]}
+        return {"tag": x["tag"], "not_run": bool(r.get("not_run")), "reasons": r.get("reasons")}
+
     out = {"stopped": session.get("stopped"), "outcomes": session.get("outcomes"),
            "planned": {x: planned[x] for x in ("A", "B")}, "valid": {x: valid[x] for x in ("A", "B")},
-           "excluded": {x: [{"tag": r["tag"], "not_run": bool(r.get("not_run")), "reasons": r.get("reasons")}
-                            for r in rows if r["seed_label"] == x and not (r.get("ok") and not r.get("not_run"))]
-                        for x in ("A", "B")},
+           "excluded": {lab: [why(x) for x in benches if x["seed_label"] == lab
+                              and not (by_tag.get(x["tag"], {}).get("ok") and not by_tag[x["tag"]].get("not_run"))]
+                        for lab in ("A", "B")},
            "without_e1": {x: [{"tag": r["tag"], "e1_error": r.get("e1_error")} for r in rows
                               if r["seed_label"] == x and r.get("ok") and not r.get("e1")] for x in ("A", "B")}}
     out["insufficient_data"] = any(out["valid"][x] < cfg["e1p"]["repeat_min"] for x in ("A", "B"))
