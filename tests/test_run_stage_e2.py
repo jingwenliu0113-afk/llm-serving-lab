@@ -413,3 +413,17 @@ def test_a_smoke_on_another_vllm_is_refused(tmp_path):
     with pytest.raises(re2.RunError, match="0.29.0"):
         session(root, ds, pins, cfg, e2.smoke_plan(pins, cfg), mode="smoke", capture_env=OldVllm())
     assert json.loads((root / "results" / "stage_e" / "s" / "session.json").read_text())["status"] == "refused"
+
+
+def test_an_abort_before_any_server_started_is_not_an_attempt(tmp_path):
+    root, ds, pins, cfg, plan = formal_setup(tmp_path)
+
+    class Busy(World):
+        def compute_apps(self):
+            return [{"pid": 9, "name": "other", "used_mib": 4000}]
+
+    with pytest.raises(re2.rc.RunError, match="gpu_not_idle"):                       # run_capacity's pre_boot
+        session(root, ds, pins, cfg, plan, mode="formal", sid="busy", world=Busy(tmp_path / "wb"))
+    saved = json.loads((root / "results" / "stage_e" / "busy" / "session.json").read_text())
+    assert saved["status"] == "refused" and saved["runs"] == {} and e2.formal_attempts(root) == []
+

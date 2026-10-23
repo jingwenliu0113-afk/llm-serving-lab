@@ -473,7 +473,8 @@ def run_session(plan: dict, *, pins: dict, cfg: dict, pins_sha256: str, out_dir,
             session["aborted"] = f"{type(exc).__name__}: {exc}"
             raise
         finally:
-            session.update({"status": "aborted" if "aborted" in session else "finished", "finished_at": clock(),
+            status = "finished" if "aborted" not in session else "aborted" if session["runs"] else "refused"
+            session.update({"status": status, "finished_at": clock(),            # refused: no server ever started
                             "env_flags": h.env_flags, "env_valid": not h.env_flags,
                             "outcomes": {"boots": len(rows), "valid": sum(r["valid"] for r in rows),
                                          "skipped": sum(bool(r.get("skipped")) for r in rows)}})

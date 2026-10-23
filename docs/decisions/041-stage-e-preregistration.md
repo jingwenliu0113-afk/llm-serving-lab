@@ -265,7 +265,7 @@
 - 閒置判定的上限：B0、T、K2.5 沿用 F_peak 15,157 MiB；T256 與 PC-on 由 smoke 量 bench 後的增量，超過 15,157 + 128 MiB 時，凍結前另寫 decision log 改用實測值。
 - 停止規則：不提前停止，也不依結果決定任何事；連續 3 次 boot 沒有就緒時停止（session 記 stopped，剩下的 boot 記為 skipped，該 session 作廢）；持有 lock 的上限 7.5 h（約預估的 1.75 倍），到上限時在 boot 之間停止，沒跑完的格為 NT。
 - 記憶體：每次 boot 在 bench 之後、teardown 之前量一次 nvidia-smi 的 memory.used，減去該 boot 閒置窗的 idle_mib，記為增量；量不到時記為 None 並記錄錯誤（描述量，不影響 Y 與 session；smoke 的記憶體條件因此不通過）。
-- 重跑（§0）：session 目錄只能是 `results/stage_e/<id>`；第一個 boot 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），中斷的 session 也是一次嘗試，讀不到時以 `plan.json` 判定為作廢的嘗試；在第一個 boot 之前被拒絕的（status refused）不算。已有一個有效的正式 session（finished、env 有效、沒有 stopped），或已有兩次嘗試時，runner 拒絕開始，分析也只接受「之前最多一次作廢嘗試」的第一個有效 session。plan 記錄的 `stage_e2_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊。
+- 重跑（§0）：session 目錄只能是 `results/stage_e/<id>`；第一個 boot 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），中斷的 session 也是一次嘗試，讀不到時以 `plan.json` 判定為作廢的嘗試；在第一個 boot 之前被拒絕的（status refused）不算，沒有啟動任何 server 就中止的（例如第一個 boot 前的閒置判定失敗）也記為 refused。正式 session 在主 checkout 的 `results/stage_e/` 下執行（worktree 看不到其他嘗試）。已有一個有效的正式 session（finished、env 有效、沒有 stopped），或已有兩次嘗試時，runner 拒絕開始，分析也只接受「之前最多一次作廢嘗試」的第一個有效 session。plan 記錄的 `stage_e2_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊。
 
 ### 2.10 E2 的凍結證據
 
@@ -350,7 +350,7 @@
 - 每次 session 前驗證 8 個 GGUF 的 sha256 與 header（token_embd 的 bytes 與類型、tie、`output.weight` 的類型、tensor 類型分布、model_size），任一不符就不開始；每列 llama-bench 結果的 model_filename、model_size、model_type 都要和 `configs/stage_e3.toml` 一致，不符的列記為 error。
 - RTX 的 B 在建立 session 目錄之前量；量不到時什麼都不開始。
 - sentinel 漂移 > 3% 或 env 無效：session 作廢，可重跑一次；只分析第一個有效的 session。具體規則：
-  - session 目錄只能是 `results/stage_e/<id>`（不可巢狀），第一個 job 之前先寫 `session.json`（status running；之後的覆寫是先寫暫存檔再 rename），所以中斷的 session 也是一次嘗試；`session.json` 讀不到時以 `plan.json` 判定，算一次作廢的嘗試（fail closed）。在第一個 job 之前就被拒絕的（status refused，例如 adapter 或 build 不符）不算。
+  - 正式 session 在主 checkout 執行（worktree 的 `results/stage_e/` 看不到其他嘗試）。session 目錄只能是 `results/stage_e/<id>`（不可巢狀），第一個 job 之前先寫 `session.json`（status running；之後的覆寫是先寫暫存檔再 rename），所以中斷的 session 也是一次嘗試；`session.json` 讀不到時以 `plan.json` 判定，算一次作廢的嘗試（fail closed）。在第一個 job 之前就被拒絕的（status refused，例如 adapter 或 build 不符）不算。
   - pilot 也只能執行 build_plan 的 pilot plan（mode 只有 pilot 與 formal，plan 與 harness 都要相符），所以完整設計不能標成 pilot 執行。
   - 只有 `plan.json`、沒有其他檔案的目錄不算嘗試（沒有任何 job 執行過）；`results/stage_e/` 本身不是 session。
   - plan 記錄的 `stage_e3_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊，所以一個平台先跑完正式 session、另一個平台之後才凍結，前者仍可分析；分析比對 plan 時不比 `pins_sha256`（pins 帶進 plan 的內容逐項比對）。

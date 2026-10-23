@@ -166,7 +166,7 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
     - `harness_sha256` 也涵蓋 `run_quality`、`quality_parse` 與 `disk_guard`（沒有 guard test 鎖住它們）。
 14. **只分析第一個正式 session**：同一部分若有多個正式 session，分析只接受最早開始的那一個；其他的需要另寫 decision log。這是為了不能事後挑選結果（例如 OOM 之後換設定重跑）。
     - 實作（修正後覆核，2026-10-23）：
-      - session 目錄只能是 `results/stage_q/<id>`（不可巢狀）。第一個 job 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），所以中斷的 session 也是一次嘗試；讀不到 `session.json` 時以 `plan.json` 判定，算作廢的嘗試；只有 `plan.json` 的目錄與在第一個 job 之前被拒絕的（status refused）不算。
+      - 正式 session 在主 checkout 執行（Phase 1 的 Mac session 曾在 `.worktrees/` 的固定 commit 執行；worktree 的 `results/stage_q/` 看不到其他嘗試，所以 Stage Q 不這樣做）。session 目錄只能是 `results/stage_q/<id>`（不可巢狀）。第一個 job 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），所以中斷的 session 也是一次嘗試；讀不到 `session.json` 時以 `plan.json` 判定，算作廢的嘗試；只有 `plan.json` 的目錄與在第一個 job 之前被拒絕的（status refused）不算。
       - 有效 = 跑完而且 env 有效。env 無效（012）的 session 作廢，可用新 id 重跑一次；一個部分已有有效的正式 session，或已有兩次嘗試時，runner 拒絕開始。
       - 分析自己從 `results/stage_q` 找出每個部分的嘗試，取第一個有效的 session（之前最多一次作廢的嘗試），不再由 CLI 指定，所以不能省略已執行的部分。
       - 「另寫 decision log」的機制：取代者在**執行時**給 `--superseded <id>=docs/decisions/<log>.md`，runner 驗證後記進它自己的 `session.json`；log 必須已 commit、在 `docs/decisions/` 之下、內文以完整的 token 同時寫出被取代與取代它的 session id（重跑的 id 常是原 id 加字，子字串不算）。分析沒有這個參數：哪些嘗試被取代，只從各 session 的紀錄推出，並再驗證一次 log，所以看過結果後不能再選；被取代的若是有效 session，取代它的必須也是有效 session，否則拒絕分析。這個決定放在所有被雜湊的檔案之外，不會讓 pilot 或正式 session 失效。
