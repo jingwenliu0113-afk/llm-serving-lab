@@ -247,13 +247,30 @@ def session_problems(path, *, pins: dict, cfg: dict, root=ROOT) -> list:
     return problems
 
 
+def out_problems(out, root=ROOT) -> list:
+    """--out is a file in a new session directory results/stage_e/<id>/ (041 v3 §0: no existing session is changed)."""
+    out = Path(out).resolve()
+    if out.parent.parent != Path(root).resolve().joinpath(*e3.RESULTS):
+        return [f"{out} is not results/stage_e/<new session>/<file>"]
+    return [f"{out.parent} already exists (a new session directory only)"] if out.parent.exists() else []
+
+
+def input_sha256(sessions: list) -> dict:
+    return {f"{Path(s).name}/{n}": e3.file_sha256(Path(s) / n) for s in sessions
+            for n in ("session.json", "plan.json", "rows.jsonl")}
+
+
 def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--session", action="append", required=True, help="results/stage_e/<formal E3 session>")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
-    raw, cfg_raw = (ROOT / "configs" / "pins.toml").read_bytes(), e3.CONFIG.read_bytes()
-    pins, cfg = tomllib.loads(raw.decode()), tomllib.loads(cfg_raw.decode())
+    problems = out_problems(args.out)
+    if problems:
+        print("stage_e3_analysis: --out " + "; ".join(problems), file=sys.stderr)
+        return 2
+    pins = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
+    cfg = tomllib.loads(e3.CONFIG.read_text())
     by_platform = {}
     for sess in map(Path, args.session):
         problems = session_problems(sess, pins=pins, cfg=cfg)
@@ -272,7 +289,9 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
         by_platform[s["platform"]] = {"session": sess.name, **analyze(rows, plan["files"], platform=s["platform"],
                                                                       n_params=plan["n_params"], spill_params=params)}
     result = {"by_platform": by_platform, "cross_platform": combine(by_platform.get("macos-metal"),
-                                                                    by_platform.get("wsl2-cuda"))}
+                                                                    by_platform.get("wsl2-cuda")),
+              "harness_sha256": e3.harness_sha256(), "inputs_sha256": input_sha256(args.session)}
+    Path(args.out).parent.mkdir(parents=True)
     Path(args.out).write_text(json.dumps(result, indent=1, default=str) + "\n")
     print(json.dumps({p: a["row"] for p, a in by_platform.items()}))
     return 0

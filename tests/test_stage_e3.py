@@ -221,12 +221,36 @@ def test_a_pilot_runs_the_two_q4_0s_and_the_sentinel_cell_once():
         e3.build_plan(PINS, UNPINNED, platform="macos-metal", mode="pilot")             # new GGUFs not pinned
 
 
-def test_formal_plans_need_their_platforms_freeze_and_pilot(frozen_root, tmp_path):
+def test_formal_plans_need_both_platforms_frozen_and_both_pilots(frozen_root, tmp_path):
     with pytest.raises(e3.StageE3Error, match="freeze.e3_cuda"):
-        e3.build_plan(PINS, pinned(("macos-metal",)), platform="wsl2-cuda", mode="formal", root=frozen_root)
-    assert e3.build_plan(PINS, pinned(("wsl2-cuda",)), platform="wsl2-cuda", mode="formal", root=frozen_root)
-    with pytest.raises(e3.StageE3Error, match="pilot first"):
-        e3.build_plan(PINS, pinned(("wsl2-cuda",)), platform="wsl2-cuda", mode="formal", root=tmp_path)
+        e3.build_plan(PINS, pinned(("macos-metal",)), platform="macos-metal", mode="formal", root=frozen_root)
+    with pytest.raises(e3.StageE3Error, match="freeze.e3_metal"):                  # the shared harness (041 §3.7)
+        e3.build_plan(PINS, pinned(("wsl2-cuda",)), platform="wsl2-cuda", mode="formal", root=frozen_root)
+    assert e3.build_plan(PINS, pinned(e3.PLATFORMS), platform="wsl2-cuda", mode="formal", root=frozen_root)
+    root = tmp_path / "rtx-only"
+    pilots(root, ("wsl2-cuda",))
+    with pytest.raises(e3.StageE3Error, match="pilots first.*pilot_e3_metal"):
+        e3.build_plan(PINS, pinned(e3.PLATFORMS), platform="wsl2-cuda", mode="formal", root=root)
+
+
+def test_a_pilot_commits_no_speed(tmp_path):
+    plan = e3.build_plan(PINS, pinned(), platform="wsl2-cuda", mode="pilot")
+    s = run(tmp_path, plan, "p")
+    out = tmp_path / "results" / "stage_e" / "p"
+    rows = [json.loads(x) for x in (out / "rows.jsonl").read_text().splitlines()]
+    assert all(set(r) <= set(e3.PILOT_ROW_KEYS) for r in rows) and [r["outcome"] for r in rows] == ["ok"] * 5
+    full = [json.loads(x) for x in (out / "raw" / "rows.full.jsonl").read_text().splitlines()]
+    assert all(r["metrics"]["avg_ts"] for r in full)                                 # git-ignored raw/ only
+    assert "start_tok_s" not in s["sentinel"] and s["sentinel"]["drift"] is False
+    for f in (out / "rows.jsonl", out / "session.json"):
+        text = f.read_text()
+        assert "avg_ts" not in text and "wall_s" not in text and "tok_s" not in text, f
+
+
+def test_plans_are_never_written_into_results_stage_e(tmp_path):
+    out = ROOT / "results" / "stage_e" / "plan-test-should-not-exist.json"
+    assert e3.main(["plan", "--platform", "wsl2-cuda", "--mode", "pilot", "--out", str(out)]) == 2
+    assert not out.exists()
 
 
 def _tamper(root, sid, **over):

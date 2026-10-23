@@ -12,7 +12,7 @@
 | `freeze.e1` | E1-D（桌面分析） | 分析模組、合成 fixture 的測試與取回清單一起 commit；在取回任何 raw 之前完成 |
 | `freeze.e1p` | E1-P（換 seed 探針） | 一次通過的 smoke，`harness_sha256` 相同 |
 | `freeze.e2` | E2 | 一次通過的 smoke，加上 WSL 原始碼核對紀錄 |
-| `freeze.e3_cuda`、`freeze.e3_metal` | E3 的兩個平台 | 各一次通過的 pilot |
+| `freeze.e3_cuda`、`freeze.e3_metal` | E3 的兩個平台 | 各一次通過的 pilot；兩個平台共用 harness 與 `[e3]`，任一平台的正式 plan 都要兩個旗標與兩個 pilot（3.7） |
 
 - 凍結前，正式 plan 一律拒絕（040 補記 13）。`pins.toml` 與 `capacity.toml` 不寫入。
 - 每個部分一個設定檔（和 Stage Q3 相同）：一個部分改設定時，不會讓另一個部分的凍結證據失效。
@@ -22,7 +22,7 @@
   - 「H-C0 失敗」（現象不存在）與「NT」（數據不足）分開記錄。
 - 有效性：無效的 run 不補跑；格子少於 3 次有效 restart 時為 NT（013）。env 無效或 sentinel 漂移的 session 整個作廢，可用新 id 重跑一次；只分析第一個有效的正式 session（040 補記 14）。
 - 判定只用同一 session 的數字（024:75、:450；037 §4）。跨 session 的數字只用於設計、揭露與描述。
-- 輸出在 `results/stage_e/<session>/`，不改任何既有 session。GPU 工作排在 Stage D 的正式 session 之後（037 §5），一律 `flock -n`，不搶占。
+- 輸出在 `results/stage_e/<session>/`，不改任何既有 session：各部分的分析都寫到新的 session 目錄，並記錄輸入檔的 sha256；plan 檔不寫進 `results/stage_e/`。GPU 工作排在 Stage D 的正式 session 之後（037 §5），一律 `flock -n`，不搶占。
 
 ## 1. E1：8K 滑移的觸發點與雙模式（探索性）
 
@@ -352,6 +352,7 @@
 - sentinel 漂移 > 3% 或 env 無效：session 作廢，可重跑一次；只分析第一個有效的 session。具體規則：
   - session 目錄只能是 `results/stage_e/<id>`（不可巢狀），第一個 job 之前先寫 `session.json`（status running；之後的覆寫是先寫暫存檔再 rename），所以中斷的 session 也是一次嘗試；`session.json` 讀不到時以 `plan.json` 判定，算一次作廢的嘗試（fail closed）。在第一個 job 之前就被拒絕的（status refused，例如 adapter 或 build 不符）不算。
   - pilot 也只能執行 build_plan 的 pilot plan（mode 只有 pilot 與 formal，plan 與 harness 都要相符），所以完整設計不能標成 pilot 執行。
+  - 只有 `plan.json`、沒有其他檔案的目錄不算嘗試（沒有任何 job 執行過）；`results/stage_e/` 本身不是 session。
   - plan 記錄的 `stage_e3_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊，所以一個平台先跑完正式 session、另一個平台之後才凍結，前者仍可分析；分析比對 plan 時不比 `pins_sha256`（pins 帶進 plan 的內容逐項比對）。
   - 同一平台已有一個有效的正式 session，或已有兩次嘗試時，runner 拒絕再開始；分析也拒絕「之前有兩次以上嘗試，或之前已有有效 session」的 session。
 - 任一格少於 3 個 ok 的 process 或有 spill：依賴該格的 hypothesis 為 NT（H-E3a 需要 6 個舊設定；H-E3b 需要 6 個舊設定（全域擬合與 κ）加兩個 size 的 Q4_0）。不改設定重試。
@@ -359,7 +360,7 @@
 
 ### 3.7 凍結證據
 
-每個平台一次 pilot：兩個 Q4_0 加 4B-Q4_K_M，L 2048，各 1 次，加 sentinel；結果遮蔽。通過條件（`stage_e3.pilot_problems`）：session 跑完；每個 job ok（含每列的模型身分）；8 個 GGUF 的 sha256 與 header 都相符；env 有效（Mac 為 Apple 140W 並記錄協商瓦數；RTX 已量 B 且沒有 drift）；plan 是 build_plan 在此設定下的 pilot plan（含上限與參數數）；記錄的 `harness_sha256` 等於目前的 harness。
+每個平台一次 pilot：兩個 Q4_0 加 4B-Q4_K_M，L 2048，各 1 次，加 sentinel；結果遮蔽（commit 的 rows.jsonl 只留 job 的身分與結果，完整的列在 git-ignored 的 `raw/rows.full.jsonl`；session.json 的 sentinel 只留漂移）。兩個平台共用 harness 與 `[e3]`，所以任一平台的正式 plan 都要兩個 freeze 旗標都是 true、兩個 pilot 都通過：先跑完的平台不會因為另一個平台的 pilot 逼出的 harness 修正而無法分析、也無法重跑。通過條件（`stage_e3.pilot_problems`）：session 跑完；每個 job ok（含每列的模型身分）；8 個 GGUF 的 sha256 與 header 都相符；env 有效（Mac 為 Apple 140W 並記錄協商瓦數；RTX 已量 B 且沒有 drift）；plan 是 build_plan 在此設定下的 pilot plan（含上限與參數數）；記錄的 `harness_sha256` 等於目前的 harness。
 
 ## 4. 時數
 
@@ -466,3 +467,11 @@
   - R、Λ、L̄q 沒有計算，R3 的子標籤只看 preemption；描述量大多沒有報 → 實作並定義計算方式（2.2、2.7）。
   - incomplete 把 H-C0 失敗當成 NT，也沒有照「NT 能否改變主列」判斷；β_ok 為 NT 時被讀成不成立；H-E2k 在 ρ_8 ≤ 0 時仍判定；H-E2-0 沒有三值判定；T256 的「只適用於 T512」附註沒有加 → 全部依 2.6、2.7 修正。
   - smoke 的延遲遮蔽不足 → 補上（2.10）。
+
+### E3 與 E2 的修正後覆核（2026-10-23，pilot 之前）
+
+- E3（確認 4 項，1 項 must-fix）：
+  - must-fix：兩個平台各自凍結，但 harness 與 `[e3]` 是共用的；先跑完正式 session 的平台，會因另一個平台的 pilot 逼出的 harness 修正而無法分析、也無法重跑 → 任一平台的正式 plan 都要兩個旗標與兩個 pilot（3.7、§0 的表）。
+  - pilot 把兩個 Q4_0 的 tok/s 寫進會 commit 的 rows.jsonl → pilot 的 rows.jsonl 只留身分與結果（3.7）。
+  - 存在 `results/stage_e/` 的 plan 檔會被算成作廢的嘗試 → 只有 plan.json 的目錄不算，plan 指令拒絕寫進 `results/stage_e/`。
+  - 分析的 `--out` 可以覆寫既有 session → 只接受新的 session 目錄，並記錄輸入的 sha256；E2 的分析同樣改為寫到新的 session 目錄（§0）。

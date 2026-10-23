@@ -311,9 +311,12 @@ def formal_attempts(root=ROOT) -> list:
     plan.json is a formal E2 one; runs refused before their first boot are left out. valid = finished, env valid and
     not stopped (three boots never ready); an unreadable session.json is a void attempt, oldest (fail closed)."""
     out = []
-    dirs = {f.parent for name in ("session.json", "plan.json") for f in Path(root).joinpath(*RESULTS).rglob(name)}
+    base = Path(root).joinpath(*RESULTS)
+    dirs = {f.parent for name in ("session.json", "plan.json") for f in base.rglob(name)} - {base}
     for d in sorted(dirs):
         s = _read_json(d / "session.json")
+        if not isinstance(s, dict) and not any(x.name != "plan.json" for x in d.iterdir()):
+            continue                                        # a saved plan alone: nothing ran here
         head = s if isinstance(s, dict) else _read_json(d / "plan.json")
         if not isinstance(head, dict) or (head.get("stage"), head.get("mode")) != (STAGE, "formal"):
             continue
@@ -396,7 +399,12 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     except PlanError as exc:
         print(f"stage_e2_plan: {exc}", file=sys.stderr)
         return 2
-    Path(args.out).write_text(json.dumps(plan, indent=1) + "\n")
+    out = Path(args.out).resolve()
+    if ROOT.joinpath(*RESULTS).resolve() in (out, *out.parents):
+        print("stage_e2_plan: write plans outside results/stage_e (a session directory is the runner's)",
+              file=sys.stderr)
+        return 2
+    out.write_text(json.dumps(plan, indent=1) + "\n")
     print(json.dumps({"boots": len(plan["boots"]), "mode": plan["mode"]}))
     return 0
 

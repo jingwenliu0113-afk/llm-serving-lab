@@ -8,9 +8,11 @@ with every comparison inside it.
   and the sentinel cell once.
 - configs/stage_e3.toml freezes each platform on its own (freeze.e3_metal / e3_cuda) with its passed pilot (mode
   pilot, finished, its platform's host, build_plan's pilot plan, every job ok, env valid with the Mac's 140W adapter
-  and its watts or the RTX's undrifted B, all eight GGUFs' sha256 and headers verified, this harness); a formal plan
-  needs its own platform's freeze and pilot. A plan records stage_e3_sha256 = the config's content without [freeze],
-  so freezing the other platform later changes no plan.
+  and its watts or the RTX's undrifted B, all eight GGUFs' sha256 and headers verified, this harness). The two
+  platforms share the harness and [e3], so a formal plan on either needs both freezes and both pilots (041 v3 §3.7):
+  no platform's formal session can be stranded by a harness fix the other platform's pilot forces. A plan records
+  stage_e3_sha256 = the config's content without [freeze]. A pilot commits no speed: its full rows go to
+  raw/rows.full.jsonl (git-ignored), rows.jsonl keeps the job identity and outcome only.
 - The runner: the Mac under the Mac heavy lock (owner verified) with 037 §4's rules (the Apple 140W adapter, one
   powermode, AC, battery, thermal; run_core_a's 70 W rule does not apply to Phase 3), the RTX under the GPU lock
   (verified) with the session-start B (stage_b.measure_baseline, before the session directory exists). Before the
@@ -71,6 +73,7 @@ MAC_ADAPTER_REQUIRED = {"manufacturer": "Apple Inc.", "name": "140W USB-C Power 
 MAC_LOCK_DIR = "/tmp/ai-portfolio-mac-heavy.lock"
 CONFIG_KEYS = {"schema_version": None, "freeze": {"e3_metal", "e3_cuda", "pilot_e3_metal", "pilot_e3_cuda"},
                "e3": {"seed", "L", "reps", "sentinel", "sentinel_drift_max", "cap_hours", "n_params", "files"}}
+PILOT_ROW_KEYS = ("job_id", "kind", "position", "size", "quant", "L", "rep", "model", "outcome", "stage", "reason")
 HEADER_KEYS = ("token_embd_bytes", "token_embd_type", "tied", "output_type", "tensor_types", "model_size")
 FILE_KEYS = {"filename", "model_type", *HEADER_KEYS}                  # an old config (sha256 / size from pins)
 NEW_FILE_KEYS = FILE_KEYS | {"sha256", "size_bytes"}
@@ -186,20 +189,21 @@ def config_sha256(cfg: dict) -> str:
 
 def build_plan(pins: dict, cfg: dict, *, platform: str, mode: str, pins_sha256: str | None = None,
                root=ROOT) -> dict:
-    """Pilot plans need the new GGUFs pinned; formal plans also need the platform's freeze and its passed pilot under
-    root."""
+    """Pilot plans need the new GGUFs pinned; formal plans also need both platforms' freezes and passed pilots under
+    root (041 v3 §3.7)."""
     if platform not in PLATFORMS or mode not in ("pilot", "formal"):
         raise StageE3Error(f"unknown platform / mode {platform!r} / {mode!r}")
     problems = config_problems(cfg) + new_file_problems(cfg)
     if problems:
         raise StageE3Error("configs/stage_e3.toml: " + "; ".join(dict.fromkeys(problems)))
-    key = FREEZE_KEYS[platform]
     if mode == "formal":
-        if cfg["freeze"][key] is not True:
-            raise StageE3Error(f"formal E3 plans on {platform} need freeze.{key} = true (041 凍結)")
-        evidence = freeze_evidence_problems(cfg, root, pins, platforms=(platform,))
+        unfrozen = [f"freeze.{k}" for k in FREEZE_KEYS.values() if cfg["freeze"][k] is not True]
+        if unfrozen:
+            raise StageE3Error(f"formal E3 plans need {' and '.join(unfrozen)} = true: both platforms freeze before "
+                               "either runs formally (041 v3 §3.7)")
+        evidence = freeze_evidence_problems(cfg, root, pins)
         if evidence:
-            raise StageE3Error(f"formal E3 plans need the {platform} pilot first: " + "; ".join(evidence))
+            raise StageE3Error("formal E3 plans need both platforms' pilots first: " + "; ".join(evidence))
     e, files = cfg["e3"], config_files(pins, cfg)
     n_thr, poll, frozen_b = _params(pins, platform)
     L, s = e["L"], e["sentinel"]
@@ -364,10 +368,12 @@ def formal_attempts(repo_root, platform: str) -> list:
     before their first job are left out. valid = finished, env valid and no sentinel drift; an unreadable
     session.json counts as a void attempt, oldest (fail closed)."""
     out = []
-    dirs = {f.parent for name in ("session.json", "plan.json")
-            for f in Path(repo_root).joinpath(*RESULTS).rglob(name)}
+    base = Path(repo_root).joinpath(*RESULTS)
+    dirs = {f.parent for name in ("session.json", "plan.json") for f in base.rglob(name)} - {base}
     for d in sorted(dirs):
         s = _read_json(d / "session.json")
+        if not isinstance(s, dict) and not any(x.name != "plan.json" for x in d.iterdir()):
+            continue                                        # a saved plan alone: nothing ran here
         head = s if isinstance(s, dict) else _read_json(d / "plan.json")
         if not isinstance(head, dict) or (head.get("stage"), head.get("mode"), head.get("platform")) != \
                 (STAGE, "formal", platform):
@@ -505,6 +511,16 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
         if pause:
             charge_pauses.append({"job_id": None, **pause})
     t0, paused, cap_reached = clock(), 0.0, False
+    full = open(out / "raw" / "rows.full.jsonl", "w") if not formal else None
+
+    def emit(fh, row):                                      # a pilot commits no speed (041 v3 §3.7: 結果遮蔽)
+        if full is not None:
+            full.write(json.dumps(row) + "\n")
+            full.flush()
+            row = {k: row[k] for k in PILOT_ROW_KEYS if k in row}
+        fh.write(json.dumps(row) + "\n")
+        fh.flush()
+
     with open(out / "rows.jsonl", "w") as fh:
         for i, job in enumerate(plan["jobs"]):
             jid, end = job["id"], job.get("position") == "end"
@@ -523,7 +539,7 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
             if cap_reached and not end:                     # the end sentinel always runs: the drift is measured
                 row = {**base, "outcome": "skipped", "reason": f"time cap {plan['cap_s']:.0f} s reached (041 v3 §3.6)"}
                 rows.append(row)
-                fh.write(json.dumps(row) + "\n")
+                emit(fh, row)
                 continue
             job_timeout = timeout_s if end else min(timeout_s, max(plan["cap_s"] - elapsed, 0) + CAP_MARGIN_S)
             argv = [a.replace("{bin}", bin_dir).replace("{models}", models_dir) for a in job["argv"]]
@@ -552,12 +568,15 @@ def run_e3(plan: dict, *, bin_dir, models_dir, out_dir, capture_env: Callable, s
                    "evidence": result["evidence"], "metrics": result.get("metrics"), "summary": result.get("summary"),
                    **rel}
             rows.append(row)
-            fh.write(json.dumps(row) + "\n")
-            fh.flush()
+            emit(fh, row)
+    if full is not None:
+        full.close()
     outcomes = {"ok": 0, "oom": 0, "error": 0, "skipped": 0}
     for r in rows:
         outcomes[r["outcome"]] += 1
     sentinel = _sentinel_summary([r for r in rows if r["outcome"] != "skipped"])
+    if not formal:
+        sentinel = {k: sentinel.get(k) for k in ("drift", "drift_pct", "threshold_pct", "note") if k in sentinel}
     session.update({"status": "finished", "finished_at": now(), "outcomes": outcomes, "sentinel": sentinel,
                     "sentinel_ok": sentinel.get("drift") is False, "cap_reached": cap_reached,
                     "measured_s": clock() - t0 - paused, "env_flags": env_flags, "env_valid": not env_flags,
@@ -589,7 +608,10 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
 
     try:
         if args.cmd == "plan":
-            Path(args.out).write_text(json.dumps(plan_for(args.platform, args.mode), indent=1) + "\n")
+            out = Path(args.out).resolve()
+            if ROOT.joinpath(*RESULTS).resolve() in (out, *out.parents):
+                raise StageE3Error("write plans outside results/stage_e (a session directory is the runner's)")
+            out.write_text(json.dumps(plan_for(args.platform, args.mode), indent=1) + "\n")
             return 0
         plan = json.loads(Path(args.plan).read_text())
         platform = plan.get("platform")

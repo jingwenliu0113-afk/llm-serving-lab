@@ -22,12 +22,17 @@ frozen functions, every contrast inside the session.
 - Descriptive per (cell, mix), mean / SE over the valid restarts: throughput, long-class P95, KV peak, the 1 Hz
   shares, preemptions, R, Lambda, Lq, the B0 tail shares and the unexplained-break share; the allocator bound is
   reported as 024 A13's, 未操弄，未檢驗.
-- A formal session is analyzed only if it is the first valid one after at most one void attempt (041 v3 §0).
+- A formal session is analyzed only if it is the first valid one after at most one void attempt (041 v3 §0); the
+  result goes to a new results/stage_e/<id>/ with the inputs' sha256.
+
+Usage:
+    python benchmarks/stage_e2_analysis.py --session results/stage_e/<formal> --out results/stage_e/<new>/analysis.json
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import statistics
@@ -319,11 +324,24 @@ def session_problems(path, *, pins: dict, cfg: dict, root=ROOT) -> list:
     return problems
 
 
+def out_problems(out, root=ROOT) -> list:
+    """--out is a file in a new session directory results/stage_e/<id>/ (041 v3 §0: no existing session is changed)."""
+    out = Path(out).resolve()
+    if out.parent.parent != Path(root).resolve().joinpath(*e2p.RESULTS):
+        return [f"{out} is not results/stage_e/<new session>/<file>"]
+    return [f"{out.parent} already exists (a new session directory only)"] if out.parent.exists() else []
+
+
 def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--session", required=True)
+    parser.add_argument("--out", required=True, help="results/stage_e/<new id>/analysis.json")
     args = parser.parse_args(argv)
     session = Path(args.session)
+    bad = out_problems(args.out)
+    if bad:
+        print("stage_e2_analysis: --out " + "; ".join(bad), file=sys.stderr)
+        return 2
     pins = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
     cfg = tomllib.loads(e2p.CONFIG.read_text())
     problems = session_problems(session, pins=pins, cfg=cfg)
@@ -331,8 +349,11 @@ def main(argv: list | None = None) -> int:  # pragma: no cover - thin CLI
         print("stage_e2_analysis: " + "; ".join(problems), file=sys.stderr)
         return 2
     rows = [json.loads(x) for x in (session / "rows.jsonl").read_text().splitlines() if x.strip()]
-    out = analyze(rows, cfg)
-    (session / "analysis.json").write_text(json.dumps(out, indent=1, default=str) + "\n")
+    out = {**analyze(rows, cfg), "session": session.name, "harness_sha256": e2p.harness_sha256(),
+           "inputs_sha256": {n: hashlib.sha256((session / n).read_bytes()).hexdigest()
+                             for n in ("session.json", "plan.json", "rows.jsonl")}}
+    Path(args.out).parent.mkdir(parents=True)
+    Path(args.out).write_text(json.dumps(out, indent=1, default=str) + "\n")
     print(json.dumps({"row": out["row"]["row"]}))
     return 0
 

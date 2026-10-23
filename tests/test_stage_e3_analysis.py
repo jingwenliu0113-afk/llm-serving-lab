@@ -173,10 +173,16 @@ def te_frozen(tmp_path):
     return root, te.pinned(e3.PLATFORMS)
 
 
-def test_freezing_the_other_platform_later_keeps_a_session_analyzable(tmp_path):
+def test_a_session_stays_analyzable_when_only_freeze_flags_or_pins_bytes_change(tmp_path):
     root = te.pilots(tmp_path / "repo")
-    cuda_only = te.pinned(("wsl2-cuda",))
-    plan = e3.build_plan(PINS, cuda_only, platform="wsl2-cuda", mode="formal", pins_sha256="old pins", root=root)
-    assert te.run(root, plan, "formal-rtx", expected_plan=plan, cfg=cuda_only)["env_valid"]
-    both = te.pinned(e3.PLATFORMS)                                 # the Mac freezes afterwards; pins.toml moved on
-    assert ea.session_problems(root / "results" / "stage_e" / "formal-rtx", pins=PINS, cfg=both, root=root) == []
+    both = te.pinned(e3.PLATFORMS)
+    plan = e3.build_plan(PINS, both, platform="wsl2-cuda", mode="formal", pins_sha256="old pins", root=root)
+    assert te.run(root, plan, "formal-rtx", expected_plan=plan, cfg=both)["env_valid"]
+    renamed = {**both, "freeze": {**both["freeze"], "pilot_e3_metal": "pilot-e3_metal"}}  # pins.toml moved on too
+    assert ea.session_problems(root / "results" / "stage_e" / "formal-rtx", pins=PINS, cfg=renamed, root=root) == []
+    (root / "results" / "stage_e" / "saved").mkdir()                              # a plan saved alone ran nothing
+    (root / "results" / "stage_e" / "saved" / "plan.json").write_text(json.dumps(plan))
+    (root / "results" / "stage_e" / "plan.json").write_text(json.dumps(plan))
+    assert [a["dir"].name for a in e3.formal_attempts(root, "wsl2-cuda")] == ["formal-rtx"]
+    assert ea.out_problems(root / "results" / "stage_e" / "new" / "e3.json", root=root) == []
+    assert ea.out_problems(root / "results" / "stage_e" / "formal-rtx" / "e3.json", root=root)

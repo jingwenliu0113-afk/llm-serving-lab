@@ -189,3 +189,9 @@ def test_only_a_finished_first_valid_formal_session_is_analyzed(tmp_path):
     import shutil
     shutil.copytree(base / "f1", base / "x" / "f1")
     assert any("not results/stage_e/<session id>" in p for p in ea.session_problems(base / "x" / "f1", **kw))
+    assert ea.out_problems(base / "new" / "analysis.json", root=root) == []
+    assert ea.out_problems(base / "f1" / "analysis.json", root=root)                 # never into an existing session
+    assert ea.out_problems(base / "analysis.json", root=root)
+    (base / "saved").mkdir()
+    (base / "saved" / "plan.json").write_text((base / "f1" / "plan.json").read_text())   # a saved plan ran nothing
+    assert sorted(str(a["dir"].relative_to(base)) for a in e2p.formal_attempts(root)) == ["f1", "old1", "x/f1"]
