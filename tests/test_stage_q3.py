@@ -407,6 +407,8 @@ def test_only_the_first_valid_formal_q3_session_after_one_void_attempt_is_analyz
 def test_the_q3_analysis_finds_its_session_or_reports_nt(tmp_path):
     root, cfg = with_pilot(tmp_path)
     kw = dict(cfg=cfg, stage_q3_sha256="q" * 64, pins_sha256=PINS_SHA, pins=PINS, root=root, n_boot=50)
+    with pytest.raises(q3.StageQ3Error, match="freeze.stage_q3"):                    # no NT before the freeze either
+        q3.analyze_q3(**{**kw, "cfg": {**cfg, "freeze": {**cfg["freeze"], "stage_q3": False}}})
     assert q3.analyze_q3(**kw)["H-Q3"] == {"verdict": "NT", "why": "not run"}
     plan = q3.build_plan(PINS, cfg, mode="formal", stage_q3_sha256="q" * 64, pins_sha256=PINS_SHA, root=root)
     busy = iter([(True, {}), (False, {"problems": ["not idle"]})])

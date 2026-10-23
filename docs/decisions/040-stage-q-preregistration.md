@@ -169,9 +169,10 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
       - 正式 session 在主 checkout 執行（Phase 1 的 Mac session 曾在 `.worktrees/` 的固定 commit 執行；worktree 的 `results/stage_q/` 看不到其他嘗試，所以 Stage Q 不這樣做）。session 目錄只能是 `results/stage_q/<id>`（不可巢狀）。第一個 job 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），所以中斷的 session 也是一次嘗試；讀不到 `session.json` 時以 `plan.json` 判定，算作廢的嘗試；只有 `plan.json` 的目錄與在第一個 job 之前被拒絕的（status refused）不算。
       - 有效 = 跑完而且 env 有效。env 無效（012）的 session 作廢，可用新 id 重跑一次；一個部分已有有效的正式 session，或已有兩次嘗試時，runner 拒絕開始。
       - 分析自己從 `results/stage_q` 找出每個部分的嘗試，取第一個有效的 session（之前最多一次作廢的嘗試），不再由 CLI 指定，所以不能省略已執行的部分。
-      - 「另寫 decision log」的機制：取代者在**執行時**給 `--superseded <id>=docs/decisions/<log>.md`，runner 驗證後記進它自己的 `session.json`；log 必須已 commit、在 `docs/decisions/` 之下、內文以完整的 token 同時寫出被取代與取代它的 session id（重跑的 id 常是原 id 加字，子字串不算）。分析沒有這個參數：哪些嘗試被取代，只從各 session 的紀錄推出，並再驗證一次 log，所以看過結果後不能再選；被取代的若是有效 session，取代它的必須也是有效 session，否則拒絕分析。這個決定放在所有被雜湊的檔案之外，不會讓 pilot 或正式 session 失效。
+      - 「另寫 decision log」的機制：取代者在**執行時**給 `--superseded <id>=docs/decisions/<log>.md`，runner 驗證後記進它自己的 `session.json`；log 必須已 commit、以 repo 內的相對路徑 `docs/decisions/<file>` 指定（兩台機器都要讀得到）、內文以完整的 token 同時寫出被取代與取代它的 session id（重跑的 id 常是原 id 加字，子字串不算）；被取代的必須是同一部分較早開始的正式嘗試，不能取代自己。分析沒有這個參數：哪些嘗試被取代，只從各 session 的紀錄推出，並再驗證一次 log，所以看過結果後不能再選；被取代的若是有效 session，之後必須有一個有效的正式 session 被分析（取代者本身作廢時，可依本條重跑一次），否則拒絕分析。這個決定放在所有被雜湊的檔案之外，不會讓 pilot 或正式 session 失效。
       - Q3 用同樣的規則（`stage_q3.formal_attempts`、`q3_session`）；Q3 的分析也自己找 session，沒有嘗試或全部作廢時 H-Q3 為 NT 並列出嘗試。Q3 某個 job 前 031 的閒置判定失敗時，該 job 記為 error，session 作廢（env 無效），可依本條重跑一次。
-      - plan 指令拒絕把 plan 寫進 `results/stage_q/`；Q1 / Q2 與 Q3 的分析輸出都必須是 `results/stage_q/` 下的新 .json 檔。
+      - plan 指令拒絕把 plan 寫進 `results/stage_q/`；Q1 / Q2 與 Q3 的分析輸出都必須是 `results/stage_q/` 下的新 .json 檔；Q3 的分析在凍結前也一律拒絕。
+      - WSL 上的部分（q1-cuda、q2、Q3）只有取回 Mac 之後，分析才看得到。分析前先執行 `tools/rtx/fetch_all_sessions.sh stage_q`：唯讀列出 WSL 上 `results/stage_q` 的每個 session 目錄、取回還沒有的（不含 raw/），並寫出 `results/stage_q/wsl-inventory.txt`（列出的時間與全部目錄），和 session 一起 commit。對 WSL 的部分，「不能省略已執行的部分」靠這一步與它的稽核紀錄。
 15. **Q3 的修正**：
     - 子 process 的環境改用 Core B 的 `server_env`（CUDA_HOME shim、venv 的 bin 在 PATH 最前面、GDN decode kernel），啟動前跑 `toolchain_problems`；原本少了這些，vLLM 的 FlashInfer JIT 會失敗。
     - engine 加上 Core B 的 `attention_backend = FLASH_ATTN`，並從子 process 的 log 核對 attention backend、text-only 與 GDN prefill kernel（`coreb_smoke.parse_server_log`）。
@@ -242,3 +243,14 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 | 34 | Q3 的分析仍由參數指定 session，無法回報「尚未執行／全部作廢」，並覆寫 session 目錄的檔案 | 補記 14：自己找 session，輸出到新檔 |
 
 被反駁的 1 項：「log 已 commit」只看 git index、內文讀工作目錄（runner 已用一份 commit 過的 log 放行取代者，分析再讀同一份；改傳別的 log 沒有可達的後果）。反駁時附帶的觀察已處理：WSL 的副本由 `deploy_bundle` 部署、沒有 `.git`，原本 RTX 上的 runner 一定判定 log「未 commit」；現在沒有 `.git` 時改以 `DEPLOY_MANIFEST.json` 判定（列在部署的 commit 中，而且內容沒有改過）。
+
+### 第四輪覆核（2026-10-23，pilot 之前）
+
+確認 4 項（沒有 must-fix），全部處理：
+
+| # | 發現 | 處理 |
+|---|---|---|
+| 35 | Mac 上的分析只看得到已取回的 WSL session，可以靠不取回而省略已執行的部分或某個取代紀錄 | 補記 14：`tools/rtx/fetch_all_sessions.sh` 與 commit 的清單（不改 harness） |
+| 36 | log 的路徑照輸入記錄，在 WSL 上用絕對路徑時，Mac 的分析永遠讀不到 | 補記 14：只接受 repo 內的相對路徑 |
+| 37 | 有效 session 可以被作廢的 session 或它自己取代 | 補記 14：不能取代自己，被取代的必須是較早的嘗試；文字改為「之後必須有有效的 session 被分析」 |
+| 38 | Q3 的分析在凍結前仍會寫出 NT | 補記 14：凍結前一律拒絕 |

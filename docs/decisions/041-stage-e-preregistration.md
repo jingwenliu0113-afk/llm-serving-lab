@@ -22,7 +22,8 @@
   - 「H-C0 失敗」（現象不存在）與「NT」（數據不足）分開記錄。
 - 有效性：無效的 run 不補跑；格子少於 3 次有效 restart 時為 NT（013）。env 無效或 sentinel 漂移的 session 整個作廢，可用新 id 重跑一次；只分析第一個有效的正式 session（040 補記 14）。
 - 判定只用同一 session 的數字（024:75、:450；037 §4）。跨 session 的數字只用於設計、揭露與描述。
-- 輸出在 `results/stage_e/<session>/`，不改任何既有 session：各部分的分析都寫到新的 session 目錄，並記錄輸入檔的 sha256；plan 檔不寫進 `results/stage_e/`。GPU 工作排在 Stage D 的正式 session 之後（037 §5），一律 `flock -n`，不搶占。
+- 輸出在 `results/stage_e/<session>/`，不改任何既有 session：各部分的分析都寫到新的 session 目錄，並記錄輸入檔的 sha256；plan 檔不寫進 `results/stage_e/`。
+- WSL 上跑的 session（E1-P、E2、E3 的 RTX）只有取回 Mac 之後，分析與嘗試次數的檢查才看得到：分析前先執行 `tools/rtx/fetch_all_sessions.sh stage_e`，取回 WSL 上 `results/stage_e` 的每個 session（不含 raw/），並 commit 它寫出的 `wsl-inventory.txt`（列出的時間與全部目錄）作為稽核紀錄。GPU 工作排在 Stage D 的正式 session 之後（037 §5），一律 `flock -n`，不搶占。
 
 ## 1. E1：8K 滑移的觸發點與雙模式（探索性）
 
@@ -265,7 +266,7 @@
 - 閒置判定的上限：B0、T、K2.5 沿用 F_peak 15,157 MiB；T256 與 PC-on 由 smoke 量 bench 後的增量，超過 15,157 + 128 MiB 時，凍結前另寫 decision log 改用實測值。
 - 停止規則：不提前停止，也不依結果決定任何事；連續 3 次 boot 沒有就緒時停止（session 記 stopped，剩下的 boot 記為 skipped，該 session 作廢）；持有 lock 的上限 7.5 h（約預估的 1.75 倍），到上限時在 boot 之間停止，沒跑完的格為 NT。
 - 記憶體：每次 boot 在 bench 之後、teardown 之前量一次 nvidia-smi 的 memory.used，減去該 boot 閒置窗的 idle_mib，記為增量；量不到時記為 None 並記錄錯誤（描述量，不影響 Y 與 session；smoke 的記憶體條件因此不通過）。
-- 重跑（§0）：session 目錄只能是 `results/stage_e/<id>`；第一個 boot 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），中斷的 session 也是一次嘗試，讀不到時以 `plan.json` 判定為作廢的嘗試；在第一個 boot 之前被拒絕的（status refused）不算，沒有啟動任何 server 就中止的（例如第一個 boot 前的閒置判定失敗）也記為 refused。正式 session 在主 checkout 的 `results/stage_e/` 下執行（worktree 看不到其他嘗試）。已有一個有效的正式 session（finished、env 有效、沒有 stopped），或已有兩次嘗試時，runner 拒絕開始，分析也只接受「之前最多一次作廢嘗試」的第一個有效 session。plan 記錄的 `stage_e2_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊。
+- 重跑（§0）：session 目錄只能是 `results/stage_e/<id>`；第一個 boot 之前先寫 `session.json`（status running，之後以暫存檔加 rename 覆寫），中斷的 session 也是一次嘗試，讀不到時以 `plan.json` 判定為作廢的嘗試；在第一個 boot 之前被拒絕的（status refused）不算，沒有啟動任何 server 就中止的（例如第一個 boot 前的閒置判定失敗、vLLM 的路徑錯誤、OTLP 的 port 被占用）也記為 refused。正式 session 在主 checkout 的 `results/stage_e/` 下執行（worktree 看不到其他嘗試）。已有一個有效的正式 session（finished、env 有效、沒有 stopped），或已有兩次嘗試時，runner 拒絕開始，分析也只接受「之前最多一次作廢嘗試」的第一個有效 session。plan 記錄的 `stage_e2_sha256` 是設定檔去掉 `[freeze]` 後的內容雜湊。
 
 ### 2.10 E2 的凍結證據
 
@@ -480,3 +481,7 @@
 
 - E2（確認 4 項）：R3 的 HOL 路徑與描述量用了 A10 無效的分解份額、描述量在少於 3 次 restart 時仍報平均 → 依 2.2、2.7 修正；bench 後的 nvidia-smi 失敗會中止整個 session → 改為記錄錯誤；smoke 沒有核對 vLLM 版本 → smoke 也核對，凍結證據加上版本。
 - E3（確認 3 項）：pilot 的逐 job env capture 帶有 job 的時間 → 移到 `raw/env/`；RTX 的正式 plan 需要 Mac 的 pilot 在 WSL 上，沒有支援的步驟 → `tools/rtx/push_session.sh`（3.7）；一個測試沒有真正改到 `[freeze]` → 修正。
+
+### 第四輪覆核（2026-10-23）
+
+- 確認 3 項（沒有 must-fix）：E2 判斷「沒有啟動 server」用的是有沒有 run 紀錄，server 啟動失敗時仍算一次嘗試 → 改為記錄 `server_started`（2.9）；`push_session.sh` 會把 macOS 的 AppleDouble 檔與 xattr 一起送到 WSL → 關掉；Stage E 在 WSL 上的 session 只有取回後才看得到 → `tools/rtx/fetch_all_sessions.sh` 與 commit 的清單（§0）。

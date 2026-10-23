@@ -163,6 +163,7 @@ class E2Harness(rc._Harness):
         proc = None
         try:
             proc = self.popen(argv, env, self.raw / f"{tag}.server.log")
+            record["server_started"] = True
             ready, detail = self.wait_ready(proc, record)
             row["ready"] = ready
             metrics = self.metrics_text(ready)
@@ -473,7 +474,8 @@ def run_session(plan: dict, *, pins: dict, cfg: dict, pins_sha256: str, out_dir,
             session["aborted"] = f"{type(exc).__name__}: {exc}"
             raise
         finally:
-            status = "finished" if "aborted" not in session else "aborted" if session["runs"] else "refused"
+            started = any(r.get("server_started") for r in session["runs"].values())
+            status = "finished" if "aborted" not in session else "aborted" if started else "refused"
             session.update({"status": status, "finished_at": clock(),            # refused: no server ever started
                             "env_flags": h.env_flags, "env_valid": not h.env_flags,
                             "outcomes": {"boots": len(rows), "valid": sum(r["valid"] for r in rows),

@@ -215,6 +215,11 @@ def test_no_supersede_can_hide_a_valid_session(tmp_path, pilot_root):
     log.write_text("formal-q2b supersedes nothing here.\n")                         # -q2 is only a prefix of -q2b
     with pytest.raises(qa2.AnalysisError, match="does not name both"):
         analyze(root, cfg, tracked=lambda p: True)
+    log.write_text("formal-q2 is superseded by formal-q2b.\n")
+    early = root / "results" / "stage_q" / "formal-q2b" / "session.json"            # recorded by an earlier run
+    early.write_text(json.dumps({**json.loads(early.read_text()), "started_at": "2026-10-23T00:00:00"}))
+    with pytest.raises(qa2.AnalysisError, match="not an earlier formal attempt"):
+        analyze(root, cfg, tracked=lambda p: True)
 
 
 def test_the_bounds_include_their_endpoints_exactly():

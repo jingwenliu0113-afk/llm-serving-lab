@@ -342,8 +342,12 @@ def superseded_problems(superseded: dict, new_id: str, *, root=ROOT, tracked: Ca
     problems = []
     for sid, log in sorted((superseded or {}).items()):
         path = (Path(root) / log).resolve()
-        if Path(root).resolve().joinpath("docs", "decisions") not in path.parents or not path.is_file():
-            problems.append(f"--superseded {sid}: {log} is not a decision log under docs/decisions/")
+        if sid == new_id:
+            problems.append(f"--superseded {sid}: a session cannot supersede itself")
+        elif not str(log).startswith("docs/decisions/") or Path(root).resolve().joinpath("docs", "decisions") \
+                not in path.parents or path.relative_to(Path(root).resolve()).as_posix() != log or not path.is_file():
+            problems.append(f"--superseded {sid}: {log} is not a repo-relative decision log docs/decisions/<file> "
+                            "(recorded as typed, read on both machines)")
         elif not tracked(path):
             problems.append(f"--superseded {sid}: {log} is not committed (git ls-files)")
         elif not (_names(text := path.read_text(), sid) and _names(text, new_id)):
@@ -363,8 +367,14 @@ def recorded_supersedes(attempts: list) -> dict:
 
 
 def recorded_supersede_problems(attempts: list, *, root=ROOT, tracked: Callable = git_tracked) -> list:
-    return [p for sid, (log, by) in sorted(recorded_supersedes(attempts).items())
-            for p in superseded_problems({sid: log}, by, root=root, tracked=tracked)]
+    """Every recorded supersede checks out: its log (superseded_problems) and an earlier attempt it names."""
+    started = {a["id"]: a["started_at"] for a in attempts}
+    out = []
+    for sid, (log, by) in sorted(recorded_supersedes(attempts).items()):
+        out += superseded_problems({sid: log}, by, root=root, tracked=tracked)
+        if sid != by and not (sid in started and started[sid] < started[by]):
+            out.append(f"{by} supersedes {sid}, which is not an earlier formal attempt of this part")
+    return out
 
 
 def default_gpu_lock_check() -> bool:  # pragma: no cover - /proc (WSL)

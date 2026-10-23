@@ -358,8 +358,12 @@ def test_a_superseded_attempt_needs_a_committed_decision_log_naming_both_session
         run(root, plan, "new", superseded=sup, tracked=lambda p: False, **kw)
     with pytest.raises(sq.StageQError, match="does not name both"):
         run(root, plan, "other", superseded=sup, tracked=lambda p: True, **kw)
-    with pytest.raises(sq.StageQError, match="not a decision log"):
+    with pytest.raises(sq.StageQError, match="not a repo-relative decision log"):
         run(root, plan, "new", superseded={"old": "README.md"}, tracked=lambda p: True, **kw)
+    with pytest.raises(sq.StageQError, match="not a repo-relative decision log"):          # read on both machines
+        run(root, plan, "new", superseded={"old": str(log)}, tracked=lambda p: True, **kw)
+    with pytest.raises(sq.StageQError, match="cannot supersede itself"):
+        run(root, plan, "new", superseded={"new": "docs/decisions/999-supersede.md"}, tracked=lambda p: True, **kw)
     s = run(root, plan, "new", superseded=sup, tracked=lambda p: True, **kw)
     assert s["status"] == "finished" and s["superseded"] == sup
 

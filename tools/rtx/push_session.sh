@@ -19,7 +19,7 @@ remote() {
   ssh -o BatchMode=yes -o ConnectTimeout=30 gpu-server "wsl.exe -d Ubuntu-22.04 -- bash -lc \"$1\""
 }
 remote "test ! -e ~/llm-serving-lab/results/$SUB/$SID" || { echo "refusing: results/$SUB/$SID exists on WSL"; exit 3; }
-tar -c -C "$REPO/results/$SUB" --exclude=raw "$SID" \
+COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs -c -C "$REPO/results/$SUB" --exclude=raw "$SID" \
   | remote "mkdir -p ~/llm-serving-lab/results/$SUB && tar -x -k -C ~/llm-serving-lab/results/$SUB"
 remote "test -f ~/llm-serving-lab/results/$SUB/$SID/session.json" || { echo "push failed (no session.json)"; exit 4; }
 echo "pushed results/$SUB/$SID to WSL"

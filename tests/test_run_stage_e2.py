@@ -427,3 +427,14 @@ def test_an_abort_before_any_server_started_is_not_an_attempt(tmp_path):
     saved = json.loads((root / "results" / "stage_e" / "busy" / "session.json").read_text())
     assert saved["status"] == "refused" and saved["runs"] == {} and e2.formal_attempts(root) == []
 
+    class NoBinary(World):
+        def popen(self, argv, env, log_path):
+            raise FileNotFoundError("/v/vllm")                                       # a mistyped --vllm-bin
+
+    with pytest.raises(FileNotFoundError):
+        session(root, ds, pins, cfg, plan, mode="formal", sid="nobin", world=NoBinary(tmp_path / "wn"))
+    saved = json.loads((root / "results" / "stage_e" / "nobin" / "session.json").read_text())
+    assert saved["status"] == "refused" and saved["runs"] and e2.formal_attempts(root) == []
+    session(root, ds, pins, cfg, plan, mode="formal", sid="ok", world=World(tmp_path / "wo"))
+    assert [a["dir"].name for a in e2.formal_attempts(root)] == ["ok"]
+

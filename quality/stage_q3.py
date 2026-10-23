@@ -487,8 +487,12 @@ def superseded_problems(superseded: dict, new_id: str, *, root=ROOT, tracked: Ca
     problems = []
     for sid, log in sorted((superseded or {}).items()):
         path = (Path(root) / log).resolve()
-        if Path(root).resolve().joinpath("docs", "decisions") not in path.parents or not path.is_file():
-            problems.append(f"--superseded {sid}: {log} is not a decision log under docs/decisions/")
+        if sid == new_id:
+            problems.append(f"--superseded {sid}: a session cannot supersede itself")
+        elif not str(log).startswith("docs/decisions/") or Path(root).resolve().joinpath("docs", "decisions") \
+                not in path.parents or path.relative_to(Path(root).resolve()).as_posix() != log or not path.is_file():
+            problems.append(f"--superseded {sid}: {log} is not a repo-relative decision log docs/decisions/<file> "
+                            "(recorded as typed, read on both machines)")
         elif not tracked(path):
             problems.append(f"--superseded {sid}: {log} is not committed (git ls-files)")
         elif not (_names(text := path.read_text(), sid) and _names(text, new_id)):
@@ -508,8 +512,14 @@ def recorded_supersedes(attempts: list) -> dict:
 
 
 def recorded_supersede_problems(attempts: list, *, root=ROOT, tracked: Callable = git_tracked) -> list:
-    return [p for sid, (log, by) in sorted(recorded_supersedes(attempts).items())
-            for p in superseded_problems({sid: log}, by, root=root, tracked=tracked)]
+    """Every recorded supersede checks out: its log (superseded_problems) and an earlier attempt it names."""
+    started = {a["id"]: a["started_at"] for a in attempts}
+    out = []
+    for sid, (log, by) in sorted(recorded_supersedes(attempts).items()):
+        out += superseded_problems({sid: log}, by, root=root, tracked=tracked)
+        if sid != by and not (sid in started and started[sid] < started[by]):
+            out.append(f"{by} supersedes {sid}, which is not an earlier formal attempt of this part")
+    return out
 
 
 def run_q3(plan: dict, *, data_dir, out_dir, capture_env: Callable, session_id: str, gpu_lock_held: bool,
@@ -805,10 +815,17 @@ def analyze_session(path, *, cfg: dict, stage_q3_sha256: str, pins_sha256: str, 
 def analyze_q3(*, cfg: dict, stage_q3_sha256: str, pins_sha256: str, pins: dict, root=ROOT,
                n_boot: int | None = None, tracked: Callable = git_tracked) -> dict:
     """The analysis finds its own session (040 補記 14, as Q1 / Q2): H-Q3 of it, or NT ("not run", every attempt
-    void) with the attempts listed."""
+    void) with the attempts listed; nothing before the freeze and its evidence (040 凍結)."""
+    problems = config_problems(cfg)
+    if not problems and cfg["freeze"]["stage_q3"] is not True:
+        problems = ["freeze.stage_q3 is not true in configs/stage_q3.toml (040 凍結: no Q3 analysis before it)"]
+    problems = problems or freeze_evidence_problems(cfg, root, pins)
+    if problems:
+        raise StageQ3Error("; ".join(problems))
     path, record = q3_session(root=root, tracked=tracked)
     if path is None:
-        return {"session": None, "q3": record, "H-Q3": {"verdict": "NT", "why": record["status"]}}
+        return {"session": None, "q3": record, "harness_sha256": harness_sha256(), "stage_q3_sha256": stage_q3_sha256,
+                "pins_sha256": pins_sha256, "H-Q3": {"verdict": "NT", "why": record["status"]}}
     return {**analyze_session(path, cfg=cfg, stage_q3_sha256=stage_q3_sha256, pins_sha256=pins_sha256, pins=pins,
                               root=root, n_boot=n_boot, tracked=tracked), "q3": record}
 
