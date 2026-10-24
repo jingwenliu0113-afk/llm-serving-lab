@@ -628,13 +628,14 @@ def test_main_never_overwrites_and_never_writes_under_results(sess_a, tmp_path, 
 
 def test_no_override_options():
     """021 R1: the only inputs are the session, the freeze commit (verified against git) and the output path (043: a
-    file for Stage C, a directory for every profile of a Stage D session; no server selector)."""
-    assert pg.option_names() == {"--session", "--out", "--out-dir", "--freeze-commit"}
+    file for Stage C, a directory for every profile of a Stage D session; no server selector). 044: a Stage V session
+    is the --validation-session, into --out-dir; no unit selector."""
+    assert pg.option_names() == {"--session", "--validation-session", "--out", "--out-dir", "--freeze-commit"}
 
 
 def test_default_paths_are_the_repo():
     assert pg.ROOT == ROOT and pg.CAPACITY_TOML == ROOT / "configs" / "capacity.toml"
-    assert pg.STAGE_D_TOML == ROOT / "configs" / "stage_d.toml"
+    assert pg.STAGE_D_TOML == ROOT / "configs" / "stage_d.toml" and pg.STAGE_V_TOML == ROOT / "configs" / "stage_v.toml"
 
 
 def test_module_entry_point(tmp_path):
@@ -686,19 +687,23 @@ def test_the_scan_finds_a_verified_profile_at_any_tracked_path(tmp_path):
     assert got == ["d.txt", "service/deploy/b.json", "service/profiles/c.JSON", "service/profiles/verified/a.json"]
 
 
-def regenerate(doc: dict) -> dict:
+def regenerate(doc: dict, *, root=ROOT, **kw) -> dict:
     """What the generator writes for a committed verified profile, by its prereg_section (043 step 5): §8 from its
     results/capacity session (generate); §9 the profile with its profile_id among those of its results/stage_d
-    session (generate_stage_d)."""
+    session (generate_stage_d); §12 (044) the one its results/stage_v session gives (generate_stage_v). kw: the
+    generator's other inputs (a test's root, git and configs; the repo's by default)."""
     prov = doc.get("provenance") or {}
-    sid, kw = str(prov.get("source_session")), {"freeze_commit": str(prov.get("freeze_commit")),
-                                                "generator_commit": str(prov.get("generator_commit"))}
-    if prov.get("prereg_section") == cp.STAGE_D_SECTION:
-        docs = pg.generate_stage_d(ROOT / "results" / "stage_d" / sid, **kw)
+    sid = str(prov.get("source_session"))
+    kw.update(freeze_commit=str(prov.get("freeze_commit")), generator_commit=str(prov.get("generator_commit")))
+    if prov.get("prereg_section") in (cp.STAGE_D_SECTION, cp.STAGE_V_SECTION):
+        if prov["prereg_section"] == cp.STAGE_D_SECTION:
+            docs = pg.generate_stage_d(Path(root) / "results" / "stage_d" / sid, root=root, **kw)
+        else:
+            docs, _ = pg.generate_stage_v(Path(root) / "results" / "stage_v" / sid, root=root, **kw)
         if doc.get("profile_id") not in docs:
             raise pg.GenerationError([f"{sid} gives the profiles {list(docs)}, not {doc.get('profile_id')!r}"])
         return docs[doc["profile_id"]]
-    return pg.generate(ROOT / "results" / "capacity" / sid, **kw)
+    return pg.generate(Path(root) / "results" / "capacity" / sid, root=root, **kw)
 
 
 def test_every_committed_verified_profile_is_what_the_generator_writes():
