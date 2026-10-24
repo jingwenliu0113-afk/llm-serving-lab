@@ -9,6 +9,10 @@ Per HTTP request, before anything else runs:
 - a RequestRecord on the scope ("capserve.record") that the endpoint fills in; at the end the guard hands it to
   Metrics.finish and on_finish (the Retry-After policy's observe, 038 §3) and writes one JSON access-log line (no
   prompt or completion text, ever). The guard's own 429 takes its Retry-After from retry_after_s("queue_full").
+  044: the line also carries the client's x-request-id as client_request_id (one [A-Za-z0-9._:-]{1,128} value, else
+  null; never echoed: the response keeps the gateway's id), so a client can join its own requests to the log, and the
+  gateway's monotonic times t_arrival_s (arrival), t_sent_s (upstream send) and t_released_s (the admission permit's
+  release, recorded before the slot moves on), with prefill_wait_s, admission_class and admission_units once set.
 Cleanups (on_cleanup) are registered on the scope by whoever acquires something (the admission permit, the upstream
 response) right after acquiring it; the guard runs them in a shielded finally, LIFO, each bounded by
 CLEANUP_TIMEOUT_S, whether the endpoint returned, raised, or was cancelled, and whether or not the response object
@@ -24,6 +28,7 @@ import asyncio
 import inspect
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import asdict, dataclass
@@ -38,6 +43,7 @@ COMPLETION_ROUTES = {"/v1/chat/completions": "chat", "/v1/completions": "complet
 CLEANUP_TIMEOUT_S = 5.0
 RECORD_KEY = "capserve.record"
 CLEANUPS_KEY = "capserve.cleanups"
+CLIENT_REQUEST_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")   # 044: what the access log keeps of a client's id
 
 access_log = logging.getLogger("capserve.access")
 log = logging.getLogger("capserve")
@@ -63,6 +69,25 @@ class RequestRecord:
     upstream_ttft_s: float | None = None
     duration_s: float | None = None
     key: str | None = None              # the API key's name (038 §5 keys file); never the key
+    # 044: logged so a client can join the log (client_request_id) and the in-vLLM interval [t_sent_s, t_released_s)
+    # is exact; arrival and upstream_sent are logged as t_arrival_s and t_sent_s
+    client_request_id: str | None = None
+    t_released_s: float | None = None   # the admission permit's release (clock), before the slot moves on
+    prefill_wait_s: float | None = None  # prefill pacing: at the head with a free slot, waiting for tokens
+    admission_class: str | None = None  # weighted-v1: the class the prompt was admitted as, and its units
+    admission_units: int | None = None
+
+
+def client_request_id(headers) -> str | None:
+    """044: the client's x-request-id when it sent exactly one, matching CLIENT_REQUEST_ID; else None."""
+    values = [v for n, v in headers if n == b"x-request-id"]
+    if len(values) != 1:
+        return None
+    try:
+        value = values[0].decode("ascii")
+    except UnicodeDecodeError:
+        return None
+    return value if CLIENT_REQUEST_ID.fullmatch(value) else None
 
 
 def on_cleanup(scope, fn: Callable[[], Awaitable[None] | None]) -> None:
@@ -103,7 +128,7 @@ class Guard:
             return
         path = scope["path"]
         rec = RequestRecord(request_id=uuid.uuid4().hex, method=scope["method"], path=path, arrival=self.clock(),
-                            route=COMPLETION_ROUTES.get(path))
+                            route=COMPLETION_ROUTES.get(path), client_request_id=client_request_id(scope["headers"]))
         scope[RECORD_KEY] = rec
         scope[CLEANUPS_KEY] = []
         extra = [(b"x-request-id", rec.request_id.encode()), (b"x-capserve-profile", self.profile_header)]
@@ -151,4 +176,7 @@ class Guard:
             except Exception:
                 log.exception("on_finish failed")
         entry = {k: v for k, v in asdict(rec).items() if v is not None and k not in ("arrival", "upstream_sent")}
+        entry["t_arrival_s"] = rec.arrival
+        if rec.upstream_sent is not None:
+            entry["t_sent_s"] = rec.upstream_sent
         access_log.info(json.dumps({"ts": round(time.time(), 3), **entry}, sort_keys=True))

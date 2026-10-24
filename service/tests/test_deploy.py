@@ -4,7 +4,10 @@ lock descriptor): release manifest, preflight refusals (nothing started, no run 
 baseline (a headroom shortfall only warns), vLLM with the lock fd, server checks, gateway, state.json, hold /
 workload, the descriptive shared-usage readings, and the teardown order and checks (GPU memory back to the pre-boot
 baseline + 64 MiB) in every exit path; status and stop. Decision 043: preflight refuses an active class with more than
-128 output tokens, and any profile for the T server (this deploy starts only B0)."""
+128 output tokens, and any profile for the T server (this deploy starts only B0). Decision 044: preflight refuses a
+candidate policy ([gateway] admission / prefill_pacing) without a verified §12 profile carrying the identical section
+validated on the release's request path, a provisional profile's included; with one, the gateway gets that section
+and must serve it."""
 
 import datetime as dt
 import hashlib
@@ -24,10 +27,12 @@ import gpu_idle as gi
 import run_adv
 import run_core_b
 from capserve import deploy, procs, runs
+from capserve import gateway_path as gp
 from capserve.config import Settings
 from capserve.profile import CapacityProfile, content_sha256, load_profile, stage_b_fingerprint, t_fingerprint
 from fakes import profiles as fake_profiles
 from fakes.profiles import FROZEN, frozen_capacity, frozen_configs, rehash, stage_d_class, stage_d_doc, verified_class
+from fakes.profiles import SLOW_QUEUE, frozen_stage_v, stage_v_doc
 
 PINS = bp.load_pins()
 SB = PINS["stage_b"]
@@ -172,12 +177,18 @@ class World:
             return {}
         argv = argvs[-1]
         doc = json.loads(Path(argv[argv.index("--profile") + 1]).read_text())
-        active = tomllib.loads(Path(argv[argv.index("--config") + 1]).read_text())["active_class"]
+        settings = tomllib.loads(Path(argv[argv.index("--config") + 1]).read_text())
+        active = settings["active_class"]
         (cls,) = [c for c in doc["classes"] if c["name"] == active]
         limits = ("max_concurrency", "max_queue", "max_prompt_tokens", "max_output_tokens")
-        return {"ready": True, "active_class": active, "limits": {k: cls[k] for k in limits},
+        body = {"ready": True, "active_class": active, "limits": {k: cls[k] for k in limits},
                 "profile": {"id": doc["profile_id"], "status": doc["status"],
                             "provisional": doc["status"] != "verified"}}
+        if "prefill_pacing" in settings:   # 044: the pacing and queue settings it was started with
+            body.update(prefill_pacing=settings["prefill_pacing"], admission=None, queue={
+                "max_queue_wait_s": settings.get("max_queue_wait_s", 2.0),
+                "request_deadline_s": settings.get("request_deadline_s", 300.0)})
+        return body
 
     @staticmethod
     def _next(answers):
@@ -344,6 +355,16 @@ def test_gateway_settings_are_owned_by_the_deploy(world):
 
 def test_toml_dumps_round_trips_strings_with_quotes_and_unicode():
     doc = {"a": 'x"y\\z\n', "b": True, "c": 2, "d": 0.25, "t": {"u": "測試"}}
+    assert tomllib.loads(deploy.toml_dumps(doc)) == doc
+
+
+def test_toml_dumps_writes_044s_policy_tables():
+    """[admission] holds a list of class tables (044 weighted-v1), written as an array of inline tables."""
+    doc = {"tokenizer": "local", "max_queue_wait_s": 120.0, "admission": {
+        "policy": "weighted-v1", "budget": 32, "max_queue": 32,
+        "classes": [{"name": "uniform-2k", "units": 1, "max_concurrency": 32},
+                    {"name": "uniform-8k", "units": 4, "max_concurrency": 8}]},
+        "prefill_pacing": {"burst_tokens": 9600, "rate_tokens_per_s": 5920}, "t": {"xs": [1, "a", 0.5, True]}}
     assert tomllib.loads(deploy.toml_dumps(doc)) == doc
 
 
@@ -1416,3 +1437,102 @@ def test_up_defaults_to_the_pinned_profile_and_needs_one_otherwise(monkeypatch, 
     seen.clear()
     assert deploy.main(["up", "--config", str(ROOT / "service" / "deploy" / "rtx.toml")], env={}) == 2
     assert seen == {} and "--profile" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------ 044: candidate policies --
+
+PACING_2K = {"burst_tokens": 9600, "rate_tokens_per_s": 5920}
+W1_GATEWAY = {"tokenizer": "local", **SLOW_QUEUE, "admission": {
+    "policy": "weighted-v1", "budget": 32, "max_queue": 32,
+    "classes": [{"name": "uniform-2k", "units": 1, "max_concurrency": 32},
+                {"name": "uniform-8k", "units": 4, "max_concurrency": 8}]}}
+PACED_GATEWAY = {"active_class": "uniform-2k", "tokenizer": "local", "prefill_pacing": PACING_2K, **SLOW_QUEUE}
+
+
+def section_12(world):
+    """A §12 profile committed in the release, validated on the release's own request path, and the frozen configs
+    of a checkout after Stage V's freeze on that path."""
+    add_to_release(world.release, "service/capserve/__main__.py", b"import capserve.app\n")
+    add_to_release(world.release, "service/capserve/app.py", b"x = 1\n")
+    sha = gp.gateway_path_sha256(world.release)
+    doc = stage_v_doc(PINS)
+    doc["provenance"]["gateway_path_sha256"] = doc["admission"]["gateway_path_sha256"] = sha
+    path = add_to_release(world.release, "service/profiles/verified-v.json", json.dumps(rehash(doc)).encode())
+    return path, frozen_configs(stage_v=frozen_stage_v(gateway_path_sha256=sha)), sha
+
+
+@pytest.mark.parametrize("gateway", [{"active_class": "test", "tokenizer": "local", "prefill_pacing": {
+    "burst_tokens": 1920, "rate_tokens_per_s": 100}}, {"tokenizer": "local", "admission": {
+        "policy": "weighted-v1", "budget": 4, "max_queue": 4, "classes": [
+            {"name": "test", "units": 1, "max_concurrency": 4}, {"name": "test2", "units": 4, "max_concurrency": 1}]}}])
+def test_deploy_never_serves_a_candidate_policy_with_a_provisional_profile(world, tmp_path, capsys, gateway):
+    """044 item 5: research serves it with `capserve serve --allow-provisional`; `deploy up` never, whatever flag."""
+    doc = profile_doc()
+    doc["classes"].append({**doc["classes"][0], "name": "test2", "max_prompt_tokens": 8064, "max_concurrency": 1,
+                           "max_queue": 1})
+    path = write_json(tmp_path / "two.json", rehash(doc))
+    assert up(world, path, allow_provisional=True, cfg=world.cfg(gateway=gateway)) == 2
+    err = capsys.readouterr().err
+    assert world.started == [] and not (world.svc / "runs").exists() and "deploy never serves" in err
+
+
+@pytest.mark.parametrize("gateway", [{**VERIFIED_ACTIVE["gateway"], "tokenizer": "local", "prefill_pacing": PACING_2K},
+                                     W1_GATEWAY])
+def test_deploy_never_serves_a_candidate_policy_with_a_profile_without_section_12(world, capsys, gateway):
+    doc = verified_doc(classes=[verified_class(workload="U2K", value=32), verified_class(workload="U8K", value=8)])
+    path = add_to_release(world.release, "service/profiles/v.json", json.dumps(doc).encode())
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(gateway=gateway)) == 2
+    err = capsys.readouterr().err
+    assert world.started == [] and "044" in err and "§12" in err
+
+
+def test_a_section_12_pacing_is_deployed_with_exactly_its_section(world):
+    path, frozen, _ = section_12(world)
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(gateway=PACED_GATEWAY), frozen=frozen) == 0
+    (gw,) = [s for s in world.started if s["name"] == "gateway"]
+    written = tomllib.loads(Path(gw["argv"][gw["argv"].index("--config") + 1]).read_text())
+    assert written["prefill_pacing"] == PACING_2K and (written["max_queue_wait_s"], written["request_deadline_s"]) == (
+        120.0, 600.0)
+    assert "--allow-provisional" not in gw["argv"]
+
+
+@pytest.mark.parametrize("gateway, frozen_path, match", [
+    ({**PACED_GATEWAY, "prefill_pacing": {**PACING_2K, "rate_tokens_per_s": 6000}}, None, "prefill_pacing"),
+    ({**PACED_GATEWAY, "max_queue_wait_s": 2.0}, None, "queue"),
+    (PACED_GATEWAY, "00" * 32, "gateway_path_sha256"),   # validated on another request path than this release's
+])
+def test_a_section_12_profile_refuses_any_other_policy_queue_or_release(world, capsys, gateway, frozen_path, match):
+    path, frozen, sha = section_12(world)
+    if frozen_path is not None:   # the profile and the freeze name another path; this release's files differ
+        doc = json.loads(path.read_text())
+        doc["provenance"]["gateway_path_sha256"] = doc["admission"]["gateway_path_sha256"] = frozen_path
+        path = add_to_release(world.release, "service/profiles/verified-v2.json", json.dumps(rehash(doc)).encode())
+        frozen = frozen_configs(stage_v=frozen_stage_v(gateway_path_sha256=frozen_path))
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(gateway=gateway), frozen=frozen) == 2
+    err = capsys.readouterr().err
+    assert world.started == [] and match in err
+
+
+def w1_readyz(**over) -> dict:
+    classes = [{"name": "uniform-2k", "units": 1, "max_concurrency": 32, "max_prompt_tokens": 1920,
+                "max_output_tokens": 128},
+               {"name": "uniform-8k", "units": 4, "max_concurrency": 8, "max_prompt_tokens": 8064,
+                "max_output_tokens": 128}]
+    return {"ready": True, "active_class": None,
+            "profile": {"id": "verified-formal-20261101-v-adm-b0", "status": "verified", "provisional": False},
+            "limits": {"max_concurrency": 32, "max_queue": 32, "max_prompt_tokens": 8064, "max_output_tokens": 128},
+            "admission": {**W1_GATEWAY["admission"], "classes": classes}, "prefill_pacing": None,
+            "queue": dict(SLOW_QUEUE), **over}
+
+
+@pytest.mark.parametrize("body, code", [(w1_readyz(), 0), (w1_readyz(admission=None), 2),
+                                        (w1_readyz(queue={"max_queue_wait_s": 2.0, "request_deadline_s": 300.0}), 2),
+                                        (w1_readyz(active_class="uniform-2k"), 2)])
+def test_a_section_12_admission_is_deployed_and_its_gateway_must_serve_it(world, body, code):
+    """044: weighted-v1 has no active class; what the gateway's /readyz serves is the section preflight checked."""
+    path, frozen, _ = section_12(world)
+    world.readyz_body = body
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(gateway=W1_GATEWAY), frozen=frozen) == code
+    (gw,) = [s for s in world.started if s["name"] == "gateway"]
+    written = tomllib.loads(Path(gw["argv"][gw["argv"].index("--config") + 1]).read_text())
+    assert "active_class" not in written and written["admission"] == W1_GATEWAY["admission"]

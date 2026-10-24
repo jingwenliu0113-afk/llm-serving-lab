@@ -26,17 +26,23 @@ import core_b_plan as bp
 STARTUP_LIMIT_S = 10.0
 
 
-def make_profile(*, max_concurrency=4, max_queue=4, max_prompt_tokens=1920, max_output_tokens=128) -> CapacityProfile:
+def make_profile(*, max_concurrency=4, max_queue=4, max_prompt_tokens=1920, max_output_tokens=128,
+                 classes: list | None = None) -> CapacityProfile:
+    """A provisional profile with one class "test", or the given classes [(name, max_prompt_tokens,
+    max_concurrency)] (128 output tokens, max_queue = max_concurrency)."""
     pins = bp.load_pins()
+    if classes is None:
+        classes = [{"name": "test", "max_prompt_tokens": max_prompt_tokens, "max_output_tokens": max_output_tokens,
+                    "max_concurrency": max_concurrency, "max_queue": max_queue, "source": "test"}]
+    else:
+        classes = [{"name": n, "max_prompt_tokens": p, "max_output_tokens": 128, "max_concurrency": c,
+                    "max_queue": c, "source": "test"} for n, p, c in classes]
     doc = {"schema_version": 1, "profile_id": "provisional-test", "status": "provisional",
            "provisional_reason": "tests only; not a capacity", "slo": None,
            "server": {"vllm_version": pins["vllm"]["version"], "model_repo": MODEL,
                       "model_revision": pins["core_b"]["revision"], "fingerprint_sha256": None,
                       "num_gpu_blocks": None, "block_size": None},
-           "classes": [{"name": "test", "max_prompt_tokens": max_prompt_tokens,
-                        "max_output_tokens": max_output_tokens, "max_concurrency": max_concurrency,
-                        "max_queue": max_queue, "source": "test"}],
-           "provenance": None}
+           "classes": classes, "provenance": None}
     doc["content_sha256"] = content_sha256(doc)
     return CapacityProfile.model_validate(doc)
 
@@ -102,12 +108,13 @@ class Stack:
 @contextlib.asynccontextmanager
 async def stack(fake_cfg: FakeConfig | None = None, profile: CapacityProfile | None = None, *,
                 api_key: bytes | None = None, wait_ready: bool = True, local_tokenizer=None, keyring=None,
-                **settings_over):
+                gateway_path_sha256: str | None = None, **settings_over):
     fake = FakeVLLM(fake_cfg)
     async with serve(fake.app) as fake_url:
         settings = gateway_settings(fake_url, **settings_over)
         prof = profile or make_profile()
-        gw = create_app(settings, prof, api_key=api_key, local_tokenizer=local_tokenizer, keyring=keyring)
+        gw = create_app(settings, prof, api_key=api_key, local_tokenizer=local_tokenizer, keyring=keyring,
+                        gateway_path_sha256=gateway_path_sha256)
         config = srv.build_config(gw, settings)
         scheme = "https" if settings.tls else "http"
         async with serve_config(config, _in_loop(srv.CapserveServer)(config, gw), scheme) as url:

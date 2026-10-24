@@ -4,11 +4,14 @@ upstream request and free the slot, overload never exceeds the limit, readiness,
 OpenAI-shaped errors everywhere, and the class statuses of a verified profile (decision 030 8.7: a verified 0 answers
 503 class_not_serviceable, an unavailable class is never served; decision 043: neither is a verified class with more
 than 128 output tokens, nor on a T profile anything but M8K-T with H-D2a supported; /readyz discloses the active class's
-flags and what it never covered, and the server variant)."""
+flags and what it never covered, and the server variant). Decision 044: the access log's client id and monotonic
+interval, /readyz's request path, queue settings and policies, and the candidate policies (weighted-v1, prefill pacing)
+end to end: off by default, served only where the rules allow them."""
 
 import asyncio
 import contextlib
 import json
+import logging
 import socket
 import urllib.parse
 from pathlib import Path
@@ -17,7 +20,9 @@ import httpx
 import pytest
 
 from capserve import deploy
+from capserve import gateway_path as gp
 from capserve.app import create_app
+from capserve.config import ConfigError
 from capserve.profile import CapacityProfile, ProfileError, load_profile
 from capserve.proxy import ClientDisconnected
 from capserve.keys import load_keyring
@@ -25,6 +30,7 @@ from capserve.tokens import LocalTokenizer
 from fakes.fake_tokenizer import WordsHF
 from fakes.fake_vllm import MODEL, FakeConfig
 from fakes.profiles import ABOVE_CKV_NOT_COVERED, NOT_COVERED, stage_d_class, stage_d_doc, verified_class, verified_doc
+from fakes.profiles import GATEWAY_PATH_SHA256, SLOW_QUEUE, stage_v_doc, v1_class
 from fakes.servers import gateway_settings, make_profile, stack
 
 pytestmark = pytest.mark.anyio
@@ -543,7 +549,7 @@ async def test_tokenize_waits_for_the_permit():
 
 
 async def test_upstream_ttft_starts_at_the_upstream_send_after_tokenize():
-    # upstream_ttft is the research TTFT definition (upstream send -> first content); ttft counts from arrival
+    # upstream_ttft is the research TTFT definition (upstream send -> the first token event); ttft counts from arrival
     prof = make_profile(max_prompt_tokens=60)
     async with stack(FakeConfig(tokenize_delay_s=0.3), prof) as st, st.client() as c:
         r = await c.post("/v1/completions", json={"model": MODEL, "prompt": "w " * 50, "stream": True})
@@ -810,3 +816,176 @@ async def test_the_gateway_serves_https_with_the_configured_certificate(tmp_path
         async with httpx.AsyncClient(base_url=st.url.replace("https://", "http://"), trust_env=False) as plain:
             with pytest.raises(httpx.HTTPError):           # plain HTTP is not served
                 await plain.get("/healthz")
+
+
+# ------------------------------------------------------------------ 044: access log, /readyz, candidate policies --
+
+def access(caplog, path="/v1/completions") -> list:
+    return [e for e in (json.loads(r.getMessage()) for r in caplog.records if r.name == "capserve.access")
+            if e["path"] == path]
+
+
+async def test_the_access_log_joins_the_clients_id_and_brackets_the_upstream_interval(caplog):
+    """044 item 1: each completion line has client_request_id (the client's x-request-id) and t_arrival_s <= t_sent_s
+    <= t_released_s on the monotonic clock; a permit's release is recorded before the next request is sent, so with
+    one slot the intervals [t_sent_s, t_released_s) never overlap."""
+    caplog.set_level(logging.INFO, logger="capserve.access")
+    prof = make_profile(max_concurrency=1, max_queue=8)
+    async with stack(FakeConfig(ttft_s=0.01), prof) as st, st.client() as c:
+        rs = await asyncio.gather(*(c.post("/v1/completions", json={**COMP, "stream": i % 2 == 1},
+                                           headers={"x-request-id": f"V-L-U2K-c1-r1-{i}"}) for i in range(4)))
+        assert [r.status_code for r in rs] == [200] * 4
+        assert all(r.headers["x-request-id"] != f"V-L-U2K-c1-r1-{i}" for i, r in enumerate(rs))
+        await until(lambda: len(access(caplog)) == 4)
+    lines = sorted(access(caplog), key=lambda e: e["t_sent_s"])
+    assert sorted(e["client_request_id"] for e in lines) == [f"V-L-U2K-c1-r1-{i}" for i in range(4)]
+    for e in lines:
+        assert e["t_arrival_s"] <= e["t_sent_s"] <= e["t_released_s"] and e["queue_wait_s"] >= 0
+        assert not {"prefill_wait_s", "admission_class", "admission_units"} & set(e)   # no candidate policy: none
+    assert all(a["t_released_s"] <= b["t_sent_s"] for a, b in zip(lines, lines[1:]))
+
+
+async def test_readyz_discloses_the_request_path_queue_settings_and_no_policy_by_default():
+    """044 items 7, 8: gateway_path_sha256 (the AST closure of __main__), the queue settings, the serving status, and
+    admission / prefill_pacing null; gateway_validated is null without a §12 profile."""
+    async with stack() as st, st.client() as c:
+        r = await c.get("/readyz")
+        body = r.json()
+        assert body["gateway_path_sha256"] == gp.gateway_path_sha256() and body["gateway_validated"] is None
+        assert body["queue"] == {"max_queue_wait_s": 30.0, "request_deadline_s": 300.0}
+        assert (body["serving_status"], body["admission"], body["admission_state"], body["prefill_pacing"]) == (
+            "provisional", None, None, None)
+        assert deploy.served_profile_problems(r.text, st.gateway.profile, "test") == []
+
+
+TWO = make_profile(classes=[("s", 10, 4), ("l", 40, 1)])   # weighted-v1's shape: units 1 / 4, budget 4
+WEIGHTED = {"policy": "weighted-v1", "budget": 4, "max_queue": 8,
+            "classes": [{"name": "s", "units": 1, "max_concurrency": 4},
+                        {"name": "l", "units": 4, "max_concurrency": 1}]}
+
+
+def words(n: int) -> dict:
+    return {"model": MODEL, "prompt": " ".join(["w"] * n)}
+
+
+def weighted_stack(fake_cfg=None, hf=None, **kw):
+    return stack(fake_cfg or FakeConfig(), TWO, active_class=None, admission=WEIGHTED, tokenizer="local",
+                 tokenizer_path="/fake-snapshot", local_tokenizer=LocalTokenizer(hf or WordsHF()), **kw)
+
+
+async def test_weighted_v1_classifies_by_the_local_count_and_admits_within_its_budget(caplog):
+    """044 item 2: every prompt is counted (no byte fast path), admitted as the first class it fits (s <= 10 tokens,
+    l <= 40), above the largest 400; the units and class go to the access log; strict FIFO with head-of-line
+    blocking."""
+    caplog.set_level(logging.INFO, logger="capserve.access")
+    hf = WordsHF()
+    async with weighted_stack(FakeConfig(hang=True), hf) as st, st.client() as c:
+        gw = st.gateway
+        r = await c.post("/v1/completions", json=words(41))
+        assert r.status_code == 400 and error(r)["code"] == "context_length_exceeded" and "40" in error(r)["message"]
+        assert hf.calls == 1   # counted although its 81 bytes alone would not fit 40: never the fast path
+        shorts = [asyncio.create_task(c.post("/v1/completions", json=words(3))) for _ in range(3)]
+        await until(lambda: st.fake.in_flight == 3)
+        long = asyncio.create_task(c.post("/v1/completions", json=words(20)))    # 3 + 4 > 4: waits
+        await until(lambda: gw.ctrl.queued == 1)
+        behind = asyncio.create_task(c.post("/v1/completions", json=words(2)))   # would fit, but behind the head
+        await until(lambda: gw.ctrl.queued == 2)
+        assert (st.fake.in_flight, gw.ctrl.units_in_flight, gw.ctrl.class_in_flight) == (3, 3, {"s": 3, "l": 0})
+        body = (await c.get("/readyz")).json()
+        assert body["admission_state"] == {"units_in_flight": 3, "in_flight": {"s": 3, "l": 0}}
+        st.fake.release.set()
+        assert [r.status_code for r in await asyncio.gather(*shorts, long, behind)] == [200] * 5
+        assert st.fake.peak_in_flight <= 4
+    got = sorted((e["admission_class"], e["admission_units"]) for e in access(caplog) if e["status"] == 200)
+    assert got == [("l", 4)] + [("s", 1)] * 4
+    assert next(e for e in access(caplog) if e["status"] == 400)["error_code"] == "context_length_exceeded"
+
+
+async def test_weighted_v1_is_disclosed_by_policy_in_readyz_metrics_and_sizes():
+    """044 item 2: no active class; /readyz and capserve_profile_info name the policy; max_pending = budget + max_queue
+    + pre_admission_slots; the upstream pool is budget + 4 connections."""
+    async with weighted_stack() as st, st.client() as c:
+        r = await c.get("/readyz")
+        body = r.json()
+        assert body["ready"] is True and (body["active_class"], body["class_status"], body["bound"]) == (None,) * 3
+        assert body["admission"] == {**WEIGHTED, "classes": [
+            {"name": "s", "units": 1, "max_concurrency": 4, "max_prompt_tokens": 10, "max_output_tokens": 128},
+            {"name": "l", "units": 4, "max_concurrency": 1, "max_prompt_tokens": 40, "max_output_tokens": 128}]}
+        assert body["limits"] == {"max_concurrency": 4, "max_queue": 8, "max_pending": 4 + 8 + 16,
+                                  "max_prompt_tokens": 40, "max_output_tokens": 128}
+        assert st.gateway.guard.max_pending == 4 + 8 + 16 and body["prefill_pacing"] is None
+        pool = st.gateway.client._transport._pool
+        assert (pool._max_connections, pool._max_keepalive_connections) == (4 + 4, 4 + 4)
+        assert metric(st.gateway, "capserve_profile_info", active_class="weighted-v1:s+l", flags="") == 1
+        assert (metric(st.gateway, "capserve_concurrency_limit"), metric(st.gateway, "capserve_queue_limit")) == (4, 8)
+
+
+async def test_prefill_pacing_meters_the_burst_and_records_its_wait(caplog):
+    """044 item 3: the bucket (burst 10 tokens, 1,000 tokens/s) and the slots on one FIFO; every admitted request
+    records prefill_wait_s (0.0 when it waited for no tokens), observed as capserve_prefill_wait_seconds."""
+    caplog.set_level(logging.INFO, logger="capserve.access")
+    prof = make_profile(max_concurrency=4, max_queue=8, max_prompt_tokens=10)
+    pacing = {"burst_tokens": 10, "rate_tokens_per_s": 1000}
+    async with stack(FakeConfig(), prof, tokenizer="local", tokenizer_path="/fake-snapshot",
+                     local_tokenizer=LocalTokenizer(WordsHF()), prefill_pacing=pacing) as st, st.client() as c:
+        assert [r.status_code for r in await asyncio.gather(*(c.post("/v1/completions", json=words(4))
+                                                               for _ in range(4)))] == [200] * 4
+        body = (await c.get("/readyz")).json()
+        assert body["prefill_pacing"] == pacing and body["active_class"] == "test"
+        assert metric(st.gateway, "capserve_prefill_wait_seconds_count") == 4
+        await until(lambda: len(access(caplog)) == 4)
+    waits = sorted(e["prefill_wait_s"] for e in access(caplog))
+    assert waits[:2] == [0.0, 0.0] and waits[-1] > 0   # 10 tokens cover two prompts of 4; the others wait
+    assert all("admission_class" not in e for e in access(caplog))
+
+
+def test_a_pacing_burst_below_the_class_prompt_is_a_config_error():
+    prof = make_profile(max_prompt_tokens=1920)
+    settings = gateway_settings("http://127.0.0.1:9", tokenizer="local", tokenizer_path="/snap",
+                                prefill_pacing={"burst_tokens": 1919, "rate_tokens_per_s": 5920})
+    with pytest.raises(ConfigError, match="burst_tokens"):
+        create_app(settings, prof, local_tokenizer=LocalTokenizer(WordsHF()))
+
+
+@pytest.mark.parametrize("over", [{"prefill_pacing": {"burst_tokens": 9600, "rate_tokens_per_s": 5920}},
+                                  {"active_class": None, "admission": {
+                                      "policy": "weighted-v1", "budget": 32, "max_queue": 32, "classes": [
+                                          {"name": "uniform-2k", "units": 1, "max_concurrency": 32},
+                                          {"name": "uniform-8k", "units": 4, "max_concurrency": 8}]}}])
+def test_a_candidate_policy_never_builds_a_gateway_on_a_verified_profile_without_section_12(over):
+    prof = committed("verified-formal-20261017-c1b")
+    settings = gateway_settings("http://127.0.0.1:9", tokenizer="local", tokenizer_path="/snap",
+                                **{"active_class": "uniform-2k", **over})
+    with pytest.raises(ProfileError, match="044"):
+        create_app(settings, prof, local_tokenizer=LocalTokenizer(WordsHF()))
+
+
+def v12(**kw) -> CapacityProfile:
+    return CapacityProfile.model_validate(stage_v_doc(**kw))
+
+
+async def test_a_section_12_pacing_serves_only_on_its_validated_request_path():
+    settings = dict(active_class="uniform-2k", tokenizer="local", tokenizer_path="/fake-snapshot",
+                    prefill_pacing={"burst_tokens": 9600, "rate_tokens_per_s": 5920}, **SLOW_QUEUE)
+    with pytest.raises(ProfileError, match="gateway_path_sha256"):
+        create_app(gateway_settings("http://127.0.0.1:9", **settings), v12(),
+                   local_tokenizer=LocalTokenizer(WordsHF()))   # this checkout's path is not the fake frozen one
+    async with stack(profile=v12(), local_tokenizer=LocalTokenizer(WordsHF()), gateway_path_sha256=GATEWAY_PATH_SHA256,
+                     **settings) as st, st.client() as c:
+        body = (await c.get("/readyz")).json()
+        assert (body["gateway_path_sha256"], body["gateway_validated"]) == (GATEWAY_PATH_SHA256, True)
+        assert body["serving_status"] == "verified" and body["queue"] == SLOW_QUEUE
+        assert (await c.post("/v1/completions", json=words(5))).status_code == 200
+
+
+@pytest.mark.parametrize("path, validated", [(GATEWAY_PATH_SHA256, True), ("00" * 32, False)])
+async def test_a_v1_class_serves_512_tokens_and_discloses_whether_its_request_path_was_validated(path, validated):
+    """044 待決 4: a V1 class is no candidate policy, so another request path only shows gateway_validated false."""
+    prof = v12(classes=[v1_class("U2K-O512")], admission=None, session="formal-20261102-v-cls")
+    async with stack(FakeConfig(honor_max_tokens=True, n_tokens=600), prof, active_class="uniform-2k-o1-512",
+                     gateway_path_sha256=path) as st, st.client() as c:
+        body = (await c.get("/readyz")).json()
+        assert (body["gateway_validated"], body["bound"], body["limits"]["max_output_tokens"]) == (
+            validated, "validated", 512)
+        r = await c.post("/v1/completions", json=COMP)
+        assert r.status_code == 200 and st.fake.generations[-1].body["max_tokens"] == 512

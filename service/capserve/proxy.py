@@ -58,7 +58,8 @@ class SSEFramer:
 
 
 def has_content(event: bytes) -> bool:
-    """Whether an event carries generated text (chat delta.content or completion text): the first-token mark."""
+    """Whether an event carries generated text (chat delta.content or completion text): the content checks of itest
+    and loadtest (never the gateway's first-token mark: is_token_event)."""
     for line in event.splitlines():
         if not line.startswith(b"data:"):
             continue
@@ -71,6 +72,26 @@ def has_content(event: bytes) -> bool:
             return bool((choice.get("delta") or {}).get("content") or choice.get("text"))
         except (ValueError, AttributeError, IndexError, TypeError):
             return False
+    return False
+
+
+def is_token_event(event: bytes) -> bool:
+    """Whether an event is a token event, the gateway's first-token mark (ttft_s, upstream_ttft_s; 044 實作補記六): its
+    first data line is JSON with a non-empty choices list: vLLM 0.30 bench's TTFT rule (endpoint_request_func:
+    `if choices := data.get("choices")`, whatever the text, which may be empty for a special or partial UTF-8 token).
+    [DONE], the usage-only chunk ("choices": []), an in-band error and a comment are not."""
+    for line in event.splitlines():
+        if not line.startswith(b"data:"):
+            continue
+        payload = line[5:].strip()
+        if payload == b"[DONE]":
+            return False
+        try:
+            doc = json.loads(payload)
+        except ValueError:
+            return False
+        choices = doc.get("choices") if isinstance(doc, dict) else None
+        return isinstance(choices, list) and len(choices) > 0
     return False
 
 
@@ -195,7 +216,7 @@ class ProxyStream(StreamingResponse):
                 for event in framer.feed(chunk):
                     if self.rec.outcome is None and is_error(event):   # forwarded as is, but never counted ok
                         self.rec.outcome, self.rec.upstream_error = "upstream_error", "stream_error"
-                    if self.rec.ttft_s is None and has_content(event):
+                    if self.rec.ttft_s is None and is_token_event(event):   # vLLM bench's first token
                         now = self.clock()
                         self.rec.ttft_s = now - self.rec.arrival
                         if self.rec.upstream_sent is not None:

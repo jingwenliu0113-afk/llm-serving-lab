@@ -9,6 +9,21 @@ The environment supplies exactly three things, never stored in settings or logs:
 Limits (max_concurrency, max_queue, token bounds) come from the capacity profile's active_class, never from here;
 max_queue_wait_s and the pending slots are product policy, not research results (029). There is no workers option:
 the gateway is one process, otherwise its in-process limits would multiply.
+
+Candidate policies (decision 044 "產品程式" items 2-5; 043 7.3's designs, which only Stage V validates), off unless set:
+- [admission] (policy "weighted-v1", budget, max_queue, classes [{name, units, max_concurrency}]) replaces
+  active_class (there is none): a prompt is admitted as the first named class it fits, under one budget of units and
+  each class's cap (capserve.admission.PolicyController); max_pending = budget + max_queue + pre_admission_slots.
+- [prefill_pacing] (burst_tokens, rate_tokens_per_s): a prefill token bucket in the active class's FIFO.
+- Never both (never measured together: V4 ran with pacing off); either counts every prompt with tokenizer "local".
+- served_classes is the one place a gateway's classes are resolved (capserve serve, create_app, deploy up): each by
+  profile.serving_class (030 8.7, 043, whatever flag); the parameters must fit the classes (ConfigError: the caps are
+  the classes' max_concurrency, units x cap = budget, strictly increasing prompt limits, one output bound; a burst at
+  least the class's max_prompt_tokens, else a prompt could never be admitted); and a candidate policy is served only
+  (ProfileError otherwise, no flag overrides it) on a provisional profile (research: it loads only with
+  --allow-provisional) or on a verified §12 profile carrying the identical section (the same parameters and queue
+  settings) whose units were validated on this gateway's request path (gateway_path_sha256). deploy (study=False)
+  never serves one without such a section, a provisional profile's included.
 """
 
 from __future__ import annotations
@@ -21,7 +36,8 @@ from typing import Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from capserve.profile import WorkloadClass
+from capserve.profile import (STAGE_V_SECTION, AdmissionParams, CapacityProfile, PacingParams, ProfileError,
+                              WorkloadClass, admission_problems)
 
 API_KEY_ENV = "CAPSERVE_API_KEY"
 KEYS_FILE_ENV = "CAPSERVE_API_KEYS_FILE"
@@ -86,7 +102,7 @@ def loopback_client_context(tls: TLS) -> ssl.SSLContext:
 
 
 class Settings(_Strict):
-    active_class: str
+    active_class: str | None = None   # required, unless [admission] (044) names the classes instead
     # 038 §4: "vllm" asks vLLM's /tokenize under a permit (029); "local" counts in the gateway from tokenizer_path,
     # the snapshot vLLM serves (the deploy sets it), before admission.
     tokenizer: Literal["vllm", "local"] = "vllm"
@@ -114,6 +130,8 @@ class Settings(_Strict):
     retry_after_s: RetryAfter = RetryAfter()
     tokens: TokenOverheads = TokenOverheads()
     tls: TLS | None = None
+    admission: AdmissionParams | None = None        # 044: weighted-v1 (candidate; off unless set)
+    prefill_pacing: PacingParams | None = None      # 044: prefill pacing (candidate; off unless set)
 
     @model_validator(mode="after")
     def _tokenizer(self):
@@ -121,9 +139,128 @@ class Settings(_Strict):
             raise ValueError('tokenizer_path is required with tokenizer = "local" and allowed only with it')
         return self
 
-    def max_pending(self, cls: WorkloadClass) -> int:
-        """Requests the guard lets in before reading a body: running + queued + pre-admission slots."""
+    @model_validator(mode="after")
+    def _policies(self):
+        if (self.active_class is None) == (self.admission is None):
+            raise ValueError("set exactly one of active_class (one class, 029) and [admission] (044 weighted-v1, which "
+                             "names its classes and has no active class)")
+        if self.admission is not None and self.prefill_pacing is not None:
+            raise ValueError("[admission] and [prefill_pacing] together were never measured (044: V4 ran with pacing "
+                             "off)")
+        if (self.admission is not None or self.prefill_pacing is not None) and self.tokenizer != "local":
+            raise ValueError('a candidate policy counts every prompt in the gateway: it needs tokenizer = "local" '
+                             "(044: weighted-v1 classifies by the count, pacing spends it)")
+        return self
+
+    def max_pending(self, cls: WorkloadClass | None = None) -> int:
+        """Requests the guard lets in before reading a body: running + queued + pre-admission slots (044 weighted-v1:
+        its budget + its max_queue + the slots)."""
+        if self.admission is not None:
+            return self.admission.budget + self.admission.max_queue + self.pre_admission_slots
         return cls.max_concurrency + cls.max_queue + self.pre_admission_slots
+
+
+CANDIDATE_POLICIES = ("admission", "prefill_pacing")   # 044: validated only by Stage V
+
+
+def candidate_policies(settings: Settings) -> list:
+    return [name for name in CANDIDATE_POLICIES if getattr(settings, name) is not None]
+
+
+def queue_settings(settings: Settings) -> dict:
+    """The queue settings a candidate policy is validated with (044: max_queue_wait_s, request_deadline_s)."""
+    return {"max_queue_wait_s": settings.max_queue_wait_s, "request_deadline_s": settings.request_deadline_s}
+
+
+def _policy_config_problems(settings: Settings, classes: list) -> list:
+    problems = []
+    pacing = settings.prefill_pacing
+    if pacing is not None and pacing.burst_tokens < classes[0].max_prompt_tokens:
+        problems.append(f"[prefill_pacing] burst_tokens {pacing.burst_tokens} < class {classes[0].name}'s "
+                        f"max_prompt_tokens {classes[0].max_prompt_tokens}: such a prompt could never be admitted "
+                        "(044)")
+    if settings.admission is not None:
+        problems += admission_problems(settings.admission, classes)
+    return problems
+
+
+def _policy_serving_problems(settings: Settings, profile: CapacityProfile, classes: list, *, gateway_path_sha256: str,
+                             study: bool) -> list:
+    names = candidate_policies(settings)
+    if not names:
+        return []
+    tables = " and ".join(f"[{n}]" for n in names)
+    if not profile.verified:
+        return [] if study else [f"{tables}: deploy never serves a candidate policy without a §12 section, a "
+                                 f"provisional profile's ({profile.profile_id}) included (044)"]
+    if profile.section != STAGE_V_SECTION:
+        return [f"{tables}: verified profile {profile.profile_id} ({profile.section}) carries no Stage V section: a "
+                "candidate policy serves only on a provisional profile with --allow-provisional (research) or a "
+                "verified §12 profile carrying the identical section (044), whatever flag is given"]
+    problems = []
+    queue, validated_path = queue_settings(settings), profile.provenance.gateway_path_sha256
+    if gateway_path_sha256 != validated_path:
+        problems.append(f"this gateway's request path (gateway_path_sha256 {gateway_path_sha256}) is not the one "
+                        f"profile {profile.profile_id}'s units were validated on ({validated_path}): its candidate "
+                        "policies are refused (044)")
+    if settings.prefill_pacing is not None:
+        c = classes[0]
+        want = None if c.pacing is None else {**c.pacing.model_dump(include=set(PacingParams.model_fields)),
+                                              "queue": c.pacing.queue.model_dump()}
+        got = {**settings.prefill_pacing.model_dump(), "queue": queue}
+        if got != want:
+            problems.append(f"[prefill_pacing] {settings.prefill_pacing.model_dump()} with queue {queue} is not class "
+                            f"{c.name}'s validated pacing {want} (044: exactly these, or none)")
+    if settings.admission is not None:
+        adm = profile.admission
+        want = None if adm is None else {**adm.model_dump(include=set(AdmissionParams.model_fields)),
+                                         "queue": adm.queue.model_dump()}
+        got = {**settings.admission.model_dump(), "queue": queue}
+        if got != want:
+            problems.append(f"[admission] {settings.admission.model_dump()} with queue {queue} is not profile "
+                            f"{profile.profile_id}'s validated admission section {want} (044: exactly these, or none)")
+        elif adm.gateway_path_sha256 != gateway_path_sha256:
+            problems.append(f"the admission section was validated on request path {adm.gateway_path_sha256}, not this "
+                            f"gateway's {gateway_path_sha256} (044)")
+    return problems
+
+
+def served_classes(settings: Settings, profile: CapacityProfile, *, gateway_path_sha256: str,
+                   study: bool = True) -> list:
+    """The classes a gateway with these settings serves, in admission order: [the active class] or weighted-v1's.
+    ProfileError (030 8.7 / 043 / 044 refusals, whatever flag) or ConfigError (parameters that do not fit the
+    classes); see the module docstring. study=False is deploy's call: never a candidate policy without §12."""
+    names = [settings.active_class] if settings.admission is None else [a.name for a in settings.admission.classes]
+    classes = [profile.serving_class(n) for n in names]
+    if problems := _policy_serving_problems(settings, profile, classes, gateway_path_sha256=gateway_path_sha256,
+                                            study=study):
+        raise ProfileError("; ".join(problems))
+    if problems := _policy_config_problems(settings, classes):
+        raise ConfigError("; ".join(problems))
+    return classes
+
+
+def served_limits(settings: Settings, classes: list) -> dict:
+    """/readyz's limits: the active class's, or weighted-v1's envelope (044: the most requests in flight, the largest
+    cap since units x cap = budget; its max_queue; the largest prompt; the one output bound)."""
+    adm = settings.admission
+    if adm is None:
+        c = classes[0]
+        return {"max_concurrency": c.max_concurrency, "max_queue": c.max_queue, "max_pending": settings.max_pending(c),
+                "max_prompt_tokens": c.max_prompt_tokens, "max_output_tokens": c.max_output_tokens}
+    return {"max_concurrency": max(a.max_concurrency for a in adm.classes), "max_queue": adm.max_queue,
+            "max_pending": settings.max_pending(), "max_prompt_tokens": max(c.max_prompt_tokens for c in classes),
+            "max_output_tokens": classes[0].max_output_tokens}
+
+
+def admission_view(settings: Settings, classes: list) -> dict | None:
+    """/readyz's admission (044): weighted-v1's parameters with each class's token limits; None when off."""
+    adm = settings.admission
+    if adm is None:
+        return None
+    return {**adm.model_dump(), "classes": [{**a.model_dump(), "max_prompt_tokens": c.max_prompt_tokens,
+                                             "max_output_tokens": c.max_output_tokens}
+                                            for a, c in zip(adm.classes, classes)]}
 
 
 def load_settings(path) -> Settings:

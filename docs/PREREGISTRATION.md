@@ -561,14 +561,16 @@ H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。本節�
 - **gateway 是被操弄的變因**：`capserve serve` 的 import 閉包（AST 計算）以 `gateway_path_sha256` 凍結；
   研究用的佇列設定（V2 / V4 為 120 s / 600 s）記錄在設定檔，和產品設定分開。
 - **Hypotheses**（預測寫在數據之前）：
-  - H-GW1–4：GW-M8K-T 預測 not supported，其他 supported；
+  - H-GW1–4：GW-M8K-T 預測 MARGINAL 或 FAIL（not supported），其他 supported；
   - H-L1–2：supported；
   - H-P1–3：var-pace 預測 not supported；
   - H-W0–2：W-90 / W-50 預測 not supported。
+  - 預測以點的類別記錄（supported 為 PASS，not supported 為 FAIL 或 TRIVIAL），是否如預測由類別機械判定，NT 不判定。
 - **session**：mini 一次；`formal-*-v-adm`（V2 + V4，約 2.75 h，上限 3.5 h）、`formal-*-v-cls`（V-GW + V1，約 5.3 h，
   上限 7.0 h），之間 ≥ 2 h；全期上限 12 h。
   - 超過 session 的上限時不再開始新的 boot，剩下的點為 NT；
-  - 一個產品單位中有任一點不是 ok，該單位的其他點不再測。
+  - 跳過規則逐點：一個點有一次 run 不是 ok（無效、FAIL 或 trivial）之後，只有該點不再測；同一產品單位的其他點照常測，
+    單位仍要每一點都 PASS 才成立。
 - **產品對應**：每個單位只在它列出的每一點都 PASS 時成立。
   - 產生器（`profile_gen --validation-session`）只為成立的單位寫出 §12 verified profile：V1 的 `validated` class、
     `pacing` 段、`admission` 段；

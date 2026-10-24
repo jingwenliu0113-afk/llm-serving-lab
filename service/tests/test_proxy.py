@@ -49,6 +49,81 @@ def test_first_content_detection(event, want):
     assert px.has_content(event) is want
 
 
+USAGE_ONLY = b'data: {"id":"cmpl-1","choices":[],"usage":{"prompt_tokens":5,"completion_tokens":1}}\n\n'
+
+
+@pytest.mark.parametrize("event, want", [
+    (EVENTS[0], True),                                                     # chat's role chunk carries a choice
+    (EVENTS[1], True), (EVENTS[3], False),                                 # [DONE] is no token
+    (b'data: {"choices":[{"text":""}]}\n\n', True),                        # empty text is still a token
+    (b'data: {"choices":[{"text":"","finish_reason":"length"}]}\n\n', True),
+    (b'data: {"choices":[{"delta":{"content":""}}]}\n\n', True),
+    (b'data: {"choices":[{"text":"x"}]}\n\n', True),
+    (USAGE_ONLY, False), (b'data: {"choices":[]}\n\n', False),             # the usage-only chunk is no token
+    (b'data: {"usage":{"completion_tokens":1}}\n\n', False), (b'data: {"choices":null}\n\n', False),
+    (b'data: {"error":{"message":"boom","type":"x","code":500}}\n\n', False),   # an in-band error is no token
+    (b"data: not json\n\n", False), (b": keep-alive\n\n", False), (b'data: [1, 2]\n\n', False),
+    (b'data: {"choices":{"0":{}}}\n\n', False),
+])
+def test_the_first_token_event_is_vllm_benchs(event, want):
+    """044 實作補記六: the gateway's first-token mark is vLLM 0.30 bench's (endpoint_request_func: the first data event
+    whose JSON has a non-empty choices list; not [DONE], not the usage-only chunk), not the first non-empty text."""
+    assert px.is_token_event(event) is want
+
+
+class Timed(httpx.AsyncByteStream):
+    """An upstream body whose events arrive at scripted times of a fake clock: (t, bytes) sets now to t, then yields."""
+
+    def __init__(self, steps, now):
+        self.steps, self.now = steps, now
+
+    async def __aiter__(self):
+        for t, data in self.steps:
+            self.now[0] = t
+            yield data
+
+    async def aclose(self):
+        pass
+
+
+def cmpl(text, finish=None) -> bytes:
+    return b"data: " + json.dumps({"id": "cmpl-1", "choices": [{"index": 0, "text": text,
+                                                                 "finish_reason": finish}]}).encode() + b"\n\n"
+
+
+async def timed_marks(steps) -> tuple:
+    """(ttft_s, upstream_ttft_s, outcome) of a completions stream: arrival at 0, upstream send at 0.25."""
+    now = [0.0]
+    rec = RequestRecord(request_id="r", method="POST", path="/v1/completions", arrival=0.0, route="completions",
+                        stream=True, upstream_sent=0.25)
+    resp = px.ProxyStream(httpx.Response(200, stream=Timed(steps, now)), rec=rec, deadline=1e9,
+                          clock=lambda: now[0], cleanup=lambda: None)
+    peer = Peer()
+    await resp(SCOPE, peer.receive, peer.send)
+    assert b"".join(peer.chunks) == b"".join(data for _, data in steps)   # the bytes pass through unchanged
+    return rec.ttft_s, rec.upstream_ttft_s, rec.outcome
+
+
+DONE = b"data: [DONE]\n\n"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("steps, want", [
+    # an empty-text first chunk (a partial UTF-8 byte-BPE token, a skipped special token), then text: the first chunk
+    ([(1.0, cmpl("")), (2.0, cmpl("x")), (2.5, cmpl("y", "length")), (2.6, USAGE_ONLY), (2.7, DONE)], (1.0, 0.75)),
+    # out = 1 whose only chunk has empty text
+    ([(1.5, cmpl("", "length")), (1.6, USAGE_ONLY), (1.7, DONE)], (1.5, 1.25)),
+    # every chunk empty, then usage and [DONE]
+    ([(1.0, cmpl("")), (2.0, cmpl("")), (3.0, cmpl("", "length")), (3.1, USAGE_ONLY), (3.2, DONE)], (1.0, 0.75)),
+    # the usage-only chunk (and [DONE]) never mark
+    ([(1.0, USAGE_ONLY), (2.0, cmpl("x", "length")), (3.0, DONE)], (2.0, 1.75)),
+    ([(1.0, USAGE_ONLY), (2.0, DONE)], (None, None)),
+])
+async def test_ttft_marks_the_first_token_event_as_vllm_bench_does(steps, want):
+    ttft, upstream_ttft, outcome = await timed_marks(steps)
+    assert (ttft, upstream_ttft) == want and outcome == "ok"
+
+
 def test_error_event_then_done():
     events = px.sse_error("upstream_stream_broken", "the model server stream broke")
     assert px.SSEFramer().feed(b"".join(events)) == events

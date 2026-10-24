@@ -12,7 +12,16 @@ A Stage D profile (decision 043, PREREGISTRATION §9) is built here by hand too:
 long_prefill_token_threshold, the Stage B fingerprint) or T (threshold 512 from pins [advanced], the fingerprint of B0's
 argv plus --long-prefill-token-threshold 512), its classes named and limited by the D-A workload (043 §2), every class
 stating its server, output length, descriptive estimands, the C_PROD point's facts, its hypotheses and what it never
-covered (043 §5: six items, plus in_vllm_wait_beyond_c_kv for ABOVE_CKV)."""
+covered (043 §5: six items, plus in_vllm_wait_beyond_c_kv for ABOVE_CKV).
+
+A Stage V profile (decision 044, PREREGISTRATION §12) is built here by hand too: B0, checked against a frozen
+configs/stage_v.toml (frozen_stage_v: [freeze] stage_v and gateway_path_sha256, stage_d.toml's [slo]). The repo's file
+exists before Stage V's freeze with [freeze] stage_v = false (cp.frozen_configs() is that repo state, and refuses
+every §12 profile); FROZEN models a checkout without the file and FROZEN_V adds a frozen one. Its classes are copies
+of c1b's uniform-2k / uniform-8k (with the pacing V2 validated, or plain members of the weighted-v1 admission section
+V4 validated) and V1's validated classes (uniform-2k-o1-512 / uniform-8k-o1-512: the D-A O512 class's limits and
+evidence, not_covered recomputed, the output distribution and its five datasets, at V1's C 32 / 8 over the unit's
+points)."""
 
 from __future__ import annotations
 
@@ -45,15 +54,32 @@ def frozen_stage_d(**freeze) -> dict:
     return cfg
 
 
+GATEWAY_PATH_SHA256, STAGE_V_SHA256, CAPSERVE_SHA256 = "c3" * 32, "b2" * 32, "d4" * 32
+
+
+def frozen_stage_v(**freeze) -> dict:
+    """A frozen configs/stage_v.toml as the §12 loader reads it (044): [freeze] stage_v, mini, gateway_path_sha256,
+    and [slo] = stage_d.toml's (or with the given [freeze] values)."""
+    cfg = {"schema_version": 1, "freeze": {"stage_v": True, "mini": "smoke-v-20261101",
+                                           "gateway_path_sha256": GATEWAY_PATH_SHA256},
+           "slo": copy.deepcopy(frozen_stage_d()["slo"])}
+    cfg["freeze"].update(freeze)
+    return cfg
+
+
 def frozen_configs(capacity: dict | None = None, *, capacity_sha256=CAPACITY_SHA256, pins_sha256=PINS_SHA256,
-                   stage_d: dict | None = None, stage_d_sha256=STAGE_D_SHA256) -> FrozenConfigs:
+                   stage_d: dict | None = None, stage_d_sha256=STAGE_D_SHA256, stage_v: dict | None = None,
+                   stage_v_sha256=STAGE_V_SHA256) -> FrozenConfigs:
     """What a verified profile is checked against at load time (default: the frozen repo capacity.toml and
-    stage_d.toml; FrozenConfigs._replace(stage_d=None, stage_d_sha256=None) is a checkout without stage_d.toml)."""
+    stage_d.toml, and no stage_v.toml; FrozenConfigs._replace(stage_d=None, stage_d_sha256=None) is a checkout without
+    stage_d.toml)."""
     return FrozenConfigs(frozen_capacity() if capacity is None else capacity, capacity_sha256, pins_sha256,
-                         frozen_stage_d() if stage_d is None else stage_d, stage_d_sha256)
+                         frozen_stage_d() if stage_d is None else stage_d, stage_d_sha256, stage_v,
+                         None if stage_v is None else stage_v_sha256)
 
 
 FROZEN = frozen_configs()
+FROZEN_V = frozen_configs(stage_v=frozen_stage_v())   # after Stage V's freeze (044)
 
 
 def rehash(doc: dict) -> dict:
@@ -175,5 +201,82 @@ def stage_d_doc(pins: dict | None = None, *, server: str = "B0", classes: list |
                           "capacity_sha256": CAPACITY_SHA256, "pins_sha256": PINS_SHA256,
                           "stage_d_sha256": STAGE_D_SHA256, "gpu": "NVIDIA GeForce RTX 5070 Ti",
                           "gpu_driver": "617.42"},
+           **over}
+    return rehash(copy.deepcopy(doc))
+
+
+# ------------------------------------------------------------------ Stage V (decision 044, §12)
+
+SLOW_QUEUE = {"max_queue_wait_s": 120.0, "request_deadline_s": 600.0}           # 044 V2 / V4: "慢慢服務"
+PACING = {"U2K": {"burst_tokens": 9600, "rate_tokens_per_s": 5920},              # 044 V2
+          "U8K": {"burst_tokens": 32256, "rate_tokens_per_s": 5800}}
+V1_NOT_COVERED = ["prompt_length_variation", "open_loop", "start_up_wave", "concurrent_classes"]   # + ABOVE_CKV's
+V1_CLASSES = {  # base D-A workload -> (name, validated C, unit, points, the study classes they served)
+    "U2K-O512": ("uniform-2k-o1-512", 32, "V1-2K", ["L-U2K", "GW-U2K-O512"], ["v-uniform-2k-o512"]),
+    "U8K-O512": ("uniform-8k-o1-512", 8, "V1-8K", ["L-U8K", "GW-U8K-O512"],
+                 ["v-uniform-8k-o512-c8", "v-uniform-8k-o512"])}
+
+
+def validation(study, unit, points, measured, *, n=5) -> dict:
+    return {"study": study, "unit": unit, "points": list(points), "measured_classes": list(measured),
+            "worst_r": {p: {"client": 0.81, "upstream": 0.74} for p in points}, "n": n}
+
+
+def stage_v_copy(workload="U2K", value=None, *, pacing=True) -> dict:
+    """A §12 copy of c1b's uniform-2k (32) or uniform-8k (8): its §8 class, with the pacing PACE-2K / PACE-8K
+    validated (V2), or plain (only a member of the admission section)."""
+    tier = {"U2K": "2K", "U8K": "8K"}[workload]
+    cls = verified_class(workload=workload, value=value or {"U2K": 32, "U8K": 8}[workload])
+    if pacing:
+        cls["pacing"] = {**PACING[workload], "queue": dict(SLOW_QUEUE)}
+        cls["validation"] = validation("V2", f"PACE-{tier}", [f"P-{workload}"], [f"v-{cls['name']}"])
+    return cls
+
+
+def v1_class(base="U2K-O512") -> dict:
+    """V1's validated class of a D-A O512 workload: its limits and evidence, the validated C, not_covered recomputed
+    (via_gateway and output_length_other_than_measured covered, output_length_distribution added)."""
+    name, c, unit, points, measured = V1_CLASSES[base]
+    flags = ["WINDOW_SENSITIVE", "ABOVE_CKV"] if base == "U2K-O512" else []
+    cls = stage_d_class(base, value={"U2K-O512": 32, "U8K-O512": 12}[base], flags=flags)
+    ev = cls["evidence"]
+    ev["not_covered"] = V1_NOT_COVERED + ([ABOVE_CKV_NOT_COVERED] if "ABOVE_CKV" in flags else []) + [
+        "output_length_distribution"]
+    ev.update(output_distribution="uniform[1,512]", datasets_sha256=[f"{i:02x}" * 32 for i in range(1, 6)],
+              via_gateway=True)
+    cls.update(name=name, max_concurrency=c, max_queue=c, bound="validated", source=f"stage_v:{unit}",
+               validation=validation("V1", unit, points, measured))
+    return cls
+
+
+def admission_section(**over) -> dict:
+    """W1's weighted-v1 section (044 V4) over the copies uniform-2k and uniform-8k."""
+    return {"policy": "weighted-v1", "budget": 32, "max_queue": 32,
+            "classes": [{"name": "uniform-2k", "units": 1, "max_concurrency": 32},
+                        {"name": "uniform-8k", "units": 4, "max_concurrency": 8}],
+            "queue": dict(SLOW_QUEUE), "measured_mixes": [0.9, 0.5], "gateway_path_sha256": GATEWAY_PATH_SHA256,
+            "validation": validation("V4", "W1", ["W-90", "W-50"], ["v-uniform-2k", "v-uniform-8k"]), **over}
+
+
+def stage_v_doc(pins: dict | None = None, *, classes: list | None = None, admission: dict | None = "default",
+                session: str = "formal-20261101-v-adm", **over) -> dict:
+    """A valid §12 verified profile of one Stage V session (default: V-ADM's PACE-2K, PACE-8K and W1)."""
+    pins = pins if pins is not None else bp.load_pins()
+    doc = {"schema_version": 1, "profile_id": f"verified-{session}-b0", "status": "verified",
+           "provisional_reason": None, "slo": {"id": "S2", "terms": S2},   # stage_v.toml's [slo] (S2)
+           "server": {"vllm_version": pins["vllm"]["version"], "model_repo": pins["core_b"]["repo"],
+                      "model_revision": pins["core_b"]["revision"], "fingerprint_sha256": stage_b_fingerprint(pins),
+                      "num_gpu_blocks": pins["stage_b"]["num_gpu_blocks"], "block_size": pins["stage_b"]["block_size"],
+                      "long_prefill_token_threshold": None},
+           "classes": [stage_v_copy("U2K"), stage_v_copy("U8K")] if classes is None else classes,
+           "admission": admission_section() if admission == "default" else admission,
+           "provenance": {"source_session": session, "analysis_path": f"results/stage_v/{session}/analysis.json",
+                          "analysis_sha256": HEX, "prereg_section": "§12", "freeze_commit": "1" * 40,
+                          "generator_commit": "2" * 40, "deployed_commit": "3" * 40,
+                          "capacity_sha256": CAPACITY_SHA256, "pins_sha256": PINS_SHA256,
+                          "stage_d_sha256": STAGE_D_SHA256, "stage_v_sha256": STAGE_V_SHA256,
+                          "gateway_path_sha256": GATEWAY_PATH_SHA256, "capserve_sha256": CAPSERVE_SHA256,
+                          "base_profiles": [{"id": "verified-formal-20261017-c1b", "content_sha256": "e5" * 32}],
+                          "gpu": "NVIDIA GeForce RTX 5070 Ti", "gpu_driver": "617.42"},
            **over}
     return rehash(copy.deepcopy(doc))

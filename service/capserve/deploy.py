@@ -29,7 +29,9 @@ up: a foreground supervisor (WSL kills detached jobs), run from a release direct
     active class in the profile, servable (profile.serving_class: never an unavailable class (030 8.7), a verified
     class of more than 128 output tokens, or on a T profile anything but M8K-T with H-D2a supported (043)) and
     serviceable (never a verified 0, whose gateway would answer every request 503 class_not_serviceable and never be
-    ready);
+    ready); a candidate policy ([gateway] admission or prefill_pacing, 044) only with a verified §12 profile carrying
+    the identical section, validated on this release's request path (capserve.config.served_classes with
+    study=False: never with a provisional profile, whatever flag is given);
  3. the pre-boot shared usage (below); runs/pt-<UTC>[-<scenario>]/meta.json (purpose product-test, formal false,
     research_valid false, the preflight's idle window and baseline, its warnings), the profile bytes preflight
     checked as runs/<id>/profile.json (the gateway serves that copy, never the mutable path) and
@@ -43,7 +45,8 @@ up: a foreground supervisor (WSL kills detached jobs), run from a release direct
  5. the gateway: python -m capserve serve with runs/<id>/gateway.toml (rtx.toml [gateway] plus the deploy-owned
     backend_url, host 127.0.0.1, port and drain_timeout_s) and runs/<id>/profile.json, the same keep_fds; wait for
     /readyz (at most GATEWAY_READY_TIMEOUT_S, cut to what is left of max_hold_s), which must name the profile id,
-    status, active class and limits preflight checked, else teardown and exit 2;
+    status, active class and limits preflight checked (044: with a candidate policy also the policy, its parameters
+    and the queue settings; weighted-v1 has no active class), else teardown and exit 2;
  6. the workload: the capserve.loadtest scenario (a fixed module, never an arbitrary command), or hold until a
     signal, max_hold_s after the start or the exit of either child. max_hold_s (finite, <= 1 h: 029 allows no
     resident daemon; `up --resident`, 038 §7, is resident() below, a user decision, with resident_hold instead of
@@ -97,8 +100,10 @@ import coreb_smoke as smoke
 import gpu_idle as gi
 import run_adv
 import run_core_b
-from capserve import loadtest, procs, runs
-from capserve.config import API_KEY_ENV, KEYS_FILE_ENV, TLS, Settings, allow_provisional, loopback_client_context
+from capserve import gateway_path, loadtest, procs, runs
+from capserve.config import (API_KEY_ENV, CANDIDATE_POLICIES, KEYS_FILE_ENV, TLS, ConfigError, Settings,
+                             admission_view, allow_provisional, candidate_policies, loopback_client_context,
+                             queue_settings, served_classes, served_limits)
 from capserve.profile import FrozenConfigs, ProfileError, parse_profile, server_fingerprint
 
 RESEARCH_PORT = run_core_b.PORT
@@ -266,11 +271,16 @@ def _toml_value(value) -> str:
         return repr(value)
     if isinstance(value, str):
         return json.dumps(value, ensure_ascii=False)   # JSON string escapes are valid TOML basic-string escapes
+    if isinstance(value, list):   # 044: [admission] classes, an array of inline tables
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{_toml_key(k)} = {_toml_value(v)}" for k, v in value.items()) + "}"
     raise DeployError(f"cannot write {type(value).__name__} values to the gateway settings")
 
 
 def toml_dumps(doc: dict) -> str:
-    """Scalars, then one level of tables: exactly the shape of capserve Settings."""
+    """Scalars, then one level of tables (inside them lists and inline tables): exactly the shape of capserve
+    Settings."""
     lines = [f"{_toml_key(k)} = {_toml_value(v)}" for k, v in doc.items() if not isinstance(v, dict)]
     for k, v in doc.items():
         if isinstance(v, dict):
@@ -505,8 +515,22 @@ def idle_record(samples: list, compute_apps: list, *, bound_mib: int | None) -> 
             "window": {**window, "bound_mib": bound_mib}}
 
 
+def candidate_policy_problems(cfg: DeployConfig, prof, *, release_root) -> list:
+    """044 item 5: a [gateway] candidate policy serves only with a verified §12 profile carrying the identical
+    section, validated on the request path of the release the gateway runs from; never a provisional profile's."""
+    try:
+        settings = Settings.model_validate(gateway_settings(cfg))
+        classes = served_classes(settings, prof, gateway_path_sha256=gateway_path.gateway_path_sha256(release_root),
+                                 study=False)
+    except ValidationError as exc:
+        return [f"[gateway]: {exc}"]
+    except (ProfileError, ConfigError) as exc:
+        return [str(exc)]
+    return [f"class {c.name} of profile {prof.profile_id} is not serviceable" for c in classes if not c.serviceable]
+
+
 def preflight(cfg: DeployConfig, prof, *, pins: dict, env: dict, fingerprint: str, run_id: str,
-              fx: Effects) -> tuple:
+              fx: Effects, release_root=RELEASE_ROOT) -> tuple:
     """(problems, facts) before anything starts; every problem is reported, not only the first."""
     problems, facts = [], {}
     if not fx.held_gpu_lock():
@@ -536,7 +560,10 @@ def preflight(cfg: DeployConfig, prof, *, pins: dict, env: dict, fingerprint: st
         if not fx.port_free(port):
             problems.append(f"port {port} ({name}) is in use")
     problems += runs.run_path_problems(run_id, service_root=cfg.service_root, research_dir=cfg.research_dir)
-    if prof is not None:
+    if prof is not None and any(cfg.gateway.get(k) is not None for k in CANDIDATE_POLICIES):
+        problems += profile_server_problems(prof, pins=pins, fingerprint=fingerprint)
+        problems += candidate_policy_problems(cfg, prof, release_root=release_root)   # 044
+    elif prof is not None:
         problems += profile_server_problems(prof, pins=pins, fingerprint=fingerprint)
         try:
             cls = prof.serving_class(cfg.gateway.get("active_class", ""))   # refused: 030 8.7, 043
@@ -587,14 +614,29 @@ def server_problems(metrics_text: str, log_text: str, *, pins: dict) -> tuple:
     return {"cache_config": cache, "log_facts": facts, "nondefault": nondefault}, problems
 
 
-def served_profile_problems(readyz_text: str, prof, active_class: str) -> list:
-    """The gateway's /readyz must name the profile id, status, active class and limits preflight checked."""
+def served_profile_problems(readyz_text: str, prof, active_class: str, *, settings: Settings | None = None) -> list:
+    """The gateway's /readyz must name the profile id, status, active class and limits preflight checked; 044: with a
+    candidate policy in settings (the gateway's), also that policy, its parameters and the queue settings
+    (weighted-v1: no active class, its limits the envelope)."""
     try:
         body = json.loads(readyz_text)
     except ValueError:
         body = None
     if not isinstance(body, dict):
         return [f"gateway /readyz body is not a JSON object: {readyz_text[:200]!r}"]
+    if settings is not None and candidate_policies(settings):
+        names = [settings.active_class] if settings.admission is None else [a.name for a in settings.admission.classes]
+        classes = [prof.workload_class(n) for n in names]
+        limits = served_limits(settings, classes)
+        want = {"profile_id": prof.profile_id, "status": prof.status, "active_class": settings.active_class,
+                **{k: limits[k] for k in SERVED_LIMITS}, "admission": admission_view(settings, classes),
+                "prefill_pacing": settings.prefill_pacing.model_dump() if settings.prefill_pacing else None,
+                "queue": queue_settings(settings)}
+        profile, got_limits = body.get("profile") or {}, body.get("limits") or {}
+        got = {"profile_id": profile.get("id"), "status": profile.get("status"),
+               "active_class": body.get("active_class"), **{k: got_limits.get(k) for k in SERVED_LIMITS},
+               **{k: body.get(k) for k in ("admission", "prefill_pacing", "queue")}}
+        return [] if got == want else [f"gateway /readyz serves {got} != what preflight checked {want} (refused)"]
     cls = prof.workload_class(active_class)
     want = {"profile_id": prof.profile_id, "status": prof.status, "active_class": cls.name,
             **{k: getattr(cls, k) for k in SERVED_LIMITS}}
@@ -759,7 +801,8 @@ def up(cfg: DeployConfig, profile_path, *, allow_provisional: bool, loadtest: st
 
     try:
         problems += early_phase("preflight")
-        pre_problems, pre = preflight(cfg, prof, pins=pins, env=env, fingerprint=fp, run_id=run_id, fx=fx)
+        pre_problems, pre = preflight(cfg, prof, pins=pins, env=env, fingerprint=fp, run_id=run_id, fx=fx,
+                                      release_root=release_root)
         problems += pre_problems
         if problems:
             problems += early_phase("refused", problems=list(problems))
@@ -886,7 +929,8 @@ def _serve(cfg, prof, *, argv, env, run_dir: Path, allow_provisional, workload, 
     if status != 200:
         problems.append(f"gateway /readyz returned {status} right after it was ready")
         return 1
-    served_bad = served_profile_problems(readyz_text, prof, cfg.gateway.get("active_class", ""))
+    served_bad = served_profile_problems(readyz_text, prof, cfg.gateway.get("active_class", ""),
+                                         settings=Settings.model_validate(gateway_settings(cfg)))
     if served_bad:   # the gateway serves another profile than preflight checked: refused, like a non-Core-B server
         problems.extend(served_bad)
         return 2
