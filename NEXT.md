@@ -43,8 +43,10 @@
   - [x] 判讀與結果文件 **042**：每個 session 與 D5 各由一個 agent 抽取、第二個 agent 反駁，判定全部和 report 一致；039 執行紀錄二與文字更正、PREREGISTRATION §9 註記。
   - [ ] D-B 無效 run（C-U2K-P-i3-r1）的原因（**等 GPU 空閒**）：`tools/rtx/fetch_raw.sh` 唯讀取回 `raw/C-U2K-P-i3-r1.bench.log`（sha256 `96a2d194…`），
         並查 WSL venv 的 aiohttp 版本，確認 042 推論的 keep-alive 競態；只更新 042 的說明，判定不變（U2K-P 仍為 NT）。
-  - [ ] 產品：`capserve.profile_gen` 擴充到 Stage D session，產生 B0（U32K、U2K-O512、U8K-O512）與 T（U8K-T、M8K-T）的 verified profile（042「產品上的使用」）；不改正式設定的釘選。
-  - [ ] 產品：多 class 准入與開場湧入的處理，依 042 的 D5 與 D-A2 另寫 decision。
+  - [x] 產品設計 **043**（DRAFT，`76115eb`）：三份設計經三位評審比較。待決事項 1–7 依建議定案：3 份不釘選的 verified profile、
+        輸出上限 > 128 的 class 不能作為 active class、T 只服務 mixed-8k-t 而且現在不部署、正式釘選與 active class 不變、開場湧入維持現況。
+  - [ ] 043 實作（0 GPU，TDD）：在 worktree `feat/043-stage-d-profiles` 依序進行（loader → 產生器 → 三份 profile → 揭露、gateway keep-alive、README），完成後獨立審查，再合併到 main。
+  - [ ] **等使用者決定**（043 待決事項 8、9）：驗證研究 V-GW、V1、V2、V4 是否執行與先後；多 class 准入（`weighted-v1`）與 prefill pacing 在驗證前不上線。
 - **Stage Q**（decision 040，DRAFT；PREREGISTRATION §10）：
   - [x] Q1 / Q2 harness 與凍結檢查（`f65c081`、`49b88af`）：`configs/stage_q.toml`，三個 pilot 是凍結的證據，分析只接受凍結後的正式 session。
   - [x] Q3 harness（`quality/stage_q3.py`、`configs/stage_q3.toml`，獨立的凍結）。
