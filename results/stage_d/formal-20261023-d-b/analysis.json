@@ -1,0 +1,1215 @@
+{
+ "schema_version": 1,
+ "stage": "D",
+ "session": "D-B",
+ "kind": "open",
+ "slo": {
+  "id": "S2",
+  "ttft_p95_ms": {
+   "2048": 2000,
+   "8192": 6000,
+   "32768": 20000
+  },
+  "tpot_p95_ms": 100,
+  "mixed_long": "budget"
+ },
+ "protocol": {
+  "seed": 20261008,
+  "window": "steady",
+  "guard_band": 0.05,
+  "n_low": 3,
+  "open_loop": {
+   "grid": [
+    0.4,
+    0.55,
+    0.7,
+    0.8,
+    0.9,
+    1.0,
+    1.1,
+    1.25,
+    1.5
+   ],
+   "min_n": 300,
+   "min_duration_s": 300,
+   "trim": 0.1,
+   "warmups": 10,
+   "burstiness": 1.0
+  }
+ },
+ "replay": {
+  "ok": true,
+  "problems": []
+ },
+ "sentinel": {
+  "start": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 315.02411765877946,
+   "w_mean_ttft_ms": 967.6110278449778,
+   "steady_p95_ttft_ms": 1002.4501802523446,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "end": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 315.60114628396457,
+   "w_mean_ttft_ms": 965.6013352303853,
+   "steady_p95_ttft_ms": 996.6542391091934,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "gate": {
+   "ok": true,
+   "drift": {
+    "output_throughput": 0.0018316966633333137,
+    "w_mean_ttft_ms": 0.002076963321788919
+   },
+   "tolerance": 0.03,
+   "reasons": []
+  },
+  "cross_session_shift": {
+   "shift": false,
+   "limit": 0.05,
+   "values": [
+    {
+     "output_throughput": 0.0002811303171830204,
+     "steady_p95_ttft_ms": 0.006452993830629694
+    },
+    {
+     "output_throughput": 0.00211334192598045,
+     "steady_p95_ttft_ms": 0.0006339093209912772
+    }
+   ],
+   "references": {
+    "core_output_throughput": 314.9355797193607,
+    "advanced_steady_p95_ttft_ms": 996.0228509400622
+   }
+  }
+ },
+ "workloads": {
+  "U2K-P": {
+   "tier": 2048,
+   "mix": "uniform",
+   "out": 128,
+   "server": "B0",
+   "c_kv": 35,
+   "c_cap": 9,
+   "n_near": 5,
+   "search": {
+    "c_hat": 4,
+    "c_hat_g": null,
+    "runs": [
+     {
+      "C": 1,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 926.8893683045462,
+       "tpot": 33.537622867696356,
+       "long": null
+      },
+      "R": {
+       "short": 0.46344468415227313,
+       "tpot": 0.33537622867696354,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 2,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 834.4136374027586,
+       "tpot": 45.9088778543661,
+       "long": null
+      },
+      "R": {
+       "short": 0.41720681870137927,
+       "tpot": 0.459088778543661,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 3,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1033.1377183072618,
+       "tpot": 75.23155791175554,
+       "long": null
+      },
+      "R": {
+       "short": 0.5165688591536309,
+       "tpot": 0.7523155791175554,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 4,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1473.5294083460758,
+       "tpot": 85.41935858743308,
+       "long": null
+      },
+      "R": {
+       "short": 0.7367647041730379,
+       "tpot": 0.8541935858743308,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 5,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2471.2107556559176,
+       "tpot": 102.59770696852003,
+       "long": null
+      },
+      "R": {
+       "short": 1.2356053778279588,
+       "tpot": 1.0259770696852002,
+       "long": null
+      },
+      "search_pass": false
+     }
+    ]
+   },
+   "K": [
+    3,
+    4,
+    5
+   ],
+   "points": {
+    "3": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 0,
+     "class": "NT",
+     "class_late": "NT",
+     "class_full": "NT",
+     "met": 0,
+     "worst_R": {
+      "short": null,
+      "tpot": null,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": null,
+      "Y_tpot": null,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [],
+     "runs": [
+      {
+       "tag": "C-U2K-P-i3-r1",
+       "block": 1,
+       "valid": false,
+       "reasons": [
+        "runner: completed=533 failed=2 (expected 535 / 0); output_lens not all 128; out not all 128"
+       ],
+       "output_throughput": 225.62715662479064,
+       "kv_cache_usage_peak": 0.9878542510121457,
+       "preemptions": 0.0,
+       "waiting_peak": 5.0,
+       "inflight_peak": 37.0,
+       "inflight_le_c": null
+      }
+     ],
+     "rate": 1.7821
+    },
+    "4": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "NT",
+     "class_late": "NT",
+     "class_full": "NT",
+     "met": 1,
+     "worst_R": {
+      "short": 0.6517097609979828,
+      "tpot": 0.8139269687795087,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1303.4195219959656,
+      "Y_tpot": 81.39269687795087,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "runs": [
+      {
+       "tag": "C-U2K-P-i4-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 257.776214043698,
+       "kv_cache_usage_peak": 0.9635627530364372,
+       "preemptions": 0.0,
+       "waiting_peak": 7.0,
+       "inflight_peak": 34.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 1303.4195219959656,
+        "tpot": 81.39269687795087,
+        "long": null
+       },
+       "R": {
+        "short": 0.6517097609979828,
+        "tpot": 0.8139269687795087,
+        "long": null
+       },
+       "max_r": 0.8139269687795087,
+       "conclusion": "pass",
+       "attainment": 0.985655737704918,
+       "burst_max_ttft_ms": 1362.079222992179,
+       "n": {
+        "short": 488,
+        "long": 0,
+        "all": 488
+       },
+       "full": {
+        "Y_short": 1302.8456779960836,
+        "Y_tpot": 77.46347804722477,
+        "Y_long": null
+       }
+      }
+     ],
+     "rate": 2.0367
+    },
+    "5": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "FAIL",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 1.0084227227533114,
+      "tpot": 1.0414416739600483,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2016.8454455066226,
+      "Y_tpot": 104.14416739600482,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "runs": [
+      {
+       "tag": "C-U2K-P-i5-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 291.02224584185916,
+       "kv_cache_usage_peak": 0.9919028340080972,
+       "preemptions": 0.0,
+       "waiting_peak": 9.0,
+       "inflight_peak": 43.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 2016.8454455066226,
+        "tpot": 104.14416739600482,
+        "long": null
+       },
+       "R": {
+        "short": 1.0084227227533114,
+        "tpot": 1.0414416739600483,
+        "long": null
+       },
+       "max_r": 1.0414416739600483,
+       "conclusion": "fail",
+       "attainment": 0.76,
+       "burst_max_ttft_ms": 1628.9918870024849,
+       "n": {
+        "short": 550,
+        "long": 0,
+        "all": 550
+       },
+       "full": {
+        "Y_short": 2239.4031800002267,
+        "Y_tpot": 103.67316197204393,
+        "Y_long": null
+       }
+      }
+     ],
+     "rate": 2.2913
+    }
+   },
+   "c_slo": {
+    "value": null,
+    "status": "NT"
+   },
+   "c_prod": {
+    "value": null,
+    "status": "NT"
+   },
+   "binding": [
+    "tpot",
+    "short"
+   ],
+   "flags": [],
+   "descriptive": {
+    "c_full": {
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "NT"
+     }
+    },
+    "c_late": {
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "NT"
+     }
+    }
+   },
+   "lambda_ref": {
+    "workload": "U2K",
+    "c_prod": 32,
+    "requests": 768,
+    "mean_latency_s": 12.56945,
+    "lambda_ref": 2.545855
+   },
+   "rate_slo": null,
+   "rate_prod": null,
+   "factor_slo": null,
+   "factor_prod": null
+  },
+  "U8K-P": {
+   "tier": 8192,
+   "mix": "uniform",
+   "out": 128,
+   "server": "B0",
+   "c_kv": 13,
+   "c_cap": 9,
+   "n_near": 5,
+   "search": {
+    "c_hat": 2,
+    "c_hat_g": null,
+    "runs": [
+     {
+      "C": 1,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2754.760630945384,
+       "tpot": 55.19321293656152,
+       "long": null
+      },
+      "R": {
+       "short": 0.4591267718242307,
+       "tpot": 0.5519321293656152,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 2,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 3493.7211700918856,
+       "tpot": 91.57957946144897,
+       "long": null
+      },
+      "R": {
+       "short": 0.582286861681981,
+       "tpot": 0.9157957946144897,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 3,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 5152.490813449551,
+       "tpot": 140.51354564755,
+       "long": null
+      },
+      "R": {
+       "short": 0.8587484689082585,
+       "tpot": 1.4051354564754999,
+       "long": null
+      },
+      "search_pass": false
+     }
+    ]
+   },
+   "K": [
+    1,
+    2,
+    3
+   ],
+   "points": {
+    "1": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "met": 5,
+     "worst_R": {
+      "short": 0.6219217405240974,
+      "tpot": 0.6683982974256337,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 3235.3748752997485,
+      "Y_tpot": 66.00069034930917,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "runs": [
+      {
+       "tag": "C-U8K-P-i1-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 32.12660474922987,
+       "kv_cache_usage_peak": 0.7692307692307692,
+       "preemptions": 0.0,
+       "waiting_peak": 8.0,
+       "inflight_peak": 10.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 2852.844738360727,
+        "tpot": 63.05773465389545,
+        "long": null
+       },
+       "R": {
+        "short": 0.4754741230601212,
+        "tpot": 0.6305773465389545,
+        "long": null
+       },
+       "max_r": 0.6305773465389545,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 3422.1104469907004,
+       "n": {
+        "short": 240,
+        "long": 0,
+        "all": 240
+       },
+       "full": {
+        "Y_short": 2863.8793412515965,
+        "Y_tpot": 64.73735805235252,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-P-i1-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 32.121957817919274,
+       "kv_cache_usage_peak": 0.9230769230769231,
+       "preemptions": 0.0,
+       "waiting_peak": 8.0,
+       "inflight_peak": 12.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 2996.890545409407,
+        "tpot": 65.31395146609047,
+        "long": null
+       },
+       "R": {
+        "short": 0.4994817575682345,
+        "tpot": 0.6531395146609047,
+        "long": null
+       },
+       "max_r": 0.6531395146609047,
+       "conclusion": "pass",
+       "attainment": 0.9833333333333333,
+       "burst_max_ttft_ms": 3049.0169180120574,
+       "n": {
+        "short": 240,
+        "long": 0,
+        "all": 240
+       },
+       "full": {
+        "Y_short": 3320.956124152872,
+        "Y_tpot": 69.39434481101343,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-P-i1-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 32.16201261953729,
+       "kv_cache_usage_peak": 0.8461538461538461,
+       "preemptions": 0.0,
+       "waiting_peak": 8.0,
+       "inflight_peak": 11.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 3119.4319530040957,
+        "tpot": 66.83982974256337,
+        "long": null
+       },
+       "R": {
+        "short": 0.5199053255006826,
+        "tpot": 0.6683982974256337,
+        "long": null
+       },
+       "max_r": 0.6683982974256337,
+       "conclusion": "pass",
+       "attainment": 0.9875,
+       "burst_max_ttft_ms": 3612.588561998564,
+       "n": {
+        "short": 240,
+        "long": 0,
+        "all": 240
+       },
+       "full": {
+        "Y_short": 3025.1714044527043,
+        "Y_tpot": 65.92070600427537,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-P-i1-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 32.16361085291912,
+       "kv_cache_usage_peak": 0.7692307692307692,
+       "preemptions": 0.0,
+       "waiting_peak": 9.0,
+       "inflight_peak": 10.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 3731.5304431445843,
+        "tpot": 66.3010857811353,
+        "long": null
+       },
+       "R": {
+        "short": 0.6219217405240974,
+        "tpot": 0.6630108578113529,
+        "long": null
+       },
+       "max_r": 0.6630108578113529,
+       "conclusion": "pass",
+       "attainment": 0.9916666666666667,
+       "burst_max_ttft_ms": 2268.8851400016574,
+       "n": {
+        "short": 240,
+        "long": 0,
+        "all": 240
+       },
+       "full": {
+        "Y_short": 3347.755463656358,
+        "Y_tpot": 56.6467422487773,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-P-i1-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 32.14398022151654,
+       "kv_cache_usage_peak": 0.7692307692307692,
+       "preemptions": 0.0,
+       "waiting_peak": 9.0,
+       "inflight_peak": 10.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 3353.2103613935765,
+        "tpot": 58.98348446568761,
+        "long": null
+       },
+       "R": {
+        "short": 0.558868393565596,
+        "tpot": 0.5898348446568761,
+        "long": null
+       },
+       "max_r": 0.5898348446568761,
+       "conclusion": "pass",
+       "attainment": 0.9875,
+       "burst_max_ttft_ms": 3694.3358940043254,
+       "n": {
+        "short": 240,
+        "long": 0,
+        "all": 240
+       },
+       "full": {
+        "Y_short": 3249.9301346389993,
+        "Y_tpot": 57.72281019095016,
+        "Y_long": null
+       }
+      }
+     ],
+     "rate": 0.2519
+    },
+    "2": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "FAIL",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 0.6931205224507726,
+      "tpot": 1.073127781782828,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 4158.723134704635,
+      "Y_tpot": 107.3127781782828,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "runs": [
+      {
+       "tag": "C-U8K-P-i2-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 44.0945825291989,
+       "kv_cache_usage_peak": 0.9230769230769231,
+       "preemptions": 0.0,
+       "waiting_peak": 9.0,
+       "inflight_peak": 12.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 4158.723134704635,
+        "tpot": 107.3127781782828,
+        "long": null
+       },
+       "R": {
+        "short": 0.6931205224507726,
+        "tpot": 1.073127781782828,
+        "long": null
+       },
+       "max_r": 1.073127781782828,
+       "conclusion": "fail",
+       "attainment": 0.9208333333333333,
+       "burst_max_ttft_ms": 4759.128446006798,
+       "n": {
+        "short": 240,
+        "long": 0,
+        "all": 240
+       },
+       "full": {
+        "Y_short": 4031.3543832002338,
+        "Y_tpot": 100.59757158946242,
+        "Y_long": null
+       }
+      }
+     ],
+     "rate": 0.3463
+    },
+    "3": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "FAIL",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 0.7714851804428086,
+      "tpot": 1.2254196798585755,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 4628.911082656851,
+      "Y_tpot": 122.54196798585755,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "runs": [
+      {
+       "tag": "C-U8K-P-i3-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 55.94278168517747,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 0.0,
+       "waiting_peak": 8.0,
+       "inflight_peak": 19.0,
+       "inflight_le_c": null,
+       "Y": {
+        "short": 4628.911082656851,
+        "tpot": 122.54196798585755,
+        "long": null
+       },
+       "R": {
+        "short": 0.7714851804428086,
+        "tpot": 1.2254196798585755,
+        "long": null
+       },
+       "max_r": 1.2254196798585755,
+       "conclusion": "fail",
+       "attainment": 0.8833333333333333,
+       "burst_max_ttft_ms": 4281.203272999846,
+       "n": {
+        "short": 240,
+        "long": 0,
+        "all": 240
+       },
+       "full": {
+        "Y_short": 6748.283949603505,
+        "Y_tpot": 141.45531189169847,
+        "Y_long": null
+       }
+      }
+     ],
+     "rate": 0.4408
+    }
+   },
+   "c_slo": {
+    "value": 1,
+    "status": "EXACT"
+   },
+   "c_prod": {
+    "value": 1,
+    "status": "EXACT"
+   },
+   "binding": [
+    "tpot"
+   ],
+   "flags": [],
+   "descriptive": {
+    "c_full": {
+     "c_slo": {
+      "value": 1,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 1,
+      "status": "EXACT"
+     }
+    },
+    "c_late": {
+     "c_slo": {
+      "value": 1,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 1,
+      "status": "EXACT"
+     }
+    }
+   },
+   "lambda_ref": {
+    "workload": "U8K",
+    "c_prod": 8,
+    "requests": 920,
+    "mean_latency_s": 12.705468,
+    "lambda_ref": 0.62965
+   },
+   "rate_slo": 0.2519,
+   "rate_prod": 0.2519,
+   "factor_slo": 0.4,
+   "factor_prod": 0.4
+  }
+ },
+ "secondary_slo": {
+  "S1": {
+   "slo": {
+    "id": "S1",
+    "ttft_p95_ms": {
+     "2048": 1000,
+     "8192": 3000,
+     "32768": 10000
+    },
+    "tpot_p95_ms": 50,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "workloads": {
+    "U2K-P": {
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "NT"
+     },
+     "binding": [
+      "tpot",
+      "short"
+     ],
+     "flags": []
+    },
+    "U8K-P": {
+     "c_slo": {
+      "value": 0,
+      "status": "INFEASIBLE"
+     },
+     "c_prod": {
+      "value": 0,
+      "status": "INFEASIBLE"
+     },
+     "binding": [
+      "tpot",
+      "short"
+     ],
+     "flags": [
+      "SEARCH_MISMATCH"
+     ]
+    }
+   }
+  },
+  "S3": {
+   "slo": {
+    "id": "S3",
+    "ttft_p95_ms": {
+     "2048": 2000,
+     "8192": 6000,
+     "32768": 20000
+    },
+    "tpot_p95_ms": 200,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "workloads": {
+    "U2K-P": {
+     "c_slo": {
+      "value": null,
+      "status": "NT"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "NT"
+     },
+     "binding": [
+      "short"
+     ],
+     "flags": []
+    },
+    "U8K-P": {
+     "c_slo": {
+      "value": 1,
+      "status": "LOWER"
+     },
+     "c_prod": {
+      "value": 1,
+      "status": "LOWER"
+     },
+     "binding": null,
+     "flags": []
+    }
+   }
+  }
+ },
+ "hypotheses": {
+  "H-D4": {
+   "U2K-P": {
+    "rate_prod": null,
+    "factor_prod": null,
+    "lambda_ref": 2.545855,
+    "verdict": "NT",
+    "prediction": "supported"
+   },
+   "U8K-P": {
+    "rate_prod": 0.2519,
+    "factor_prod": 0.4,
+    "lambda_ref": 0.62965,
+    "verdict": "supported",
+    "prediction": "supported"
+   }
+  }
+ },
+ "not_supported": [
+  "Stage D measures one machine, one model and Core B's server (or T); open loop is vLLM's own capacity without the gateway's admission; D-C checks only C_PROD itself; mixed open loop, other output lengths and T on other workloads are not measured; the start-up wave (D5) is descriptive."
+ ],
+ "runs": [
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "start",
+   "tag": "sentinel-start-U2K-c25",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-P",
+   "C": 1,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-P-i1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-P",
+   "C": 2,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-P-i2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-P",
+   "C": 3,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-P-i3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-P",
+   "C": 4,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-P-i4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-P",
+   "C": 5,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-P-i5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-P",
+   "C": 1,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-P-i1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-P",
+   "C": 2,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-P-i2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-P",
+   "C": 3,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-P-i3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-P",
+   "C": 5,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-P-i5-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-P",
+   "C": 3,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-P-i3-r1",
+   "valid": false,
+   "reasons": [
+    "runner: completed=533 failed=2 (expected 535 / 0); output_lens not all 128; out not all 128"
+   ]
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-P",
+   "C": 4,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-P-i4-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-P",
+   "C": 1,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-P-i1-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-P",
+   "C": 3,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-P-i3-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-P",
+   "C": 2,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-P-i2-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-P",
+   "C": 1,
+   "block": 2,
+   "position": null,
+   "tag": "C-U8K-P-i1-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-P",
+   "C": 1,
+   "block": 3,
+   "position": null,
+   "tag": "C-U8K-P-i1-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-P",
+   "C": 1,
+   "block": 4,
+   "position": null,
+   "tag": "C-U8K-P-i1-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-P",
+   "C": 1,
+   "block": 5,
+   "position": null,
+   "tag": "C-U8K-P-i1-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "end",
+   "tag": "sentinel-end-U2K-c25",
+   "valid": true,
+   "reasons": []
+  }
+ ],
+ "provenance": {
+  "session_id": "formal-20261023-d-b",
+  "session": "D-B",
+  "kind": "open",
+  "deployed_commit": "0ec7b9208ea339b302cf43f8658829f4a9995545",
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "plan_sha256": "4d553847c90a23510c7b4693cf901d294ae17b0cf28f8a271985f166bd52b390",
+  "confirm_plan_sha256": "4ae4d45db5c50f2c1c0aa0864b920d8a5b7000e2ee1f069c71f0cd0ad24e3d4d",
+  "rows_sha256": "cdc1859e4b9e449d0b2aea9b706271baadc6ad037ec889950ed73c3c3e3eb62b",
+  "dataset_sha256": {},
+  "derived_from": "formal-20261009-coreb-uniform",
+  "c1b_session": "formal-20261017-c1b",
+  "capserve_sha256": null
+ },
+ "platform": {
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "driver": "617.42",
+  "vllm": "0.30.0",
+  "torch": "2.13.0+cu130",
+  "model": "RedHatAI/Qwen3.5-9B-quantized.w4a16@a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "server_argv_sha256": {
+   "U2K": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "U2K-P": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "U8K-P": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d"
+  },
+  "env": {
+   "HF_HOME": "/home/wenn0113/.cache/huggingface",
+   "HF_HUB_OFFLINE": "1",
+   "VLLM_GDN_DECODE_KERNEL": "triton",
+   "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+   "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+   "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+   "OTEL": {},
+   "engine_vars": [
+    "CUDA_HOME",
+    "VLLM_GDN_DECODE_KERNEL",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY"
+   ]
+  },
+  "K": 4294967296,
+  "U": "0.91",
+  "num_gpu_blocks": 248,
+  "block_size": 528
+ },
+ "report": {
+  "session_id": "formal-20261023-d-b",
+  "uniform_session": "formal-20261009-coreb-uniform",
+  "advanced_references": true,
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b"
+ }
+}

@@ -1,0 +1,2368 @@
+{
+ "schema_version": 1,
+ "stage": "D",
+ "session": "D-A2",
+ "kind": "closed",
+ "slo": {
+  "id": "S2",
+  "ttft_p95_ms": {
+   "2048": 2000,
+   "8192": 6000,
+   "32768": 20000
+  },
+  "tpot_p95_ms": 100,
+  "mixed_long": "budget"
+ },
+ "protocol": {
+  "seed": 20261008,
+  "window": "steady",
+  "guard_band": 0.05,
+  "n_low": 3,
+  "open_loop": null
+ },
+ "replay": {
+  "ok": true,
+  "problems": []
+ },
+ "sentinel": {
+  "start": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 310.98939879446584,
+   "w_mean_ttft_ms": 981.1235881895118,
+   "steady_p95_ttft_ms": 1010.5580838921014,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "end": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 315.1557094287383,
+   "w_mean_ttft_ms": 966.8659790803213,
+   "steady_p95_ttft_ms": 1001.6631899990898,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "gate": {
+   "ok": true,
+   "drift": {
+    "output_throughput": 0.013396953884675647,
+    "w_mean_ttft_ms": 0.01453191960811012
+   },
+   "tolerance": 0.03,
+   "reasons": []
+  },
+  "cross_session_shift": {
+   "shift": false,
+   "limit": 0.05,
+   "values": [
+    {
+     "output_throughput": -0.012530121012085393,
+     "steady_p95_ttft_ms": 0.014593272572331673
+    },
+    {
+     "output_throughput": 0.0006989674192219297,
+     "steady_p95_ttft_ms": 0.005662861101734862
+    }
+   ],
+   "references": {
+    "core_output_throughput": 314.9355797193607,
+    "advanced_steady_p95_ttft_ms": 996.0228509400622
+   }
+  }
+ },
+ "workloads": {
+  "U2K-O512": {
+   "tier": 2048,
+   "mix": "uniform",
+   "out": 512,
+   "server": "B0",
+   "c_kv": 30,
+   "c_cap": 60,
+   "n_near": 5,
+   "search": {
+    "c_hat": 32,
+    "c_hat_g": 32,
+    "runs": [
+     {
+      "C": 1,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 332.6948042420554,
+       "tpot": 12.195347136199459,
+       "long": null
+      },
+      "R": {
+       "short": 0.1663474021210277,
+       "tpot": 0.12195347136199458,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 2,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 646.0754684958374,
+       "tpot": 13.54298326809208,
+       "long": null
+      },
+      "R": {
+       "short": 0.3230377342479187,
+       "tpot": 0.1354298326809208,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 4,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 969.7257262050698,
+       "tpot": 15.0748889218281,
+       "long": null
+      },
+      "R": {
+       "short": 0.4848628631025349,
+       "tpot": 0.150748889218281,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 8,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 975.2852756486391,
+       "tpot": 17.813070911634803,
+       "long": null
+      },
+      "R": {
+       "short": 0.48764263782431955,
+       "tpot": 0.17813070911634804,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 16,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 988.9302390518424,
+       "tpot": 24.05474455117442,
+       "long": null
+      },
+      "R": {
+       "short": 0.4944651195259212,
+       "tpot": 0.2405474455117442,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 32,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1401.7867804977868,
+       "tpot": 43.507381603239374,
+       "long": null
+      },
+      "R": {
+       "short": 0.7008933902488934,
+       "tpot": 0.43507381603239376,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 60,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 22774.12418594613,
+       "tpot": 54.673811600196935,
+       "long": null
+      },
+      "R": {
+       "short": 11.387062092973064,
+       "tpot": 0.5467381160019693,
+       "long": null
+      },
+      "search_pass": false
+     },
+     {
+      "C": 46,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 17740.189475854277,
+       "tpot": 54.76602743072472,
+       "long": null
+      },
+      "R": {
+       "short": 8.870094737927138,
+       "tpot": 0.5476602743072472,
+       "long": null
+      },
+      "search_pass": false
+     },
+     {
+      "C": 39,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 14981.230600652634,
+       "tpot": 55.09267305216047,
+       "long": null
+      },
+      "R": {
+       "short": 7.490615300326317,
+       "tpot": 0.5509267305216047,
+       "long": null
+      },
+      "search_pass": false
+     },
+     {
+      "C": 35,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 5526.979978949387,
+       "tpot": 54.155150561357914,
+       "long": null
+      },
+      "R": {
+       "short": 2.7634899894746936,
+       "tpot": 0.5415515056135791,
+       "long": null
+      },
+      "search_pass": false
+     },
+     {
+      "C": 33,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2092.90523850068,
+       "tpot": 47.88400176997265,
+       "long": null
+      },
+      "R": {
+       "short": 1.0464526192503398,
+       "tpot": 0.4788400176997265,
+       "long": null
+      },
+      "search_pass": false
+     }
+    ]
+   },
+   "K": [
+    16,
+    31,
+    32,
+    33
+   ],
+   "points": {
+    "16": {
+     "role": "low",
+     "n": 3,
+     "n_valid": 3,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "FAIL",
+     "met": 3,
+     "worst_R": {
+      "short": 0.5013160079502995,
+      "tpot": 0.24492226156270896,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1000.5122148999362,
+      "Y_tpot": 24.114490838743837,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "runs": [
+      {
+       "tag": "C-U2K-O512-c16-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 630.8224199881898,
+       "kv_cache_usage_peak": 0.5182186234817814,
+       "preemptions": 0.0,
+       "waiting_peak": 12.0,
+       "inflight_peak": 16.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 991.8656619061949,
+        "tpot": 23.953917255679976,
+        "long": null
+       },
+       "R": {
+        "short": 0.4959328309530974,
+        "tpot": 0.23953917255679977,
+        "long": null
+       },
+       "max_r": 0.4959328309530974,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5043.890711007407,
+       "n": {
+        "short": 168,
+        "long": 0,
+        "all": 168
+       },
+       "full": {
+        "Y_short": 2018.138959698994,
+        "Y_tpot": 23.927609391971593,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c16-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 620.8227836767812,
+       "kv_cache_usage_peak": 0.5182186234817814,
+       "preemptions": 0.0,
+       "waiting_peak": 13.0,
+       "inflight_peak": 16.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1002.6320159005991,
+        "tpot": 24.492226156270895,
+        "long": null
+       },
+       "R": {
+        "short": 0.5013160079502995,
+        "tpot": 0.24492226156270896,
+        "long": null
+       },
+       "max_r": 0.5013160079502995,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5141.185761996894,
+       "n": {
+        "short": 168,
+        "long": 0,
+        "all": 168
+       },
+       "full": {
+        "Y_short": 2084.6969196973114,
+        "Y_tpot": 24.39438723739326,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c16-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 630.9216985085615,
+       "kv_cache_usage_peak": 0.5182186234817814,
+       "preemptions": 0.0,
+       "waiting_peak": 12.0,
+       "inflight_peak": 16.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 987.9404155573866,
+        "tpot": 24.074001422798585,
+        "long": null
+       },
+       "R": {
+        "short": 0.49397020777869327,
+        "tpot": 0.24074001422798585,
+        "long": null
+       },
+       "max_r": 0.49397020777869327,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5144.443691999186,
+       "n": {
+        "short": 168,
+        "long": 0,
+        "all": 168
+       },
+       "full": {
+        "Y_short": 2072.271865543011,
+        "Y_tpot": 23.985515405194867,
+        "Y_long": null
+       }
+      }
+     ]
+    },
+    "31": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "FAIL",
+     "met": 5,
+     "worst_R": {
+      "short": 0.5249449495007866,
+      "tpot": 0.3831864258669217,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1041.596171110723,
+      "Y_tpot": 37.749080559400944,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "runs": [
+      {
+       "tag": "C-U2K-O512-c31-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 790.9634040758551,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 3.0,
+       "waiting_peak": 27.0,
+       "inflight_peak": 31.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1038.829141601309,
+        "tpot": 37.69592540440584,
+        "long": null
+       },
+       "R": {
+        "short": 0.5194145708006545,
+        "tpot": 0.3769592540440584,
+        "long": null
+       },
+       "max_r": 0.5194145708006545,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10021.034788995166,
+       "n": {
+        "short": 248,
+        "long": 0,
+        "all": 248
+       },
+       "full": {
+        "Y_short": 5274.759387094677,
+        "Y_tpot": 37.611199724270676,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c31-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 778.6846556712785,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 3.0,
+       "waiting_peak": 27.0,
+       "inflight_peak": 31.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1049.8898990015732,
+        "tpot": 38.31864258669217,
+        "long": null
+       },
+       "R": {
+        "short": 0.5249449495007866,
+        "tpot": 0.3831864258669217,
+        "long": null
+       },
+       "max_r": 0.5249449495007866,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10104.691883010673,
+       "n": {
+        "short": 248,
+        "long": 0,
+        "all": 248
+       },
+       "full": {
+        "Y_short": 5339.525782803688,
+        "Y_tpot": 38.282776859678286,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c31-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 790.5784091462958,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 3.0,
+       "waiting_peak": 27.0,
+       "inflight_peak": 31.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1024.9590918523609,
+        "tpot": 37.67063493689239,
+        "long": null
+       },
+       "R": {
+        "short": 0.5124795459261804,
+        "tpot": 0.3767063493689239,
+        "long": null
+       },
+       "max_r": 0.5124795459261804,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10090.071254002396,
+       "n": {
+        "short": 248,
+        "long": 0,
+        "all": 248
+       },
+       "full": {
+        "Y_short": 5327.136688343311,
+        "Y_tpot": 37.6617219515762,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c31-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 791.0828096081232,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 3.0,
+       "waiting_peak": 27.0,
+       "inflight_peak": 31.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1033.5809242496907,
+        "tpot": 37.70344460430843,
+        "long": null
+       },
+       "R": {
+        "short": 0.5167904621248454,
+        "tpot": 0.3770344460430843,
+        "long": null
+       },
+       "max_r": 0.5167904621248454,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 9991.889587996411,
+       "n": {
+        "short": 248,
+        "long": 0,
+        "all": 248
+       },
+       "full": {
+        "Y_short": 5265.344596653453,
+        "Y_tpot": 37.648270670834876,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c31-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 791.0345748198265,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 3.0,
+       "waiting_peak": 27.0,
+       "inflight_peak": 31.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1029.9485317067592,
+        "tpot": 37.68785722417067,
+        "long": null
+       },
+       "R": {
+        "short": 0.5149742658533796,
+        "tpot": 0.37687857224170673,
+        "long": null
+       },
+       "max_r": 0.5149742658533796,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10033.349532997818,
+       "n": {
+        "short": 248,
+        "long": 0,
+        "all": 248
+       },
+       "full": {
+        "Y_short": 5296.2274190998905,
+        "Y_tpot": 37.67236389119862,
+        "Y_long": null
+       }
+      }
+     ]
+    },
+    "32": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "FAIL",
+     "met": 5,
+     "worst_R": {
+      "short": 0.7082988073780143,
+      "tpot": 0.4432265428569518,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1414.9751248041866,
+      "Y_tpot": 43.74913790099007,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "runs": [
+      {
+       "tag": "C-U2K-O512-c32-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 760.8194034366484,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 30.0,
+       "waiting_peak": 27.0,
+       "inflight_peak": 32.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1406.9844114928856,
+        "tpot": 43.62538809784379,
+        "long": null
+       },
+       "R": {
+        "short": 0.7034922057464428,
+        "tpot": 0.43625388097843787,
+        "long": null
+       },
+       "max_r": 0.7034922057464428,
+       "conclusion": "pass",
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10453.747143998044,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "full": {
+        "Y_short": 5513.167529193019,
+        "Y_tpot": 43.072350827499555,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c32-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 749.4675443374155,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 30.0,
+       "waiting_peak": 28.0,
+       "inflight_peak": 32.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1416.5976147560286,
+        "tpot": 44.32265428569518,
+        "long": null
+       },
+       "R": {
+        "short": 0.7082988073780143,
+        "tpot": 0.4432265428569518,
+        "long": null
+       },
+       "max_r": 0.7082988073780143,
+       "conclusion": "pass",
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10501.437437997083,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "full": {
+        "Y_short": 5532.93823079803,
+        "Y_tpot": 43.70880468580836,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c32-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 760.9893204697902,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 30.0,
+       "waiting_peak": 28.0,
+       "inflight_peak": 32.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1401.7824089933129,
+        "tpot": 43.56579206212099,
+        "long": null
+       },
+       "R": {
+        "short": 0.7008912044966564,
+        "tpot": 0.4356579206212099,
+        "long": null
+       },
+       "max_r": 0.7008912044966564,
+       "conclusion": "pass",
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10280.483387003187,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "full": {
+        "Y_short": 5438.028068893622,
+        "Y_tpot": 42.938006598243376,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c32-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 760.3266799646898,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 30.0,
+       "waiting_peak": 28.0,
+       "inflight_peak": 32.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1399.0508720016805,
+        "tpot": 43.76870418200127,
+        "long": null
+       },
+       "R": {
+        "short": 0.6995254360008403,
+        "tpot": 0.4376870418200127,
+        "long": null
+       },
+       "max_r": 0.6995254360008403,
+       "conclusion": "pass",
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10356.341671998962,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "full": {
+        "Y_short": 5460.584083910366,
+        "Y_tpot": 43.1816426140853,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U2K-O512-c32-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 760.998234680191,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 30.0,
+       "waiting_peak": 28.0,
+       "inflight_peak": 32.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 1398.7161582554108,
+        "tpot": 43.647633076311905,
+        "long": null
+       },
+       "R": {
+        "short": 0.6993580791277054,
+        "tpot": 0.43647633076311904,
+        "long": null
+       },
+       "max_r": 0.6993580791277054,
+       "conclusion": "pass",
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10378.223106003134,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "full": {
+        "Y_short": 5472.224069687221,
+        "Y_tpot": 43.049829979649004,
+        "Y_long": null
+       }
+      }
+     ]
+    },
+    "33": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "NT",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 1.030888629180481,
+      "tpot": 0.4756781801624041,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2061.777258360962,
+      "Y_tpot": 47.56781801624041,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "runs": [
+      {
+       "tag": "C-U2K-O512-c33-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 745.6380427469825,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 43.0,
+       "waiting_peak": 29.0,
+       "inflight_peak": 33.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2061.777258360962,
+        "tpot": 47.56781801624041,
+        "long": null
+       },
+       "R": {
+        "short": 1.030888629180481,
+        "tpot": 0.4756781801624041,
+        "long": null
+       },
+       "max_r": 1.030888629180481,
+       "conclusion": "fail",
+       "attainment": 0.9318181818181818,
+       "burst_max_ttft_ms": 10773.630196999875,
+       "n": {
+        "short": 264,
+        "long": 0,
+        "all": 264
+       },
+       "full": {
+        "Y_short": 6174.978843700228,
+        "Y_tpot": 47.23546591173818,
+        "Y_long": null
+       }
+      }
+     ]
+    }
+   },
+   "c_slo": {
+    "value": 32,
+    "status": "EXACT"
+   },
+   "c_prod": {
+    "value": 32,
+    "status": "EXACT"
+   },
+   "binding": [
+    "short"
+   ],
+   "flags": [
+    "WINDOW_SENSITIVE",
+    "ABOVE_CKV"
+   ],
+   "descriptive": {
+    "c_full": {
+     "c_slo": {
+      "value": null,
+      "status": "UNSTABLE"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "UNSTABLE"
+     }
+    },
+    "c_late": {
+     "c_slo": {
+      "value": 32,
+      "status": "LOWER"
+     },
+     "c_prod": {
+      "value": 32,
+      "status": "LOWER"
+     }
+    }
+   }
+  },
+  "U8K-O512": {
+   "tier": 8192,
+   "mix": "uniform",
+   "out": 512,
+   "server": "B0",
+   "c_kv": 12,
+   "c_cap": 24,
+   "n_near": 5,
+   "search": {
+    "c_hat": 12,
+    "c_hat_g": 12,
+    "runs": [
+     {
+      "C": 1,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 1399.117364747508,
+       "tpot": 12.359921816043492,
+       "long": null
+      },
+      "R": {
+       "short": 0.233186227457918,
+       "tpot": 0.12359921816043493,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 2,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2712.7790107479086,
+       "tpot": 15.909018423206366,
+       "long": null
+      },
+      "R": {
+       "short": 0.45212983512465144,
+       "tpot": 0.15909018423206367,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 4,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2678.687774249556,
+       "tpot": 22.01317300321591,
+       "long": null
+      },
+      "R": {
+       "short": 0.44644796237492596,
+       "tpot": 0.2201317300321591,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 8,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2503.624160496838,
+       "tpot": 33.701061149614,
+       "long": null
+      },
+      "R": {
+       "short": 0.4172706934161397,
+       "tpot": 0.33701061149614,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 16,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 18874.563186500745,
+       "tpot": 53.47103292366591,
+       "long": null
+      },
+      "R": {
+       "short": 3.1457605310834578,
+       "tpot": 0.5347103292366591,
+       "long": null
+      },
+      "search_pass": false
+     },
+     {
+      "C": 12,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 2533.2936455015442,
+       "tpot": 46.572691391883936,
+       "long": null
+      },
+      "R": {
+       "short": 0.4222156075835907,
+       "tpot": 0.46572691391883936,
+       "long": null
+      },
+      "search_pass": true
+     },
+     {
+      "C": 14,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 11282.472160851466,
+       "tpot": 53.31676339031872,
+       "long": null
+      },
+      "R": {
+       "short": 1.8804120268085778,
+       "tpot": 0.5331676339031872,
+       "long": null
+      },
+      "search_pass": false
+     },
+     {
+      "C": 13,
+      "valid": true,
+      "reasons": [],
+      "Y": {
+       "short": 6504.732088300807,
+       "tpot": 53.29675739226109,
+       "long": null
+      },
+      "R": {
+       "short": 1.0841220147168011,
+       "tpot": 0.532967573922611,
+       "long": null
+      },
+      "search_pass": false
+     }
+    ]
+   },
+   "K": [
+    6,
+    11,
+    12,
+    13
+   ],
+   "points": {
+    "6": {
+     "role": "low",
+     "n": 3,
+     "n_valid": 3,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "met": 3,
+     "worst_R": {
+      "short": 0.43995916694245074,
+      "tpot": 0.28270322597666664,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2505.789797207399,
+      "Y_tpot": 28.253508900586276,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "runs": [
+      {
+       "tag": "C-U8K-O512-c6-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 191.0713252986091,
+       "kv_cache_usage_peak": 0.4858299595141701,
+       "preemptions": 0.0,
+       "waiting_peak": 4.0,
+       "inflight_peak": 6.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2639.7550016547043,
+        "tpot": 28.270322597666663,
+        "long": null
+       },
+       "R": {
+        "short": 0.43995916694245074,
+        "tpot": 0.28270322597666664,
+        "long": null
+       },
+       "max_r": 0.43995916694245074,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 8383.305273004225,
+       "n": {
+        "short": 188,
+        "long": 0,
+        "all": 188
+       },
+       "full": {
+        "Y_short": 2843.807237398869,
+        "Y_tpot": 28.269341913509077,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c6-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 193.47800105506153,
+       "kv_cache_usage_peak": 0.4858299595141701,
+       "preemptions": 0.0,
+       "waiting_peak": 5.0,
+       "inflight_peak": 6.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2501.241501842742,
+        "tpot": 28.02299812308013,
+        "long": null
+       },
+       "R": {
+        "short": 0.41687358364045696,
+        "tpot": 0.2802299812308013,
+        "long": null
+       },
+       "max_r": 0.41687358364045696,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 8377.211623999756,
+       "n": {
+        "short": 188,
+        "long": 0,
+        "all": 188
+       },
+       "full": {
+        "Y_short": 2503.644201644056,
+        "Y_tpot": 28.02488762404948,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c6-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 194.00211709970276,
+       "kv_cache_usage_peak": 0.4858299595141701,
+       "preemptions": 0.0,
+       "waiting_peak": 5.0,
+       "inflight_peak": 6.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2479.6442196042335,
+        "tpot": 27.93188668199451,
+        "long": null
+       },
+       "R": {
+        "short": 0.4132740366007056,
+        "tpot": 0.2793188668199451,
+        "long": null
+       },
+       "max_r": 0.4132740366007056,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 8149.079013994196,
+       "n": {
+        "short": 188,
+        "long": 0,
+        "all": 188
+       },
+       "full": {
+        "Y_short": 2492.3870464510424,
+        "Y_tpot": 27.921816838574365,
+        "Y_long": null
+       }
+      }
+     ]
+    },
+    "11": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "met": 5,
+     "worst_R": {
+      "short": 0.4234484230922438,
+      "tpot": 0.44520703959872515,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2538.176201400347,
+      "Y_tpot": 43.93915026848916,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "runs": [
+      {
+       "tag": "C-U8K-O512-c11-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 231.0279997778388,
+       "kv_cache_usage_peak": 0.8906882591093117,
+       "preemptions": 0.0,
+       "waiting_peak": 10.0,
+       "inflight_peak": 11.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2535.3051443584263,
+        "tpot": 44.31563806575271,
+        "long": null
+       },
+       "R": {
+        "short": 0.4225508573930711,
+        "tpot": 0.4431563806575271,
+        "long": null
+       },
+       "max_r": 0.4431563806575271,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 15389.623590002884,
+       "n": {
+        "short": 178,
+        "long": 0,
+        "all": 178
+       },
+       "full": {
+        "Y_short": 2565.7995635978327,
+        "Y_tpot": 44.12600636155775,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c11-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 229.20369134314288,
+       "kv_cache_usage_peak": 0.8906882591093117,
+       "preemptions": 0.0,
+       "waiting_peak": 10.0,
+       "inflight_peak": 11.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2540.690538553463,
+        "tpot": 44.52070395987251,
+        "long": null
+       },
+       "R": {
+        "short": 0.4234484230922438,
+        "tpot": 0.44520703959872515,
+        "long": null
+       },
+       "max_r": 0.44520703959872515,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 15470.508719008649,
+       "n": {
+        "short": 178,
+        "long": 0,
+        "all": 178
+       },
+       "full": {
+        "Y_short": 2562.2276159920184,
+        "Y_tpot": 44.51627150567838,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c11-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 232.5268292201345,
+       "kv_cache_usage_peak": 0.8906882591093117,
+       "preemptions": 0.0,
+       "waiting_peak": 9.0,
+       "inflight_peak": 11.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2515.99985199864,
+        "tpot": 43.89733215363105,
+        "long": null
+       },
+       "R": {
+        "short": 0.41933330866644003,
+        "tpot": 0.43897332153631047,
+        "long": null
+       },
+       "max_r": 0.43897332153631047,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 15288.839068001835,
+       "n": {
+        "short": 178,
+        "long": 0,
+        "all": 178
+       },
+       "full": {
+        "Y_short": 2532.8026674040334,
+        "Y_tpot": 43.85209031683681,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c11-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 232.66886851363424,
+       "kv_cache_usage_peak": 0.8906882591093117,
+       "preemptions": 0.0,
+       "waiting_peak": 9.0,
+       "inflight_peak": 11.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2511.6984183943714,
+        "tpot": 43.836186296770045,
+        "long": null
+       },
+       "R": {
+        "short": 0.41861640306572856,
+        "tpot": 0.43836186296770047,
+        "long": null
+       },
+       "max_r": 0.43836186296770047,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 15245.746458997019,
+       "n": {
+        "short": 178,
+        "long": 0,
+        "all": 178
+       },
+       "full": {
+        "Y_short": 2529.601309199646,
+        "Y_tpot": 43.81333615850511,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c11-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 232.70441024616744,
+       "kv_cache_usage_peak": 0.8906882591093117,
+       "preemptions": 0.0,
+       "waiting_peak": 9.0,
+       "inflight_peak": 11.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2513.2392652543786,
+        "tpot": 43.85044990362033,
+        "long": null
+       },
+       "R": {
+        "short": 0.41887321087572976,
+        "tpot": 0.4385044990362033,
+        "long": null
+       },
+       "max_r": 0.4385044990362033,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 15249.046131008072,
+       "n": {
+        "short": 178,
+        "long": 0,
+        "all": 178
+       },
+       "full": {
+        "Y_short": 2533.2495027993027,
+        "Y_tpot": 43.83958610987672,
+        "Y_long": null
+       }
+      }
+     ]
+    },
+    "12": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 5,
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "met": 5,
+     "worst_R": {
+      "short": 0.4247757937100687,
+      "tpot": 0.4735874467808263,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2545.8312785514863,
+      "Y_tpot": 46.65934175058756,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "pass"
+     ],
+     "runs": [
+      {
+       "tag": "C-U8K-O512-c12-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 237.51040921049176,
+       "kv_cache_usage_peak": 0.97165991902834,
+       "preemptions": 0.0,
+       "waiting_peak": 11.0,
+       "inflight_peak": 12.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2548.654762260412,
+        "tpot": 47.35874467808263,
+        "long": null
+       },
+       "R": {
+        "short": 0.4247757937100687,
+        "tpot": 0.4735874467808263,
+        "long": null
+       },
+       "max_r": 0.4735874467808263,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16950.479360995814,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "full": {
+        "Y_short": 2961.3999658933767,
+        "Y_tpot": 47.35578639950534,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c12-r2",
+       "block": 2,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 241.05018055443378,
+       "kv_cache_usage_peak": 0.97165991902834,
+       "preemptions": 0.0,
+       "waiting_peak": 10.0,
+       "inflight_peak": 12.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2526.6411922493717,
+        "tpot": 46.61879883268492,
+        "long": null
+       },
+       "R": {
+        "short": 0.4211068653748953,
+        "tpot": 0.46618798832684916,
+        "long": null
+       },
+       "max_r": 0.46618798832684916,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16643.47780699609,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "full": {
+        "Y_short": 2916.9043333939203,
+        "Y_tpot": 46.61159005117525,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c12-r3",
+       "block": 3,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 241.05508431796477,
+       "kv_cache_usage_peak": 0.97165991902834,
+       "preemptions": 0.0,
+       "waiting_peak": 11.0,
+       "inflight_peak": 12.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2521.4651554997545,
+        "tpot": 46.655528558691934,
+        "long": null
+       },
+       "R": {
+        "short": 0.42024419258329243,
+        "tpot": 0.46655528558691933,
+        "long": null
+       },
+       "max_r": 0.46655528558691933,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16710.616819997085,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "full": {
+        "Y_short": 2903.1888829406103,
+        "Y_tpot": 46.62048487513311,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c12-r4",
+       "block": 4,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 241.11029401123676,
+       "kv_cache_usage_peak": 0.97165991902834,
+       "preemptions": 0.0,
+       "waiting_peak": 11.0,
+       "inflight_peak": 12.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2518.6446315092326,
+        "tpot": 46.642672808700986,
+        "long": null
+       },
+       "R": {
+        "short": 0.41977410525153874,
+        "tpot": 0.46642672808700986,
+        "long": null
+       },
+       "max_r": 0.46642672808700986,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16652.095224999357,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "full": {
+        "Y_short": 2859.5903286972475,
+        "Y_tpot": 46.632688428278875,
+        "Y_long": null
+       }
+      },
+      {
+       "tag": "C-U8K-O512-c12-r5",
+       "block": 5,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 241.09834080011592,
+       "kv_cache_usage_peak": 0.97165991902834,
+       "preemptions": 0.0,
+       "waiting_peak": 10.0,
+       "inflight_peak": 12.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 2520.244477003871,
+        "tpot": 46.62480152983193,
+        "long": null
+       },
+       "R": {
+        "short": 0.42004074616731185,
+        "tpot": 0.4662480152983193,
+        "long": null
+       },
+       "max_r": 0.4662480152983193,
+       "conclusion": "pass",
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16748.102321012993,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "full": {
+        "Y_short": 2900.744902702006,
+        "Y_tpot": 46.61111756085923,
+        "Y_long": null
+       }
+      }
+     ]
+    },
+    "13": {
+     "role": "near",
+     "n": 5,
+     "n_valid": 1,
+     "class": "FAIL",
+     "class_late": "FAIL",
+     "class_full": "FAIL",
+     "met": 0,
+     "worst_R": {
+      "short": 1.1038248969591222,
+      "tpot": 0.5408934153278658,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 6622.949381754734,
+      "Y_tpot": 54.089341532786584,
+      "Y_long": null,
+      "R_long": null
+     },
+     "conclusions": [
+      "fail"
+     ],
+     "runs": [
+      {
+       "tag": "C-U8K-O512-c13-r1",
+       "block": 1,
+       "valid": true,
+       "reasons": [],
+       "output_throughput": 213.2436794846419,
+       "kv_cache_usage_peak": 1.0,
+       "preemptions": 46.0,
+       "waiting_peak": 11.0,
+       "inflight_peak": 13.0,
+       "inflight_le_c": true,
+       "Y": {
+        "short": 6622.949381754734,
+        "tpot": 54.089341532786584,
+        "long": null
+       },
+       "R": {
+        "short": 1.1038248969591222,
+        "tpot": 0.5408934153278658,
+        "long": null
+       },
+       "max_r": 1.1038248969591222,
+       "conclusion": "fail",
+       "attainment": 0.7931034482758621,
+       "burst_max_ttft_ms": 18341.655445998185,
+       "n": {
+        "short": 174,
+        "long": 0,
+        "all": 174
+       },
+       "full": {
+        "Y_short": 6986.377229091158,
+        "Y_tpot": 54.06973217368093,
+        "Y_long": null
+       }
+      }
+     ]
+    }
+   },
+   "c_slo": {
+    "value": 12,
+    "status": "EXACT"
+   },
+   "c_prod": {
+    "value": 12,
+    "status": "EXACT"
+   },
+   "binding": [
+    "short"
+   ],
+   "flags": [],
+   "descriptive": {
+    "c_full": {
+     "c_slo": {
+      "value": 12,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 12,
+      "status": "EXACT"
+     }
+    },
+    "c_late": {
+     "c_slo": {
+      "value": 12,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 12,
+      "status": "EXACT"
+     }
+    }
+   }
+  }
+ },
+ "secondary_slo": {
+  "S1": {
+   "slo": {
+    "id": "S1",
+    "ttft_p95_ms": {
+     "2048": 1000,
+     "8192": 3000,
+     "32768": 10000
+    },
+    "tpot_p95_ms": 50,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "workloads": {
+    "U2K-O512": {
+     "c_slo": {
+      "value": null,
+      "status": "UNSTABLE"
+     },
+     "c_prod": {
+      "value": null,
+      "status": "UNSTABLE"
+     },
+     "binding": [
+      "short"
+     ],
+     "flags": [
+      "STRADDLE"
+     ]
+    },
+    "U8K-O512": {
+     "c_slo": {
+      "value": 12,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 12,
+      "status": "EXACT"
+     },
+     "binding": [
+      "short",
+      "tpot"
+     ],
+     "flags": []
+    }
+   }
+  },
+  "S3": {
+   "slo": {
+    "id": "S3",
+    "ttft_p95_ms": {
+     "2048": 2000,
+     "8192": 6000,
+     "32768": 20000
+    },
+    "tpot_p95_ms": 200,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "workloads": {
+    "U2K-O512": {
+     "c_slo": {
+      "value": 32,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 32,
+      "status": "EXACT"
+     },
+     "binding": [
+      "short"
+     ],
+     "flags": [
+      "WINDOW_SENSITIVE",
+      "ABOVE_CKV"
+     ]
+    },
+    "U8K-O512": {
+     "c_slo": {
+      "value": 12,
+      "status": "EXACT"
+     },
+     "c_prod": {
+      "value": 12,
+      "status": "EXACT"
+     },
+     "binding": [
+      "short"
+     ],
+     "flags": []
+    }
+   }
+  }
+ },
+ "hypotheses": {
+  "H-D3": {
+   "U2K-O512": {
+    "c_slo": {
+     "value": 32,
+     "status": "EXACT"
+    },
+    "c_kv": 30,
+    "verdict": "not supported",
+    "prediction": "supported"
+   },
+   "U8K-O512": {
+    "c_slo": {
+     "value": 12,
+     "status": "EXACT"
+    },
+    "c_kv": 12,
+    "verdict": "supported",
+    "prediction": "supported"
+   }
+  }
+ },
+ "not_supported": [
+  "Stage D measures one machine, one model and Core B's server (or T); open loop is vLLM's own capacity without the gateway's admission; D-C checks only C_PROD itself; mixed open loop, other output lengths and T on other workloads are not measured; the start-up wave (D5) is descriptive."
+ ],
+ "runs": [
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "start",
+   "tag": "sentinel-start-U2K-c25",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 1,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 2,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 4,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 8,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c8",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 16,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c16",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 32,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c32",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 60,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c60",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 46,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c46",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 39,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c39",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 35,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c35",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U2K-O512",
+   "C": 33,
+   "block": null,
+   "position": null,
+   "tag": "S-U2K-O512-c33",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-O512",
+   "C": 1,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-O512-c1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-O512",
+   "C": 2,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-O512-c2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-O512",
+   "C": 4,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-O512-c4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-O512",
+   "C": 8,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-O512-c8",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-O512",
+   "C": 16,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-O512-c16",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-O512",
+   "C": 12,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-O512-c12",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-O512",
+   "C": 14,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-O512-c14",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "S",
+   "workload": "U8K-O512",
+   "C": 13,
+   "block": null,
+   "position": null,
+   "tag": "S-U8K-O512-c13",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 31,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-O512-c31-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 32,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-O512-c32-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 33,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-O512-c33-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 16,
+   "block": 1,
+   "position": null,
+   "tag": "C-U2K-O512-c16-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 11,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-O512-c11-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 13,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-O512-c13-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 12,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-O512-c12-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 6,
+   "block": 1,
+   "position": null,
+   "tag": "C-U8K-O512-c6-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 31,
+   "block": 2,
+   "position": null,
+   "tag": "C-U2K-O512-c31-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 16,
+   "block": 2,
+   "position": null,
+   "tag": "C-U2K-O512-c16-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 32,
+   "block": 2,
+   "position": null,
+   "tag": "C-U2K-O512-c32-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 11,
+   "block": 2,
+   "position": null,
+   "tag": "C-U8K-O512-c11-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 6,
+   "block": 2,
+   "position": null,
+   "tag": "C-U8K-O512-c6-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 12,
+   "block": 2,
+   "position": null,
+   "tag": "C-U8K-O512-c12-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 16,
+   "block": 3,
+   "position": null,
+   "tag": "C-U2K-O512-c16-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 32,
+   "block": 3,
+   "position": null,
+   "tag": "C-U2K-O512-c32-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 31,
+   "block": 3,
+   "position": null,
+   "tag": "C-U2K-O512-c31-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 6,
+   "block": 3,
+   "position": null,
+   "tag": "C-U8K-O512-c6-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 12,
+   "block": 3,
+   "position": null,
+   "tag": "C-U8K-O512-c12-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 11,
+   "block": 3,
+   "position": null,
+   "tag": "C-U8K-O512-c11-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 32,
+   "block": 4,
+   "position": null,
+   "tag": "C-U2K-O512-c32-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 31,
+   "block": 4,
+   "position": null,
+   "tag": "C-U2K-O512-c31-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 11,
+   "block": 4,
+   "position": null,
+   "tag": "C-U8K-O512-c11-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 12,
+   "block": 4,
+   "position": null,
+   "tag": "C-U8K-O512-c12-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 31,
+   "block": 5,
+   "position": null,
+   "tag": "C-U2K-O512-c31-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U2K-O512",
+   "C": 32,
+   "block": 5,
+   "position": null,
+   "tag": "C-U2K-O512-c32-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 11,
+   "block": 5,
+   "position": null,
+   "tag": "C-U8K-O512-c11-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "C",
+   "workload": "U8K-O512",
+   "C": 12,
+   "block": 5,
+   "position": null,
+   "tag": "C-U8K-O512-c12-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "end",
+   "tag": "sentinel-end-U2K-c25",
+   "valid": true,
+   "reasons": []
+  }
+ ],
+ "provenance": {
+  "session_id": "formal-20261023-d-a2",
+  "session": "D-A2",
+  "kind": "closed",
+  "deployed_commit": "0ec7b9208ea339b302cf43f8658829f4a9995545",
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "plan_sha256": "e698241832045b4086bc2f4b55c0fa5327b862cd057382b47b77044ad63fc9d9",
+  "confirm_plan_sha256": "10c3dd3d1fc0b8c6547848b817b527930b533a614bf323e09b08ec5ba77c7295",
+  "rows_sha256": "7e2e3a3c374b26365fd7b12a6cb65fdd7f92788336b5a2cd606452dc01e92108",
+  "dataset_sha256": {},
+  "derived_from": "formal-20261009-coreb-uniform",
+  "c1b_session": "formal-20261017-c1b",
+  "capserve_sha256": null
+ },
+ "platform": {
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "driver": "617.42",
+  "vllm": "0.30.0",
+  "torch": "2.13.0+cu130",
+  "model": "RedHatAI/Qwen3.5-9B-quantized.w4a16@a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "server_argv_sha256": {
+   "U2K": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "U2K-O512": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "U8K-O512": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d"
+  },
+  "env": {
+   "HF_HOME": "/home/wenn0113/.cache/huggingface",
+   "HF_HUB_OFFLINE": "1",
+   "VLLM_GDN_DECODE_KERNEL": "triton",
+   "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+   "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+   "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+   "OTEL": {},
+   "engine_vars": [
+    "CUDA_HOME",
+    "VLLM_GDN_DECODE_KERNEL",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY"
+   ]
+  },
+  "K": 4294967296,
+  "U": "0.91",
+  "num_gpu_blocks": 248,
+  "block_size": 528
+ },
+ "report": {
+  "session_id": "formal-20261023-d-a2",
+  "uniform_session": "formal-20261009-coreb-uniform",
+  "advanced_references": true,
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b"
+ }
+}

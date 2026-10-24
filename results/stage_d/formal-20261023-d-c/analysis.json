@@ -1,0 +1,1227 @@
+{
+ "schema_version": 1,
+ "stage": "D",
+ "session": "D-C",
+ "kind": "verify",
+ "slo": {
+  "id": "S2",
+  "ttft_p95_ms": {
+   "2048": 2000,
+   "8192": 6000,
+   "32768": 20000
+  },
+  "tpot_p95_ms": 100,
+  "mixed_long": "budget"
+ },
+ "protocol": {
+  "seed": 20261008,
+  "window": "steady",
+  "guard_band": 0.05,
+  "n_low": 3,
+  "open_loop": null
+ },
+ "replay": {
+  "ok": true,
+  "problems": []
+ },
+ "sentinel": {
+  "start": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 315.54629627951914,
+   "w_mean_ttft_ms": 965.790345260175,
+   "steady_p95_ttft_ms": 997.3331886096275,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "end": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 315.276145341327,
+   "w_mean_ttft_ms": 966.9410403352958,
+   "steady_p95_ttft_ms": 1001.1483027505165,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "gate": {
+   "ok": true,
+   "drift": {
+    "output_throughput": 0.0008561372495174301,
+    "w_mean_ttft_ms": 0.001191454315906323
+   },
+   "tolerance": 0.03,
+   "reasons": []
+  },
+  "cross_session_shift": {
+   "shift": false,
+   "limit": 0.05,
+   "values": [
+    {
+     "output_throughput": 0.00193917930994858,
+     "steady_p95_ttft_ms": 0.001315569887105017
+    },
+    {
+     "output_throughput": 0.0010813818567902977,
+     "steady_p95_ttft_ms": 0.005145917892964702
+    }
+   ],
+   "references": {
+    "core_output_throughput": 314.9355797193607,
+    "advanced_steady_p95_ttft_ms": 996.0228509400622
+   }
+  }
+ },
+ "workloads": {
+  "U2K-var": {
+   "tier": 2048,
+   "mix": "var",
+   "via": "vllm",
+   "C": 32,
+   "n": 5,
+   "n_valid": 4,
+   "class": "FAIL",
+   "class_late": "NT",
+   "class_full": "FAIL",
+   "met": 3,
+   "worst_R": {
+    "short": 1.0211776265005028,
+    "tpot": 0.5728941353339991,
+    "long": null
+   },
+   "pooled": {
+    "Y_short": 1718.9608550477715,
+    "Y_tpot": 57.251504631440326,
+    "Y_long": null,
+    "R_long": null
+   },
+   "conclusions": [
+    "fail",
+    "pass"
+   ],
+   "runs": [
+    {
+     "tag": "V-U2K-var-c32-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 545.2358680572819,
+     "kv_cache_usage_peak": 0.7611336032388664,
+     "preemptions": 0.0,
+     "waiting_peak": 20.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 1888.2523302454501,
+      "tpot": 57.2788383779973,
+      "long": null
+     },
+     "R": {
+      "short": 0.9441261651227251,
+      "tpot": 0.572788383779973,
+      "long": null
+     },
+     "max_r": 0.9441261651227251,
+     "conclusion": "pass",
+     "attainment": 0.953125,
+     "burst_max_ttft_ms": 4660.179911996238,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 2362.2476367556374,
+      "Y_tpot": 57.41413197203771,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U2K-var-c32-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 545.2846515673236,
+     "kv_cache_usage_peak": 0.757085020242915,
+     "preemptions": 0.0,
+     "waiting_peak": 18.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 1712.9179559997283,
+      "tpot": 56.645547513803976,
+      "long": null
+     },
+     "R": {
+      "short": 0.8564589779998641,
+      "tpot": 0.5664554751380397,
+      "long": null
+     },
+     "max_r": 0.8564589779998641,
+     "conclusion": "pass",
+     "attainment": 0.98828125,
+     "burst_max_ttft_ms": 4620.553656000993,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 2253.6891455471086,
+      "Y_tpot": 57.47833600357486,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U2K-var-c32-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 545.3191058664448,
+     "kv_cache_usage_peak": 0.757085020242915,
+     "preemptions": 0.0,
+     "waiting_peak": 18.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 1977.6079734983796,
+      "tpot": 57.28941353339991,
+      "long": null
+     },
+     "R": {
+      "short": 0.9888039867491898,
+      "tpot": 0.5728941353339991,
+      "long": null
+     },
+     "max_r": 0.9888039867491898,
+     "conclusion": "pass",
+     "attainment": 0.94921875,
+     "burst_max_ttft_ms": 4610.714380993159,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 2386.455800751719,
+      "Y_tpot": 57.80810420900972,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U2K-var-c32-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 544.9524290271912,
+     "kv_cache_usage_peak": 0.757085020242915,
+     "preemptions": 0.0,
+     "waiting_peak": 20.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 2042.3552530010056,
+      "tpot": 56.668142891780235,
+      "long": null
+     },
+     "R": {
+      "short": 1.0211776265005028,
+      "tpot": 0.5666814289178024,
+      "long": null
+     },
+     "max_r": 1.0211776265005028,
+     "conclusion": "fail",
+     "attainment": 0.9375,
+     "burst_max_ttft_ms": 4612.312469995231,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 2383.417922445369,
+      "Y_tpot": 57.75919471373878,
+      "Y_long": null
+     }
+    }
+   ]
+  },
+  "U8K-var": {
+   "tier": 8192,
+   "mix": "var",
+   "via": "vllm",
+   "C": 8,
+   "n": 5,
+   "n_valid": 5,
+   "class": "PASS",
+   "class_late": "PASS",
+   "class_full": "PASS",
+   "met": 5,
+   "worst_R": {
+    "short": 0.4087510984581362,
+    "tpot": 0.6091482679726965,
+    "long": null
+   },
+   "pooled": {
+    "Y_short": 2427.035776093544,
+    "Y_tpot": 60.372548698000536,
+    "Y_long": null,
+    "R_long": null
+   },
+   "conclusions": [
+    "pass"
+   ],
+   "runs": [
+    {
+     "tag": "V-U8K-var-c8-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 140.1549905961889,
+     "kv_cache_usage_peak": 0.45344129554655865,
+     "preemptions": 0.0,
+     "waiting_peak": 5.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 2397.484833750786,
+      "tpot": 60.241715200826306,
+      "long": null
+     },
+     "R": {
+      "short": 0.399580805625131,
+      "tpot": 0.6024171520082631,
+      "long": null
+     },
+     "max_r": 0.6024171520082631,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 5519.8487660090905,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 2778.5082577982403,
+      "Y_tpot": 59.966825659075845,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U8K-var-c8-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 140.13534186371402,
+     "kv_cache_usage_peak": 0.4736842105263158,
+     "preemptions": 0.0,
+     "waiting_peak": 4.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 2421.961462245963,
+      "tpot": 60.91482679726965,
+      "long": null
+     },
+     "R": {
+      "short": 0.4036602437076605,
+      "tpot": 0.6091482679726965,
+      "long": null
+     },
+     "max_r": 0.6091482679726965,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 5518.664429007913,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 2548.905212955289,
+      "Y_tpot": 60.99245144885243,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U8K-var-c8-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 140.13986766381936,
+     "kv_cache_usage_peak": 0.46153846153846156,
+     "preemptions": 0.0,
+     "waiting_peak": 4.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 2427.572051143943,
+      "tpot": 60.44058828430404,
+      "long": null
+     },
+     "R": {
+      "short": 0.4045953418573239,
+      "tpot": 0.6044058828430404,
+      "long": null
+     },
+     "max_r": 0.6044058828430404,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 5496.160300011979,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 2663.8036059928722,
+      "Y_tpot": 60.47487100555358,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U8K-var-c8-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 140.12704610710009,
+     "kv_cache_usage_peak": 0.44534412955465585,
+     "preemptions": 0.0,
+     "waiting_peak": 4.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 2333.7007576497854,
+      "tpot": 60.32945865590018,
+      "long": null
+     },
+     "R": {
+      "short": 0.3889501262749642,
+      "tpot": 0.6032945865590018,
+      "long": null
+     },
+     "max_r": 0.6032945865590018,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 5500.57507600286,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 2437.3056814452866,
+      "Y_tpot": 60.179820117295684,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U8K-var-c8-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 140.19898469750783,
+     "kv_cache_usage_peak": 0.45344129554655865,
+     "preemptions": 0.0,
+     "waiting_peak": 5.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 2452.506590748817,
+      "tpot": 59.80794069574464,
+      "long": null
+     },
+     "R": {
+      "short": 0.4087510984581362,
+      "tpot": 0.5980794069574464,
+      "long": null
+     },
+     "max_r": 0.5980794069574464,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 5439.461985995877,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 2784.209584713244,
+      "Y_tpot": 59.86036956032984,
+      "Y_long": null
+     }
+    }
+   ]
+  },
+  "U2K-gw": {
+   "tier": 2048,
+   "mix": "uniform",
+   "via": "gateway",
+   "C": 32,
+   "n": 5,
+   "n_valid": 5,
+   "class": "PASS",
+   "class_late": "PASS",
+   "class_full": "FAIL",
+   "met": 5,
+   "worst_R": {
+    "short": 0.6961675538750569,
+    "tpot": 0.9233332974604775,
+    "long": null
+   },
+   "pooled": {
+    "Y_short": 1390.5743031988095,
+    "Y_tpot": 92.17912508267015,
+    "Y_long": null,
+    "R_long": null
+   },
+   "conclusions": [
+    "pass"
+   ],
+   "runs": [
+    {
+     "tag": "V-U2K-gw-c32-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 327.5729779798275,
+     "kv_cache_usage_peak": 0.9068825910931174,
+     "preemptions": 0.0,
+     "waiting_peak": 29.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 1389.0180967391643,
+      "tpot": 92.33332974604775,
+      "long": null
+     },
+     "R": {
+      "short": 0.6945090483695822,
+      "tpot": 0.9233332974604775,
+      "long": null
+     },
+     "max_r": 0.9233332974604775,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 10365.852279006504,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 5483.880583007707,
+      "Y_tpot": 92.33274485942941,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U2K-gw-c32-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 327.7935141229825,
+     "kv_cache_usage_peak": 0.9068825910931174,
+     "preemptions": 0.0,
+     "waiting_peak": 27.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 1390.1047959952848,
+      "tpot": 92.0274097165464,
+      "long": null
+     },
+     "R": {
+      "short": 0.6950523979976424,
+      "tpot": 0.920274097165464,
+      "long": null
+     },
+     "max_r": 0.920274097165464,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 10388.368155006901,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 5497.454449398359,
+      "Y_tpot": 91.9047694244043,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U2K-gw-c32-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 327.5402936096588,
+     "kv_cache_usage_peak": 0.9068825910931174,
+     "preemptions": 0.0,
+     "waiting_peak": 27.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 1390.317803248763,
+      "tpot": 91.96553325586939,
+      "long": null
+     },
+     "R": {
+      "short": 0.6951589016243815,
+      "tpot": 0.9196553325586939,
+      "long": null
+     },
+     "max_r": 0.9196553325586939,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 10403.097627000534,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 5508.071519859372,
+      "Y_tpot": 91.91724102799533,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U2K-gw-c32-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 327.67122307723673,
+     "kv_cache_usage_peak": 0.9068825910931174,
+     "preemptions": 0.0,
+     "waiting_peak": 28.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 1390.3232905031473,
+      "tpot": 92.12982109450486,
+      "long": null
+     },
+     "R": {
+      "short": 0.6951616452515736,
+      "tpot": 0.9212982109450486,
+      "long": null
+     },
+     "max_r": 0.9212982109450486,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 10417.272667997167,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 5519.76706345013,
+      "Y_tpot": 91.94250322207941,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U2K-gw-c32-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 327.5219667024571,
+     "kv_cache_usage_peak": 0.9068825910931174,
+     "preemptions": 0.0,
+     "waiting_peak": 28.0,
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 1392.3351077501138,
+      "tpot": 92.24797492516507,
+      "long": null
+     },
+     "R": {
+      "short": 0.6961675538750569,
+      "tpot": 0.9224797492516507,
+      "long": null
+     },
+     "max_r": 0.9224797492516507,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 10420.219841995277,
+     "n": {
+      "short": 256,
+      "long": 0,
+      "all": 256
+     },
+     "full": {
+      "Y_short": 5519.824470001189,
+      "Y_tpot": 92.09393827358878,
+      "Y_long": null
+     }
+    }
+   ]
+  },
+  "U8K-gw": {
+   "tier": 8192,
+   "mix": "uniform",
+   "via": "gateway",
+   "C": 8,
+   "n": 5,
+   "n_valid": 5,
+   "class": "PASS",
+   "class_late": "PASS",
+   "class_full": "PASS",
+   "met": 5,
+   "worst_R": {
+    "short": 0.5329013790007593,
+    "tpot": 0.8850646620820503,
+    "long": null
+   },
+   "pooled": {
+    "Y_short": 3192.635447101202,
+    "Y_tpot": 88.48478731186648,
+    "Y_long": null,
+    "R_long": null
+   },
+   "conclusions": [
+    "pass"
+   ],
+   "runs": [
+    {
+     "tag": "V-U8K-gw-c8-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 80.3804465978819,
+     "kv_cache_usage_peak": 0.6153846153846154,
+     "preemptions": 0.0,
+     "waiting_peak": 7.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 3189.4231340585975,
+      "tpot": 88.49813193702698,
+      "long": null
+     },
+     "R": {
+      "short": 0.5315705223430995,
+      "tpot": 0.8849813193702698,
+      "long": null
+     },
+     "max_r": 0.8849813193702698,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 11066.338866992737,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 3191.1794712570554,
+      "Y_tpot": 88.46342365353003,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U8K-gw-c8-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 80.3993505043781,
+     "kv_cache_usage_peak": 0.6153846153846154,
+     "preemptions": 0.0,
+     "waiting_peak": 7.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 3189.700288893073,
+      "tpot": 88.4309290716524,
+      "long": null
+     },
+     "R": {
+      "short": 0.5316167148155121,
+      "tpot": 0.884309290716524,
+      "long": null
+     },
+     "max_r": 0.884309290716524,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 11083.94159200543,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 3190.9388064887025,
+      "Y_tpot": 88.34653747482632,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U8K-gw-c8-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 80.37816238415107,
+     "kv_cache_usage_peak": 0.6153846153846154,
+     "preemptions": 0.0,
+     "waiting_peak": 7.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 3193.027249444276,
+      "tpot": 88.41185642205367,
+      "long": null
+     },
+     "R": {
+      "short": 0.5321712082407127,
+      "tpot": 0.8841185642205367,
+      "long": null
+     },
+     "max_r": 0.8841185642205367,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 11079.96481200098,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 3487.5220581001486,
+      "Y_tpot": 88.40302948657319,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U8K-gw-c8-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 80.38067744636116,
+     "kv_cache_usage_peak": 0.6153846153846154,
+     "preemptions": 0.0,
+     "waiting_peak": 6.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 3197.408274004556,
+      "tpot": 88.50646620820503,
+      "long": null
+     },
+     "R": {
+      "short": 0.5329013790007593,
+      "tpot": 0.8850646620820503,
+      "long": null
+     },
+     "max_r": 0.8850646620820503,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 11103.489707995323,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 3490.84888800935,
+      "Y_tpot": 88.47806685709341,
+      "Y_long": null
+     }
+    },
+    {
+     "tag": "V-U8K-gw-c8-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "output_throughput": 80.38499602203237,
+     "kv_cache_usage_peak": 0.6153846153846154,
+     "preemptions": 0.0,
+     "waiting_peak": 6.0,
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "Y": {
+      "short": 3192.4408166516514,
+      "tpot": 88.4666571235314,
+      "long": null
+     },
+     "R": {
+      "short": 0.5320734694419419,
+      "tpot": 0.884666571235314,
+      "long": null
+     },
+     "max_r": 0.884666571235314,
+     "conclusion": "pass",
+     "attainment": 1.0,
+     "burst_max_ttft_ms": 10997.159865000867,
+     "n": {
+      "short": 184,
+      "long": 0,
+      "all": 184
+     },
+     "full": {
+      "Y_short": 3196.2610799957474,
+      "Y_tpot": 88.4781037644629,
+      "Y_long": null
+     }
+    }
+   ]
+  }
+ },
+ "secondary_slo": {
+  "S1": {
+   "slo": {
+    "id": "S1",
+    "ttft_p95_ms": {
+     "2048": 1000,
+     "8192": 3000,
+     "32768": 10000
+    },
+    "tpot_p95_ms": 50,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "workloads": {
+    "U2K-var": {
+     "class": "FAIL"
+    },
+    "U8K-var": {
+     "class": "FAIL"
+    },
+    "U2K-gw": {
+     "class": "FAIL"
+    },
+    "U8K-gw": {
+     "class": "FAIL"
+    }
+   }
+  },
+  "S3": {
+   "slo": {
+    "id": "S3",
+    "ttft_p95_ms": {
+     "2048": 2000,
+     "8192": 6000,
+     "32768": 20000
+    },
+    "tpot_p95_ms": 200,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "workloads": {
+    "U2K-var": {
+     "class": "FAIL"
+    },
+    "U8K-var": {
+     "class": "PASS"
+    },
+    "U2K-gw": {
+     "class": "PASS"
+    },
+    "U8K-gw": {
+     "class": "PASS"
+    }
+   }
+  }
+ },
+ "hypotheses": {
+  "H-D6": {
+   "U2K-var": {
+    "class": "FAIL",
+    "verdict": "not supported",
+    "prediction": "supported"
+   },
+   "U8K-var": {
+    "class": "PASS",
+    "verdict": "supported",
+    "prediction": "supported"
+   }
+  },
+  "H-D7": {
+   "U2K-gw": {
+    "class": "PASS",
+    "verdict": "supported",
+    "prediction": "supported"
+   },
+   "U8K-gw": {
+    "class": "PASS",
+    "verdict": "supported",
+    "prediction": "supported"
+   }
+  }
+ },
+ "not_supported": [
+  "Stage D measures one machine, one model and Core B's server (or T); open loop is vLLM's own capacity without the gateway's admission; D-C checks only C_PROD itself; mixed open loop, other output lengths and T on other workloads are not measured; the start-up wave (D5) is descriptive."
+ ],
+ "runs": [
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "start",
+   "tag": "sentinel-start-U2K-c25",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-var",
+   "C": 8,
+   "block": 1,
+   "position": null,
+   "tag": "V-U8K-var-c8-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-gw",
+   "C": 8,
+   "block": 1,
+   "position": null,
+   "tag": "V-U8K-gw-c8-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-var",
+   "C": 32,
+   "block": 1,
+   "position": null,
+   "tag": "V-U2K-var-c32-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-gw",
+   "C": 32,
+   "block": 1,
+   "position": null,
+   "tag": "V-U2K-gw-c32-r1",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-var",
+   "C": 8,
+   "block": 2,
+   "position": null,
+   "tag": "V-U8K-var-c8-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-gw",
+   "C": 8,
+   "block": 2,
+   "position": null,
+   "tag": "V-U8K-gw-c8-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-var",
+   "C": 32,
+   "block": 2,
+   "position": null,
+   "tag": "V-U2K-var-c32-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-gw",
+   "C": 32,
+   "block": 2,
+   "position": null,
+   "tag": "V-U2K-gw-c32-r2",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-gw",
+   "C": 8,
+   "block": 3,
+   "position": null,
+   "tag": "V-U8K-gw-c8-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-var",
+   "C": 8,
+   "block": 3,
+   "position": null,
+   "tag": "V-U8K-var-c8-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-var",
+   "C": 32,
+   "block": 3,
+   "position": null,
+   "tag": "V-U2K-var-c32-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-gw",
+   "C": 32,
+   "block": 3,
+   "position": null,
+   "tag": "V-U2K-gw-c32-r3",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-var",
+   "C": 8,
+   "block": 4,
+   "position": null,
+   "tag": "V-U8K-var-c8-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-var",
+   "C": 32,
+   "block": 4,
+   "position": null,
+   "tag": "V-U2K-var-c32-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-gw",
+   "C": 32,
+   "block": 4,
+   "position": null,
+   "tag": "V-U2K-gw-c32-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-gw",
+   "C": 8,
+   "block": 4,
+   "position": null,
+   "tag": "V-U8K-gw-c8-r4",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U2K-gw",
+   "C": 32,
+   "block": 5,
+   "position": null,
+   "tag": "V-U2K-gw-c32-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-var",
+   "C": 8,
+   "block": 5,
+   "position": null,
+   "tag": "V-U8K-var-c8-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "U8K-gw",
+   "C": 8,
+   "block": 5,
+   "position": null,
+   "tag": "V-U8K-gw-c8-r5",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "end",
+   "tag": "sentinel-end-U2K-c25",
+   "valid": true,
+   "reasons": []
+  }
+ ],
+ "provenance": {
+  "session_id": "formal-20261023-d-c",
+  "session": "D-C",
+  "kind": "verify",
+  "deployed_commit": "0ec7b9208ea339b302cf43f8658829f4a9995545",
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "plan_sha256": "160cfd0c2ac9ced1682e679aa67d4d7fd37018636937e95a1b7891f4b6c94190",
+  "confirm_plan_sha256": null,
+  "rows_sha256": "7bf60157ad72c7fd97aafa12466bb9b01628970cb0c9fb9e9cebf9e5a3abf329",
+  "dataset_sha256": {
+   "var:2048": "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1",
+   "var:8192": "d550acc8d25984c2885174e62aa2326004d67fcfddc7fc2bd1f8272c305f2220"
+  },
+  "derived_from": "formal-20261009-coreb-uniform",
+  "c1b_session": "formal-20261017-c1b",
+  "capserve_sha256": "53488c6df8c7b7f5466ad6585bd49e73bff3fc2b667a06ce52d0c2933ab2ca9c"
+ },
+ "platform": {
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "driver": "617.42",
+  "vllm": "0.30.0",
+  "torch": "2.13.0+cu130",
+  "model": "RedHatAI/Qwen3.5-9B-quantized.w4a16@a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "server_argv_sha256": {
+   "U2K": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "U8K-var": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "U8K-gw": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "U2K-var": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "U2K-gw": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d"
+  },
+  "env": {
+   "HF_HOME": "/home/wenn0113/.cache/huggingface",
+   "HF_HUB_OFFLINE": "1",
+   "VLLM_GDN_DECODE_KERNEL": "triton",
+   "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+   "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+   "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+   "OTEL": {},
+   "engine_vars": [
+    "CUDA_HOME",
+    "VLLM_GDN_DECODE_KERNEL",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY"
+   ]
+  },
+  "K": 4294967296,
+  "U": "0.91",
+  "num_gpu_blocks": 248,
+  "block_size": 528
+ },
+ "report": {
+  "session_id": "formal-20261023-d-c",
+  "uniform_session": "formal-20261009-coreb-uniform",
+  "advanced_references": true,
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b"
+ }
+}

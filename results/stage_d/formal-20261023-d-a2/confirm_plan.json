@@ -1,0 +1,244 @@
+{
+ "schema_version": 1,
+ "seed": 20261008,
+ "blocks": 5,
+ "block_orders": {
+  "1": [
+   "U2K-O512",
+   "U8K-O512"
+  ],
+  "2": [
+   "U2K-O512",
+   "U8K-O512"
+  ],
+  "3": [
+   "U2K-O512",
+   "U8K-O512"
+  ],
+  "4": [
+   "U2K-O512",
+   "U8K-O512"
+  ],
+  "5": [
+   "U2K-O512",
+   "U8K-O512"
+  ]
+ },
+ "workloads": {
+  "U2K-O512": {
+   "c_hat": 32,
+   "c_hat_g": 32,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 4,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 8,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 16,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 32,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 60,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 46,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 39,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 35,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 33,
+     "pass": false,
+     "within_band": false
+    }
+   ],
+   "points": [
+    {
+     "C": 16,
+     "role": "low",
+     "n": 3
+    },
+    {
+     "C": 31,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 32,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 33,
+     "role": "near",
+     "n": 5
+    }
+   ],
+   "orders": {
+    "1": [
+     31,
+     32,
+     33,
+     16
+    ],
+    "2": [
+     31,
+     16,
+     32,
+     33
+    ],
+    "3": [
+     33,
+     16,
+     32,
+     31
+    ],
+    "4": [
+     32,
+     16,
+     33,
+     31
+    ],
+    "5": [
+     31,
+     33,
+     32,
+     16
+    ]
+   }
+  },
+  "U8K-O512": {
+   "c_hat": 12,
+   "c_hat_g": 12,
+   "search": [
+    {
+     "C": 1,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 2,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 4,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 8,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 16,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 12,
+     "pass": true,
+     "within_band": true
+    },
+    {
+     "C": 14,
+     "pass": false,
+     "within_band": false
+    },
+    {
+     "C": 13,
+     "pass": false,
+     "within_band": false
+    }
+   ],
+   "points": [
+    {
+     "C": 6,
+     "role": "low",
+     "n": 3
+    },
+    {
+     "C": 11,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 12,
+     "role": "near",
+     "n": 5
+    },
+    {
+     "C": 13,
+     "role": "near",
+     "n": 5
+    }
+   ],
+   "orders": {
+    "1": [
+     11,
+     13,
+     12,
+     6
+    ],
+    "2": [
+     11,
+     13,
+     6,
+     12
+    ],
+    "3": [
+     6,
+     12,
+     11,
+     13
+    ],
+    "4": [
+     11,
+     12,
+     13,
+     6
+    ],
+    "5": [
+     6,
+     11,
+     12,
+     13
+    ]
+   }
+  }
+ }
+}

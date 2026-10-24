@@ -1,0 +1,129 @@
+{
+ "schema_version": 1,
+ "stage": "D",
+ "session": "D-C",
+ "kind": "verify",
+ "seed": 20261008,
+ "derived_from": "formal-20261009-coreb-uniform",
+ "c1b_session": "formal-20261017-c1b",
+ "slo": {
+  "id": "S2",
+  "ttft_p95_ms": {
+   "2048": 2000,
+   "8192": 6000,
+   "32768": 20000
+  },
+  "tpot_p95_ms": 100,
+  "mixed_long": "budget"
+ },
+ "secondary_slo": {
+  "S1": {
+   "id": "S1",
+   "ttft_p95_ms": {
+    "2048": 1000,
+    "8192": 3000,
+    "32768": 10000
+   },
+   "tpot_p95_ms": 50,
+   "mixed_long": "budget"
+  },
+  "S3": {
+   "id": "S3",
+   "ttft_p95_ms": {
+    "2048": 2000,
+    "8192": 6000,
+    "32768": 20000
+   },
+   "tpot_p95_ms": 200,
+   "mixed_long": "budget"
+  }
+ },
+ "window": "steady",
+ "guard_band": 0.05,
+ "n_low": 3,
+ "open_loop": null,
+ "verify": {
+  "gateway_port": 8080,
+  "gateway_profile": "service/profiles/verified-formal-20261017-c1b.json"
+ },
+ "workloads": {
+  "U2K-var": {
+   "tier": 2048,
+   "prompt": null,
+   "out": 128,
+   "mix": "var",
+   "server": "B0",
+   "via": "vllm",
+   "kv_len": 2048,
+   "c_kv": 35,
+   "C": 32,
+   "n": 5,
+   "timeout_s": 1260
+  },
+  "U8K-var": {
+   "tier": 8192,
+   "prompt": null,
+   "out": 128,
+   "mix": "var",
+   "server": "B0",
+   "via": "vllm",
+   "kv_len": 8192,
+   "c_kv": 13,
+   "C": 8,
+   "n": 5,
+   "timeout_s": 1260
+  },
+  "U2K-gw": {
+   "tier": 2048,
+   "prompt": 1920,
+   "out": 128,
+   "mix": "uniform",
+   "server": "B0",
+   "via": "gateway",
+   "gateway_class": "uniform-2k",
+   "kv_len": 2048,
+   "c_kv": 35,
+   "C": 32,
+   "n": 5,
+   "timeout_s": 1260
+  },
+  "U8K-gw": {
+   "tier": 8192,
+   "prompt": 8064,
+   "out": 128,
+   "mix": "uniform",
+   "server": "B0",
+   "via": "gateway",
+   "gateway_class": "uniform-8k",
+   "kv_len": 8192,
+   "c_kv": 13,
+   "C": 8,
+   "n": 5,
+   "timeout_s": 1260
+  }
+ },
+ "sentinel": {
+  "workload": "U2K",
+  "L": 2048,
+  "mix": "uniform",
+  "C": 25,
+  "N": 250,
+  "tolerance": 0.03,
+  "timeout_s": 1020
+ },
+ "server_ready_timeout_s": 1800,
+ "expected_blocks": 248,
+ "block_size": 528,
+ "gpu_memory_utilization": "0.91",
+ "kv_cache_memory_bytes": 4294967296,
+ "long_prefill_token_threshold": 512,
+ "mix_dataset_sha256": {
+  "8192": "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2"
+ },
+ "var_dataset_sha256": {
+  "2048": "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1",
+  "8192": "d550acc8d25984c2885174e62aa2326004d67fcfddc7fc2bd1f8272c305f2220"
+ },
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5"
+}

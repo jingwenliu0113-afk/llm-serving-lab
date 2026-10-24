@@ -1,0 +1,243 @@
+{
+ "schema_version": 1,
+ "stage": "D",
+ "session": "D-B",
+ "kind": "open",
+ "seed": 20261008,
+ "derived_from": "formal-20261009-coreb-uniform",
+ "c1b_session": "formal-20261017-c1b",
+ "slo": {
+  "id": "S2",
+  "ttft_p95_ms": {
+   "2048": 2000,
+   "8192": 6000,
+   "32768": 20000
+  },
+  "tpot_p95_ms": 100,
+  "mixed_long": "budget"
+ },
+ "secondary_slo": {
+  "S1": {
+   "id": "S1",
+   "ttft_p95_ms": {
+    "2048": 1000,
+    "8192": 3000,
+    "32768": 10000
+   },
+   "tpot_p95_ms": 50,
+   "mixed_long": "budget"
+  },
+  "S3": {
+   "id": "S3",
+   "ttft_p95_ms": {
+    "2048": 2000,
+    "8192": 6000,
+    "32768": 20000
+   },
+   "tpot_p95_ms": 200,
+   "mixed_long": "budget"
+  }
+ },
+ "window": "steady",
+ "guard_band": 0.05,
+ "n_low": 3,
+ "open_loop": {
+  "grid": [
+   0.4,
+   0.55,
+   0.7,
+   0.8,
+   0.9,
+   1.0,
+   1.1,
+   1.25,
+   1.5
+  ],
+  "min_n": 300,
+  "min_duration_s": 300,
+  "trim": 0.1,
+  "warmups": 10,
+  "burstiness": 1.0
+ },
+ "verify": null,
+ "workloads": {
+  "U2K-P": {
+   "tier": 2048,
+   "prompt": 1920,
+   "out": 128,
+   "mix": "uniform",
+   "server": "B0",
+   "via": "vllm",
+   "kv_len": 2048,
+   "c_kv": 35,
+   "c_cap": 9,
+   "n_near": 5,
+   "scan": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "lambda_ref": {
+    "workload": "U2K",
+    "c_prod": 32,
+    "requests": 768,
+    "mean_latency_s": 12.56945,
+    "lambda_ref": 2.545855
+   },
+   "points": {
+    "1": {
+     "rate": 1.0183,
+     "N": 306,
+     "timeout_s": 1200
+    },
+    "2": {
+     "rate": 1.4002,
+     "N": 421,
+     "timeout_s": 1620
+    },
+    "3": {
+     "rate": 1.7821,
+     "N": 535,
+     "timeout_s": 2040
+    },
+    "4": {
+     "rate": 2.0367,
+     "N": 612,
+     "timeout_s": 2340
+    },
+    "5": {
+     "rate": 2.2913,
+     "N": 688,
+     "timeout_s": 2640
+    },
+    "6": {
+     "rate": 2.5459,
+     "N": 764,
+     "timeout_s": 2880
+    },
+    "7": {
+     "rate": 2.8004,
+     "N": 841,
+     "timeout_s": 3180
+    },
+    "8": {
+     "rate": 3.1823,
+     "N": 955,
+     "timeout_s": 3600
+    },
+    "9": {
+     "rate": 3.8188,
+     "N": 1146,
+     "timeout_s": 4320
+    }
+   }
+  },
+  "U8K-P": {
+   "tier": 8192,
+   "prompt": 8064,
+   "out": 128,
+   "mix": "uniform",
+   "server": "B0",
+   "via": "vllm",
+   "kv_len": 8192,
+   "c_kv": 13,
+   "c_cap": 9,
+   "n_near": 5,
+   "scan": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "lambda_ref": {
+    "workload": "U8K",
+    "c_prod": 8,
+    "requests": 920,
+    "mean_latency_s": 12.705468,
+    "lambda_ref": 0.62965
+   },
+   "points": {
+    "1": {
+     "rate": 0.2519,
+     "N": 300,
+     "timeout_s": 1860
+    },
+    "2": {
+     "rate": 0.3463,
+     "N": 300,
+     "timeout_s": 1860
+    },
+    "3": {
+     "rate": 0.4408,
+     "N": 300,
+     "timeout_s": 1860
+    },
+    "4": {
+     "rate": 0.5037,
+     "N": 300,
+     "timeout_s": 1860
+    },
+    "5": {
+     "rate": 0.5667,
+     "N": 300,
+     "timeout_s": 1860
+    },
+    "6": {
+     "rate": 0.6297,
+     "N": 300,
+     "timeout_s": 1860
+    },
+    "7": {
+     "rate": 0.6926,
+     "N": 300,
+     "timeout_s": 1860
+    },
+    "8": {
+     "rate": 0.7871,
+     "N": 300,
+     "timeout_s": 1860
+    },
+    "9": {
+     "rate": 0.9445,
+     "N": 300,
+     "timeout_s": 1860
+    }
+   }
+  }
+ },
+ "sentinel": {
+  "workload": "U2K",
+  "L": 2048,
+  "mix": "uniform",
+  "C": 25,
+  "N": 250,
+  "tolerance": 0.03,
+  "timeout_s": 1020
+ },
+ "server_ready_timeout_s": 1800,
+ "expected_blocks": 248,
+ "block_size": 528,
+ "gpu_memory_utilization": "0.91",
+ "kv_cache_memory_bytes": 4294967296,
+ "long_prefill_token_threshold": 512,
+ "mix_dataset_sha256": {
+  "8192": "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2"
+ },
+ "var_dataset_sha256": {
+  "2048": "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1",
+  "8192": "d550acc8d25984c2885174e62aa2326004d67fcfddc7fc2bd1f8272c305f2220"
+ },
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5"
+}
