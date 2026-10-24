@@ -343,13 +343,13 @@
 - **(h) access log 對應是雙射**：每個 boot 只有一個 run，所以在 `gateway_down` 之後解析 log；這時 log reader 已經 join，結果是決定性的。
   - completion route 上 `client_request_id = <tag>-<idx>` 的紀錄，idx 0..N−1 各剛好一筆，status 200，outcome ok；
   - 每筆都帶 queue_wait_s、ttft_s、upstream_ttft_s、duration_s、t_arrival_s、t_sent_s、t_released_s；P 點另有 prefill_wait_s，W 點另有 admission_class / admission_units。
-  - completion route 上沒有 id 的紀錄 ≥ C + 1：ready check 可能重試，再加上 warmup 的 C 筆；每筆都帶 t_arrival_s、t_sent_s、t_released_s，(j) 也讀它們的區間（實作補記六第 9 項）；
+  - completion route 上沒有 id 的紀錄剛好 C 筆，也就是 warmup：凍結的 client 不送 ready check（vLLM 0.30 的 `--ready-check-timeout-sec` 預設為 0，沒有任何 argv 設定它），request 也不重試，所以少一筆或多一筆都是問題；每筆都帶 t_arrival_s、t_sent_s、t_released_s，(j) 也讀它們的區間（實作補記六第 9 項；實作補記七第 1 項）；
   - `/metrics`、`/readyz`、`/healthz` 的紀錄一律排除。bench 在主要 run 前後會對 base_url 發 GET /metrics，runner 也會輪詢 /readyz。
-  - random dataset 的 client（`--dataset-name random`）在 ready check 之前送一次沒有 id 的 `POST /tokenize`（vLLM 0.30 的 prompt 對齊）；gateway 沒有這個 route，回 404，bench 因此略過對齊。剛好一筆、狀態 404、在所有 completion 紀錄之前時接受，不計入沒有 id 的筆數，也不適用 (i)；其他 `/tokenize` 紀錄（多一筆、少一筆、別的狀態、較晚、custom dataset 的 client）都是問題（實作補記六第 5 項）。
+  - random dataset 的 client（`--dataset-name random`）在 warmup 之前送一次沒有 id 的 `POST /tokenize`（vLLM 0.30 的 prompt 對齊）；gateway 沒有這個 route，回 404，bench 因此略過對齊。剛好一筆、狀態 404、在所有 completion 紀錄之前時接受，不計入沒有 id 的筆數，也不適用 (i)；其他 `/tokenize` 紀錄（多一筆、少一筆、別的狀態、較晚、custom dataset 的 client）都是問題（實作補記六第 5 項；「在 warmup 之前」原寫「在 ready check 之前」，實作補記七第 1 項）。
   - 沒有其他 prefix；
   - 每筆 gw ttft_s ≤ client ttft + 50 ms。
 - **(i)** 主要 request 與 warmup 都沒有任何 4xx、429 或 5xx。
-- **(j)** 1 Hz sampler 的 running + waiting 峰值 ≤ C（V4 為 32），由 access log 的區間重算，主要 request 之外也包括 ready check 與 warmup 的區間（實作補記六第 9 項）：
+- **(j)** 1 Hz sampler 的 running + waiting 峰值 ≤ C（V4 為 32），由 access log 的區間重算，主要 request 之外也包括 C 個 warmup 的區間（實作補記六第 9 項；凍結的 client 不送 ready check，實作補記七第 1 項）：
   - 在途數 ≤ C；
   - V4 的單位 ≤ 32，2K ≤ 32 個，8K ≤ 8 個。
   - 整個 bench process 都經過 gateway，所以任何時刻都必須成立；D-C 的 21 個 run 都符合。
@@ -526,7 +526,7 @@
 **client argv**：等於凍結函式的輸出，只允許三種差異，由測試以 diff 斷言。
 1. 凍結函式給的是 8000 時，`--base-url` 的 port 改為 8080；
 2. 只有 L 點：`--custom-output-len 128` 改為 `-1`；
-3. 每個 gateway run 都加上 `--request-id-prefix <tag>-`。vLLM 0.30 的預設值是 `bench-<uuid8>-`，主要 request 本來就帶 `x-request-id`，所以負載不變；warmup 與 ready check 重送 row 0，而且不帶 id。
+3. 每個 gateway run 都加上 `--request-id-prefix <tag>-`。vLLM 0.30 的預設值是 `bench-<uuid8>-`，主要 request 本來就帶 `x-request-id`，所以負載不變；只有 C 個 warmup 重送 row 0，而且不帶 id（凍結的 client 不送 ready check：`--ready-check-timeout-sec` 預設 0，實作補記七第 1 項）。
 
 **`configs/stage_v.toml`**
 - `schema_version`。
@@ -593,7 +593,7 @@
   - 輸入全部 out ≥ 2 時，`run_eval_v1` 等於 `ca.run_eval`；out = 1 只從 TPOT 排除；
   - upstream view 的 TPOT 不變；
   - W 的 SLO 視圖，以及 8K 的合併；
-  - 對應失敗的情況：缺行、重複、多行、別的 prefix、非 200、沒有 id 的少於 C + 1；豁免路徑被忽略；50 ms 的容差；
+  - 對應失敗的情況：缺行、重複、多行、別的 prefix、非 200、沒有 id 的不是剛好 C 筆（少一筆或多一筆，實作補記七第 1 項）；豁免路徑被忽略；50 ms 的容差；
   - U_W 以合成的區間測試，包括 HOL 造成的空檔與剛好 28.8 的邊界；N1、E、(j)；
   - 類別含 TRIVIAL；
   - 每個單位的判定表，包括否決規則；
@@ -751,6 +751,7 @@
 - 本機的 vLLM 原始碼是 scratch 中的副本（`ready_checker.py` 不在其中）。凍結前在 WSL 的 venv 唯讀複核：
   - `CustomDataset.sample` 的 `output_tokens`；
   - warmup 重送 row 0；
+  - ready check 預設略過（`--ready-check-timeout-sec` 預設 0，`benchmark()` 印出 `Skipping endpoint ready check.`；實作補記七第 1 項）；
   - `x-request-id`；
   - 前後各兩次 GET /metrics（spec decode 與 diffusion 的 metrics）；
   - aiohttp 的 limit = C 與 keepalive 60 s；
@@ -780,7 +781,7 @@
   - 改為前 9 列決定性的 33 單位。
 - **(h) 的計數**：
   - 「沒有 id 的行數 = 1 + warmup」沒有限定 route，會被 GET /metrics 與 /readyz 誤判，改為只計 completion route；
-  - 「剛好 C + 1」依賴 ready check 只送一次，改為 ≥ C + 1。
+  - 「剛好 C + 1」依賴 ready check 只送一次，改為 ≥ C + 1。（實作補記七第 1 項更正：凍結的 client 根本不送 ready check，`--ready-check-timeout-sec` 預設 0，改為剛好 C。）
 - **在途區間的終點**：用 guard 的 ts 當終點，會因 permit 早於 `_finish` 釋放而產生 C + 1 的重疊，改用 `t_released_s`。ts 也只是 1 ms 精度的 wall time。
 - **時數估算**：
   - 「每次 boot 1.6 min，gateway 點另加 0.5 min」重複計算，D-C 的 94 s 已含 10 次 gateway boot；
@@ -967,7 +968,7 @@
 
 `benchmarks/stage_v_datasets.py`、`benchmarks/stage_v_analysis.py` 與 `tests/test_stage_v_datasets.py`、`tests/test_stage_v_analysis.py` 已依本文以 TDD 實作。凍結模組只 import（`capacity_analysis`、`capacity_plan`、`core_b_analysis`、`core_b_plan`、`stage_d_analysis`、`stage_d_datasets`、`stage_d_plan`），一個位元組都沒有改，也不 import capserve。dataset 的測試用假的 sampler，vLLM 只在 WSL 的 CLI 載入（`stage_d_datasets.vllm_sampler`）。analysis 的測試以封閉迴路、嚴格 FIFO 的假 gateway 產生逐 request 的資料，並以和 runner 相同的規則模擬整個 session，再由 replay 檢查。下列是本文沒有寫死、實作時決定的細節，以及和本文字面不同、依程式處理的地方。
 
-1. **vLLM 0.30 原始碼的唯讀核對**（scratch 中的副本）：`CustomDataset.sample` 只有在 output_len 為 None 或 −1 時才讀每列的 `output_tokens`；`prompt_len` 是 `len(tokenizer(prompt).input_ids)`，和 `stage_d_datasets.vllm_sampler` 的計數相同；request_id 為 `request_id_prefix + str(列號)`，列數等於 N 時不會 oversample；ready check 與 warmup 都送 row 0 的 `test_input`，不帶 request_id，也就不帶 `x-request-id`。和本文一致。（這次核對漏了 random dataset 在 ready check 之前送的一次 `POST /tokenize`，見實作補記六第 5 項。）
+1. **vLLM 0.30 原始碼的唯讀核對**（scratch 中的副本）：`CustomDataset.sample` 只有在 output_len 為 None 或 −1 時才讀每列的 `output_tokens`；`prompt_len` 是 `len(tokenizer(prompt).input_ids)`，和 `stage_d_datasets.vllm_sampler` 的計數相同；request_id 為 `request_id_prefix + str(列號)`，列數等於 N 時不會 oversample；warmup 送 row 0 的 `test_input`，不帶 request_id，也就不帶 `x-request-id`。和本文一致。（這次核對漏了 random dataset 在 warmup 之前送的一次 `POST /tokenize`，見實作補記六第 5 項；也誤以為 ready check 會送出，其實 `--ready-check-timeout-sec` 預設 0，凍結的 client 不送，見實作補記七第 1 項。）
 2. **mini dataset 的 seed**：本文沒有寫。用 `"<seed>:stage_v:<key>"`（`v1-mini-8192`、`v4-mini`）。`v1-mini-8192` 先依 V1 的規則抽 row 1–19，再把 row 5 / 6 / 7 換成 1 / 2 / 512。
 3. **W 中 8K 的個數不寫進 plan**（本文 V4 寫「寫進 plan」）：
    - 這個個數只由 seed 決定，不需要 tokenizer。`stage_v_datasets.window_counts` 計算，測試把 10 條序列的值 pin 住（90/10 為 24–27，50/50 為 126–129），analysis 在每個 W 點的 descriptive 中逐 block 報告。
@@ -979,14 +980,14 @@
    全部都是只 import 的研究模組，測試以 AST 鎖住 import 清單。
 5. **(h) 的細節**（`join_access_log`）：
    - 只讀 JSON 物件的行。uvicorn、capserve 的 stderr、traceback 都不是紀錄；以 `{` 開頭卻不是 guard 紀錄的行算問題。
-   - 「沒有 id 的 ≥ C + 1」用 `core_b_plan.num_warmups(C) + 1`。另外要求這些紀錄都在第一個主要 request 到達之前，因為只有 ready check 與 warmup 不帶 id。
+   - 「沒有 id 的剛好 C 筆」用 `core_b_plan.num_warmups(C)`（原為 ≥ `num_warmups(C) + 1`，實作補記七第 1 項）。另外要求這些紀錄都在第一個主要 request 到達之前，因為只有 warmup 不帶 id。
    - completion route 指 `POST /v1/completions`。除了 `/healthz`、`/readyz`、`/metrics`，以及 random dataset 的 client 剛好一次、404 的 `POST /tokenize`（實作補記六第 5 項），其他 route 或 method 的紀錄都算問題（本文只寫「沒有其他 prefix」）。
    - id 的後綴必須是 0..N−1 的標準十進位寫法（`07` 不算）。
    - 50 ms 的容差在 derived 檢查（`gw_ttft_ms ≤ ttft_ms + 50`），因為 log 本身看不到 client 的 TTFT。
    - 主要紀錄另外檢查 t_arrival_s ≤ t_sent_s ≤ t_released_s，以及等待時間不為負。
-6. **(i) 也套用到沒有 id 的紀錄**：log 中無法分辨 warmup 和 ready check 的重試，所以任何非 200 或 outcome 不是 ok 的 completion 紀錄都讓 run 無效。「ready check 可能重試」只影響個數的下限。
+6. **(i) 也套用到沒有 id 的紀錄**：任何非 200 或 outcome 不是 ok 的 completion 紀錄（主要 request 或 warmup）都讓 run 無效。（原寫「log 中無法分辨 warmup 和 ready check 的重試」「ready check 可能重試只影響個數的下限」；凍結的 client 不送 ready check，沒有 id 的紀錄就是 C 個 warmup：實作補記七第 1 項。）
 7. **(j) 由 access log 的區間判定**：
-   - [t_sent, t_released) 為半開區間，同一時刻先釋放再送出，以 Fraction 精確計算整個 bench process 的峰值（主要 request 之外，ready check 與 warmup 的區間也算：實作補記六第 9 項）：request 數 ≤ C；weighted-v1 的單位數 ≤ 預算，各 class ≤ 上限。
+   - [t_sent, t_released) 為半開區間，同一時刻先釋放再送出，以 Fraction 精確計算整個 bench process 的峰值（主要 request 之外，C 個 warmup 的區間也算：實作補記六第 9 項、實作補記七第 1 項）：request 數 ≤ C；weighted-v1 的單位數 ≤ 預算，各 class ≤ 上限。
    - 1 Hz sampler 的峰值和 030 8.6 一樣只作描述（`inflight_le_c`），不是有效條件；它可能取樣到 vLLM 收尾的瞬間。
 8. **T_W 為空**（只可能出現在 mini，W 只有 2–4 個 request）：U_W 或 N1 無法計算，視為非平凡條件不成立，也就是 trivial，不是 invalid。V-GW 與 V1 沒有非平凡條件，不受影響。
 9. **E**：pacing 開的點，b 由第一波的 prompt 長度計算，和到達順序無關（uniform 用 prompt，var 用 `stage_d_datasets.lengths(2048, C)`，就是 var-2048 的前 C 列）。門檻 2K 為 26、8K 為 3、var 為 12（b 19）、mini 的 P-U2K（C 8）為 2。pacing 關的點，derived 與 log 中任何 completion 紀錄（含 warmup）的 prefill_wait 都不能 > 0。
@@ -1025,7 +1026,7 @@
 3. **log reader 沒有 join 時 run 無效**：(h) 的前提是「`gateway_down` 之後 log reader 已經 join，log 是完整的」。reader 沒有 join 時，access log 可能不完整，該 run 記為無效，並列為 gateway 造成的無效 run。
 4. **`session["gateway_faults"]`**：停止規則要求「gateway 造成的無效 run 之後，不開始下一個 V session，先寫 decision log」。runner 把下列情況逐一記下 boot、run 與原因：
    - boot 時 gateway 未就緒、`/readyz` 不符、就緒後立刻結束；
-   - bench 之前或期間 gateway 結束；
+   - bench 之前或期間 gateway 結束（bench 之前的情況原本沒有記錄，實作補記七第 3 項補上）；
    - log reader 沒有 join；
    - access log 的對應有問題；
    - (j) 被違反。
@@ -1043,7 +1044,7 @@
    - session.json 記錄 `hours_used_h`。
 9. **2 h 空檔**（只對 formal）：在 `formal-*` 之中，取 started_at 不晚於本 session 開始時間、finished_at 最晚的一個，它必須比本 session 的 started_at 早至少 2 h；任何 `formal-*` 缺少時間、沒有 session.json 或仍在進行中就拒絕（實作補記六第 8 項）。
    - session.json 記錄 `previous_formal`。
-   - report 用同一個函式（`run_stage_v.gap_problems`）在 Mac 上檢查已 commit 的 `formal-*`，排除自己。
+   - report 用同一個函式（`run_stage_v.gap_problems`）在 Mac 上檢查已 commit 的 `formal-*`，排除自己，而且只看 started_at 不晚於自己開始時間的目錄（實作補記七第 4 項）。
 10. **elapsed_s 與時數上限**：session 開始時（取 started_at 的同一刻）記下 monotonic 的 t0。每個 boot 的 `elapsed_s` = round(now − t0, 3)，時數上限的判定與記錄用同一個值，所以 report 的 replay 由記錄值重算，結果必然相同。sentinel 的 boot 也記錄 `elapsed_s`，因為 replay 要求每個 boot 都有。
 11. **渲染出的 gateway settings**：plan 的 `gateway_toml_sha256` 由 `build_plan` 以同一個 writer 算出，runner 又驗證 plan 等於 `build_plan` 的結果，所以 session 開始時再比對一次是同義的，不另寫檢查。每個 boot 寫出 `toml_dumps(x["gateway"])`，並記錄其 sha256（`toml_sha256`），report 比對它等於 plan 的值。
 12. **`/readyz` 的 tuple**（`READYZ_KEYS`）：
@@ -1165,12 +1166,12 @@
 第 5–12 項是 harness 端（`benchmarks/stage_v_plan.py`、`stage_v_analysis.py`、`run_stage_v.py`、`stage_v_report.py`）與 mini 的修正。它們只改 harness、測試與文件，不改 `service/capserve/`，所以 `gateway_path_sha256` 不因此改變；`harness_sha256` 改變，mini 還沒跑，沒有任何證據失效。第 6 項改變實驗設計（跳過規則），由主 session 在本輪審查中決定，本項就是它的 decision log。
 
 5. **random dataset 的 `POST /tokenize`**（`stage_v_analysis.join_access_log`、`random_dataset`）：
-   - vLLM 0.30 的 `vllm bench serve` 在 `--dataset-name random`（和 prefix_repetition）時，於 ready check 之前呼叫 `_align_prompts_to_server_tokenizer`，對 `{base_url}/tokenize` 送一次沒有 `x-request-id` 的 POST；任何錯誤都讓它印出警告、略過對齊（scratch 副本 `serve.py` 的 `main_async`，sha256 `ec255c3b…eec142`）。Stage V 的 base_url 是 gateway，capserve 沒有 `/tokenize` route（app.py 刻意不暴露），所以回 404，guard 仍寫一行 access log（method POST、path `/tokenize`、status 404，沒有 outcome）。
+   - vLLM 0.30 的 `vllm bench serve` 在 `--dataset-name random`（和 prefix_repetition）時，於 warmup 之前呼叫 `_align_prompts_to_server_tokenizer`（原寫「於 ready check 之前」；ready check 預設略過，實作補記七第 1 項），對 `{base_url}/tokenize` 送一次沒有 `x-request-id` 的 POST；任何錯誤都讓它印出警告、略過對齊（scratch 副本 `serve.py` 的 `main_async`，sha256 `ec255c3b…eec142`）。Stage V 的 base_url 是 gateway，capserve 沒有 `/tokenize` route（app.py 刻意不暴露），所以回 404，guard 仍寫一行 access log（method POST、path `/tokenize`、status 404，沒有 outcome）。
    - 舊規則把它當成「不是 completion route」的 (h) 問題：GW-U32K、GW-U2K-O512、GW-U8K-O512、P-U2K、P-U8K、F-U2K 的每個 run 都會無效（mini 的 GW-U8K-O512 與 P-U2K 也是），VG-32K、V1-2K、V1-8K、PACE-2K、PACE-8K 都不可能成立。兩個假的 log 都沒有這一行，實作補記三第 1 項的原始碼核對也漏了它。
-   - 新規則：client base 為 uniform（`stage_d_plan.bench_argv_for` 給 `--dataset-name random` 的那些；測試逐點比對凍結的 argv）時，接受剛好一筆 method POST、path `/tokenize`、status 404、沒有 `client_request_id`、t_arrival_s 為數字而且早於每一筆 completion 紀錄（有沒有 id 都算）的紀錄。它不計入「沒有 id 的 ≥ C + 1」，也不適用 (i)。下列都是 (h) 的問題：random dataset 的 client 沒有或多於一筆；狀態不是 404；在任何 completion 紀錄之後才到；custom dataset 的 client（L、W、var、007 的 mix）出現 `POST /tokenize`；帶 id 的 `POST /tokenize`、其他 method 或 `/detokenize`（後者照舊是「不是 completion route」）。
+   - 新規則：client base 為 uniform（`stage_d_plan.bench_argv_for` 給 `--dataset-name random` 的那些；測試逐點比對凍結的 argv）時，接受剛好一筆 method POST、path `/tokenize`、status 404、沒有 `client_request_id`、t_arrival_s 為數字而且早於每一筆 completion 紀錄（有沒有 id 都算）的紀錄。它不計入沒有 id 的筆數（剛好 C，原寫「≥ C + 1」，實作補記七第 1 項），也不適用 (i)。下列都是 (h) 的問題：random dataset 的 client 沒有或多於一筆；狀態不是 404；在任何 completion 紀錄之後才到；custom dataset 的 client（L、W、var、007 的 mix）出現 `POST /tokenize`；帶 id 的 `POST /tokenize`、其他 method 或 `/detokenize`（後者照舊是「不是 completion route」）。
    - 404 讓 bench 略過對齊，在這裡是 no-op：bench 本來就用 served snapshot 的 tokenizer 產生 prompt。直連時 vLLM 回 200，Core B 的 server log 只有 `POST /tokenize 200`、沒有 `/detokenize`（本機 archive 的 `results/capacity/c0-step0/raw/formal-20261009-coreb-uniform/server-uniform-8192-r1.log` 第 110 行），也就是長度本來就一致、不需要重新對齊。依程式推斷，D-C 的 U2K-gw / U8K-gw 也走過同一個 404（同一版 bench，gateway 同樣沒有 `/tokenize` route），所以負載和 D-C 相同；D-C 的 raw gateway log 不在 Mac 上，無法直接確認。
    - 假的 log（`tests/test_stage_v_analysis.log_text`，`test_run_stage_v` 的 World 也用它）對 random dataset 的點寫出這一行；clean join 的參數化測試加入 GW-U8K-O512、GW-U32K、F-U2K；反例逐項測試；runner 的測試確認每個 V boot 的 raw gateway log 中這一行出現的次數等於凍結 argv 是否為 random。
-   - **和真的 gateway 交叉比對**（`service/tests/test_stage_v_settings.py`）：對 mini 的 P-U2K、GW-U8K-O512、L-U8K、W-mini、F-U2K-var，用該點的設定、政策與 profile 建立真的 gateway stack（uvicorn、guard，後面是假的 vLLM），送 vLLM 0.30 形狀的序列：runner 的 /readyz、random dataset 的 `POST /tokenize`、ready check、C 個 warmup、兩次 GET /metrics（spec decode 與 diffusion）、N 個帶 `x-request-id <tag>-<idx>`、並發 C 的 request、兩次 GET /metrics；payload 是 bench 的（含 `repetition_penalty` 1.0、`logprobs` null）。真的 access log 交給 `join_access_log` 必須沒有問題、剛好 N 筆，id-less 的紀錄給出 C + 1 個 (j) 的區間。研究端的假 log 從此不能悄悄偏離真的格式。
+   - **和真的 gateway 交叉比對**（`service/tests/test_stage_v_settings.py`）：對 mini 的 P-U2K、GW-U8K-O512、L-U8K、W-mini、F-U2K-var，用該點的設定、政策與 profile 建立真的 gateway stack（uvicorn、guard，後面是假的 vLLM），送 vLLM 0.30 形狀的序列：runner 的 /readyz、random dataset 的 `POST /tokenize`、C 個 warmup（不送 ready check）、兩次 GET /metrics（spec decode 與 diffusion）、N 個帶 `x-request-id <tag>-<idx>`、並發 C 的 request、兩次 GET /metrics；payload 是 bench 的（含 `repetition_penalty` 1.0、`logprobs` null）。真的 access log 交給 `join_access_log` 必須沒有問題、剛好 N 筆，id-less 的紀錄給出 C 個 (j) 的區間。研究端的假 log 從此不能悄悄偏離真的格式。（原本的序列手寫了一個 bench 從來不送的 ready check，期望 C + 1 個區間，所以抓不到假 log 與真 bench 之間的這個偏離：實作補記七第 1 項。）
    - 本文 (h) 一節與「揭露」的 WSL 複核清單已補上；實作補記三第 1、5 項加註。
 6. **跳過規則改回逐點（所有單位）**：
    - 舊規則（本文「run outcome」與 §12、實作補記二第 4 項）：一個點的 run 不是 ok 時，它所屬產品單位的其他點也不再測（「單位已死」）。
@@ -1194,16 +1195,38 @@
    - 舊：`hours_used`、`gap_problems` 只讀存在的 `results/stage_v/*/session.json`，session.json 只在 run_session 結尾的 finally 寫出。建立目錄之後、try 之前的拒絕（preflight 的 vLLM 版本、DEPLOYED_COMMIT）沒有 session.json；硬中止（SIGKILL、OOM、`wsl --shutdown`、Windows 重開機）也沒有。這種目錄被靜默略過：12 h 少算、2 h 空檔不擋。實作補記四第 8、9 項的 fail closed 只涵蓋存在但缺時間的 session.json。
    - 新：
      - 建立目錄之後立刻寫暫時的 session.json（`in_progress: true`、`finished_at: null`）；之後的每一步（plan.json、env 擷取、preflight 的拒絕、harness、整個 session）都在寫 session.json 的 try/finally 之內，所以 Python 看得到的每一種結束都寫出 `finished_at`、`in_progress: false` 與 `aborted`。沒有 harness 時（preflight 被拒絕）`env_valid` 為 false、0 個 run、`rows_sha256` 為 null。
-     - `hours_used` 讀 `results/stage_v` 下每一個 `formal-*` / `smoke-v-*` 目錄（以及其他有 session.json 的目錄），`gap_problems` 讀每一個 `formal-*` 目錄：沒有 session.json、讀不了、仍標示進行中、或缺時間，都是問題。runner 因此拒絕開始；`stage_v_report` 另呼叫 `hours_used`，同樣拒絕。`prereg-sim` 這類不是 session 的目錄不讀。
+     - `hours_used` 讀 `results/stage_v` 下每一個 `formal-*` / `smoke-v-*` 目錄（以及其他有 session.json 的目錄），`gap_problems` 讀每一個 `formal-*` 目錄：沒有 session.json、讀不了、仍標示進行中、或缺時間，都是問題。runner 因此拒絕開始；`stage_v_report` 另呼叫 `hours_used`，同樣拒絕，但只看 started_at 不晚於該 session 開始時間的目錄（讀不到 started_at 的仍算，fail closed），所以之後或無關的未結束目錄不會擋住較早 session 的 report 與產生器的重跑（實作補記七第 4 項）。`prereg-sim` 這類不是 session 的目錄不讀。
    - 操作：遇到這種目錄時，先寫 decision log 記錄它的時數與結束時間（最後一個 raw 檔的時間，或 started_at 加它的時數上限），把這個 finished_at 記入它的 session.json，才開始下一個 session。沒有任何旗標可以跳過這個檢查。
    - 本文 Harness 一節的開始前拒絕、實作補記四第 8、9 項已加註。測試：只有 plan.json 與 rows.jsonl 的 formal 目錄、讀不了的 session.json、`in_progress` 的 session.json（有或沒有 finished_at）、只有 plan.json 的 mini 目錄，都讓 hours_used / gap_problems 回報問題、runner 拒絕、report 拒絕；env 擷取時 session.json 已經存在而且是進行中；preflight 因 vLLM 版本被拒絕的 session 留下已結束、可計時的 session.json。
-9. **(j) 也算 ready check 與 warmup 的區間**（`join_access_log`、`warmup_spans`、`warmup_problems`、`in_vllm`）：
+9. **(j) 也算 warmup 的區間**（`join_access_log`、`warmup_spans`、`warmup_problems`、`in_vllm`；標題原寫「ready check 與 warmup」，實作補記七第 1 項）：
    - 舊：(j) 的峰值只由 N 筆主要 request 的區間計算；本文 (j) 要求整個 bench process 的任何時刻。warmup 的紀錄也帶 t_sent_s、t_released_s，卻沒有算進去，warmup 轉入第一波時殘留的 permit（042 與本文標出的轉折點）看不到。
-   - 新：`join_access_log` 回傳第三個值，即沒有 id 的 completion 紀錄（ready check 與 warmup）；這些紀錄也必須帶 t_arrival_s ≤ t_sent_s ≤ t_released_s（數字），weighted-v1 的點另要求正確的 admission_class / units（(h)）。runner 以 `warmup_spans` 把它們的 [t_sent, t_released, units]（以 run 中最早的主要到達為 0，取到 µs，和 derived 的時間相同）記入 row 的 `warmups`。`run_valid` 要求 row 有至少 C + 1 個格式正確的區間（`warmup_problems`，units 必須是該點的 class 的單位），(j) 的峰值把它們和主要 request 一起算；U_W 與 N1 仍只算主要 request 在 T_W 中的區間。
+   - 新：`join_access_log` 回傳第三個值，即沒有 id 的 completion 紀錄（C 個 warmup）；這些紀錄也必須帶 t_arrival_s ≤ t_sent_s ≤ t_released_s（數字），weighted-v1 的點另要求正確的 admission_class / units（(h)）。runner 以 `warmup_spans` 把它們的 [t_sent, t_released, units]（以 run 中最早的主要到達為 0，取到 µs，和 derived 的時間相同）記入 row 的 `warmups`。`run_valid` 要求 row 有剛好 C 個格式正確的區間（`warmup_problems`，units 必須是該點的 class 的單位；原為至少 C + 1，實作補記七第 1 項），(j) 的峰值把它們和主要 request 一起算；U_W 與 N1 仍只算主要 request 在 T_W 中的區間。
    - 正式 session 中每個點的 C 都等於 gateway 的上限，所以 (j) 依構造成立，除非 gateway 的釋放順序有錯，這正是 (j) 要抓的。mini 中幾個點的 C 小於 class 的上限；bench 在 warmup 結束之後、主要 run 之前還會發兩次 GET /metrics，warmup 的 permit 在 response 結束時就釋放。
    - mini 的 rows 經 `rc.mask_smoke` 只留 `MASK_ROW_KEYS`，warmups 不保留。prereg-sim 不傳 warmups，輸出逐位元相同。
-   - 本文 (h)、(j) 與實作補記三第 7 項已加註。測試：warmup 在第一波時仍在 vLLM 內（9 > C 8；W 點 33 單位）時 run 無效；row 沒有 warmups、少於 C + 1、區間倒置、單位不對時無效；U_W 不受 warmup 影響；runner 的假 session 中每個 V row 記錄 C + 1 個區間，warmup 延到主要 run 開始之後的 run 無效並列為 gateway fault。
+   - 本文 (h)、(j) 與實作補記三第 7 項已加註。測試：warmup 在第一波時仍在 vLLM 內（9 > C 8；W 點 33 單位）時 run 無效；row 沒有 warmups、不是剛好 C 個（實作補記七第 1 項）、區間倒置、單位不對時無效；U_W 不受 warmup 影響；runner 的假 session 中每個 V row 記錄 C 個區間，warmup 延到主要 run 開始之後的 run 無效並列為 gateway fault。
 10. **mini 刪除 gateway log**（`run_stage_v.run_session`）：本文 mini 寫「延遲數值依 `rc.mask_smoke` 丟棄」，但 mask_smoke 留下 `raw/<boot>.gateway.log`，其中有每個 mini request 的 ttft_s、upstream_ttft_s、queue_wait_s、duration_s。新：mini 在寫出 raw manifest 之後刪除 `raw/*.gateway.log`，sha256 仍在 raw_manifest，session.json 列出刪除的檔名（`gateway_logs_discarded`）。formal session 不受影響。本文「逐 request 的擷取」、mini 的通過條件與實作補記四第 1 項已加註。
 11. **預測以點的類別記錄**（`stage_v_analysis.HYPOTHESES`、`hypotheses`）：本文寫 H-GW4 的預測為「not supported（MARGINAL 或 FAIL）」，程式卻存成判定字串 "not supported"，依對應規則只有 FAIL 會得到它（實作補記三第 16 項記錄了這個不一致但沒有解決），MARGINAL 時「是否如預測」可以兩邊解讀。新：每個預測是點的類別集合：supported 為 {PASS}；not supported 為 {FAIL, TRIVIAL}，也就是對應到 not supported 的類別；H-GW4 為 {MARGINAL, FAIL}，照本文的字面。analysis.json 的每個點 hypothesis 寫出 `predicted_classes` 與機械判定的 `prediction_met`（NT 為 null），不再寫 `prediction` 字串；H-W0 仍寫 `prediction: "supported"`，另加 `prediction_met`（NT 為 null）。判定（verdict）不變。§12（本文附錄與 PREREGISTRATION.md）已補上這一點。
 12. **凍結證據也綁住 profile 與 dataset**（`stage_v_plan.freeze_evidence_problems`、`mini_dataset_keys`）：study profile 不在請求路徑閉包內，舊規則只比對 mini 的 harness_sha256 與 gateway_path_sha256，所以 mini 之後改了 profile（並更新 pin）或 dataset，證據仍然有效。新：mini 的 session.json 中，6 個點的 `profile_sha256` 必須等於 stage_v.toml 目前的 pin，`dataset_sha256` 必須剛好是 mini 讀的 4 個 dataset（mixed-8192、v1-mini-8192、v4-mini、var-2048）而且等於 pin。測試：任一點或任一 dataset 不同、缺少、多出，以及 mini 之後 pin 改變，都讓凍結證據失效。
 - **突變檢查**（只在記憶體中改模組原始碼，`scratchpad/mut044h/run_mutations.py`）：第 5–12 項共 40 個突變全部被測試抓到，包括：任何 client 都接受 /tokenize、接受零筆或兩筆、任何狀態、任何時間或剛好同時、任何 method、帶 id、算成 warmup、`random_dataset` 恆真或含 var；replay 或 runner 改回單位規則或從不跳過；mini 的逾時改回 r2 或換到 L-U8K、skip_walked 空洞、不看 skipped、算到同一個 block；只讀有 session.json 的目錄、忽略 in_progress、不寫暫時的 session.json、finally 不清 in_progress、拒絕時不記 aborted、report 不查；凍結證據不比 profile 或 dataset、dataset 清單忽略 MINI；mini 保留 gateway log；峰值不含 warmup、U_W 含 warmup、run_valid 不查 warmups、不查個數或單位、id-less 紀錄不要區間、runner 不記 warmups；H-GW4 改回 not supported、NT 判為如預測或未如預測。
+
+## 實作補記七（2026-10-24，凍結前第二輪審查；沒有任何 Stage V 數據）
+
+第二輪凍結前審查確認一個必須在 mini 之前修正的問題（第 1 項）與三個小問題（第 2–4 項），依 TDD 修正：先寫會失敗的測試，再改程式，並以 in-process 的突變確認新規則有測試抓得到。只改 harness、測試、設定檔的註解與文件，不改 `service/capserve/`，所以 `gateway_path_sha256` 不變；`harness_sha256` 改變（`stage_v_analysis.py`、`stage_v_datasets.py`、`run_stage_v.py`、`stage_v_report.py`），mini 還沒跑，沒有任何證據失效。凍結模組一個位元組都沒有改，研究程式仍不 import capserve。
+
+1. **凍結的 client 不送 ready check**（`stage_v_analysis.join_access_log`、`warmup_problems`）：
+   - 原始碼（scratch 副本 `serve.py`，sha256 `ec255c3b…eec142`）：`--ready-check-timeout-sec` 在第 1954–1959 行預設為 0，說明文字寫明 ready check 預設略過；`main_async` 把 argparse 的值傳給 `benchmark()`（第 2262 行）；`benchmark()` 只在 > 0 時呼叫 `wait_for_endpoint`，否則印出 `Skipping endpoint ready check.`（第 870–886 行）。之後只有 C 個 warmup 送 row 0 的 `test_input`（第 888–910 行）。`benchmark()` 關鍵字參數的 600 s 預設值不會用到，因為 CLI 一律傳入 argparse 的值。
+   - argv：mini、V-ADM、V-CLS 每個點與 block 的 `stage_v_plan.bench_argv` 都沒有這個旗標，而且都是 `--num-warmups C`（`core_b_plan.bench_argv` 也是如此）。
+   - 實測（本機 archive，vLLM 0.30.0）：`results/capacity/c0-step0/raw/formal-20261011-adv/*.bench.log` 九個檔案的 Namespace 都是 `ready_check_timeout_sec=0`，都印出 `Skipping endpoint ready check.`，接著是 `Warming up with 8 requests...`；adv 的 server log 為 208 = 200 + 8 筆 completion。Core B 的 `formal-20261009-coreb-uniform/server-uniform-8192-r1.log` 中，相鄰兩行 `POST /tokenize` 之間的每一段剛好是 N + C 筆 `POST /v1/completions`（201、202、204、207、208、209、213、216、218、286、352、704、1408，即 max(10C, 200) + C），從來不是 N + C + 1。
+   - 舊規則（本文 (h)、實作補記三第 5 項、實作補記六第 9 項）要求沒有 id 的 completion 紀錄 ≥ C + 1、row 的 warmup 區間 ≥ C + 1。真的 bench 只送 C 筆，所以每個有 bench 結果的 V run 都會無效，並記為 gateway fault；逐點跳過之後，每個點在 block 1 之後就不再測，mini 不會通過（不會有凍結證據），正式 session 的每個點都會是 NT，停止規則也會在 V-ADM 之後停下。測試全部通過，是因為三個假的序列（`tests/test_stage_v_analysis.log_text`，`test_run_stage_v` 的 World 也用它；`service/tests/test_stage_v_settings.py` 的真 gateway 交叉比對）都手寫了一個 bench 從來不送的 ready check。第三個測試本來就是為了抓這種偏離，卻建立在同一個錯誤前提上。
+   - 新規則：沒有 id 的 completion 紀錄剛好 `core_b_plan.num_warmups(C)` = C 筆；少一筆或多一筆（不明的額外 request）都是 (h) 的問題。用「剛好」是安全的：vLLM 0.30 的 request 函式不重試，沒有 ready check 時也沒有別的東西會送沒有 id 的 completion。其他規則不變：status 200 / outcome ok、t_arrival_s ≤ t_sent_s ≤ t_released_s（數字）、都在第一個主要 request 到達之前。`warmup_problems` 要求 row 剛好有 C 個區間。random dataset 的 `POST /tokenize` 說明改為「在 warmup 之前」。
+   - 不改 client argv：加上這個旗標會違反「只允許三種差異」。新的 plan 測試（`test_the_frozen_client_sends_its_c_warmups_and_no_ready_check`）把個數綁在 argv 上：mini、V-ADM、V-CLS 的每個點與 block，凍結的 argv 不帶 `--ready-check-timeout-sec`（或設為 0），而且 `--num-warmups` 為 C。
+   - 三個假的序列都刪除 ready check：`log_text` 與 `warmups_of`（World 隨之改變），真 gateway 交叉比對改為期望 C 個區間。對應失敗的測試：C − 1 與 C + 1 都是問題；刪除「ready check 重試」的接受；「/tokenize 不算 warmup」改用新的訊息。
+   - 已在原處更正並加註：本文 (h) 的兩處、(j)、client argv 第 3 項、測試清單、設計審查改正的項目、「揭露」的 WSL 複核清單（加上 ready check 預設略過）；實作補記三第 1、5、6、7 項；實作補記六第 5、9 項；`stage_v_datasets.py` 的說明（只有 warmup 重送 row 0）。PREREGISTRATION.md §12 與 NEXT.md 沒有這個前提。024 的文件與 `adv_decomp` 中「warmup 與 ready-check 的 span」只是分類沒有 prefix 的 span，沒有斷言 bench 會送 ready check，不在 Stage V 的範圍內，不改。
+2. **`configs/stage_v.toml` 的註解**：`[stage_v.points.GW-U32K]` 上方對 unit 的說明仍是舊的單位跳過規則（「"" 表示單獨跳過的點」）。改為：點所屬的 `[stage_v.units]` 產品單位，沒有則為 ""；每個點都單獨跳過（實作補記六第 6 項）。只改註解，值不變（以 tomllib 確認解析結果相同）。stage_v.toml 不在 `HARNESS_FILES` 中，它的位元組由凍結那一步 pin。
+3. **bench 之前 gateway 結束也記為 gateway fault**（`run_stage_v.run_point`）：實作補記四第 4 項把「bench 之前或期間 gateway 結束」列入 `session["gateway_faults"]`，但只有「期間」有記錄（`_after_bench`）。run_point 的「bench 之前 gateway 已結束」分支現在在 decide 之前呼叫 `_fault(<boot tag>, 原因, run=<run tag>)`。測試：假 session 中 F-U2K r1 的 gateway 在 bench 之前結束時，gateway_faults 剛好有一筆 {boot, run, reasons}；沒有這個呼叫時測試失敗。實作補記四第 4 項已加註。
+4. **report 只看在本 session 開始時或之前開始的目錄**（`stage_v_report.refusal_problems`；`run_stage_v.hours_used` / `gap_problems` 新增的 `not_after`）：
+   - 舊：report 的 `hours_used` 與 `gap_problems` 讀 `results/stage_v` 下的每一個目錄，所以一個之後的、或無關的未結束 `formal-*` / `smoke-v-*` 目錄，會讓較早 session 的 report 拒絕；產生器唯讀重跑 report 並要求逐位元相同（產品對應），也會因此失敗。
+   - 新：report 只檢查 session.json 的 started_at 不晚於本 session started_at 的目錄。沒有 session.json、讀不了、沒有 started_at、或 started_at 不是可比較的 ISO 時間的目錄仍然檢查（fail closed）；本 session 沒有可讀的 started_at 時，照舊檢查全部並拒絕。runner 不傳 `not_after`，照舊檢查全部目錄，開始前的拒絕不變。
+   - 測試：之後開始、未結束的目錄（formal 與 smoke-v）不擋 report，但 runner 的 `hours_used`（formal 另加 `gap_problems`）仍回報；較早或同時開始、未結束的目錄仍讓 report 拒絕；沒有 started_at、started_at 為 null、不是時間、不是字串、session.json 不是 JSON、沒有 session.json，都仍讓 report 拒絕。
+   - 實作補記四第 9 項、實作補記六第 8 項與 `stage_v_report` 的說明已加註。
+- **突變檢查**（只在記憶體中改模組原始碼，`scratchpad/mut044r2/run_mutations.py`）：第 1–4 項共 20 個突變全部被測試抓到：沒有 id 的筆數改回 C + 1、只要求至少 C、只要求至多 C、不檢查個數、把 /tokenize 算成 warmup；row 的區間改回 C + 1、至少 C、至多 C、任何個數；client 加上 `--ready-check-timeout-sec 600` 或 `=5`；bench 之前 gateway 結束時不記 fault、記錄時不帶 run；report 的 hours_used 或 gap_problems 改回檢查全部目錄、report 不查 hours_used、讀不到 started_at 的目錄被略過、同時開始的目錄被略過、可讀 started_at 的目錄全部被略過、`not_after` 被忽略。
