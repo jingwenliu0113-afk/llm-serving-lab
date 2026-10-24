@@ -485,6 +485,10 @@ harness、smoke 與 C0 完成後，連同 `configs/capacity.toml` 一起凍結�
 - **D5**：開場湧入，只用 c1b 的數據作事後描述，不是檢定。
 - **輸出**：`results/stage_d/<session>/analysis.json`。新的 verified profile 不會自動取代正式設定的釘選（037 §2）。
 
+〔凍結後註記，2026-10-24：四個正式 session（`formal-20261023-d-a1b`、`-d-a2`、`-d-b`、`-d-c`）都有效，結果見 decision 042。
+H-D1、H-D2a、H-D2b supported；H-D3 U2K-O512 not supported、U8K-O512 supported；H-D4 U2K-P NT、U8K-P supported；
+H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。本節規則沒有改變。〕
+
 ## 10. Stage Q addendum：quality 的三個缺口（decision 037、040）
 
 **狀態：DRAFT**。harness、pilot 與審查完成後，連同 `configs/stage_q.toml` 一起凍結（`freeze.stage_q = true`）。在那之前沒有任何 Stage Q 的正式數據。

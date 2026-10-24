@@ -36,9 +36,15 @@
   - [x] harness（`91e6e73`）：兩輪審查（13 + 8 項）全部處理；λ_ref pin 在設定檔、由 Mac 上的測試比對；凍結證據綁定 `harness_sha256`。
   - [x] 三個 mini smoke 全部通過（`smoke-d-{closed,open,verify}-20261023b`）。
   - [x] **凍結**（`fd95164`）：`freeze.stage_d = true`、`tests/test_stage_d_frozen.py`、039 與 §9 為 FROZEN。
-  - [ ] 正式 session（約 30 h GPU）：`formal-20261023-d-a1` 因 interop 失效在第一次 boot 前中止（039 執行紀錄一）；
-        2026-10-23 20:11Z 起以前景 ssh 依序執行 `-d-a1b`、`-d-a2`、`-d-b`、`-d-c`（WSL 的 log：`~/stage-d-logs/`）。
-        每個 session 結束後取回、commit、跑 report；全部結束後產生 D5（`stage_d_analysis.py startup-wave`）。
+  - [x] 正式 session：`formal-20261023-d-a1` 因 interop 失效在第一次 boot 前中止（039 執行紀錄一）；
+        `-d-a1b`（10-22 20:11Z – 10-23 08:11Z）、`-d-a2`（– 14:18Z）、`-d-b`（– 18:15Z）、`-d-c`（– 19:48Z）全部 exit 0，共約 23.6 h。
+  - [x] 取回（不含 raw/）、四份 report、D5（`62869cf`）。report 的判定：H-D1、H-D2a、H-D2b supported；
+        H-D3 U2K-O512 not supported、U8K-O512 supported；H-D4 U2K-P NT、U8K-P supported；H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。
+  - [x] 判讀與結果文件 **042**：每個 session 與 D5 各由一個 agent 抽取、第二個 agent 反駁，判定全部和 report 一致；039 執行紀錄二與文字更正、PREREGISTRATION §9 註記。
+  - [ ] D-B 無效 run（C-U2K-P-i3-r1）的原因（**等 GPU 空閒**）：`tools/rtx/fetch_raw.sh` 唯讀取回 `raw/C-U2K-P-i3-r1.bench.log`（sha256 `96a2d194…`），
+        並查 WSL venv 的 aiohttp 版本，確認 042 推論的 keep-alive 競態；只更新 042 的說明，判定不變（U2K-P 仍為 NT）。
+  - [ ] 產品：`capserve.profile_gen` 擴充到 Stage D session，產生 B0（U32K、U2K-O512、U8K-O512）與 T（U8K-T、M8K-T）的 verified profile（042「產品上的使用」）；不改正式設定的釘選。
+  - [ ] 產品：多 class 准入與開場湧入的處理，依 042 的 D5 與 D-A2 另寫 decision。
 - **Stage Q**（decision 040，DRAFT；PREREGISTRATION §10）：
   - [x] Q1 / Q2 harness 與凍結檢查（`f65c081`、`49b88af`）：`configs/stage_q.toml`，三個 pilot 是凍結的證據，分析只接受凍結後的正式 session。
   - [x] Q3 harness（`quality/stage_q3.py`、`configs/stage_q3.toml`，獨立的凍結）。
@@ -69,6 +75,8 @@
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
   - [ ] E2（**等 GPU 空閒**，WSL）：原始碼核對（prefix caching 路徑、warmup 來源、`vllm:prefix_cache_hits_total`、`cache_config_info` 的 `mamba_cache_mode` 標籤、span 的 cached-token 欄位、`num_requests_waiting`）→ `stage_e2_datasets.py` 產生共享前綴 dataset 並 pin sha256 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
   - [x] E1-P harness 寫成並審查（2026-10-23，DRAFT）：`configs/stage_e1p.toml`、`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`、`stage_e1p_seed_check.py`、`tests/test_stage_e1p.py`；三輪審查（都沒有 must-fix）全部處理（041 修訂紀錄「E1-P harness 審查」「E1-P 修正後的覆核」「第三次覆核」；E2、E3、Stage Q、Q3 的中斷、SIGTERM 與 refused 範圍一併修正，040 #39–#49）。
+  - GPU 佇列（2026-10-24）：Stage D 結束後，另一個專案的 `agent_gym_serve` 自 01:09Z 起持有 GPU lock；不搶占。
+        lock 空出後依序：部署 HEAD（`deploy_bundle.py`）→ E1-P seed 檢查與 smoke → D-B 的 raw 取證 → E1-D 取回 → Q3 下載 → E3 / Stage Q 的 RTX pilot → E2。
   - [ ] E1-P（**等 GPU 空閒**，WSL）：
         1. seed 檢查（只用 CPU，`flock -n` 下）：`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e1p_seed_check.py` → Mac 上 `tools/rtx/fetch_seed_check.sh`（核對 sha256）→ commit。不通過時（seed B 有 prompt 不是 8,064，或 A、B 相同）要另寫 decision log 換 seed，不能自行改。
         2. smoke：`python benchmarks/stage_e1p_plan.py --mode smoke --out ~/e1p-smoke-plan.json`，`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_e1p.py --plan ~/e1p-smoke-plan.json --out results/stage_e/smoke-e1p-<date> --gpu-lock-held --smoke`

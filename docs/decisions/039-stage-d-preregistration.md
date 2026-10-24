@@ -325,4 +325,12 @@ harness 依本文以 TDD 實作：`stage_d_plan`、`stage_d_analysis`、`run_sta
   - 每個 session 各自以 `flock -n` 取得 GPU lock，session 之間釋放；任何一個 session 回傳非 0 就停止後續；
   - 中止的 session 已取回並 commit（只有 session.json），不重用它的 id，D-A1 以新 id `formal-20261023-d-a1b` 重跑。
 - 2026-10-23 20:11Z（UTC）起依序執行 `formal-20261023-d-a1b`、`-d-a2`、`-d-b`、`-d-c`；第一次 boot 的 spill 檢查已通過。
+- 〔2026-10-24 更正（042）：上一行的日期應為 **2026-10-22 20:11:47Z**（台灣時間 10-23 04:11）；「啟動後 44 秒」依 session.json 為 38.7 s；
+  中止的 session commit 的是 5 個檔案（session.json、plan.json、env/preflight.json、raw_manifest.json、0 byte 的 rows.jsonl），不是只有 session.json。〕
+
+### 二、四個正式 session 完成（2026-10-23）
+
+- `-d-a1b` 10-22 20:11Z – 10-23 08:11Z、`-d-a2` – 14:18Z、`-d-b` – 18:15Z、`-d-c` – 19:48Z，全部 exit 0，部署都是 `0ec7b92`。
+- 四個都有效（replay、sentinel 閘門、CROSS_SESSION_SHIFT、031、spill 都通過）。D-B 有一個無效的 run（C-U2K-P-i3-r1，2 個 request 失敗），依規則不補跑，U2K-P 為 NT。
+- 結果、判讀與限制見 decision 042。本文的規則沒有任何改變。
 
