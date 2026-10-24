@@ -1,6 +1,9 @@
 """Tests for capserve/profile.py: the capacity profile schema, canonical hash, loader rules and server fingerprint
-(decision 029 "Capacity profile"; 027 §4), and the per-class statuses of a verified profile (decision 030 8.7:
-verified with a number and its bound, verified 0 = refuse the class, unavailable with a reason and no number)."""
+(decision 029 "Capacity profile"; 027 §4), the per-class statuses of a verified profile (decision 030 8.7:
+verified with a number and its bound, verified 0 = refuse the class, unavailable with a reason and no number), and the
+Stage D profiles of decision 043 (§9: their classes, servers, fingerprints and evidence; the serving_class refusals:
+an output limit above 128 tokens, on a T profile anything but an M8K-T class with H-D2a supported, and on a B0 profile
+a T workload's class)."""
 
 import copy
 import hashlib
@@ -11,8 +14,11 @@ from pathlib import Path
 import pytest
 
 import core_b_plan as bp
+import stage_d_plan as sdplan
 from capserve import profile as cp
-from fakes.profiles import FROZEN, HEX, frozen_capacity, frozen_configs, rehash, verified_class
+from fakes.profiles import FROZEN, HEX, frozen_capacity, frozen_configs, frozen_stage_d, rehash, verified_class
+from fakes.profiles import ABOVE_CKV_NOT_COVERED, NOT_COVERED, STAGE_D_CLASSES, stage_d_class, stage_d_doc
+from fakes.profiles import t_fingerprint as hand_t_fingerprint
 from fakes.profiles import verified_doc as _verified_doc
 
 SERVICE = Path(__file__).resolve().parent.parent
@@ -302,7 +308,7 @@ def test_a_provisional_profiles_classes_carry_no_status(tmp_path, pins, over, ne
     assert "provisional" in refusal(tmp_path, rehash(doc), pins=pins)
 
 
-@pytest.mark.parametrize("name", sorted(cp.CLASS_NAMES.values()))
+@pytest.mark.parametrize("name", sorted(cp.CLASS_NAMES.values()) + sorted(cp.STAGE_D_CLASS_NAMES.values()))
 def test_a_provisional_profile_never_uses_a_verified_class_name(tmp_path, pins, name):
     """Phase 2 closure (036): the Stage C class names belong to verified profiles. A provisional profile with a class
     named uniform-2k could otherwise be served under a production config that selects uniform-2k, so it is refused
@@ -325,7 +331,8 @@ def test_the_committed_provisional_profiles_use_no_reserved_name(pins):
     for path in sorted((SERVICE / "profiles").glob("provisional-*.json")):
         prof = cp.load_profile(path, allow_provisional=True, pins=pins)
         assert not prof.verified and not prof.profile_id.startswith("verified-")
-        assert not {c.name for c in prof.classes} & set(cp.CLASS_NAMES.values()), path.name
+        reserved = set(cp.CLASS_NAMES.values()) | set(cp.STAGE_D_CLASS_NAMES.values())
+        assert not {c.name for c in prof.classes} & reserved, path.name
 
 
 def test_serving_class_refuses_an_unavailable_class_and_keeps_a_verified_0(tmp_path, pins):
@@ -405,17 +412,38 @@ def test_a_verified_profile_must_match_its_session_the_frozen_configs_and_the_st
 def test_the_frozen_configs_default_to_the_repo_files():
     root = Path(bp.__file__).resolve().parent.parent
     cap, pins = (root / "configs" / "capacity.toml").read_bytes(), (root / "configs" / "pins.toml").read_bytes()
+    stage_d = (root / "configs" / "stage_d.toml").read_bytes()   # 043: read too (a release's git archive has it)
     assert cp.frozen_configs() == (tomllib.loads(cap.decode()), hashlib.sha256(cap).hexdigest(),
-                                   hashlib.sha256(pins).hexdigest())
+                                   hashlib.sha256(pins).hexdigest(), tomllib.loads(stage_d.decode()),
+                                   hashlib.sha256(stage_d).hexdigest())
 
 
 def test_a_missing_capacity_toml_is_not_frozen(tmp_path):
     (tmp_path / "configs").mkdir()
     (tmp_path / "configs" / "pins.toml").write_bytes(b"x = 1\n")
-    assert cp.frozen_configs(tmp_path) == ({}, None, hashlib.sha256(b"x = 1\n").hexdigest())
+    assert cp.frozen_configs(tmp_path) == ({}, None, hashlib.sha256(b"x = 1\n").hexdigest(), None, None)
     (tmp_path / "configs" / "capacity.toml").write_text("[freeze\n")
     with pytest.raises(cp.ProfileError):
         cp.frozen_configs(tmp_path)
+
+
+def test_a_missing_stage_d_toml_is_none_and_a_broken_one_an_error(tmp_path):
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs" / "pins.toml").write_bytes(b"x = 1\n")
+    (tmp_path / "configs" / "stage_d.toml").write_bytes(b"[freeze]\nstage_d = true\n")
+    got = cp.frozen_configs(tmp_path)
+    assert (got.stage_d, got.stage_d_sha256) == ({"freeze": {"stage_d": True}},
+                                                 hashlib.sha256(b"[freeze]\nstage_d = true\n").hexdigest())
+    assert (got.capacity, got.capacity_sha256) == ({}, None)
+    (tmp_path / "configs" / "stage_d.toml").write_text("[freeze\n")
+    with pytest.raises(cp.ProfileError):
+        cp.frozen_configs(tmp_path)
+
+
+def test_frozen_configs_built_from_three_positional_values_have_no_stage_d():
+    """043: the new fields have defaults, so FrozenConfigs(cfg, CAP_SHA, PINS_SHA) (the generator, its tests) works."""
+    got = cp.FrozenConfigs({"freeze": {"capacity": True}}, "cd" * 32, "ef" * 32)
+    assert (got.stage_d, got.stage_d_sha256) == (None, None) and got.capacity_sha256 == "cd" * 32
 
 
 def test_the_stage_c_classes_are_the_generators():
@@ -476,3 +504,249 @@ def test_stage_b_fingerprint_is_the_core_b_server_argv_and_recorded_env(pins):
     other = copy.deepcopy(pins)
     other["stage_b"]["kv_cache_memory_bytes"] = 3 * 2**30
     assert cp.stage_b_fingerprint(other) != cp.stage_b_fingerprint(pins)
+
+
+def test_t_fingerprint_is_b0_plus_the_threshold_from_the_frozen_stage_d_argv(pins):
+    """043 §1.4: T's fingerprint calls stage_d_plan.server_argv_for (frozen, read-only); the values are the ones 043
+    quotes, and the B0 one is the pinned c1b profile's."""
+    assert cp.stage_b_fingerprint(pins) == "98b9f41be7b75b6bf431e6c090124156360edfc929ccd6164001468da05b6d4f"
+    assert cp.t_fingerprint(pins) == "564d27ecfc45f162c564185cf8c9b4566f84208e788808aa6d302187474dd7cc"
+    assert cp.t_fingerprint(pins) == hand_t_fingerprint(pins)
+    argv, env = sdplan.server_argv_for(pins, "M8K-T", port=1234, vllm_bin="/other/vllm")
+    assert cp.t_fingerprint(pins) == cp.server_fingerprint(argv, bp.recorded_env(env))
+    other = copy.deepcopy(pins)
+    other["advanced"]["long_prefill_token_threshold"] = 256
+    assert cp.t_fingerprint(other) != cp.t_fingerprint(pins)
+    assert cp.stage_b_fingerprint(other) == cp.stage_b_fingerprint(pins)
+
+
+# ------------------------------------------------------------------ Stage D profiles (043, §9) --
+
+def test_the_pinned_c1b_profile_loads_unchanged(pins):
+    """043 §3: every new field is optional, so the pinned production profile keeps its bytes, hash and meaning."""
+    path = SERVICE / "profiles" / "verified-formal-20261017-c1b.json"
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == \
+        "963de428168e688733ad0692fab2a68b1d83ca644e5c9deda1126df8370759c8"
+    prof = cp.load_profile(path, allow_provisional=False, pins=pins)
+    assert prof.content_sha256 == "1863d7e1766bc41b4351981714c85eaf1530d984ca9d8e07866f56dae786c8bc"
+    assert prof.provenance.prereg_section == "§8" and prof.provenance.stage_d_sha256 is None
+    assert prof.server.long_prefill_token_threshold is None and prof.server_variant == "B0"
+    for c in prof.classes:
+        ev = c.evidence
+        assert (ev.server, ev.output_tokens, ev.descriptive, ev.at_c_prod, ev.hypotheses, ev.not_covered) == \
+            (None,) * 6, c.name
+    assert prof.serving_class("uniform-2k").max_concurrency == 32
+
+
+def test_the_stage_d_classes_are_the_d_a_workloads():
+    """043 §2: one class per D-A workload, its name unlike any c1b one; M8K-T takes the 007 mix's 32,640-token long
+    requests (WORKLOADS["M8K-T"]["prompt"] is None)."""
+    assert set(cp.STAGE_D_CLASS_NAMES) == set(sdplan.SESSIONS["D-A1"]) | set(sdplan.SESSIONS["D-A2"])
+    assert {w: cp.stage_d_class(w) for w in cp.STAGE_D_CLASS_NAMES} == {
+        "U32K": ("uniform-32k", 32640, 128), "U8K-T": ("uniform-8k-t", 8064, 128),
+        "M8K-T": ("mixed-8k-t", 32640, 128), "U2K-O512": ("uniform-2k-o512", 1920, 512),
+        "U8K-O512": ("uniform-8k-o512", 8064, 512)}
+    assert {w: v[:3] for w, v in STAGE_D_CLASSES.items()} == {w: cp.stage_d_class(w) for w in cp.STAGE_D_CLASS_NAMES}
+    assert not set(cp.STAGE_D_CLASS_NAMES.values()) & set(cp.CLASS_NAMES.values())
+    for w in ("U2K", "U2K-P", "U8K-P", "U2K-var", "U8K-var", "U2K-gw", "U8K-gw"):
+        with pytest.raises(cp.ProfileError):
+            cp.stage_d_class(w)
+
+
+def test_not_covered_is_a_closed_enum_set_by_the_flags():
+    """043 §5: every D-A class has the six items; ABOVE_CKV adds in_vllm_wait_beyond_c_kv; no other flag adds any."""
+    assert list(cp.NOT_COVERED) == NOT_COVERED + [ABOVE_CKV_NOT_COVERED]
+    for w in cp.STAGE_D_CLASS_NAMES:
+        assert cp.not_covered_for(w, []) == NOT_COVERED
+        assert cp.not_covered_for(w, ["WINDOW_SENSITIVE", "STRICT_COARSE"]) == NOT_COVERED
+        assert cp.not_covered_for(w, ["WINDOW_SENSITIVE", "ABOVE_CKV"]) == NOT_COVERED + [ABOVE_CKV_NOT_COVERED]
+    with pytest.raises(cp.ProfileError):
+        cp.not_covered_for("U2K", [])
+
+
+B0_CLASSES = [stage_d_class("U32K", value=2), stage_d_class("U2K-O512", value=32, flags=["WINDOW_SENSITIVE",
+                                                                                          "ABOVE_CKV"]),
+              stage_d_class("U8K-O512", value=12)]
+T_CLASSES = [stage_d_class("U8K-T", value=4), stage_d_class("M8K-T", value=4, flags=["WINDOW_SENSITIVE"])]
+
+
+def test_stage_d_profiles_of_both_servers_load(tmp_path, pins):
+    b0 = load(write(tmp_path, stage_d_doc(pins, classes=B0_CLASSES), "b0.json"), allow_provisional=False, pins=pins)
+    assert b0.profile_id == "verified-formal-20261101-d-a1-b0" and b0.server_variant == "B0"
+    assert b0.server.fingerprint_sha256 == cp.stage_b_fingerprint(pins)
+    o512 = b0.workload_class("uniform-2k-o512")
+    assert (o512.max_concurrency, o512.bound, o512.evidence.output_tokens, o512.evidence.server) == (32, "exact", 512,
+                                                                                                     "B0")
+    assert o512.evidence.not_covered[-1] == "in_vllm_wait_beyond_c_kv"
+    assert o512.evidence.descriptive.c_late.value == 32 and o512.evidence.at_c_prod.attainment_min == 1.0
+    t = load(write(tmp_path, stage_d_doc(pins, server="T", classes=T_CLASSES), "t.json"), allow_provisional=False,
+             pins=pins)
+    assert t.profile_id == "verified-formal-20261101-d-a1-t" and t.server_variant == "T"
+    assert (t.server.long_prefill_token_threshold, t.server.fingerprint_sha256) == (512, cp.t_fingerprint(pins))
+    assert t.workload_class("mixed-8k-t").evidence.hypotheses == {"H-D2a": "supported"}
+
+
+def test_stage_d_unavailable_and_verified_0_classes_load(tmp_path, pins):
+    """030 8.7 holds for §9 too, with a stage_d source."""
+    classes = [stage_d_class("U32K", "UNSTABLE"), stage_d_class("U2K-O512", "NT"),
+               stage_d_class("U8K-O512", "INFEASIBLE", 0)]
+    prof = load(write(tmp_path, stage_d_doc(pins, classes=classes)), allow_provisional=False, pins=pins)
+    assert [(c.status, c.max_concurrency, c.source) for c in prof.classes] == [
+        ("unavailable", None, "stage_d:U32K:c_prod:UNSTABLE"), ("unavailable", None, "stage_d:U2K-O512:c_prod:NT"),
+        ("verified", 0, "stage_d:U8K-O512:c_prod:INFEASIBLE")]
+
+
+def _edit_d_class(i):
+    def edit(fn):
+        return lambda d: fn(d["classes"][i])
+    return edit
+
+
+def _append_on(server, workload, value):
+    """Append workload's class with evidence.server set to the profile's own server, so only the other half of the
+    server rule (the workload's server in stage_d_plan.WORKLOADS) can refuse it."""
+    def edit(d):
+        cls = stage_d_class(workload, value=value)
+        cls["evidence"]["server"] = server
+        d["classes"].append(cls)
+    return edit
+
+
+@pytest.mark.parametrize("server, edit, needle", [
+    ("B0", lambda d: d["provenance"].update(stage_d_sha256=None), "stage_d_sha256"),
+    ("B0", lambda d: d["provenance"].pop("stage_d_sha256"), "stage_d_sha256"),
+    ("B0", lambda d: d["provenance"].update(stage_d_sha256="AB" * 32), "stage_d_sha256"),
+    ("B0", lambda d: d["provenance"].update(stage_d_sha256="00" * 32), "stage_d_sha256"),     # not this checkout's
+    ("B0", lambda d: d["provenance"].update(capacity_sha256="00" * 32), "capacity_sha256"),
+    ("B0", lambda d: d["provenance"].update(pins_sha256="00" * 32), "pins_sha256"),
+    ("B0", lambda d: d["slo"].update(id="S3"), "slo"),
+    ("B0", lambda d: d["slo"]["terms"].update(tpot_p95_ms=200), "slo"),
+    ("B0", lambda d: d.update(profile_id="verified-formal-20261101-d-a1"), "profile_id"),
+    ("B0", lambda d: d.update(profile_id="verified-formal-20261101-d-a1-t"), "profile_id"),
+    ("T", lambda d: d.update(profile_id="verified-formal-20261101-d-a1-b0"), "profile_id"),
+    ("B0", lambda d: d["provenance"].update(source_session="formal-20261101-d-a2"), "profile_id"),
+    ("B0", lambda d: d["provenance"].update(analysis_path="results/capacity/formal-20261101-d-a1/analysis.json"),
+     "analysis_path"),
+    ("B0", lambda d: d["classes"].append(stage_d_class("U32K", value=3)), "more than one class"),
+    ("B0", _edit_d_class(0)(lambda c: c.update(name="uniform-32k-x")), "uniform-32k"),
+    ("B0", _edit_d_class(0)(lambda c: c.update(max_prompt_tokens=32000)), "max_prompt_tokens"),
+    ("B0", _edit_d_class(2)(lambda c: c.update(max_output_tokens=128)), "max_output_tokens"),
+    ("B0", _edit_d_class(0)(lambda c: c["evidence"].update(server="T")), "evidence.server is 'T'"),
+    ("B0", _edit_d_class(0)(lambda c: c["evidence"].update(server=None)), "evidence.server is None"),
+    ("B0", _edit_d_class(2)(lambda c: c["evidence"].update(output_tokens=128)), "output_tokens"),
+    ("B0", _edit_d_class(2)(lambda c: c["evidence"].update(output_tokens=None)), "output_tokens"),
+    ("B0", lambda d: d["classes"].append(stage_d_class("U8K-T", value=4)), "runs on server T"),     # a T class on B0
+    ("T", lambda d: d["classes"].append(stage_d_class("U32K", value=2)), "runs on server B0"),      # a B0 class on T
+    ("B0", _append_on("B0", "U8K-T", 4), "runs on server T"),     # the same, its evidence.server the profile's own
+    ("T", _append_on("T", "U32K", 2), "runs on server B0"),
+    ("B0", _edit_d_class(0)(lambda c: c.update(source="stage_c:U32K:c_prod:EXACT")), "source"),
+    ("B0", _edit_d_class(1)(lambda c: c["evidence"]["not_covered"].pop()), "not_covered"),   # drops the ABOVE_CKV one
+    ("B0", _edit_d_class(0)(lambda c: c["evidence"]["not_covered"].append("in_vllm_wait_beyond_c_kv")), "not_covered"),
+    ("B0", _edit_d_class(0)(lambda c: c["evidence"]["not_covered"].reverse()), "not_covered"),
+    ("B0", _edit_d_class(0)(lambda c: c["evidence"].update(not_covered=None)), "not_covered"),
+    ("B0", _edit_d_class(0)(lambda c: c["evidence"].update(not_covered=["anything"])), "not_covered"),   # schema
+    ("B0", lambda d: d["server"].update(long_prefill_token_threshold=512), "fingerprint"),  # B0's fingerprint, T's knob
+    ("T", lambda d: d["server"].update(long_prefill_token_threshold=None), "fingerprint"),
+    ("T", lambda d: d["server"].update(long_prefill_token_threshold=256), "long_prefill_token_threshold"),
+    ("T", lambda d: d["server"].update(fingerprint_sha256=HEX), "fingerprint"),
+])
+def test_a_stage_d_profile_must_match_its_session_server_and_the_d_a_classes(tmp_path, pins, server, edit, needle):
+    doc = stage_d_doc(pins, server=server, classes=copy.deepcopy(T_CLASSES if server == "T" else B0_CLASSES))
+    edit(doc)
+    assert needle in refusal(tmp_path, rehash(doc), allow_provisional=False, pins=pins)
+
+
+@pytest.mark.parametrize("workload", ["U2K", "U2K-P", "U8K-P", "U2K-var", "U8K-var", "U2K-gw", "U8K-gw", "U8K"])
+def test_only_the_d_a_workloads_become_stage_d_classes(tmp_path, pins, workload):
+    """043 §3: the sentinel, D-B, D-C (and any Stage C workload) never become a §9 class."""
+    cls = stage_d_class("U32K", value=2)
+    cls["evidence"]["workload"] = workload
+    cls["source"] = f"stage_d:{workload}:c_prod:EXACT"
+    msg = refusal(tmp_path, stage_d_doc(pins, classes=[cls]), allow_provisional=False, pins=pins)
+    assert "workload" in msg and workload in msg
+
+
+def test_a_stage_d_profile_needs_both_freezes_and_stage_d_tomls_slo(tmp_path, pins):
+    doc = stage_d_doc(pins)
+    for frozen, needle in ((frozen_configs(stage_d=frozen_stage_d(stage_d=False)), "[freeze] stage_d"),
+                           (FROZEN._replace(stage_d=None, stage_d_sha256=None), "[freeze] stage_d"),
+                           (frozen_configs(frozen_capacity(capacity=False)), "[freeze] capacity")):
+        assert needle in refusal(tmp_path, doc, allow_provisional=False, pins=pins, frozen=frozen)
+    s3 = frozen_stage_d()
+    s3["slo"] = {**s3["slo"], "tpot_p95_ms": 150}
+    msg = refusal(tmp_path, doc, allow_provisional=False, pins=pins, frozen=frozen_configs(stage_d=s3))
+    assert "slo" in msg and "stage_d.toml" in msg
+
+
+@pytest.mark.parametrize("edit, needle", [
+    (lambda d: d["provenance"].update(stage_d_sha256="a1" * 32), "stage_d_sha256"),
+    (lambda d: d["server"].update(long_prefill_token_threshold=512), "long_prefill_token_threshold"),
+    (lambda d: d["classes"][0]["evidence"].update(server="B0"), "server"),
+    (lambda d: d["classes"][0]["evidence"].update(output_tokens=128), "output_tokens"),
+    (lambda d: d["classes"][0]["evidence"].update(not_covered=list(NOT_COVERED)), "not_covered"),
+    (lambda d: d["classes"][0]["evidence"].update(hypotheses={"H-D1": "supported"}), "hypotheses"),
+    (lambda d: d["classes"][0].update(source="stage_d:U2K:c_prod:EXACT"), "source"),
+])
+def test_a_stage_c_profile_carries_none_of_the_stage_d_fields(tmp_path, pins, edit, needle):
+    """§8's rules are unchanged; the §9-only fields are simply absent (null) in a §8 profile."""
+    doc = verified_doc(pins)
+    edit(doc)
+    assert needle in refusal(tmp_path, rehash(doc), allow_provisional=False, pins=pins)
+
+
+def test_prereg_sections_are_stage_c_and_stage_d():
+    assert cp.PREREG_SECTIONS == ("§8", "§9") and cp.PREREG_SECTION == "§8"
+
+
+# ------------------------------------------------------------------ serving_class: the 043 refusals --
+
+def test_a_verified_class_with_more_than_128_output_tokens_is_never_served(tmp_path, pins):
+    """043 §4: U8K's C_PROD is 12 at 512 output tokens, but C 9 already FAILs at 128; a shorter output than measured
+    is not covered, so an O512 class is never the active class, whatever flag is given."""
+    prof = load(write(tmp_path, stage_d_doc(pins, classes=B0_CLASSES)), allow_provisional=False, pins=pins)
+    for name in ("uniform-2k-o512", "uniform-8k-o512"):
+        with pytest.raises(cp.ProfileError) as exc:
+            prof.serving_class(name)
+        assert "512" in str(exc.value) and "128" in str(exc.value) and "043" in str(exc.value)
+    assert prof.serving_class("uniform-32k").max_concurrency == 2
+    dev = cp.load_profile(SERVICE / "profiles" / "provisional-rtx.json", allow_provisional=True, pins=pins)
+    assert dev.serving_class("rtx-it").max_output_tokens == 1024   # a provisional limit is no measured length
+
+
+def test_on_a_t_profile_only_m8k_t_with_h_d2a_supported_is_served(tmp_path, pins):
+    """030 8.8 via 043 §3: a T profile serves only a declared M8K deployment whose C_PROD beats B0's (H-D2a); U8K-T is
+    reported, never served."""
+    prof = load(write(tmp_path, stage_d_doc(pins, server="T", classes=T_CLASSES)), allow_provisional=False,
+                pins=pins)
+    with pytest.raises(cp.ProfileError) as exc:
+        prof.serving_class("uniform-8k-t")
+    assert "030 8.8" in str(exc.value) and "report" in str(exc.value)
+    assert prof.serving_class("mixed-8k-t").max_concurrency == 4
+    for hyp in ({"H-D2a": "not supported"}, {"H-D2a": "NT"}, {}):
+        doc = stage_d_doc(pins, server="T", classes=[stage_d_class("M8K-T", value=4, hypotheses=hyp)])
+        prof = load(write(tmp_path, doc), allow_provisional=False, pins=pins)
+        with pytest.raises(cp.ProfileError) as exc:
+            prof.serving_class("mixed-8k-t")
+        assert "H-D2a" in str(exc.value) and "030 8.8" in str(exc.value)
+
+
+@pytest.mark.parametrize("workload", ["U8K-T", "M8K-T"])
+def test_a_t_workloads_class_on_a_b0_profile_is_never_served(pins, workload):
+    """030 8.8, defence in depth: the refusal reads the model only (create_app may get a profile the loader never saw),
+    so T's limit is never served on B0 even when the class's evidence.server claims B0."""
+    cls = stage_d_class(workload, value=4)
+    cls["evidence"]["server"] = "B0"
+    prof = cp.CapacityProfile.model_validate(stage_d_doc(pins, classes=[stage_d_class("U32K", value=2), cls]))
+    assert prof.server_variant == "B0"
+    with pytest.raises(cp.ProfileError) as exc:
+        prof.serving_class(cls["name"])
+    assert "030 8.8" in str(exc.value) and "server T" in str(exc.value) and workload in str(exc.value)
+    assert prof.serving_class("uniform-32k").max_concurrency == 2
+
+
+def test_a_t_profile_class_without_evidence_is_never_served(pins):
+    """The refusal reads the model only (create_app may get a profile the loader never saw): fail closed."""
+    doc = stage_d_doc(pins, server="T", classes=T_CLASSES)
+    doc["classes"][1]["evidence"] = None
+    with pytest.raises(cp.ProfileError, match="030 8.8"):
+        cp.CapacityProfile.model_validate(rehash(doc)).serving_class("mixed-8k-t")

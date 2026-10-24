@@ -4,7 +4,9 @@ are never research evidence: research TTFT comes from the research client, never
 - An own CollectorRegistry (never prometheus_client.REGISTRY) and disable_created_metrics(), so the exposition has
   no _created series.
 - Gauges read live state through callables (in_flight, queued, pending, backend_ready); limits and the profile are
-  fixed for the process. Info("capserve_profile") is exposed as capserve_profile_info.
+  fixed for the process. Info("capserve_profile") is exposed as capserve_profile_info; besides the profile's ids and
+  the active class it labels (043 §5) the class's evidence flags (comma-joined in the profile's order, "" without
+  any) and the server variant (B0 / T).
 - finish(record) is the only place a finished request becomes counters / histograms (called by the guard):
   requests_total{route, stream, outcome} for the completion routes (stream "unknown" when the request ended before
   its body was parsed), rejections / client errors / upstream errors / disconnects by their label, queue wait for
@@ -61,7 +63,9 @@ class Metrics:
             "slo_id": profile.slo.id if profile.slo else "",
             "source_session": prov.source_session if prov else "",
             "analysis_sha256": prov.analysis_sha256 if prov else "",
-            "active_class": cls.name})
+            "active_class": cls.name,
+            "flags": ",".join(cls.evidence.flags) if cls.evidence else "",   # 043 §5
+            "server_variant": profile.server_variant})
 
     def finish(self, rec) -> None:
         if rec.reason:

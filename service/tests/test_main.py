@@ -1,7 +1,8 @@
 """Tests for capserve/__main__.py: `python -m capserve serve --config F --profile P [--allow-provisional]` refuses a
 provisional profile unless the flag or CAPSERVE_ALLOW_PROVISIONAL=1 allows it (027 §4; decision 029), refuses an
 unavailable active class of a verified profile whatever flag is given, and serves a verified 0 class as not
-serviceable (decision 030 8.7)."""
+serviceable (decision 030 8.7); decision 043's refusals (more than 128 output tokens; on a T profile anything but M8K-T
+with H-D2a supported) exit 2 the same way."""
 
 import json
 import os
@@ -12,7 +13,8 @@ from pathlib import Path
 import pytest
 
 from capserve.__main__ import main
-from fakes.profiles import FROZEN, frozen_capacity, frozen_configs, rehash, verified_class, verified_doc
+from fakes.profiles import FROZEN, frozen_capacity, frozen_configs, rehash, stage_d_class, stage_d_doc, verified_class
+from fakes.profiles import verified_doc
 
 SERVICE = Path(__file__).resolve().parent.parent
 ROOT = SERVICE.parent
@@ -110,6 +112,31 @@ def test_an_unavailable_active_class_is_refused_whatever_flag(tmp_path, profiles
     run = Runner()
     assert serve(settings, prof, profiles, *argv_extra, env=env, run=run) == 2
     assert run.calls == [] and "unavailable" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("server, cls, match", [
+    ("B0", stage_d_class("U2K-O512", value=32, flags=["WINDOW_SENSITIVE", "ABOVE_CKV"]), "043"),
+    ("B0", stage_d_class("U8K-O512", value=12), "043"),
+    ("T", stage_d_class("U8K-T", value=4), "030 8.8"),
+    ("T", stage_d_class("M8K-T", value=4, hypotheses={"H-D2a": "not supported"}), "H-D2a"),
+])
+@pytest.mark.parametrize("argv_extra, env", [([], {}), (["--allow-provisional"], {"CAPSERVE_ALLOW_PROVISIONAL": "1"})])
+def test_a_043_refused_stage_d_class_exits_2_whatever_flag(tmp_path, profiles, capsys, server, cls, match, argv_extra,
+                                                           env):
+    settings, prof = verified_files(tmp_path, profiles, doc=stage_d_doc(server=server, classes=[cls]))
+    run = Runner()
+    assert serve(settings, prof, profiles, *argv_extra, env=env, run=run) == 2
+    assert run.calls == [] and match in capsys.readouterr().err
+
+
+def test_the_stage_d_classes_043_allows_are_served(tmp_path, profiles, capsys):
+    """uniform-32k (B0, 128 output tokens) and mixed-8k-t (T, H-D2a supported) load and serve (serve cannot tell
+    which vLLM it fronts; only deploy up checks the server, 043 §6)."""
+    for server in ("B0", "T"):
+        run = Runner()
+        assert serve(*verified_files(tmp_path, profiles, doc=stage_d_doc(server=server), name=f"{server}.json"),
+                     profiles, run=run) == 0
+        assert run.calls[0][1].verified and capsys.readouterr().err == ""
 
 
 def test_a_verified_0_class_starts_and_says_it_refuses_every_request(tmp_path, profiles, capsys):

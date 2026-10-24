@@ -1,6 +1,8 @@
 # 043 — Stage D 的產品化：verified profile、輸出長度、T 的部署與准入的設計（DRAFT）
 
-- 狀態：**DRAFT**（設計；第 1–7 項待決事項已依建議定案）。實作依文末「實作步驟」以 TDD 進行；驗證研究（待決事項第 8、9 項）等使用者決定。
+- 狀態：**DRAFT**（設計；第 1–7 項待決事項已依建議定案）。
+  - 「實作步驟」第 1–9 步已以 TDD 在分支 `feat/043-stage-d-profiles` 上實作（第 9 步的 NEXT.md 由主 session 更新）；第 10 步的獨立審查、合併與 push 尚未進行。
+  - 驗證研究（待決事項第 8、9 項）仍是 DRAFT，等使用者決定。
 - 日期：2026-10-24
 - 對應：021（R1 不提供覆寫參數，R3 逐位元重現）、027 §4、029（產生器、loader、准入、M2 補記、036 的釘選補記）、030 8.7–8.9、035、036、037（§1 Engineering、§2、§5 第 2 步）、038、039（「產品上的使用」）、042（Stage D 的全部數字）
 - 時點：042 之後，任何 Stage D 的產品程式之前。本文不產生數據，也不使用 GPU。
@@ -205,11 +207,13 @@ python -m capserve.profile_gen --session results/stage_d/<sid> --freeze-commit <
   - U2K-P、U8K-P、`*-var`、`*-gw` 永遠不能成為 class。
 - **source 規則一般化**：§8 為 `stage_c:…`，§9 為 `stage_d:…`。
 - **保留名稱**：provisional profile 也不得使用 Stage D 的 class 名稱（延伸 036 的規則）。
-- **`serving_class` 新增兩條拒絕**，都拋出 ProfileError，和 unavailable 走同一條路徑：
+- **`serving_class` 新增三條拒絕**，都拋出 ProfileError，和 unavailable 走同一條路徑：
   `create_app` 拋出 ProfileError（不是 ConfigError），`capserve serve` exit 2，`deploy up` 在 preflight 拒絕，任何旗標都不能覆寫。
   1. verified class 的 `max_output_tokens` > `bp.N_GEN`（128）：見第 4 節。
   2. 在 T profile 上，只有 `evidence.workload == "M8K-T"`、而且 `evidence.hypotheses["H-D2a"] == "supported"` 的 class 可以服務（030 8.8：T profile 只用於明確宣告為 M8K 的部署，而且要 C_PROD 大於 B0 的值）。
      `uniform-8k-t` 一律拒絕，訊息為「030 8.8：只報告」。
+  3. 在 B0 profile 上，`evidence.workload` 是 T workload（`stage_d_plan.WORKLOADS[w]["server"] == "T"`）的 class 一律拒絕（030 8.8：T 的上限不能用在 B0）。
+     loader 已經拒絕這種 profile；這一條是第 10 步的獨立審查後加入的縱深防禦，只讀 model，所以 `create_app` 收到沒有經過 loader 的 profile 時也成立。
 
 ## 4. 輸出長度 512 與 128
 
@@ -276,7 +280,7 @@ python -m capserve.profile_gen --session results/stage_d/<sid> --freeze-commit <
 - 產品實際的情況，也就是「gateway 的並發上限加上 Poisson 到達」，從未量過。
 - **keep-alive 的說法改正**：gateway → vLLM 這一段，httpx 的 `keepalive_expiry` 2 s 低於 vLLM 的 5 s，所以受到保護。
   - client → gateway 這一段沒有保護：`server.build_config` 沒有設定 `timeout_keep_alive`，uvicorn 預設 5 s；
-  - aiohttp（閒置保留 60 s、FIFO 重用）或 httpx（預設 5 s）的 client 連到 gateway 時，仍可能遇到 D-B 推論的同一類競態。
+  - vLLM bench 的 aiohttp 連線池（keepalive_timeout 60 s、FIFO 重用；aiohttp 預設 15 s）或 httpx（預設 5 s）的 client 連到 gateway 時，仍可能遇到 D-B 推論的同一類競態。
   - 修正方式見 7.2。
 
 **D-C**（只涉及 c1b 的 class；c1b 的位元組不改，寫進 README）
@@ -350,12 +354,17 @@ python -m capserve.profile_gen --session results/stage_d/<sid> --freeze-commit <
 - 單一 active class 的 FIFO 准入不變，`admission.py` 不改。
 - 第 1–6 節的產生器、loader、三份 profile（不釘選）、輸出長度與 T 的拒絕規則，以及 `/readyz` 的揭露。
 - **gateway 的 keep-alive 修正**（產品修正，不宣稱任何容量）：
-  - `Settings.keep_alive_s`，預設 75 s，交給 `uvicorn.Config(timeout_keep_alive=...)`。75 s 高於 aiohttp 的 60 s 與 httpx 的 5 s，所以 client 端的連線池會先讓連線過期。
+  - `Settings.keep_alive_s`，預設 75 s，交給 `uvicorn.Config(timeout_keep_alive=...)`。閒置上限低於 75 s 的 client 連線池（aiohttp、httpx 的預設，以及 vLLM bench 的 60 s）會先讓連線過期；
+    閒置更久或不設上限的 client（例如 Go 預設 90 s、urllib3）仍有同類競態。
   - 代價是閒置的 socket 保留得比較久。Guard 數的是 request，不是連線。
   - 這會改變 `capserve_sha256`，D-C 的 H-D7 只對應舊的那一版。修正之後在下一次 RTX 產品測試中跑 IT-0 至 IT-6。
 - 文件寫明開場湧入的已知事實：
-  - 第一波最大 TTFT：2K 為 10.35 s（經過 gateway 為 10.37–10.42 s），8K 為 11.04 s（11.00–11.10 s），uniform-32k 為 12.8 s，uniform-8k-o512 為 16.95 s；
-  - 第二波已回到門檻內；
+  - 第一波最大 TTFT：2K 為 10.35 s（經過 gateway 為 10.37–10.42 s），8K 為 11.04 s（11.00–11.10 s），uniform-32k 為 12.8 s，uniform-2k-o512 為 10.50 s，uniform-8k-o512 為 16.95 s；
+  - 第二波（idx 在 [C, 2C)）的最大 TTFT 回到門檻內的有：c1b 固定長度（直連 U2K 1.38 s、U8K 2.47–2.48 s；經過 gateway U2K 1.71–1.73 s、U8K 3.16–3.54 s）、
+    uniform-8k 長度不一（2.07–2.12 s / 6 s）、uniform-32k（9.32–9.54 s / 20 s）、uniform-8k-o512（2.52–2.55 s / 6 s）、U8K-T（5.38–5.61 s / 6 s）、
+    M8K-T（短類 5.73–5.93 s / 6 s，長類 11.02–11.40 s / 20 s）。
+    例外：uniform-2k-o512 每個 run 的 idx 63 停在 4.24–4.36 s（門檻 2 s 的 2.1–2.2 倍，在 vLLM 內等待，gateway 無法逾時）；uniform-2k 長度不一（D-C）的第二波最大 2.04–2.39 s，超過 2 s。
+    （各有效 run 最大值的範圍，以 derived 檔的 request 算出，只寫在文件中；第 10 步的獨立審查改正了原本不加限定的「第二波已回到門檻內」。）
   - 產品不對第一波宣稱 SLO。
 - 營運上，既有的 `capserve_queue_wait_seconds`、`capserve_ttft_seconds`（從到達起算）與 `capserve_upstream_ttft_seconds` 已經足以觀察湧入，不新增指標。
 

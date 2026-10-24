@@ -5,7 +5,8 @@ Routes: POST /v1/chat/completions, POST /v1/completions, GET /v1/models (the ser
 /metrics. There is no catch-all passthrough, so vLLM's /tokenize and admin endpoints are never exposed.
 
 The active class must be servable (profile.serving_class): an unavailable class of a verified profile (Stage C
-C_PROD UNSTABLE / NT, decision 030 8.7) never builds a gateway (ProfileError), whatever flag is given. A verified 0
+C_PROD UNSTABLE / NT, decision 030 8.7), a verified class of more than 128 output tokens, and on a T profile any class
+but M8K-T with H-D2a supported (decision 043) never build a gateway (ProfileError), whatever flag is given. A verified 0
 (C_PROD INFEASIBLE: refuse the class) builds one with a closed admission controller: every completion request gets
 503 class_not_serviceable right after auth (no Retry-After, x-should-retry false: retrying cannot help), /readyz is
 503 with not_ready_reason class_not_serviceable, and /v1/models, /healthz and /metrics work as usual.
@@ -86,7 +87,7 @@ class Gateway:
                  keyring: KeyRing | None = None):
         self.settings = settings
         self.profile = profile
-        self.cls = profile.serving_class(settings.active_class)   # ProfileError for an unavailable class (030 8.7)
+        self.cls = profile.serving_class(settings.active_class)   # ProfileError: 030 8.7, 043
         self.served_model = profile.server.model_repo
         self.api_key = api_key
         self.keyring = keyring
@@ -239,11 +240,18 @@ class Gateway:
         return JSONResponse({"status": "ok"})
 
     def readiness(self) -> dict:
+        """The /readyz body. Besides the limits it discloses (043 §5) the server variant (B0 / T) and, from the
+        active class's evidence, its flags and what its limit was never measured under (not_covered: null for a §8
+        class such as c1b's, whose conditions are the README's; both null for a provisional class)."""
         p, c = self.profile, self.cls
+        ev = c.evidence
         return {"ready": c.serviceable and self.monitor.ready and not self.draining,
                 "not_ready_reason": self._unavailable(),
                 "profile": {"id": p.profile_id, "status": p.status, "provisional": not p.verified},
                 "active_class": c.name, "class_status": c.status, "bound": c.bound, "serviceable": c.serviceable,
+                "server_variant": p.server_variant,
+                "flags": list(ev.flags) if ev is not None else None,
+                "not_covered": list(ev.not_covered) if ev is not None and ev.not_covered is not None else None,
                 "backend": {"ready": self.monitor.ready, "reason": self.monitor.reason},
                 "draining": self.draining, "in_flight": self.ctrl.in_flight, "queued": self.ctrl.queued,
                 "pending": self.guard.pending,

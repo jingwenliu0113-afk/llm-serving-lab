@@ -1,0 +1,106 @@
+{
+ "schema_version": 1,
+ "profile_id": "verified-formal-20261023-d-a1b-b0",
+ "status": "verified",
+ "provisional_reason": null,
+ "slo": {
+  "id": "S2",
+  "terms": {
+   "ttft_p95_ms": {
+    "2048": 2000,
+    "8192": 6000,
+    "32768": 20000
+   },
+   "tpot_p95_ms": 100,
+   "mixed_long": "budget"
+  }
+ },
+ "server": {
+  "vllm_version": "0.30.0",
+  "model_repo": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+  "model_revision": "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "fingerprint_sha256": "98b9f41be7b75b6bf431e6c090124156360edfc929ccd6164001468da05b6d4f",
+  "num_gpu_blocks": 248,
+  "block_size": 528,
+  "long_prefill_token_threshold": null
+ },
+ "classes": [
+  {
+   "name": "uniform-32k",
+   "max_prompt_tokens": 32640,
+   "max_output_tokens": 128,
+   "max_concurrency": 2,
+   "max_queue": 2,
+   "source": "stage_d:U32K:c_prod:EXACT",
+   "status": "verified",
+   "bound": "exact",
+   "unavailable_reason": null,
+   "evidence": {
+    "workload": "U32K",
+    "scope": "uniform 32640-token prompts, exactly 128 output tokens (ignore-eos), on the Core B server (B0); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7, 039 D-A); at_c_prod's preemptions and KV peak are the whole bench process's (042)",
+    "c_prod": {
+     "value": 2,
+     "status": "EXACT"
+    },
+    "c_slo": {
+     "value": 2,
+     "status": "EXACT"
+    },
+    "c_kv": 3,
+    "c_cap": 6,
+    "flags": [],
+    "binding": [
+     "tpot"
+    ],
+    "margins": {
+     "short": 0.48791706349993547,
+     "tpot": 0.3584408701571814
+    },
+    "burst_max_ttft_ms": 12824.046319001354,
+    "server": "B0",
+    "output_tokens": 128,
+    "descriptive": {
+     "c_full": {
+      "value": 2,
+      "status": "EXACT"
+     },
+     "c_late": {
+      "value": 2,
+      "status": "EXACT"
+     }
+    },
+    "at_c_prod": {
+     "attainment_min": 1.0,
+     "preemptions_max": 0.0,
+     "kv_cache_usage_peak_max": 0.534412955465587
+    },
+    "hypotheses": {
+     "H-D1": "supported"
+    },
+    "not_covered": [
+     "prompt_length_variation",
+     "via_gateway",
+     "open_loop",
+     "output_length_other_than_measured",
+     "start_up_wave",
+     "concurrent_classes"
+    ]
+   }
+  }
+ ],
+ "provenance": {
+  "source_session": "formal-20261023-d-a1b",
+  "analysis_path": "results/stage_d/formal-20261023-d-a1b/analysis.json",
+  "analysis_sha256": "f2b29c5ee4d243b1133d4deac0cc23c71a011c34e37bcd7a4da82ed70d99969b",
+  "prereg_section": "§9",
+  "freeze_commit": "fd95164f19cb261ccdf54b22ae93359f74b8f6be",
+  "generator_commit": "955588d0b8f8045ef05fe38182f58199b6eeea8c",
+  "deployed_commit": "0ec7b9208ea339b302cf43f8658829f4a9995545",
+  "capacity_sha256": "b7c4a6c68bdd7b39857b55f2cb6f00feb0e0fc134334263a22bb5284da843e21",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "gpu_driver": "617.42"
+ },
+ "content_sha256": "342ca94fd9e446fd86688332666c850d3cc679adaa98d6d957f71a5352c7939e"
+}

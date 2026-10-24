@@ -4,7 +4,12 @@ The Stage C sessions are written by the real runner (run_capacity) in the fake w
 and their analysis.json by the real capacity_report CLI, so every input is schema-faithful: nothing is hand-written.
 Scenario A gives C_PROD LOWER / EXACT / EXACT / INFEASIBLE (U2K / U8K / M2K / M8K), scenario B CENSORED / UNSTABLE /
 NT / EXACT, so every 030 8.7 mapping is exercised end to end. git is faked except in the tests of the git helpers,
-which use a real repository."""
+which use a real repository.
+
+Stage D (decision 043, PREREGISTRATION §9) is tested on the committed formal sessions (results/stage_d/: D-A1b and
+D-A2 give profiles; D-B, D-C and the aborted D-A1 never do) with this repository's own git, so the freeze commit, the
+sessions' DEPLOYED_COMMIT and the frozen files are the real ones (RepoGit only fakes HEAD / the tree status, or one
+answer a test breaks). A session broken on disk is a copy under a private repo root (d_root)."""
 
 import copy
 import hashlib
@@ -20,6 +25,7 @@ import pytest
 
 import capacity_report as cr
 import core_b_plan as bp
+import stage_d_plan as sdplan
 from capserve import profile as cp
 from capserve import profile_gen as pg
 
@@ -621,12 +627,14 @@ def test_main_never_overwrites_and_never_writes_under_results(sess_a, tmp_path, 
 
 
 def test_no_override_options():
-    """021 R1: the only inputs are the session, the freeze commit (verified against git) and the output path."""
-    assert pg.option_names() == {"--session", "--out", "--freeze-commit"}
+    """021 R1: the only inputs are the session, the freeze commit (verified against git) and the output path (043: a
+    file for Stage C, a directory for every profile of a Stage D session; no server selector)."""
+    assert pg.option_names() == {"--session", "--out", "--out-dir", "--freeze-commit"}
 
 
 def test_default_paths_are_the_repo():
     assert pg.ROOT == ROOT and pg.CAPACITY_TOML == ROOT / "configs" / "capacity.toml"
+    assert pg.STAGE_D_TOML == ROOT / "configs" / "stage_d.toml"
 
 
 def test_module_entry_point(tmp_path):
@@ -678,15 +686,722 @@ def test_the_scan_finds_a_verified_profile_at_any_tracked_path(tmp_path):
     assert got == ["d.txt", "service/deploy/b.json", "service/profiles/c.JSON", "service/profiles/verified/a.json"]
 
 
+def regenerate(doc: dict) -> dict:
+    """What the generator writes for a committed verified profile, by its prereg_section (043 step 5): §8 from its
+    results/capacity session (generate); §9 the profile with its profile_id among those of its results/stage_d
+    session (generate_stage_d)."""
+    prov = doc.get("provenance") or {}
+    sid, kw = str(prov.get("source_session")), {"freeze_commit": str(prov.get("freeze_commit")),
+                                                "generator_commit": str(prov.get("generator_commit"))}
+    if prov.get("prereg_section") == cp.STAGE_D_SECTION:
+        docs = pg.generate_stage_d(ROOT / "results" / "stage_d" / sid, **kw)
+        if doc.get("profile_id") not in docs:
+            raise pg.GenerationError([f"{sid} gives the profiles {list(docs)}, not {doc.get('profile_id')!r}"])
+        return docs[doc["profile_id"]]
+    return pg.generate(ROOT / "results" / "capacity" / sid, **kw)
+
+
 def test_every_committed_verified_profile_is_what_the_generator_writes():
     assert sorted((SERVICE / "profiles").glob("*.json"))
     for path in tracked_verified_profiles(ROOT):
         doc = json.loads(path.read_text())
-        prov = doc.get("provenance") or {}
-        session = ROOT / "results" / "capacity" / str(prov.get("source_session"))
         try:
-            regenerated = pg.generate(session, freeze_commit=str(prov.get("freeze_commit")),
-                                      generator_commit=str(prov.get("generator_commit")))
+            regenerated = regenerate(doc)
         except pg.GenerationError as exc:
             pytest.fail(f"{path.name} is verified, but the generator refuses it: {exc}")
         assert _regenerable(regenerated) == _regenerable(doc), path.name
+
+
+def test_the_pinned_c1b_profile_regenerates_byte_for_byte_but_its_generator_commit():
+    """043 §3 / §9: the Stage D schema and generator change nothing a §8 profile is written with."""
+    path = SERVICE / "profiles" / "verified-formal-20261017-c1b.json"
+    doc = json.loads(path.read_text())
+    assert doc["provenance"]["prereg_section"] == cp.PREREG_SECTION
+    regenerated = regenerate(doc)
+    regenerated["provenance"]["generator_commit"] = doc["provenance"]["generator_commit"]
+    regenerated["content_sha256"] = cp.content_sha256(regenerated)
+    assert pg.render(regenerated) == path.read_bytes()
+
+
+# ------------------------------------------------------------------ Stage D (043 §1, §2; PREREGISTRATION §9) --
+
+STAGE_D = ROOT / "results" / "stage_d"
+D_A1B, D_A2, D_A1, D_B, D_C = (STAGE_D / f"formal-20261023-{x}" for x in ("d-a1b", "d-a2", "d-a1", "d-b", "d-c"))
+D_FREEZE = "fd95164f19cb261ccdf54b22ae93359f74b8f6be"     # set configs/stage_d.toml [freeze] stage_d = true (039)
+D_DEPLOYED = "0ec7b9208ea339b302cf43f8658829f4a9995545"   # the D-A sessions' DEPLOYED_COMMIT
+STAGE_D_TOML = "configs/stage_d.toml"
+STAGE_D_SHA = "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5"
+FROZEN_D, UNFROZEN_D = b"[freeze]\nstage_d = true\n", b"[freeze]\nstage_d = false\n"
+PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
+S2_TERMS = {"ttft_p95_ms": {"2048": 2000, "8192": 6000, "32768": 20000}, "tpot_p95_ms": 100, "mixed_long": "budget"}
+NOT_COVERED = ["prompt_length_variation", "via_gateway", "open_loop", "output_length_other_than_measured",
+               "start_up_wave", "concurrent_classes"]                     # 043 §5: every D-A class
+# 039 凍結: stage_d_plan.HARNESS_FILES, then the Stage C modules Stage D runs
+D_FROZEN_PATHS = list(sdplan.HARNESS_FILES) + [f"benchmarks/{m}.py" for m in CAPACITY_MODULES]
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+class RepoGit:
+    """This repository's own git, so the Stage D freeze commit, the sessions' DEPLOYED_COMMIT and the frozen files are
+    the real ones; HEAD is CLEAN_HEAD of a clean tree unless dirty is given. files overrides `git show` {(rev, path):
+    bytes or None}, history overrides stage_d.toml's history up to the freeze commit (newest first), and ancestor=False
+    answers no to every ancestry question."""
+
+    def __init__(self, *, files=None, history=None, ancestor=True, dirty=""):
+        self.real, self.files, self.history = pg.git_runner(ROOT), files or {}, history
+        self.ancestor, self.dirty = ancestor, dirty
+
+    def __call__(self, *args):
+        if args[0] == "show":
+            rev, _, path = args[1].partition(":")
+            if (rev, path) in self.files:
+                return self.files[(rev, path)]
+        if args[:2] == ("rev-list", "--full-history") and self.history is not None:
+            return "".join(f"{c}\n" for c in self.history).encode()
+        if args[:2] == ("merge-base", "--is-ancestor") and not self.ancestor:
+            return None
+        if args == ("rev-parse", "HEAD"):
+            return CLEAN_HEAD.encode() + b"\n"
+        if args == ("status", "--porcelain", "--untracked-files=no"):
+            return self.dirty.encode()
+        return self.real(*args)
+
+
+def gen_d(session=D_A1B, **kw) -> dict:
+    kw.setdefault("freeze_commit", D_FREEZE)
+    kw.setdefault("generator_commit", GEN)
+    kw.setdefault("git", RepoGit())
+    return pg.generate_stage_d(session, **kw)
+
+
+def refused_d(session=D_A1B, **kw) -> str:
+    with pytest.raises(pg.GenerationError) as exc:
+        gen_d(session, **kw)
+    return str(exc.value)
+
+
+def main_d(session, out, *, option="--out-dir", root=ROOT, git=None, freeze=D_FREEZE) -> int:
+    return pg.main(["--session", str(session), "--freeze-commit", freeze, option, str(out)], root=root,
+                   git=git or RepoGit())
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def t_boots(s: dict) -> list:
+    return [b["tag"] for b in s["boots"] if sdplan.WORKLOADS[b["workload"]]["server"] == "T"]
+
+
+def d_root(tmp_path: Path, session: Path = D_A1B) -> dict:
+    """A private repo root with a copy of a Stage D session to break on disk: the repo's configs, and links to what the
+    frozen report reads besides the session (the mini smokes, the uniform and Advanced sessions, c1b's lambda_ref)."""
+    root = tmp_path / "root"
+    (root / "configs").mkdir(parents=True)
+    for name in ("capacity.toml", "pins.toml", "stage_d.toml"):
+        shutil.copy(ROOT / "configs" / name, root / "configs" / name)
+    cfg = tomllib.loads((ROOT / STAGE_D_TOML).read_text())
+    links = [("stage_d", cfg["freeze"][k]) for k in ("mini_closed", "mini_open", "mini_verify")]
+    links += [("core_b", cfg["stage_d"]["derived_from"]), ("advanced", pg.ADVANCED_SESSION),
+              ("capacity", cfg["stage_d"]["c1b_session"])]
+    for kind, sid in links:
+        (root / "results" / kind).mkdir(parents=True, exist_ok=True)
+        (root / "results" / kind / sid).symlink_to(ROOT / "results" / kind / sid)
+    out = root / "results" / "stage_d" / session.name
+    shutil.copytree(session, out)
+    return {"root": root, "out": out}
+
+
+@pytest.fixture(scope="module")
+def a1b():
+    return gen_d(D_A1B)
+
+
+@pytest.fixture(scope="module")
+def a2():
+    return gen_d(D_A2)
+
+
+def by_name(docs: dict) -> dict:
+    return {c["name"]: c for doc in docs.values() for c in doc["classes"]}
+
+
+def rounded(margins: dict) -> dict:
+    return {t: round(v, 3) for t, v in margins.items()}
+
+
+# ---------------------------------------------------- the committed D-A sessions
+
+def test_d_a1b_gives_a_b0_and_a_t_profile_and_the_sentinel_no_class(a1b):
+    """043 §1.1 / §2: one profile per (session, server): U32K on B0, U8K-T and M8K-T on T; the U2K sentinel ran on B0
+    but never becomes a class."""
+    assert list(a1b) == ["verified-formal-20261023-d-a1b-b0", "verified-formal-20261023-d-a1b-t"]
+    b0, t = a1b.values()
+    assert [summary(c) for c in b0["classes"]] == [
+        ("verified", 32640, 128, 2, 2, "exact", "stage_d:U32K:c_prod:EXACT")]
+    assert [summary(c) for c in t["classes"]] == [
+        ("verified", 8064, 128, 4, 4, "exact", "stage_d:U8K-T:c_prod:EXACT"),
+        ("verified", 32640, 128, 4, 4, "exact", "stage_d:M8K-T:c_prod:EXACT")]
+    assert list(by_name(a1b)) == ["uniform-32k", "uniform-8k-t", "mixed-8k-t"]
+
+
+def test_each_stage_d_profile_states_its_own_server(a1b):
+    """043 §1.4: T's classes carry T's fingerprint, never the first boot's (b000-sentinel-start-U2K, on B0), which Stage
+    C's session_fingerprint would have stamped on them, and passed."""
+    b0, t = a1b.values()
+    assert b0["server"]["fingerprint_sha256"] == cp.stage_b_fingerprint(PINS) == \
+        "98b9f41be7b75b6bf431e6c090124156360edfc929ccd6164001468da05b6d4f"
+    assert t["server"]["fingerprint_sha256"] == cp.t_fingerprint(PINS) == \
+        "564d27ecfc45f162c564185cf8c9b4566f84208e788808aa6d302187474dd7cc"
+    assert (b0["server"]["long_prefill_token_threshold"], t["server"]["long_prefill_token_threshold"]) == (None, 512)
+    s = read_json(D_A1B / "session.json")
+    first, problems = pg.session_fingerprint(s, PINS)
+    assert s["boots"][0]["tag"] == "b000-sentinel-start-U2K" and problems == []
+    assert first == b0["server"]["fingerprint_sha256"] != t["server"]["fingerprint_sha256"]
+    for doc in (b0, t):
+        assert {k: v for k, v in doc["server"].items() if k not in ("fingerprint_sha256", "long_prefill_token_threshold")} \
+            == {"vllm_version": "0.30.0", "model_repo": PINS["core_b"]["repo"],
+                "model_revision": PINS["core_b"]["revision"], "num_gpu_blocks": 248, "block_size": 528}
+
+
+def test_a_stage_d_profile_states_the_slo_and_its_provenance(a1b):
+    raw = (D_A1B / "analysis.json").read_bytes()
+    for suffix, doc in zip(("b0", "t"), a1b.values()):
+        assert (doc["schema_version"], doc["profile_id"], doc["status"], doc["provisional_reason"]) == (
+            1, f"verified-formal-20261023-d-a1b-{suffix}", "verified", None)
+        assert doc["slo"] == {"id": "S2", "terms": S2_TERMS}
+        assert doc["provenance"] == {
+            "source_session": "formal-20261023-d-a1b",
+            "analysis_path": "results/stage_d/formal-20261023-d-a1b/analysis.json", "analysis_sha256": sha(raw),
+            "prereg_section": "§9", "freeze_commit": D_FREEZE, "generator_commit": GEN, "deployed_commit": D_DEPLOYED,
+            "capacity_sha256": sha((ROOT / CAPACITY).read_bytes()),
+            "pins_sha256": sha((ROOT / "configs" / "pins.toml").read_bytes()), "stage_d_sha256": STAGE_D_SHA,
+            "gpu": "NVIDIA GeForce RTX 5070 Ti", "gpu_driver": "617.42"}
+        assert doc["content_sha256"] == cp.content_sha256(doc)
+
+
+def test_the_d_a1b_classes_carry_the_analysis_evidence(a1b):
+    """043 §1.5 / §3: only analysis.json's fields; margins 1 - worst R at C_PROD (043 §2's table); the hypotheses'
+    verdicts verbatim; at C_PROD the valid runs' worst attainment, preemptions and KV peak."""
+    analysis = read_json(D_A1B / "analysis.json")
+    got = {n: c["evidence"] for n, c in by_name(a1b).items()}
+    for name, w in (("uniform-32k", "U32K"), ("uniform-8k-t", "U8K-T"), ("mixed-8k-t", "M8K-T")):
+        x, e = analysis["workloads"][w], got[name]
+        point = x["points"][str(x["c_prod"]["value"])]
+        runs = [r for r in point["runs"] if r["valid"]]
+        assert e["workload"] == w and e["c_prod"] == x["c_prod"] and e["c_slo"] == x["c_slo"]
+        assert (e["c_kv"], e["c_cap"], e["flags"], e["binding"]) == (x["c_kv"], x["c_cap"], x["flags"], x["binding"])
+        assert e["margins"] == {t: 1 - R for t, R in point["worst_R"].items() if R is not None}
+        assert e["burst_max_ttft_ms"] == max(r["burst_max_ttft_ms"] for r in runs)
+        assert e["at_c_prod"] == {"attainment_min": min(r["attainment"] for r in runs),
+                                  "preemptions_max": max(r["preemptions"] for r in runs),
+                                  "kv_cache_usage_peak_max": max(r["kv_cache_usage_peak"] for r in runs)}
+        assert (e["server"], e["output_tokens"]) == (x["server"], 128)
+        assert e["descriptive"] == {k: x["descriptive"][k]["c_prod"] for k in ("c_full", "c_late")}
+        assert e["not_covered"] == NOT_COVERED
+        assert "exactly 128 output tokens (ignore-eos)" in e["scope"] and "after admission" in e["scope"]
+    assert {n: rounded(e["margins"]) for n, e in got.items()} == {
+        "uniform-32k": {"short": 0.488, "tpot": 0.358}, "uniform-8k-t": {"short": 0.06, "tpot": 0.827},
+        "mixed-8k-t": {"short": 0.114, "tpot": 0.212, "long": 0.42}}
+    assert {n: e["hypotheses"] for n, e in got.items()} == {
+        "uniform-32k": {"H-D1": "supported"}, "uniform-8k-t": {"H-D2b": "supported"},
+        "mixed-8k-t": {"H-D2a": "supported"}}
+    assert got["mixed-8k-t"]["flags"] == ["WINDOW_SENSITIVE"]
+    assert got["mixed-8k-t"]["descriptive"]["c_late"] == {"value": 5, "status": "EXACT"}
+    assert "32640-token (10 %)" in got["mixed-8k-t"]["scope"] and "T server" in got["mixed-8k-t"]["scope"]
+    assert got["uniform-32k"]["c_kv"] == 3 and round(got["uniform-32k"]["burst_max_ttft_ms"] / 1000, 1) == 12.8
+    assert "32640-token prompts" in got["uniform-32k"]["scope"] and "B0" in got["uniform-32k"]["scope"]
+
+
+def test_d_a2_gives_one_b0_profile_with_the_two_o512_classes(a2):
+    """043 §2: B0 only; U2K-O512 ABOVE_CKV (C_KV 30), WINDOW_SENSITIVE (c_full UNSTABLE), attainment 0.96875 with 30
+    preemptions at a KV peak of 1.0, H-D3 not supported; U8K-O512 12 at C_KV 12, its first wave 16.95 s."""
+    assert list(a2) == ["verified-formal-20261023-d-a2-b0"]
+    (doc,) = a2.values()
+    assert doc["server"]["fingerprint_sha256"] == cp.stage_b_fingerprint(PINS)
+    assert doc["server"]["long_prefill_token_threshold"] is None
+    got = by_name(a2)
+    assert summary(got["uniform-2k-o512"]) == ("verified", 1920, 512, 32, 32, "exact", "stage_d:U2K-O512:c_prod:EXACT")
+    assert summary(got["uniform-8k-o512"]) == ("verified", 8064, 512, 12, 12, "exact", "stage_d:U8K-O512:c_prod:EXACT")
+    u2, u8 = got["uniform-2k-o512"]["evidence"], got["uniform-8k-o512"]["evidence"]
+    assert (u2["flags"], u2["c_kv"], u2["output_tokens"], u2["server"]) == (["WINDOW_SENSITIVE", "ABOVE_CKV"], 30, 512,
+                                                                            "B0")
+    assert u2["at_c_prod"] == {"attainment_min": 0.96875, "preemptions_max": 30.0, "kv_cache_usage_peak_max": 1.0}
+    assert (u2["hypotheses"], u8["hypotheses"]) == ({"H-D3": "not supported"}, {"H-D3": "supported"})
+    assert u2["descriptive"] == {"c_full": {"value": None, "status": "UNSTABLE"},
+                                 "c_late": {"value": 32, "status": "LOWER"}}
+    assert u2["not_covered"] == NOT_COVERED + ["in_vllm_wait_beyond_c_kv"] and u8["not_covered"] == NOT_COVERED
+    assert rounded(u2["margins"]) == {"short": 0.292, "tpot": 0.557}
+    assert rounded(u8["margins"]) == {"short": 0.575, "tpot": 0.526}
+    assert u8["c_kv"] == 12 and round(u8["burst_max_ttft_ms"] / 1000, 2) == 16.95
+    for e in (u2, u8):
+        assert "exactly 512 output tokens (ignore-eos)" in e["scope"] and "whole bench process" in e["scope"]
+
+
+def test_the_stage_d_profiles_pass_the_loader_and_serving_class_applies_043(a1b, a2):
+    """Every generated profile loads as verified against this checkout (§9); serving_class then refuses U8K-T (030
+    8.8: report only) and both O512 classes (043 §4); uniform-32k and mixed-8k-t are servable."""
+    frozen_cfgs = cp.frozen_configs(ROOT)
+    profs = [cp.parse_profile(pg.render(doc), source=pid, allow_provisional=False, pins=PINS, frozen=frozen_cfgs)
+             for pid, doc in {**a1b, **a2}.items()]
+    b0, t, o512 = profs
+    assert all(p.verified and p.provenance.prereg_section == "§9" for p in profs)
+    assert (b0.server_variant, t.server_variant, o512.server_variant) == ("B0", "T", "B0")
+    assert b0.serving_class("uniform-32k").max_concurrency == 2
+    assert t.serving_class("mixed-8k-t").max_concurrency == 4
+    with pytest.raises(cp.ProfileError, match="030 8.8"):
+        t.serving_class("uniform-8k-t")
+    for name in ("uniform-2k-o512", "uniform-8k-o512"):
+        with pytest.raises(cp.ProfileError, match="043 §4"):
+            o512.serving_class(name)
+
+
+def test_the_stage_d_output_is_deterministic_and_only_the_generator_commit_varies(a1b):
+    again, other = gen_d(), gen_d(generator_commit="1c" * 20)
+    assert {k: pg.render(v) for k, v in again.items()} == {k: pg.render(v) for k, v in a1b.items()}
+    for pid, doc in a1b.items():
+        assert {k for k in doc if doc[k] != other[pid][k]} == {"provenance", "content_sha256"}
+        assert {k for k in doc["provenance"] if doc["provenance"][k] != other[pid]["provenance"][k]} == {
+            "generator_commit"}
+
+
+def test_stage_d_margins_are_capacity_analysis_margins_on_c1b():
+    """043 §1.5: the Stage D analysis has no margins; 1 - worst R at C_PROD is capacity_analysis's own margins.c_prod,
+    so the same function on c1b's four workloads gives their margins.c_prod (U2K short: 1 - 0.5892 = 0.4108)."""
+    analysis = read_json(ROOT / "results" / "capacity" / "formal-20261017-c1b" / "analysis.json")
+    for w, x in analysis["workloads"].items():
+        assert pg.stage_d_margins(x) == x["margins"]["c_prod"], w
+    assert pg.stage_d_margins(analysis["workloads"]["U2K"])["short"] == 1 - 0.5891562507490562
+    x = copy.deepcopy(analysis["workloads"]["U2K"])
+    for est in ({"value": None, "status": "UNSTABLE"}, {"value": None, "status": "NT"},
+                {"value": 0, "status": "INFEASIBLE"}):
+        x["c_prod"] = est
+        assert pg.stage_d_margins(x) is None       # no C_PROD point, as capacity_analysis writes it
+
+
+# ---------------------------------------------------- server groups (043 §1.4)
+
+def test_server_groups_fingerprint_every_boot_by_its_workloads_server():
+    """B0 has 8 boots in D-A1b (U32K 6, the sentinel 2), T 12; D-A2 runs B0 only."""
+    groups, problems = pg.server_groups(read_json(D_A1B / "session.json"), PINS)
+    assert problems == []
+    assert {v: (g["fingerprint"], len(g["boots"]), g["workloads"]) for v, g in groups.items()} == {
+        "B0": (cp.stage_b_fingerprint(PINS), 8, ["U2K", "U32K"]), "T": (cp.t_fingerprint(PINS), 12, ["U8K-T", "M8K-T"])}
+    groups, problems = pg.server_groups(read_json(D_A2 / "session.json"), PINS)
+    assert problems == [] and list(groups) == ["B0"]
+    assert groups["B0"]["workloads"] == ["U2K", "U2K-O512", "U8K-O512"] and len(groups["B0"]["boots"]) == 14
+
+
+def _one_t_boot_another_server(s):
+    s["runs"][t_boots(s)[3]]["argv"].append("--enforce-eager")
+
+
+def _t_boots_on_b0(s):
+    for tag in t_boots(s):
+        s["runs"][tag]["argv"] = s["runs"][tag]["argv"][:-2]          # without --long-prefill-token-threshold 512
+
+
+def _b0_boots_on_t(s):
+    for b in s["boots"]:
+        if b["tag"] not in t_boots(s):
+            s["runs"][b["tag"]]["argv"] += ["--long-prefill-token-threshold", "512"]
+
+
+def _no_env_key(s):
+    s["runs"][s["boots"][0]["tag"]]["env"].pop("CUDA_HOME")
+
+
+def _no_record(s):
+    del s["runs"][s["boots"][5]["tag"]]
+
+
+def _unknown_workload(s):
+    s["boots"][1]["workload"] = "U64K"
+
+
+def _no_boots(s):
+    s["boots"] = []
+
+
+@pytest.mark.parametrize("edit, match", [
+    (_one_t_boot_another_server, "server T: its boots ran 2 different servers"),
+    (_t_boots_on_b0, "not the product T server's"),
+    (_b0_boots_on_t, "not the product B0 server's"),
+    (_no_env_key, "CUDA_HOME"),
+    (_no_record, "no server argv / env"),
+    (_unknown_workload, "U64K"),
+    (_no_boots, "no boots"),
+])
+def test_server_groups_refuse_a_server_that_is_not_one_product_server(edit, match):
+    s = read_json(D_A1B / "session.json")
+    edit(s)
+    _, problems = pg.server_groups(s, PINS)
+    assert any(match in p for p in problems), problems
+
+
+def test_the_analysis_records_one_server_argv_per_server():
+    """043 §1.4's cross-check: analysis.platform.server_argv_sha256 is one value per server (B0 54614663..., T
+    56fcc296...)."""
+    analysis = read_json(D_A1B / "analysis.json")
+    assert pg.argv_sha256_problems(analysis) == []
+    assert set(analysis["platform"]["server_argv_sha256"].values()) == {
+        "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+        "56fcc2960d9f4186b83a343b2193ec8105ebcc0a45a8129c7fb4f55bd186a915"}
+    analysis["platform"]["server_argv_sha256"]["M8K-T"] = "00" * 32
+    assert "server T" in "; ".join(pg.argv_sha256_problems(analysis))
+    analysis["platform"]["server_argv_sha256"] = {"U64K": "00" * 32}
+    assert "U64K" in "; ".join(pg.argv_sha256_problems(analysis))
+
+
+def test_a_session_whose_t_boots_ran_two_servers_is_refused(tmp_path):
+    r = d_root(tmp_path)
+    path = r["out"] / "session.json"
+    s = read_json(path)
+    _one_t_boot_another_server(s)
+    path.write_text(json.dumps(s, indent=1) + "\n")
+    msg = refused_d(r["out"], root=r["root"])
+    assert "server T: its boots ran 2 different servers" in msg
+
+
+# ---------------------------------------------------- 030 8.7 on a synthetic analysis
+
+def test_unstable_nt_and_infeasible_map_to_unavailable_classes_and_a_verified_0(tmp_path, monkeypatch):
+    """030 8.7 for §9 on a synthetic analysis.json: the frozen report (its byte reproduction is tested on the real
+    sessions) is replaced by one that returns it. UNSTABLE / NT give unavailable classes without any number, INFEASIBLE
+    a verified 0; the profiles still pass the loader."""
+    r = d_root(tmp_path)
+    path = r["out"] / "analysis.json"
+    analysis = read_json(path)
+    ws = analysis["workloads"]
+    ws["U32K"]["c_prod"] = {"value": 0, "status": "INFEASIBLE"}
+    ws["U8K-T"]["c_prod"] = {"value": None, "status": "UNSTABLE"}
+    ws["M8K-T"]["c_prod"] = {"value": None, "status": "NT"}
+    path.write_text(json.dumps(analysis, indent=1) + "\n")
+    monkeypatch.setattr(pg.sr, "report", lambda *a, **k: copy.deepcopy(analysis))
+    docs = gen_d(r["out"], root=r["root"])
+    got = by_name(docs)
+    assert summary(got["uniform-32k"]) == ("verified", 32640, 128, 0, 0, "exact", "stage_d:U32K:c_prod:INFEASIBLE")
+    for name, w, status in (("uniform-8k-t", "U8K-T", "UNSTABLE"), ("mixed-8k-t", "M8K-T", "NT")):
+        c = got[name]
+        assert summary(c) == ("unavailable", c["max_prompt_tokens"], 128, None, None, None,
+                              f"stage_d:{w}:c_prod:{status}")
+        assert f"Stage D {w}: C_PROD is {status}" in c["unavailable_reason"]
+        assert "never a number" in c["unavailable_reason"]
+    for c in got.values():
+        assert (c["evidence"]["margins"], c["evidence"]["at_c_prod"], c["evidence"]["burst_max_ttft_ms"]) == (
+            None, None, None)
+    assert got["uniform-32k"]["evidence"]["c_prod"] == {"value": 0, "status": "INFEASIBLE"}
+    prof = cp.parse_profile(pg.render(docs["verified-formal-20261023-d-a1b-t"]), source="synthetic",
+                            allow_provisional=False, pins=PINS, frozen=cp.frozen_configs(r["root"]))
+    with pytest.raises(cp.ProfileError, match="unavailable"):
+        prof.serving_class("mixed-8k-t")
+
+
+def test_at_c_prod_and_the_first_wave_read_only_the_valid_runs(tmp_path, monkeypatch):
+    """An invalid run at C_PROD (synthetic, as above) changes neither at_c_prod nor burst_max_ttft_ms."""
+    r = d_root(tmp_path)
+    path = r["out"] / "analysis.json"
+    analysis = read_json(path)
+    run = analysis["workloads"]["U32K"]["points"]["2"]["runs"][0]
+    run.update(valid=False, attainment=0.5, preemptions=99.0, kv_cache_usage_peak=1.0, burst_max_ttft_ms=99999.0)
+    path.write_text(json.dumps(analysis, indent=1) + "\n")
+    monkeypatch.setattr(pg.sr, "report", lambda *a, **k: copy.deepcopy(analysis))
+    e = by_name(gen_d(r["out"], root=r["root"]))["uniform-32k"]["evidence"]
+    valid = [x for x in analysis["workloads"]["U32K"]["points"]["2"]["runs"] if x["valid"]]
+    assert len(valid) == 4 and e["at_c_prod"] == {"attainment_min": 1.0, "preemptions_max": 0.0,
+                                                  "kv_cache_usage_peak_max": max(x["kv_cache_usage_peak"] for x in valid)}
+    assert e["burst_max_ttft_ms"] == max(x["burst_max_ttft_ms"] for x in valid) < 99999.0
+    assert pg.at_c_prod(analysis["workloads"]["U32K"], 0) is None and pg.at_c_prod(analysis["workloads"]["U32K"], 7) \
+        is None
+
+
+# ---------------------------------------------------- refusals (exit 2, nothing written)
+
+@pytest.mark.parametrize("session, match", [
+    (D_B, "D-B and D-C produce no profile"), (D_C, "D-B and D-C produce no profile"), (D_A1, "aborted"),
+])
+def test_d_b_d_c_and_the_aborted_d_a1_give_no_profile(tmp_path, capsys, session, match):
+    """042: D-B (open) and D-C (verify) only go to service/README.md's scope; the aborted D-A1 has no confirm plan
+    and no analysis.json."""
+    out = tmp_path / "profiles"
+    out.mkdir()
+    assert main_d(session, out) == 2
+    err = capsys.readouterr().err
+    assert list(out.iterdir()) == [] and "refused" in err and match in err
+    if session == D_A1:
+        assert "confirm_plan" in err and "analysis.json" in err
+
+
+def test_the_plan_and_the_analysis_must_both_be_closed_loop(tmp_path):
+    """Each kind is checked on its own: a D-B copy whose analysis.json claims closed loop is still refused by its plan,
+    and a D-A copy whose analysis.json claims open loop by the analysis."""
+    assert pg.D_A_KIND == sdplan.KINDS["D-A1"] == sdplan.KINDS["D-A2"] == "closed"
+    assert {sdplan.KINDS["D-B"], sdplan.KINDS["D-C"]} == {"open", "verify"}
+    r = d_root(tmp_path / "b", D_B)
+    path = r["out"] / "analysis.json"
+    doc = read_json(path)
+    doc["provenance"]["kind"] = "closed"
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+    msg = refused_d(r["out"], root=r["root"])
+    assert "plan.json kind is 'open'" in msg and "analysis.json kind" not in msg
+    r = d_root(tmp_path / "a", D_A1B)
+    path = r["out"] / "analysis.json"
+    doc = read_json(path)
+    doc["provenance"]["kind"] = "open"
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+    msg = refused_d(r["out"], root=r["root"])
+    assert "analysis.json kind is 'open'" in msg and "plan.json kind" not in msg
+
+
+def test_an_analysis_with_two_server_argv_for_one_server_is_refused(tmp_path):
+    r = d_root(tmp_path)
+    path = r["out"] / "analysis.json"
+    doc = read_json(path)
+    doc["platform"]["server_argv_sha256"]["M8K-T"] = doc["platform"]["server_argv_sha256"]["U32K"]
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+    assert "2 server argv for server T" in refused_d(r["out"], root=r["root"])
+
+
+def test_the_stage_d_freeze_commit_must_be_the_commit_that_set_the_freeze():
+    parent = git(ROOT, "rev-parse", f"{D_FREEZE}^").strip()
+    assert "has no [freeze] stage_d = true: not the freeze commit" in refused_d(freeze_commit=parent)
+    assert "already frozen" in refused_d(freeze_commit=D_DEPLOYED)        # frozen in its parent too
+    assert "40 lowercase hex" in refused_d(freeze_commit=f"{D_FREEZE}^")
+    assert "DEPLOYED_COMMIT" in refused_d(git=RepoGit(ancestor=False))
+    first, unfrozen = "f1" * 20, "f2" * 20                                    # freeze, unfreeze, re-freeze
+    msg = refused_d(git=RepoGit(history=[D_FREEZE, unfrozen, first],
+                                files={(first, STAGE_D_TOML): FROZEN_D, (unfrozen, STAGE_D_TOML): UNFROZEN_D}))
+    assert f"already frozen at {first}" in msg and "re-freeze" in msg
+
+
+def test_a_stage_d_toml_changed_after_the_freeze_is_refused():
+    msg = refused_d(git=RepoGit(files={(D_FREEZE, STAGE_D_TOML): (ROOT / STAGE_D_TOML).read_bytes() + b"# x\n"}))
+    assert STAGE_D_TOML in msg and "changed after the freeze" in msg
+
+
+def test_the_stage_d_frozen_files_are_the_harness_and_the_stage_c_modules():
+    """043 §1.2: stage_d_plan.HARNESS_FILES (stage_d_datasets, never imported, is this checkout's file) and the Stage C
+    modules; each the file the generator runs."""
+    files = [pg.frozen_file(m) for m in pg.STAGE_D_MODULES]
+    assert [rel for rel, _ in files] == D_FROZEN_PATHS
+    assert all(local.resolve() == (ROOT / rel).resolve() for rel, local in files)
+    assert [m for m in pg.STAGE_D_MODULES if isinstance(m, str)] == ["benchmarks/stage_d_datasets.py"]
+    assert pg.frozen_file(pg.STAGE_C_MODULES[0]) == ("benchmarks/capacity_plan.py", Path(pg.cplan.__file__))
+
+
+@pytest.mark.parametrize("path", D_FROZEN_PATHS)
+def test_a_stage_d_frozen_file_changed_after_the_freeze_is_refused(path):
+    edited = (ROOT / path).read_bytes() + b"# edited after the freeze\n"
+    msg = refused_d(git=RepoGit(files={(D_DEPLOYED, path): edited}))
+    assert path in msg and "DEPLOYED_COMMIT" in msg and "frozen Stage D code" in msg
+    msg = refused_d(git=RepoGit(files={(D_FREEZE, path): edited}))
+    where = "in this checkout" if path == "benchmarks/stage_d_datasets.py" else "imported by this generator"
+    assert path in msg and where in msg
+    assert "no " + path in refused_d(git=RepoGit(files={(D_FREEZE, path): None}))
+
+
+def test_a_copied_root_generates_the_same_profiles(tmp_path, a1b):
+    """The private root of the on-disk refusals below is a faithful copy: unbroken, it gives the same bytes."""
+    r = d_root(tmp_path)
+    got = gen_d(r["out"], root=r["root"])
+    assert {k: pg.render(v) for k, v in got.items()} == {k: pg.render(v) for k, v in a1b.items()}
+
+
+def test_a_stage_d_analysis_json_with_other_bytes_or_content_is_refused(tmp_path):
+    """021 R3: stage_d_report.report, re-run read-only, reproduces analysis.json byte for byte."""
+    r = d_root(tmp_path)
+    path = r["out"] / "analysis.json"
+    doc = read_json(path)
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    assert "byte for byte" in refused_d(r["out"], root=r["root"])
+    doc["workloads"]["U32K"]["c_prod"]["value"] = 3
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+    msg = refused_d(r["out"], root=r["root"])
+    assert "byte for byte" in msg and "workloads" in msg
+    path.unlink()
+    assert "stage_d_report" in refused_d(r["out"], root=r["root"])
+
+
+def test_a_stage_d_session_elsewhere_or_with_another_slo_is_refused(tmp_path):
+    r = d_root(tmp_path)
+    other = r["out"].parent / "formal-20261023-d-a1b-copy"
+    shutil.copytree(r["out"], other)
+    assert "results/stage_d/<session_id>" in refused_d(other, root=r["root"])
+    configs = pg.load_stage_d_configs(r["root"])
+    s3 = copy.deepcopy(configs[0])
+    s3["slo"]["tpot_p95_ms"] = 200
+    msg = refused_d(r["out"], root=r["root"], stage_d_configs=(s3, *configs[1:]))
+    assert "SLO" in msg and "stage_d.toml" in msg
+
+
+def test_a_capacity_toml_with_another_slo_than_stage_d_toml_is_refused():
+    """037 §3: Stage D runs Stage C's S2, so capacity.toml's [slo] must be stage_d.toml's. Only capacity.toml's SLO is
+    changed here: the analysis and stage_d_report still agree with stage_d.toml, so this check alone refuses."""
+    cfg, pins, cap_sha, pins_sha = pg.load_configs(ROOT)
+    other = copy.deepcopy(cfg)
+    other["slo"]["tpot_p95_ms"] = 200
+    with pytest.raises(pg.GenerationError) as exc:
+        gen_d(configs=(other, pins, cap_sha, pins_sha))
+    (problem,) = exc.value.problems
+    assert "037 §3" in problem and "capacity.toml's" in problem and "stage_d.toml's SLO" in problem
+
+
+@pytest.mark.parametrize("git, match", [
+    (RepoGit(dirty=" M service/capserve/profile_gen.py\n"), "uncommitted"),
+    (RepoGit(ancestor=False), "DEPLOYED_COMMIT"),
+])
+def test_main_refuses_a_stage_d_session_and_writes_nothing(tmp_path, capsys, git, match):
+    out = tmp_path / "profiles"
+    out.mkdir()
+    assert main_d(D_A1B, out, git=git) == 2
+    assert list(out.iterdir()) == [] and match in capsys.readouterr().err
+
+
+def test_main_writes_every_profile_of_a_d_a_session(tmp_path, capsys, a1b):
+    out = tmp_path / "profiles"
+    out.mkdir()
+    assert main_d(D_A1B, out) == 0
+    assert sorted(p.name for p in out.iterdir()) == [f"{pid}.json" for pid in a1b]
+    for pid, doc in gen_d(generator_commit=CLEAN_HEAD).items():
+        assert (out / f"{pid}.json").read_bytes() == pg.render(doc)
+    printed = json.loads(capsys.readouterr().out)
+    assert [p["profile_id"] for p in printed["profiles"]] == list(a1b)
+    assert printed["profiles"][1]["out"] == str(out / "verified-formal-20261023-d-a1b-t.json")
+    assert printed["profiles"][1]["classes"] == {"uniform-8k-t": ["verified", 4, "exact"],
+                                                 "mixed-8k-t": ["verified", 4, "exact"]}
+
+
+def test_main_writes_all_or_nothing_and_never_overwrites(tmp_path, capsys):
+    out = tmp_path / "profiles"
+    out.mkdir()
+    keep = out / "verified-formal-20261023-d-a1b-t.json"
+    keep.write_text("keep")
+    assert main_d(D_A1B, out) == 2
+    assert [p.name for p in out.iterdir()] == [keep.name] and keep.read_text() == "keep"
+    assert "already exists" in capsys.readouterr().err
+
+
+def test_main_writes_nothing_when_one_generated_profile_fails_the_loader(tmp_path, capsys, monkeypatch):
+    """043 §1.1 / §1.6: every generated document passes the loader before anything is written. A generator defect in
+    the -t document (synthetic: T's threshold 256, rehashed) leaves the valid -b0 one unwritten too."""
+    build = pg.build_stage_d_profiles
+
+    def defective(*args, **kwargs):
+        docs = build(*args, **kwargs)
+        doc = docs["verified-formal-20261023-d-a1b-t"]
+        doc["server"]["long_prefill_token_threshold"] = 256
+        doc["content_sha256"] = cp.content_sha256(doc)
+        return docs
+
+    monkeypatch.setattr(pg, "build_stage_d_profiles", defective)
+    out = tmp_path / "profiles"
+    out.mkdir()
+    assert main_d(D_A1B, out) == 2
+    err = capsys.readouterr().err
+    assert list(out.iterdir()) == []
+    assert "fails the loader" in err and "verified-formal-20261023-d-a1b-t" in err and "256" in err
+
+
+def test_main_never_writes_stage_d_profiles_under_results_or_into_no_directory(tmp_path, capsys):
+    r = d_root(tmp_path)
+    out = r["root"] / "results" / "profiles"
+    out.mkdir()
+    assert main_d(r["out"], out, root=r["root"]) == 2
+    assert list(out.iterdir()) == [] and "results/" in capsys.readouterr().err
+    assert main_d(D_A1B, tmp_path / "missing") == 2
+    assert not (tmp_path / "missing").exists() and "not an existing directory" in capsys.readouterr().err
+
+
+def test_write_all_removes_what_it_wrote_when_a_write_fails(tmp_path):
+    a, keep = tmp_path / "a.json", tmp_path / "keep.json"
+    with pytest.raises(pg.GenerationError, match="all or none"):
+        pg.write_all({a: b"a", tmp_path / "missing" / "b.json": b"b"})
+    assert not a.exists()
+    keep.write_text("keep")                                     # created after the check (a race): never overwritten
+    with pytest.raises(pg.GenerationError, match="all or none"):
+        pg.write_all({a: b"a", keep: b"other"})
+    assert not a.exists() and keep.read_text() == "keep"
+    pg.write_all({a: b"a"})
+    assert a.read_bytes() == b"a"
+
+
+def test_out_and_out_dir_follow_the_sessions_path(sess_a, tmp_path, monkeypatch, capsys):
+    """043 §1.1: results/stage_d/ takes --out-dir, results/capacity/ --out; exactly one of the two, else exit 2."""
+    out, d = tmp_path / "p.json", tmp_path / "dir"
+    d.mkdir()
+    assert main_d(D_A1B, out, option="--out") == 2
+    assert not out.exists() and "--out-dir" in capsys.readouterr().err
+    monkeypatch.setattr(pg, "load_configs", lambda root: sess_a["configs"])
+    assert pg.main(["--session", str(sess_a["out"]), "--freeze-commit", FREEZE, "--out-dir", str(d)],
+                   root=sess_a["repo"], git=FakeGit()) == 2
+    assert list(d.iterdir()) == [] and "--out" in capsys.readouterr().err
+    for argv in (["--out", str(out), "--out-dir", str(d)], []):
+        with pytest.raises(SystemExit) as exc:
+            pg.main(["--session", str(D_A1B), "--freeze-commit", D_FREEZE, *argv], root=ROOT, git=RepoGit())
+        assert exc.value.code == 2
+    assert not out.exists() and list(d.iterdir()) == []
+
+
+@pytest.mark.parametrize("text", [None, "", "[freeze]\nstage_d = false\n", "[freeze]\nstage_d = 'true'\n"])
+def test_main_refuses_a_stage_d_session_until_stage_d_is_frozen(tmp_path, capsys, text):
+    root = cli_root(tmp_path, (ROOT / CAPACITY).read_text())
+    if text is not None:
+        (root / STAGE_D_TOML).write_text(text)
+    out = tmp_path / "out"
+    out.mkdir()
+    assert main_d(root / "results" / "stage_d" / D_A1B.name, out, root=root) == 2
+    assert list(out.iterdir()) == [] and "[freeze] stage_d" in capsys.readouterr().err
+    (root / STAGE_D_TOML).write_text("[freeze\n")
+    assert main_d(root / "results" / "stage_d" / D_A1B.name, out, root=root) == 2
+    assert "cannot read" in capsys.readouterr().err
+
+
+def test_load_stage_d_configs_reads_stage_d_toml_and_pins(tmp_path):
+    """043 §1.2: (stage_d.toml, pins, their sha256); Stage C's load_configs four-tuple is unchanged."""
+    raw_d, raw_p = (ROOT / STAGE_D_TOML).read_bytes(), (ROOT / "configs" / "pins.toml").read_bytes()
+    assert pg.load_stage_d_configs(ROOT) == (tomllib.loads(raw_d.decode()), tomllib.loads(raw_p.decode()), STAGE_D_SHA,
+                                             sha(raw_p))
+    assert pg.load_configs(ROOT)[2:] == (sha((ROOT / CAPACITY).read_bytes()), sha(raw_p))
+    assert pg.load_stage_d_configs(cli_root(tmp_path, None)) is None
+
+
+def test_freeze_commit_problems_for_stage_d_with_a_real_repository(tmp_path):
+    """The parameterized freeze check (043 §1.2) on stage_d.toml, with the Stage C defaults unchanged."""
+    root = tmp_path / "r"
+    root.mkdir()
+    git(root, "init", "-q")
+    files = {rel: (ROOT / rel).read_bytes() for rel in D_FROZEN_PATHS}
+    before = commit_files(root, {STAGE_D_TOML: UNFROZEN_D, CAPACITY: FROZEN_TOML, **files})
+    freeze = commit_files(root, {STAGE_D_TOML: FROZEN_D})
+    deployed = commit_files(root, {"x.txt": b"after the freeze\n"})
+    kw = {"git": pg.git_runner(root), "freeze_file": STAGE_D_TOML, "freeze_key": "stage_d",
+          "modules": pg.STAGE_D_MODULES}
+    assert pg.freeze_commit_problems(freeze, deployed_commit=deployed, capacity_sha256=sha(FROZEN_D), **kw) == []
+    assert "[freeze] stage_d = true: not the freeze commit" in pg.freeze_commit_problems(
+        before, deployed_commit=deployed, capacity_sha256=sha(FROZEN_D), **kw)[0]
+    assert "already frozen" in pg.freeze_commit_problems(deployed, deployed_commit=deployed,
+                                                         capacity_sha256=sha(FROZEN_D), **kw)[0]
+    assert "DEPLOYED_COMMIT" in pg.freeze_commit_problems(freeze, deployed_commit=before,
+                                                          capacity_sha256=sha(FROZEN_D), **kw)[0]
+    # capacity.toml, frozen since `before`, is what the Stage C defaults still read
+    assert "already frozen" not in "; ".join(pg.freeze_commit_problems(before, deployed_commit=deployed,
+                                                                       capacity_sha256=CAP_SHA, git=kw["git"]))
+    commit_files(root, {STAGE_D_TOML: UNFROZEN_D})
+    refrozen = commit_files(root, {STAGE_D_TOML: FROZEN_D + b"# again\n"})
+    msg = "; ".join(pg.freeze_commit_problems(refrozen, deployed_commit=refrozen,
+                                              capacity_sha256=sha(FROZEN_D + b"# again\n"), **kw))
+    assert f"already frozen at {freeze}" in msg and "re-freeze" in msg
+
+
+def test_the_regeneration_dispatches_on_the_prereg_section(a1b):
+    """043 step 5: a §9 profile is regenerated from its results/stage_d session and picked by its profile_id."""
+    for doc in a1b.values():
+        committed = copy.deepcopy(doc)
+        committed["provenance"]["generator_commit"] = "5e" * 20
+        committed["content_sha256"] = cp.content_sha256(committed)
+        assert _regenerable(regenerate(committed)) == _regenerable(committed)
+    with pytest.raises(pg.GenerationError, match="not 'verified-formal-20261023-d-a1b-x'"):
+        regenerate({**doc, "profile_id": "verified-formal-20261023-d-a1b-x"})
