@@ -574,6 +574,86 @@ def test_deployed_gateway_path_sha256_with_a_real_repository(tmp_path):
     assert pg.deployed_gateway_path_sha256("0" * 40, git=git)[0] is None
 
 
+@pytest.mark.parametrize("data", [b"def (:\n", b"\xff\xfe not UTF-8\n", b"x = 1\0\n"])
+def test_an_unparsable_request_path_file_at_the_deployed_commit_is_refused_not_a_crash(sessions, tmp_path, monkeypatch,
+                                                                                      capsys, data):
+    """044 實作補記十第 3 項: a closure file ast cannot parse (bad syntax, not UTF-8, a NUL byte) is a refusal (exit 2,
+    nothing written), never a traceback."""
+    files = {(DEPLOYED, "service/capserve/proxy.py"): data}
+    sha256, got = pg.deployed_gateway_path_sha256(DEPLOYED, git=VGit(files=files))
+    assert sha256 is None and len(got) == 1 and "cannot hash the request path at DEPLOYED_COMMIT" in got[0]
+    assert "cannot hash the request path at DEPLOYED_COMMIT" in refused(sessions("adm"), git=VGit(files=files))
+    out = tmp_path / "profiles"
+    out.mkdir()
+    assert cli(sessions("adm"), monkeypatch, out, git=VGit(files=files)) == 2
+    assert list(out.iterdir()) == [] and "cannot hash the request path" in capsys.readouterr().err
+
+
+def test_the_deployed_request_path_is_hashed_by_the_frozen_research_copy(sessions, monkeypatch):
+    """044 實作補記十第 4 項: capserve (gateway_path.py too) may change after V-CLS; DEPLOYED_COMMIT's closure is hashed
+    by stage_v_plan's frozen copy of the algorithm, so a later change of the product module never refuses a valid
+    session (both agree on this checkout: test_the_generator_stays_outside_the_request_path)."""
+    monkeypatch.setattr(gpath, "gateway_path_sha256", lambda root=gpath.ROOT: "0" * 64)
+    assert one(sessions("adm"))["profile_id"] == "verified-formal-t-v-adm-b0"
+
+
+def stage_v_files() -> dict:
+    """What a Stage V freeze commit holds besides stage_v.toml, this checkout's bytes: the frozen modules, the tracked
+    service/capserve files and the base profiles."""
+    files = {pg.frozen_file(m)[0]: pg.frozen_file(m)[1].read_bytes() for m in pg.STAGE_V_MODULES}
+    return {**files, **{rel: (ROOT / rel).read_bytes() for rel in (*capserve_files(), pg.COPY_BASE, pg.V1_BASE)}}
+
+
+def real_git(root: Path, deployed: str):
+    """git of a real repository, the synthetic sessions' DEPLOYED_COMMIT read as the commit deployed."""
+    git = pg.git_runner(root)
+    return lambda *args: git(*(a.replace(DEPLOYED, deployed) for a in args))
+
+
+FIRST_FREEZE_V = b"[freeze]\nstage_v = true\n# the first freeze: its mini, its request path\n"
+
+
+@pytest.mark.parametrize("path", ["unfreeze and re-freeze", "frozen throughout"])
+def test_a_session_under_the_stop_rules_new_freeze_is_refused_until_its_decision_amends_the_rule(sessions, tmp_path,
+                                                                                                 path):
+    """044 實作補記十第 2 項 (option B, fail closed): after a gateway-caused invalid run the stop rule fixes capserve and
+    makes a new freeze and mini; the generator accepts only the first freeze, so a session under the new one is
+    refused with either freeze commit, the one refusal pointing at the note (that freeze's decision must amend this
+    rule first). Real git."""
+    root = tmp_path / "r"
+    root.mkdir()
+    tpg.git(root, "init", "-q")
+    proxy, files = "service/capserve/proxy.py", stage_v_files()
+    tpg.commit_files(root, {**files, STAGE_V_TOML: UNFROZEN_V, proxy: files[proxy] + b"# the defect\n"})
+    first = tpg.commit_files(root, {STAGE_V_TOML: FIRST_FREEZE_V})
+    fix = {proxy: files[proxy], STAGE_V_TOML: UNFROZEN_V} if path.startswith("unfreeze") else {proxy: files[proxy]}
+    tpg.commit_files(root, fix)
+    new = tpg.commit_files(root, {STAGE_V_TOML: FROZEN_V})           # the new mini and request path: the session's
+    git = real_git(root, tpg.commit_files(root, {"x.txt": b"deployed\n"}))
+    for commit, why in ((new, "already frozen"), (first, "changed after the freeze")):
+        (msg,) = problems(sessions("adm"), freeze_commit=commit, git=git)
+        assert why in msg and "044 實作補記十" in msg
+
+
+@pytest.mark.parametrize("freeze", [{"gateway_path_sha256": "1" * 64}, {"mini": "smoke-v-new"},
+                                    {"gateway_path_sha256": "1" * 64, "mini": "smoke-v-new"}])
+def test_after_a_new_freeze_the_old_sessions_profile_no_longer_loads(sessions, freeze):
+    """044 停止規則 「舊結果只對舊的 sha 有效，依服務規則不能上線」 holds mechanically for every class, V1's too (實作補記十
+    第 2 項): a new freeze changes configs/stage_v.toml ([freeze] mini, gateway_path_sha256), and the §12 loader
+    compares the profile's stage_v_sha256 and gateway_path_sha256 with the checkout's."""
+    s = sessions("cls")
+    doc = one(s)
+    cap, _, cap_sha, _ = s["configs"]
+    c, d, p, _, sd_sha, pins_sha = s["stage_v_configs"]
+    c = copy.deepcopy(c)
+    c["freeze"].update(freeze)
+    new = cp.FrozenConfigs(cap, cap_sha, pins_sha, d, sd_sha, c, sha(FROZEN_V + b"# the new freeze\n"))
+    with pytest.raises(cp.ProfileError) as exc:
+        cp.parse_profile(pg.render(doc), source=doc["profile_id"], allow_provisional=False, pins=p, frozen=new)
+    assert "provenance.stage_v_sha256" in str(exc.value)
+    assert ("provenance.gateway_path_sha256" in str(exc.value)) is ("gateway_path_sha256" in freeze)
+
+
 @pytest.mark.parametrize("rel", [pg.COPY_BASE, pg.V1_BASE])
 def test_a_base_profile_must_be_its_bytes_at_the_freeze_commit(sessions, tmp_path, rel):
     s = sessions("cls")
@@ -829,6 +909,7 @@ def test_main_writes_the_sessions_profile_and_prints_a_summary(sessions, tmp_pat
     s = sessions("adm")
     out = tmp_path / "profiles"
     out.mkdir()
+    capsys.readouterr()                                                     # the session's own report output
     assert cli(s, monkeypatch, out) == 0
     doc = one(s, generator_commit=CLEAN_HEAD)
     assert [p.name for p in out.iterdir()] == ["verified-formal-t-v-adm-b0.json"]
@@ -838,8 +919,31 @@ def test_main_writes_the_sessions_profile_and_prints_a_summary(sessions, tmp_pat
     printed = json.loads(capsys.readouterr().out)
     assert printed["holds"] == ["PACE-2K", "PACE-8K", "W1"]
     assert [p["profile_id"] for p in printed["profiles"]] == ["verified-formal-t-v-adm-b0"]
-    assert printed["profiles"][0]["classes"] == {"uniform-2k": ["verified", 32, "exact"],
-                                                 "uniform-8k": ["verified", 8, "exact"]}
+    assert printed["profiles"][0]["admission"] == "weighted-v1"
+    assert printed["profiles"][0]["classes"] == {
+        "uniform-2k": {"status": "verified", "max_concurrency": 32, "bound": "exact",
+                       "pacing": {"burst_tokens": 9600, "rate_tokens_per_s": 5920}, "unit": "PACE-2K"},
+        "uniform-8k": {"status": "verified", "max_concurrency": 8, "bound": "exact",
+                       "pacing": {"burst_tokens": 32256, "rate_tokens_per_s": 5800}, "unit": "PACE-8K"}}
+
+
+@pytest.mark.parametrize("key, admission, classes", [
+    ("adm-w1", "weighted-v1", {"uniform-2k": (32, "exact", None, None), "uniform-8k": (8, "exact", None, None)}),
+    ("cls", None, {"uniform-2k-o1-512": (32, "validated", None, "V1-2K"),
+                   "uniform-8k-o1-512": (8, "validated", None, "V1-8K")}),
+])
+def test_the_summary_says_what_a_section_12_profile_adds(sessions, tmp_path, monkeypatch, capsys, key, admission,
+                                                         classes):
+    """044 實作補記十第 5 項: per profile its admission policy (or null), per class its pacing (or null) and unit (its
+    validation's, or null), so a W1-only profile is not read as a plain copy of c1b."""
+    s, out = sessions(key), tmp_path / "profiles"
+    out.mkdir()
+    capsys.readouterr()                                                     # the session's own report output
+    assert cli(s, monkeypatch, out) == 0
+    (profile,) = json.loads(capsys.readouterr().out)["profiles"]
+    assert profile["admission"] == admission
+    assert profile["classes"] == {name: {"status": "verified", "max_concurrency": c, "bound": bound, "pacing": pacing,
+                                         "unit": unit} for name, (c, bound, pacing, unit) in classes.items()}
 
 
 @pytest.mark.parametrize("key, holds", [("adm-none", []), ("cls-vg", ["VG-32K", "VG-M8K-T"])])
@@ -847,13 +951,15 @@ def test_main_writes_nothing_and_says_so_when_no_unit_writes_a_profile(sessions,
                                                                        holds):
     """Decision (044 實作補記九): a reproduced session whose units write nothing is a result, not a refusal: exit 0,
     nothing written, and the summary says so."""
-    out = tmp_path / "profiles"
+    s, out = sessions(key), tmp_path / "profiles"
     out.mkdir()
-    assert cli(sessions(key), monkeypatch, out) == 0
+    capsys.readouterr()                                                     # the session's own report output
+    assert cli(s, monkeypatch, out) == 0
     assert list(out.iterdir()) == []
-    printed = json.loads(capsys.readouterr().out)
+    text = capsys.readouterr().out
+    printed = json.loads(text)
     assert printed["profiles"] == [] and printed["holds"] == holds
-    assert "no profile" in printed["written"] and "044" in printed["written"]
+    assert "no profile" in printed["written"] and "044 產品對應" in text      # printed as is, not \u escapes
 
 
 
@@ -972,6 +1078,10 @@ def test_freeze_commit_problems_for_stage_v_with_a_real_repository(tmp_path):
     edited = tpg.commit_files(root, {"benchmarks/stage_v_report.py": files["benchmarks/stage_v_report.py"] + b"#\n"})
     msg = "; ".join(pg.freeze_commit_problems(freeze, deployed_commit=edited, capacity_sha256=SV_SHA, **kw))
     assert "benchmarks/stage_v_report.py at the session's DEPLOYED_COMMIT" in msg and "044 凍結" in msg
+
+
+def test_the_help_names_every_stage():
+    assert pg._parser().description == "verified capacity profiles from a frozen Stage C, D or V analysis (M2; 044 §12)"
 
 
 def test_module_entry_point(tmp_path):

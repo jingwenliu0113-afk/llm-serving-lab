@@ -81,9 +81,11 @@ base_profiles, besides §9's). It refuses (exit 2) and writes nothing unless:
 - --freeze-commit is the commit that first set [freeze] stage_v = true (the rules above, on stage_v.toml), an ancestor
   of DEPLOYED_COMMIT, its stage_v.toml the one the session recorded and this generator reads, and every
   stage_v_plan.HARNESS_FILES file, Stage D frozen file and Stage C module there is the one at DEPLOYED_COMMIT and the
-  one this generator runs;
-- the request path at DEPLOYED_COMMIT (its tracked service/capserve files, hashed by capserve.gateway_path:
-  deployed_gateway_path_sha256) is stage_v.toml's frozen gateway_path_sha256;
+  one this generator runs (a session under the stop rule's new freeze is therefore refused until that freeze's
+  decision amends this rule: 044 實作補記十第 2 項);
+- the request path at DEPLOYED_COMMIT (its tracked service/capserve files, hashed by stage_v_plan's frozen copy of
+  capserve.gateway_path's algorithm: deployed_gateway_path_sha256; a file it cannot parse refuses too) is
+  stage_v.toml's frozen gateway_path_sha256;
 - each base profile (COPY_BASE, V1_BASE) loads as a verified profile of this checkout and is byte for byte its file at
   the freeze commit;
 - the session is results/stage_v/<session_id> with a formal- id (never a mini), stage_v_report.refusal_problems is
@@ -94,7 +96,7 @@ base_profiles, besides §9's). It refuses (exit 2) and writes nothing unless:
   freeze (the same recorded stage_v_sha256, harness_sha256 and gateway_path_sha256) is valid, i.e. accepted by
   stage_v_report (044 停止規則: 不重跑有效的 session 來換 PASS; rerun_problems). A formal-* directory of its plan, or of
   a plan that cannot be read, without a readable session.json and started_at, or such an earlier session the report
-  cannot load, refuses too (fail closed). The 2-attempt cap stays with the operator (044 實作補記四第 4 項);
+  cannot load, refuses too (fail closed). The 2-attempt cap stays with the operator (044 實作補記四第 4 項, 實作補記十);
 - the generator commit is HEAD of a clean tree, --out-dir an existing directory outside results/, the target does not
   exist, and the document passes the loader before anything is written.
 """
@@ -129,7 +131,6 @@ import stage_v_analysis as sva
 import stage_v_datasets as svd
 import stage_v_plan as svplan
 import stage_v_report as svr
-from capserve import gateway_path as gpath
 from capserve import profile as cp
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -160,10 +161,15 @@ COPY_BASE = "service/profiles/verified-formal-20261017-c1b.json"      # PACE-2K 
 V1_BASE = "service/profiles/verified-formal-20261023-d-a2-b0.json"    # V1-2K / V1-8K: D-A2's O512 classes (B0)
 NO_FILE_UNITS = ("VG-32K", "VG-M8K-T")    # 044: candidates for the pinned profile only, never a new file
 STUDY_COPIES = {"v-uniform-2k": "U2K", "v-uniform-8k": "U8K"}   # the study classes W1 measured: c1b's, by workload
-# what each freeze guards, in the refusals (the Stage C wording unchanged)
-_FREEZES = {"capacity": {"stage": "Stage C", "rule": "030 凍結", "data": "C1 data", "change": "030 8.9"},
-            "stage_d": {"stage": "Stage D", "rule": "039 凍結", "data": "Stage D data", "change": "039 凍結, 030 8.9"},
-            "stage_v": {"stage": "Stage V", "rule": "044 凍結", "data": "Stage V data", "change": "044 凍結, 030 8.9"}}
+# what each freeze guards, in the refusals (the Stage C wording unchanged); refreeze: what a refusal of a later freeze
+# adds (Stage V: the stop rule's new freeze, 044 實作補記十第 2 項)
+_FREEZES = {"capacity": {"stage": "Stage C", "rule": "030 凍結", "data": "C1 data", "change": "030 8.9",
+                         "refreeze": ""},
+            "stage_d": {"stage": "Stage D", "rule": "039 凍結", "data": "Stage D data", "change": "039 凍結, 030 8.9",
+                        "refreeze": ""},
+            "stage_v": {"stage": "Stage V", "rule": "044 凍結", "data": "Stage V data", "change": "044 凍結, 030 8.9",
+                        "refreeze": "; 044 實作補記十第 2 項: a session under the stop rule's new freeze gives a profile "
+                                    "only once that freeze's decision amends this first-freeze rule"}}
 _HEX40 = re.compile(r"[0-9a-f]{40}")
 NOT_FROZEN = ("[freeze] capacity is not true in {path} (a missing file or key is false). PREREGISTRATION §8 is not "
               "frozen, so no verified capacity exists yet (027 §4, 029); develop against a provisional profile with "
@@ -191,7 +197,8 @@ class GenerationError(RuntimeError):
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m capserve.profile_gen",
-                                     description="verified capacity profiles from a frozen Stage C or D analysis (M2)")
+                                     description="verified capacity profiles from a frozen Stage C, D or V "
+                                                 "analysis (M2; 044 §12)")
     session = parser.add_mutually_exclusive_group(required=True)
     session.add_argument("--session", help="results/capacity/<formal session> or results/stage_d/<formal D-A session> "
                          "(with its analysis.json)")
@@ -337,7 +344,7 @@ def freeze_commit_problems(commit, *, deployed_commit, capacity_sha256: str, git
         problems.append(f"{freeze_file} at {commit} has no [freeze] {freeze_key} = true: not the freeze commit")
     elif _frozen_at(git, f"{commit}^", **where):
         problems.append(f"{freeze_file} was already frozen at {commit}^: {commit} is not the commit that set "
-                        f"[freeze] {freeze_key} = true")
+                        f"[freeze] {freeze_key} = true{rule['refreeze']}")
     else:
         problems += _earlier_freeze_problems(commit, git, **where)
     if not isinstance(deployed_commit, str) or git("merge-base", "--is-ancestor", commit, deployed_commit) is None:
@@ -360,9 +367,10 @@ def _earlier_freeze_problems(commit: str, git: Git, *, freeze_file: str = FREEZE
     earlier = [c for c in history.decode().split()
                if c != commit and _frozen_at(git, c, freeze_file=freeze_file, freeze_key=freeze_key)]
     if earlier:
+        rule = _FREEZES[freeze_key]
         return [f"{freeze_file} was already frozen at {earlier[-1]}, before {commit}: an unfreeze and re-freeze is "
-                f"not the preregistered freeze ({_FREEZES[freeze_key]['change']}: a rule change after the freeze needs "
-                "its own decision)"]
+                f"not the preregistered freeze ({rule['change']}: a rule change after the freeze needs its own "
+                f"decision{rule['refreeze']})"]
     return []
 
 
@@ -373,7 +381,8 @@ def _frozen_bytes_problems(commit: str, *, deployed_commit, capacity_sha256: str
     toml = git("show", f"{commit}:{freeze_file}")
     if toml is not None and _sha256(toml) != capacity_sha256:
         problems.append(f"{freeze_file} at the freeze commit {commit} (sha256 {_sha256(toml)}) is not the one the "
-                        f"session ran and this generator reads ({capacity_sha256}): it changed after the freeze")
+                        f"session ran and this generator reads ({capacity_sha256}): it changed after the freeze"
+                        f"{rule['refreeze']}")
     for module in modules:
         path, local = frozen_file(module)
         frozen_bytes = git("show", f"{commit}:{path}")
@@ -417,9 +426,11 @@ def generator_commit(git: Git) -> tuple:
 
 def deployed_gateway_path_sha256(commit, *, git: Git) -> tuple:
     """(gateway_path_sha256, problems) of the request path at commit (044 產品對應: the session's DEPLOYED_COMMIT): its
-    tracked service/capserve files, written to a scratch directory and hashed by capserve.gateway_path itself (the AST
-    closure of __main__, the algorithm /readyz discloses and stage_v_plan copies), never this checkout's files."""
-    package = "/".join(gpath.PACKAGE_DIR)
+    tracked service/capserve files, written to a scratch directory and hashed by stage_v_plan's frozen research copy of
+    the algorithm (the AST closure of __main__, as capserve.gateway_path, which /readyz discloses and may change after
+    V-CLS: 044 實作補記十第 4 項), never this checkout's files. A file the AST cannot parse is a problem, not a crash
+    (實作補記十第 3 項)."""
+    package = "/".join(svplan.PACKAGE_DIR)
     listing = git("ls-tree", "-r", "--name-only", commit, "--", package) if isinstance(commit, str) else None
     names = [] if listing is None else [n for n in listing.decode().splitlines() if n]
     if not names:
@@ -433,7 +444,10 @@ def deployed_gateway_path_sha256(commit, *, git: Git) -> tuple:
             path = Path(tmp) / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        return gpath.gateway_path_sha256(tmp), []
+        try:
+            return svplan.gateway_path_sha256(tmp), []
+        except (SyntaxError, ValueError, OSError, UnicodeDecodeError) as exc:
+            return None, [f"cannot hash the request path at DEPLOYED_COMMIT {commit}: {type(exc).__name__}: {exc}"]
 
 
 def base_profiles(root, freeze_commit, *, git: Git, pins: dict, frozen_cfgs: cp.FrozenConfigs) -> tuple:
@@ -1267,6 +1281,16 @@ def _summary(doc: dict, out: Path) -> dict:
             "classes": {c["name"]: [c["status"], c["max_concurrency"], c["bound"]] for c in doc["classes"]}}
 
 
+def _stage_v_summary(doc: dict, out: Path) -> dict:
+    """What a §12 profile adds (044 實作補記十第 5 項): its admission policy (or None), and per class its pacing
+    parameters (or None) and its validation's unit (or None: a plain admission member)."""
+    pacing = ("burst_tokens", "rate_tokens_per_s")
+    return {"profile_id": doc["profile_id"], "out": str(out), "admission": (doc["admission"] or {}).get("policy"),
+            "classes": {c["name"]: {"status": c["status"], "max_concurrency": c["max_concurrency"], "bound": c["bound"],
+                                    "pacing": {k: c["pacing"][k] for k in pacing} if c.get("pacing") else None,
+                                    "unit": (c.get("validation") or {}).get("unit")} for c in doc["classes"]}}
+
+
 def main(argv: list | None = None, *, root=ROOT, git: Git | None = None) -> int:
     args = _parser().parse_args(argv)
     root = Path(root)
@@ -1340,10 +1364,10 @@ def _main_stage_v(args, *, root: Path, git: Git) -> int:
     if problems:
         raise GenerationError(problems)
     write_all({out: render(doc) for out, doc in targets.items()})
-    summary = {"holds": holds, "profiles": [_summary(doc, out) for out, doc in targets.items()]}
+    summary = {"holds": holds, "profiles": [_stage_v_summary(doc, out) for out, doc in targets.items()]}
     if not targets:
         summary["written"] = NO_PROFILE
-    print(json.dumps(summary))
+    print(json.dumps(summary, ensure_ascii=False))
     return 0
 
 
