@@ -115,9 +115,9 @@ WARM_RELEASE = -20.0                    # the C warmups' release, seconds from t
 
 def warmups_of(x, *, release=WARM_RELEASE):
     """[[t_sent_s, t_released_s, units], ...] of a run's id-less completion records as log_text writes them and the
-    runner records them (seconds from the run's earliest main arrival): the ready check, then C warmups of row 0
-    (2K: one unit)."""
-    return [[-40.0, -39.0, 1]] + [[round(-30.0 + k * 0.01, 6), release, 1] for k in range(x["C"])]
+    runner records them (seconds from the run's earliest main arrival): exactly the C warmups of row 0 (2K: one
+    unit); the frozen client sends no ready check (--ready-check-timeout-sec 0: 044 實作補記七)."""
+    return [[round(-30.0 + k * 0.01, 6), release, 1] for k in range(x["C"])]
 
 
 def row_for(p, point, block, *, boot=0, valid=True):
@@ -313,10 +313,11 @@ def probe_entry(t_arrival_s, **kw):
 def log_text(p, point, block, reqs, *, warmups=None, change=None, extra=(), t0=5000.0, probe=None,
              warm_release=WARM_RELEASE):
     """The gateway log of one run: uvicorn lines, a /readyz poll, the bench's POST /tokenize probe (probe None: exactly
-    when its client is the random dataset's, as vLLM 0.30's; False: none; True or a dict of changes: one), the ready
-    check and C warmups without an id, GET /metrics around the main run, one completion line per derived request (its
-    gateway fields) and a print to stderr; change(entries) edits the main entries. The id-less records' intervals are
-    warmups_of's (warm_release: when the C warmups leave vLLM); a weighted-v1 point's are row 0's class, 2K."""
+    when its client is the random dataset's, as vLLM 0.30's; False: none; True or a dict of changes: one), the C
+    warmups without an id (warmups: how many; no ready check, as the frozen client's --ready-check-timeout-sec 0: 044
+    實作補記七), GET /metrics around the main run, one completion line per derived request (its gateway fields) and a
+    print to stderr; change(entries) edits the main entries. The id-less records' intervals are warmups_of's
+    (warm_release: when the C warmups leave vLLM); a weighted-v1 point's are row 0's class, 2K."""
     x = p["points"][point]
     tag = sv.run_tag("V", point, x["C"], block=block)
     if probe is None:
@@ -327,8 +328,7 @@ def log_text(p, point, block, reqs, *, warmups=None, change=None, extra=(), t0=5
                               t_sent_s=None, t_released_s=None, queue_wait_s=None, ttft_s=None, upstream_ttft_s=None))]
     if probe is not False:
         lines.append(json.dumps(probe_entry(**{"t_arrival_s": t0 - 45, **(probe if isinstance(probe, dict) else {})})))
-    lines.append(json.dumps(entry(t_arrival_s=t0 - 40, t_sent_s=t0 - 40, t_released_s=t0 - 39, **pol)))  # ready
-    for k in range(x["C"] if warmups is None else warmups):                                              # check
+    for k in range(x["C"] if warmups is None else warmups):
         lines.append(json.dumps(entry(t_arrival_s=t0 - 30, t_sent_s=t0 - 30 + k * 0.01, t_released_s=t0 + warm_release,
                                       **pol)))
     lines.append(json.dumps(entry(method="GET", path="/metrics", route=None, stream=None, status=200,
@@ -377,7 +377,7 @@ def test_a_clean_log_joins_every_request_once_and_rebuilds_the_derived_rows(poin
     assert ('"path": "/tokenize"' in text) is random_client(p, point)        # the random dataset's probe is in it
     problems, joined, warm = sva.join_access_log(text, plan=p, point=point, block=2)
     assert problems == [] and sorted(joined) == list(range(p["points"][point]["N"]))
-    t0 = min(e["t_arrival_s"] for e in joined.values())                     # the ready check and the C warmups
+    t0 = min(e["t_arrival_s"] for e in joined.values())                     # the C warmups, no ready check
     assert sva.warmup_spans(warm, joined, x=p["points"][point]) == warmups_of(p["points"][point]) and t0 == 5000.0
     client = client_part(p, point, 2, reqs)
     assert {q["cls"] for q in client} == ({"short", "long"} if point == "GW-M8K-T" else {"short"})
@@ -396,6 +396,9 @@ def test_the_join_reads_only_its_tag_and_ignores_the_exempt_paths():
     problems, joined, _ = sva.join_access_log(log_text(p, point, 4, reqs, extra=noise), plan=p, point=point, block=4)
     assert problems == [] and len(joined) == 200
     assert sva.join_access_log(log_text(p, point, 4, reqs), plan=p, point=point, block=3)[0]      # block 3's tag
+
+
+WARMUP_COUNT = "completion records without an id; the frozen client sends exactly its C"     # 044 實作補記七
 
 
 def _joined_problems(p, point, block, reqs, **kw):
@@ -418,8 +421,9 @@ def test_every_join_failure_is_a_problem():
         "no status": (dict(change=lambda es: es[9].pop("status")), "status"),
         "not ok": (dict(change=lambda es: es[9].update(outcome="cancelled")), "cancelled"),
         "warmup 4xx": (dict(extra=[entry(status=400, outcome="client_error", t_arrival_s=4970.0)]), "400"),
-        "too few without id": (dict(warmups=7), "C + 1"),
-        "id-less during the run": (dict(extra=[entry(t_arrival_s=5003.0)]), "without"),
+        "too few without id": (dict(warmups=7), WARMUP_COUNT),                  # C - 1
+        "too many without id": (dict(warmups=9), WARMUP_COUNT),                 # C + 1: an unknown extra request
+        "id-less during the run": (dict(extra=[entry(t_arrival_s=5003.0)]), "during the main run"),
         "unexpected route": (dict(extra=[entry(path="/v1/chat/completions", route="chat")]), "/v1/chat/completions"),
         "unknown path": (dict(extra=[entry(method="GET", path="/v1/models", route=None)]), "/v1/models"),
         "missing field": (dict(change=lambda es: es[2].pop("t_released_s")), "t_released_s"),
@@ -436,8 +440,7 @@ def test_every_join_failure_is_a_problem():
                                  "t_released_s"),
     }
     assert _joined_problems(p, point, 1, reqs) == []
-    assert _joined_problems(p, point, 1, reqs, warmups=8) == []                                 # exactly C + 1
-    assert _joined_problems(p, point, 1, reqs, warmups=12) == []                                # ready-check retries
+    assert _joined_problems(p, point, 1, reqs, warmups=8) == []                                 # exactly C
     for name, (kw, needle) in cases.items():
         got = _joined_problems(p, point, 1, reqs, **kw)
         assert got and any(needle in g for g in got), (name, got)
@@ -457,8 +460,8 @@ def test_the_random_dataset_rule_is_the_frozen_clients():
 
 
 def test_the_random_dataset_benchs_tokenize_probe_is_accepted_once_before_its_first_completion():
-    """vLLM 0.30's random-dataset bench sends one POST /tokenize before its ready check; the gateway has no /tokenize
-    (404) and the bench skips its alignment. Exactly that record is accepted: never counted as a warmup, never (i)."""
+    """vLLM 0.30's random-dataset bench sends one POST /tokenize before its warmups; the gateway has no /tokenize (404)
+    and the bench skips its alignment. Exactly that record is accepted: never counted as a warmup, never (i)."""
     p, point, t0 = CLS, "GW-U2K-O512", 5000.0
     x = p["points"][point]
     reqs = make_reqs(p, point, 1)
@@ -468,14 +471,14 @@ def test_the_random_dataset_benchs_tokenize_probe_is_accepted_once_before_its_fi
         "no probe": (dict(probe=False), "0 POST /tokenize"),
         "two probes": (dict(extra=[probe_entry(t0 - 44)]), "2 POST /tokenize"),
         "status 200": (dict(probe={"status": 200}), "status 200"),
-        "after the ready check": (dict(probe={"t_arrival_s": t0 - 40}), "before every completion"),
+        "with the first warmup": (dict(probe={"t_arrival_s": t0 - 30}), "before every completion"),
         "between the warmups": (dict(probe={"t_arrival_s": t0 - 25}), "before every completion"),
         "during the main run": (dict(probe={"t_arrival_s": t0 + 1}), "before every completion"),
         "no arrival": (dict(probe={"t_arrival_s": None}), "t_arrival_s"),
         "with an id": (dict(probe={"client_request_id": f"{tag}-0"}), "POST /tokenize is not the completion"),
         "GET": (dict(probe={"method": "GET", "status": 405}), "GET /tokenize is not the completion"),
         "detokenize": (dict(extra=[probe_entry(t0 - 44, path="/detokenize")]), "/detokenize"),
-        "probe is no warmup": (dict(warmups=x["C"] - 1), "C + 1"),
+        "probe is no warmup": (dict(warmups=x["C"] - 1), WARMUP_COUNT),
     }
     for name, (kw, needle) in cases.items():
         got = _joined_problems(p, point, 1, reqs, **kw)
@@ -636,9 +639,10 @@ def test_n1_is_requests_in_vllm_against_0_9_c():
     assert sva.nontrivial(sva.in_vllm(reqs, C=8, N=200), x=p["points"]["F-U2K"], plan=p)["condition"] == "N1"
 
 
-def test_j_counts_the_ready_check_and_the_warmups_too():
-    """044 (j) over the whole bench process (實作補記六): the id-less completion records' intervals (row["warmups"])
-    join the main requests' in the peaks; U_W and N1 stay on the main requests over T_W."""
+def test_j_counts_the_warmups_too():
+    """044 (j) over the whole bench process (實作補記六): the id-less completion records' intervals (row["warmups"],
+    exactly the C warmups: 實作補記七) join the main requests' in the peaks; U_W and N1 stay on the main requests over
+    T_W."""
     p = ADM
     reqs = make_reqs(p, "P-U8K", 1)
     row = row_for(p, "P-U8K", 1)
@@ -646,15 +650,17 @@ def test_j_counts_the_ready_check_and_the_warmups_too():
     late = dict(row, warmups=row["warmups"][:-1] + [[-30.0, 0.5, 1]])       # a warmup still in vLLM at the first wave
     ok, why = sva.run_valid(late, reqs, p)
     assert not ok and any("9 requests" in w and "(j)" in w for w in why) and sva.run_outcome(late, reqs, p) == "invalid"
-    for bad, needle in ((dict(row, warmups=None), "warmup"), (dict(row, warmups=row["warmups"][:8]), "warmup"),
+    assert len(row["warmups"]) == 8                                          # C, no ready check (實作補記七)
+    for bad, needle in ((dict(row, warmups=None), "warmup"), (dict(row, warmups=row["warmups"][:7]), "warmup"),
+                        (dict(row, warmups=row["warmups"] + [[-30.0, -20.0, 1]]), "warmup"),       # C + 1
                         (dict(row, warmups=[[1.0, 0.5, 1]] + row["warmups"][1:]), "warmup"),
-                        (dict(row, warmups=[[-40.0, -39.0, 4]] + row["warmups"][1:]), "warmup")):
+                        (dict(row, warmups=[[-30.0, -20.0, 4]] + row["warmups"][1:]), "warmup")):
         ok, why = sva.run_valid(bad, reqs, p)
         assert not ok and any(needle in w for w in why), why
     w = make_reqs(p, "W-90", 1)
     wrow = row_for(p, "W-90", 1)
     assert sva.run_valid(wrow, w, p) == (True, [])
-    ok, why = sva.run_valid(dict(wrow, warmups=wrow["warmups"] + [[-0.5, 0.5, 1]]), w, p)
+    ok, why = sva.run_valid(dict(wrow, warmups=wrow["warmups"][:-1] + [[-0.5, 0.5, 1]]), w, p)
     assert not ok and any("units" in x and "(j)" in x for x in why)
     x = p["points"]["W-90"]
     span = [[-100.0, 1000.0, 1]]                                               # never in U_W / N1

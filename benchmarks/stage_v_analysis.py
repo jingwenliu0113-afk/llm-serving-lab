@@ -8,12 +8,12 @@ only supplies what 039 did not have:
   joined, so the log is complete): on the completion route (POST /v1/completions) exactly one record per
   client_request_id <tag>-<idx> for idx 0..N-1, each status 200 and outcome ok with queue_wait_s, ttft_s,
   upstream_ttft_s, duration_s, t_arrival_s <= t_sent_s <= t_released_s (pacing: prefill_wait_s; weighted-v1:
-  admission_class and its admission_units); no other client_request_id; at least C + 1 records without an id (the
-  bench's ready check, which may retry, and its C warmups), every one status 200 and outcome ok, all arriving before
-  the first main request; /healthz, /readyz and /metrics are never read; a random-dataset client's bench
-  (random_dataset) sends exactly one POST /tokenize without an id before every completion record, which the gateway
-  answers 404 (vLLM 0.30's prompt alignment, skipped then: 044 實作補記六), and no other client sends one; any other
-  route is a problem; pacing off: no completion record waited for tokens (E);
+  admission_class and its admission_units); no other client_request_id; exactly C records without an id (the bench's
+  C warmups: the frozen client sends no ready check, --ready-check-timeout-sec 0, 044 實作補記七), every one status
+  200 and outcome ok, all arriving before the first main request; /healthz, /readyz and /metrics are never read; a
+  random-dataset client's bench (random_dataset) sends exactly one POST /tokenize without an id before every
+  completion record, which the gateway answers 404 (vLLM 0.30's prompt alignment, skipped then: 044 實作補記六), and
+  no other client sends one; any other route is a problem; pacing off: no completion record waited for tokens (E);
 - the derived requests (gateway_requests): run_stage_d.derived_requests' columns with the gateway's gw_queue_wait_ms,
   gw_prefill_wait_ms, gw_ttft_ms, gw_upstream_ttft_ms, gw_arrival_s / gw_sent_s / gw_released_s (seconds from the
   run's earliest main arrival), units (weighted-v1: the record's admission_units, else 1) and out_planned; a W
@@ -27,9 +27,9 @@ only supplies what 039 did not have:
   tier on the long class's 32K slot, so 2K is judged per run and 8K pooled over the runs on 6 s, never a skip);
 - in vLLM (in_vllm): the half-open intervals [t_sent, t_released), exact (Fraction): over T_W = [t_arrival(idx C),
   t_arrival(idx N - C)) the time averages of the main requests' units (U_W) and requests (N1's), and over the whole
-  bench process, the ready check's and the warmups' intervals included (row["warmups"], warmup_spans of the id-less
-  records: 044 實作補記六), the peaks (044 (j): requests <= C; weighted-v1 units <= the budget and each class <= its
-  cap); the 1 Hz sampler's peak is reported beside them;
+  bench process, the C warmups' intervals included (row["warmups"], warmup_spans of the id-less records: 044
+  實作補記六, 七), the peaks (044 (j): requests <= C; weighted-v1 units <= the budget and each class <= its cap); the
+  1 Hz sampler's peak is reported beside them;
 - E (manipulation_e, V2): pacing on, at least C - b - 1 first-wave requests (idx < C) waited for tokens, b the most of
   the first wave's shortest prompts that fit in the burst (uniform: the prompt; var: stage_d_datasets.lengths, the
   pinned var-2048's); pacing off, none waited;
@@ -153,13 +153,13 @@ def _units_of(x: dict, prompt) -> int:
 def random_dataset(x: dict) -> bool:
     """Whether the point's client is `vllm bench serve --dataset-name random`: stage_d_plan.bench_argv_for of a uniform
     client base. Only that client aligns its prompts to the server's tokenizer (vLLM 0.30 serve.py main_async: random
-    and prefix_repetition), with one POST {base_url}/tokenize before its ready check."""
+    and prefix_repetition), with one POST {base_url}/tokenize before its warmups."""
     return sd.workload(x["client_base"])["mix"] == "uniform"
 
 
 def _probe_problems(probes: list, *, x: dict, first) -> list:
-    """044 實作補記六: the random dataset's bench sends exactly one POST /tokenize (no x-request-id) before its ready
-    check; the gateway has no /tokenize route, so it answers 404 and the bench skips its alignment (a no-op: it
+    """044 實作補記六: the random dataset's bench sends exactly one POST /tokenize (no x-request-id) before its
+    warmups; the gateway has no /tokenize route, so it answers 404 and the bench skips its alignment (a no-op: it
     tokenizes with the served snapshot). Any other /tokenize record, or none, is a problem. first: the earliest
     completion record's t_arrival_s."""
     if not random_dataset(x):
@@ -168,7 +168,7 @@ def _probe_problems(probes: list, *, x: dict, first) -> list:
     problems = []
     if len(probes) != 1:
         problems.append(f"{len(probes)} POST /tokenize records; vLLM 0.30's random-dataset bench sends exactly one, "
-                        "before its ready check (044 實作補記六)")
+                        "before its warmups (044 實作補記六)")
     for k, e in probes:
         if e.get("status") != 404:
             problems.append(f"access-log line {k}: POST /tokenize status {e.get('status')!r}, not 404 (the gateway has "
@@ -178,7 +178,7 @@ def _probe_problems(probes: list, *, x: dict, first) -> list:
             problems.append(f"access-log line {k}: POST /tokenize t_arrival_s missing or not a number (044 (h))")
         elif first is not None and not t < first:
             problems.append(f"access-log line {k}: POST /tokenize arrived at {t}, not before every completion record "
-                            f"({first}): the bench aligns before its ready check (044 實作補記六)")
+                            f"({first}): the bench aligns before its warmups (044 實作補記六)")
     return problems
 
 
@@ -189,7 +189,7 @@ def _entry_problems(e: dict, line: int, x: dict, main: bool) -> list:
                         "4xx, 429 or 5xx, main requests and warmups alike)")
     if not x["pacing"] and _finite(e.get("prefill_wait_s")) and e["prefill_wait_s"] > 0:
         problems.append(f"access-log line {line}: prefill_wait_s {e['prefill_wait_s']} with pacing off (044 (m) E)")
-    if not main:                        # the ready check and the warmups: their interval is (j)'s too (實作補記六)
+    if not main:                        # the warmups: their interval is (j)'s too (實作補記六)
         missing = [k for k in ANON_FIELDS if not _finite(e.get(k))]
         if missing:
             return problems + [f"access-log line {line} lacks {missing} as numbers (044 (h), (j))"]
@@ -224,8 +224,9 @@ def _admission_problems(e: dict, line: int, x: dict) -> list:
 def join_access_log(text: str, *, plan: dict, point: str, block: int) -> tuple:
     """(problems, {idx: access-log record}, [id-less completion records]) of one run's gateway log (044 (h), (i));
     [] problems when the log and the run's N requests are a bijection under the module docstring's rules. The id-less
-    records are the bench's ready check and warmups (warmup_spans: (j) reads their intervals too). Lines that are not
-    JSON objects (uvicorn, capserve's own prints, tracebacks) are not records; a line starting with "{" must be one."""
+    records are exactly the bench's C warmups (no ready check: 實作補記七; warmup_spans: (j) reads their intervals
+    too). Lines that are not JSON objects (uvicorn, capserve's own prints, tracebacks) are not records; a line
+    starting with "{" must be one."""
     x = plan["points"][point]
     n, C = x["N"], x["C"]
     prefix = sv.run_tag("V", point, C, block=block) + "-"
@@ -271,23 +272,23 @@ def join_access_log(text: str, *, plan: dict, point: str, block: int) -> tuple:
     missing = sorted(set(range(n)) - set(joined))
     if missing:
         problems.append(f"{len(missing)} of {n} requests have no access-log record: idx {missing} (044 (h))")
-    want = bp.num_warmups(C) + 1
-    if len(anon) < want:
-        problems.append(f"{len(anon)} completion records without an id; the ready check and the C warmups make at "
-                        f"least C + 1 = {want} (044 (h))")
+    want = bp.num_warmups(C)
+    if len(anon) != want:
+        problems.append(f"{len(anon)} completion records without an id; the frozen client sends exactly its C = {want} "
+                        "warmups and no ready check (--ready-check-timeout-sec 0) (044 (h), 實作補記七)")
     t0 = min((e["t_arrival_s"] for e in joined.values() if _finite(e.get("t_arrival_s"))), default=None)
     late = [k for k, e in anon if t0 is not None and _finite(e.get("t_arrival_s")) and e["t_arrival_s"] >= t0]
     if late:
         problems.append(f"access-log lines {late}: completion requests without the run's id arrived during the main "
-                        "run (044 (h): only the ready check and the warmups come without one, before it)")
+                        "run (044 (h): only the warmups come without one, before it)")
     problems += _probe_problems(probes, x=x, first=min(arrivals, default=None))
     return problems, joined, [e for _, e in anon]
 
 
 def warmup_spans(warmups: list, joined: dict, *, x: dict) -> list:
     """044 (j) over the whole bench process (實作補記六): [[t_sent_s, t_released_s, units], ...] of the id-less
-    completion records (join_access_log's third value: the ready check and the warmups), in seconds from the run's
-    earliest main arrival, rounded to the µs as gateway_requests' times; the runner records them as row["warmups"]."""
+    completion records (join_access_log's third value: the C warmups), in seconds from the run's earliest main
+    arrival, rounded to the µs as gateway_requests' times; the runner records them as row["warmups"]."""
     t0 = min((e["t_arrival_s"] for e in joined.values() if _finite(e.get("t_arrival_s"))), default=None)
     return [[round(e["t_sent_s"] - t0, 6), round(e["t_released_s"] - t0, 6),
              e.get("admission_units") if x["admission"] else 1]
@@ -295,15 +296,16 @@ def warmup_spans(warmups: list, joined: dict, *, x: dict) -> list:
 
 
 def warmup_problems(row: dict, x: dict) -> list:
-    """row["warmups"] (warmup_spans) as (j) needs them: at least C + 1 intervals (the ready check and the C warmups),
-    each [sent, released, units] with sent <= released and units of a class of the point (1 without weighted-v1)."""
+    """row["warmups"] (warmup_spans) as (j) needs them: exactly C intervals (the C warmups; the frozen client sends no
+    ready check: 044 實作補記七), each [sent, released, units] with sent <= released and units of a class of the point
+    (1 without weighted-v1)."""
     w = row.get("warmups")
     units = {c["units"] for c in x["admission_params"]["classes"]} if x["admission"] else {1}
-    ok = isinstance(w, list) and len(w) >= bp.num_warmups(x["C"]) + 1 and all(
+    ok = isinstance(w, list) and len(w) == bp.num_warmups(x["C"]) and all(
         isinstance(s, list) and len(s) == 3 and _finite(s[0]) and _finite(s[1]) and s[0] <= s[1]
         and type(s[2]) is int and s[2] in units for s in w)
-    return [] if ok else [f"(j): the row records no well-formed warmup intervals (the ready check and >= C warmups, "
-                          f"[sent, released, units]): {w!r:.200} (044 實作補記六)"]
+    return [] if ok else [f"(j): the row records no well-formed warmup intervals (exactly the C warmups, [sent, "
+                          f"released, units]): {w!r:.200} (044 實作補記六, 七)"]
 
 
 def _ms(v):
@@ -475,9 +477,9 @@ def _eval(reqs: list, plan: dict, x: dict, *, view: str, slo: dict, window: str 
 
 def in_vllm(reqs: list, *, C: int, N: int, warmups=()) -> dict:
     """Requests and units in vLLM on [gw_sent_s, gw_released_s): exact time averages of the main requests over T_W
-    ("_u_w", "_n_w"; None when T_W is empty) and peaks over the whole bench process, the ready check's and the
-    warmups' intervals (warmups: [[sent, released, units], ...], warmup_spans) included (044 (j), 實作補記六); releases
-    before sends at one instant: half-open intervals."""
+    ("_u_w", "_n_w"; None when T_W is empty) and peaks over the whole bench process, the C warmups' intervals
+    (warmups: [[sent, released, units], ...], warmup_spans) included (044 (j), 實作補記六, 七); releases before sends
+    at one instant: half-open intervals."""
     by = {q["idx"]: q for q in reqs}
     a, b = Fraction(by[C]["gw_arrival_s"]), Fraction(by[N - C]["gw_arrival_s"])
     spans = [(Fraction(q["gw_sent_s"]), Fraction(q["gw_released_s"]), q["units"]) for q in reqs]

@@ -21,8 +21,10 @@ and pins.toml. It refuses (exit 2) and writes nothing, as stage_d_report does fo
   recorded /readyz equal to the point's frozen tuple), or a sentinel boot ran one; a valid V run's access-log join
   recorded a problem or not its N requests;
 - another formal V session finished less than 2 h before this one started (run_stage_v.gap_problems on the committed
-  results/stage_v/formal-*), or any formal-* / smoke-v-* directory has no finished session.json (run_stage_v.hours_used:
-  a session killed hard, its hours and end unknown; 044 實作補記六);
+  results/stage_v/formal-*), or a formal-* / smoke-v-* directory has no finished session.json (run_stage_v.hours_used:
+  a session killed hard, its hours and end unknown; 044 實作補記六); both only over the directories whose session.json
+  started_at is not after this session's (one whose start cannot be read counts: fail closed), so a later or
+  unrelated unfinished directory never blocks this report or its re-run (044 實作補記七; the runner checks them all);
 - run validity (g): capacity_report.spill_problems on the rows (031 and its amendment);
 - after stage_v_analysis.analyze: a replay mismatch or a failed sentinel gate.
 Otherwise analysis.json is stage_v_analysis.analyze's body plus provenance (what the generator's §12 provenance reads:
@@ -255,14 +257,18 @@ def refusal_problems(cap: dict, *, cfg: dict, stage_d_cfg: dict, pins: dict, sta
         problems += _plan_problems(cap, cfg, stage_d_cfg, pins, stage_v_sha256=stage_v_sha256,
                                    stage_d_sha256=stage_d_sha256, pins_sha256=pins_sha256)
     problems += _argv_problems(cap, pins, repo_root) + cr.spill_problems(cap["rows"])
-    problems += rv.hours_used(repo_root)[1]          # 044 實作補記六: every session directory recorded its end
     started = cap["session"].get("started_at")
     if not isinstance(started, str):
-        return problems + [f"the session records no started_at ({started!r}): the 2 h gap cannot be checked (044)"]
+        return problems + rv.hours_used(repo_root)[1] + [
+            f"the session records no started_at ({started!r}): the 2 h gap cannot be checked (044)"]
+    # 044 實作補記六: every session directory recorded its end; 實作補記七: only those that started by this session's
+    # start (a later or unrelated unfinished one never blocks this report; one whose start is unreadable still does)
     try:
-        return problems + rv.gap_problems(repo_root, started, session_id=cap["session"].get("session_id"))[1]
+        hours = rv.hours_used(repo_root, not_after=started)[1]
+        gap = rv.gap_problems(repo_root, started, session_id=cap["session"].get("session_id"), not_after=started)[1]
     except ValueError as exc:
-        return problems + [f"started_at {started!r}: {exc} (044: the 2 h gap)"]
+        return problems + rv.hours_used(repo_root)[1] + [f"started_at {started!r}: {exc} (044: the 2 h gap)"]
+    return problems + hours + gap
 
 
 # ---------------------------------------------------------------- analysis.json

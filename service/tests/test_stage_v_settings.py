@@ -100,11 +100,12 @@ def _bench_body(prompt: str, out: int) -> dict:
 async def test_a_vllm_shaped_bench_through_the_real_gateway_joins_its_access_log(caplog, point):
     """044 實作補記六: the request sequence of vLLM 0.30's `vllm bench serve` through the real gateway stack (uvicorn,
     the guard, the point's settings, policy and profile; a fake vLLM behind it): the runner's /readyz poll, the random
-    dataset's POST /tokenize (serve.py _align_prompts_to_server_tokenizer; 404 here), the ready check and C warmups
-    without an id, GET /metrics twice, N requests with x-request-id <tag>-<idx> at concurrency C, GET /metrics twice
-    (serve.py benchmark: the spec-decode and diffusion metrics before and after). The access log the gateway really
-    writes joins with stage_v_analysis.join_access_log without a problem, and its id-less records give (j) the
-    warmups' intervals, so the research side's fakes (tests/test_stage_v_analysis.log_text) cannot drift from it."""
+    dataset's POST /tokenize (serve.py _align_prompts_to_server_tokenizer; 404 here), exactly the C warmups without an
+    id (no ready check: --ready-check-timeout-sec defaults to 0 and no frozen argv sets it, 044 實作補記七), GET
+    /metrics twice, N requests with x-request-id <tag>-<idx> at concurrency C, GET /metrics twice (serve.py
+    benchmark: the spec-decode and diffusion metrics before and after). The access log the gateway really writes joins
+    with stage_v_analysis.join_access_log without a problem, and its id-less records give (j) the warmups' intervals,
+    so the research side's fakes (tests/test_stage_v_analysis.log_text) cannot drift from it."""
     caplog.set_level(logging.INFO, logger="capserve.access")
     plan = build("mini")
     x = plan["points"][point]
@@ -123,7 +124,6 @@ async def test_a_vllm_shaped_bench_through_the_real_gateway_joins_its_access_log
         if random_dataset:
             r = await c.post("/tokenize", json={"model": MODEL, "prompt": row0, "add_special_tokens": False})
             assert r.status_code == 404
-        assert (await c.post("/v1/completions", json=_bench_body(row0, out))).status_code == 200      # ready check
         warm = await asyncio.gather(*(c.post("/v1/completions", json=_bench_body(row0, out)) for _ in range(C)))
         assert [r.status_code for r in warm] == [200] * C
         for _ in range(2):                              # fetch_spec_decode_metrics, fetch_diffusion_metrics
@@ -139,11 +139,11 @@ async def test_a_vllm_shaped_bench_through_the_real_gateway_joins_its_access_log
         for _ in range(2):
             assert (await c.get("/metrics")).status_code == 200
     lines = [r.getMessage() for r in caplog.records if r.name == "capserve.access"]
-    assert len(lines) == 1 + random_dataset + 1 + C + 2 + N + 2
+    assert len(lines) == 1 + random_dataset + C + 2 + N + 2
     problems, joined, warm = sva.join_access_log("\n".join(lines) + "\n", plan=plan, point=point, block=1)
-    assert problems == [] and sorted(joined) == list(range(N)) and len(warm) == C + 1
+    assert problems == [] and sorted(joined) == list(range(N)) and len(warm) == C
     spans = sva.warmup_spans(warm, joined, x=x)                              # (j) reads them with the main requests
-    assert len(spans) == C + 1 and all(s <= r < 0 for s, r, _ in spans)
+    assert len(spans) == C and all(s <= r < 0 for s, r, _ in spans)
     row = {"valid": True, "workload": point, "block": 1, "warmups": spans}
     assert sva.warmup_problems(row, x) == []
     assert any(json.loads(e)["path"] == "/tokenize" for e in lines) is random_dataset

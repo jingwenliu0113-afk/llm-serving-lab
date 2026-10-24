@@ -4,8 +4,8 @@ own RandomDataset (random_seed = seed + i, as D-C's var datasets, stage_d_datase
 re-tokenized, as vLLM's custom dataset counts it, to exactly that length, or nothing is written (013).
 
 - V1 (v1-<tier>-r<r>, r = 1..5, block r reads r): N = core_b_plan.num_prompts(C) rows (L-U2K 320, L-U8K 200) of the
-  O512 base's prompt (U2K-O512 1,920 / U8K-O512 8,064 tokens); row 0's output is 128 (the bench's ready check and its
-  warmups resend row 0, so they are U2K's / U8K's), every other row's
+  O512 base's prompt (U2K-O512 1,920 / U8K-O512 8,064 tokens); row 0's output is 128 (only the bench's C warmups
+  resend row 0, so they are U2K's / U8K's; the frozen client sends no ready check: 044 實作補記七), every other row's
   random.Random(int(sha256("<seed>:stage_v:v1:<tier>:<r>"), 16)).randint(1, 512) in row order. The bench reads them
   with --custom-output-len -1 (each row's output_tokens) and --ignore-eos.
 - V4 (v4-<mix>-r<r>): 320 rows; row 0 is a 2K prompt (the warmup is U2K's 32 x 2K); rows 1..319 hold exactly 287 x 2K

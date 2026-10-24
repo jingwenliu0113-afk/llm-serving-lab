@@ -816,6 +816,17 @@ def test_a_gateway_gone_right_after_ready_or_before_the_bench_runs_nothing(tmp_p
     assert not [e for e in w.events if e.startswith("bench:V-F-U2K-c")]
 
 
+def test_a_gateway_gone_before_the_bench_is_a_gateway_fault(tmp_path):
+    """044 實作補記四 item 4 (實作補記七): a gateway that exits before or during the bench is recorded in
+    session["gateway_faults"]; before the bench, run_point records it before decide."""
+    out, s, w = session(tmp_path, "V-ADM", world=fading_world(tmp_path, "F-U2K", 3))
+    row = next(r for r in load(out)[0]["rows"] if r["workload"] == "F-U2K")
+    boot = next(b for b in s["boots"] if b["workload"] == "F-U2K")
+    assert "before this bench" in row["reasons"][0] and not row["valid"]
+    assert [f for f in s["gateway_faults"] if f["run"] == row["tag"]] == [
+        {"boot": boot["tag"], "run": row["tag"], "reasons": [row["reasons"][0]]}]
+
+
 def test_a_gateway_log_reader_that_never_joins_invalidates_the_run(tmp_path):
     class Stuck(World):
         def popen(self, argv, env, log_path):
@@ -844,8 +855,9 @@ def test_a_run_that_breaks_j_is_invalid_and_a_gateway_fault(tmp_path):
 
 
 def test_j_reads_the_warmups_intervals_the_access_log_records(tmp_path, monkeypatch):
-    """044 (j) over the whole bench process (實作補記六): each V row records the ready check's and the warmups'
-    intervals from the access log; a warmup still in vLLM when the main run starts breaks (j)."""
+    """044 (j) over the whole bench process (實作補記六): each V row records the C warmups' intervals from the access
+    log (the frozen client sends no ready check: 實作補記七); a warmup still in vLLM when the main run starts breaks
+    (j)."""
     real = tva.log_text
 
     def lingering(p, point, block, reqs, **kw):
@@ -856,8 +868,9 @@ def test_j_reads_the_warmups_intervals_the_access_log_records(tmp_path, monkeypa
     a, rows = analysis(out)
     plan = json.loads((out / "plan.json").read_text())
     for r in (r for r in rows if r["phase"] == "V" and r["valid"]):
-        assert len(r["warmups"]) == plan["points"][r["workload"]]["C"] + 1
-        assert all(s <= e < 0 for s, e, _ in r["warmups"]) and r["warmups"][0] == [-40.0, -39.0, 1]
+        x = plan["points"][r["workload"]]
+        assert len(r["warmups"]) == x["C"] and all(s <= e < 0 for s, e, _ in r["warmups"])
+        assert r["warmups"] == tva.warmups_of(x)                        # C warmups, no ready check (實作補記七)
     bad = next(r for r in rows if r["workload"] == "P-U8K")
     assert not bad["valid"] and any("16 requests" in x and "(044 (j))" in x for x in bad["reasons"]), bad["reasons"]
     assert a["replay"]["ok"] and any(f["run"] == bad["tag"] for f in s["gateway_faults"])

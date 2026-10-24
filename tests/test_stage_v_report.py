@@ -235,6 +235,44 @@ def test_a_session_directory_without_a_finished_session_json_is_refused(tmp_path
         report(out, root, cfgs)
 
 
+@pytest.mark.parametrize("name", ["formal-t-later", "smoke-v-later"])
+def test_only_a_session_that_started_by_this_ones_start_can_block_its_report(tmp_path, name):
+    """044 實作補記七: the report checks hours_used and gap_problems only over the session directories whose
+    session.json started_at is not after this session's started_at, so a later unfinished directory never blocks an
+    earlier session's report (or the generator's byte-identical re-run); an earlier one still does, and so does one
+    whose start cannot be read (fail closed). The runner keeps the full check."""
+    import datetime as dt
+    import run_stage_v as rv
+    out, s, root, cfgs = formal(tmp_path, "V-ADM")
+    start = dt.datetime.fromisoformat(s["started_at"])
+    d = root.joinpath(*sv.RESULTS, name)
+    d.mkdir()
+
+    def write(**rec):
+        (d / "session.json").write_text(json.dumps({"in_progress": True, "finished_at": None, **rec}))
+
+    write(started_at=(start + dt.timedelta(hours=5)).isoformat())                   # later, never finished
+    assert report(out, root, cfgs)["replay"]["ok"]
+    assert any(name in p for p in rv.hours_used(root)[1])                           # the runner: still refused
+    assert any(name in p for p in rv.gap_problems(root, s["started_at"])[1]) is name.startswith("formal-")
+    write(started_at=(start - dt.timedelta(hours=5)).isoformat())                   # earlier, never finished
+    with pytest.raises(svr.ReportError, match=f"{name}: .*never finished"):
+        report(out, root, cfgs)
+    write(started_at=s["started_at"])                                               # the same start
+    with pytest.raises(svr.ReportError, match=f"{name}: .*never finished"):
+        report(out, root, cfgs)
+    for bad in ({}, {"started_at": None}, {"started_at": "later"}, {"started_at": 5}):   # no readable start
+        write(**bad)
+        with pytest.raises(svr.ReportError, match=f"{name}: "):
+            report(out, root, cfgs)
+    (d / "session.json").write_text("{not json")
+    with pytest.raises(svr.ReportError, match=f"{name}: "):
+        report(out, root, cfgs)
+    (d / "session.json").unlink()
+    with pytest.raises(svr.ReportError, match=f"{name}: .*no session.json"):
+        report(out, root, cfgs)
+
+
 def test_the_cli_writes_only_the_sessions_analysis_and_a_rerun_is_byte_identical(tmp_path, monkeypatch, capsys):
     out, s, root, (c, d, p) = formal(tmp_path, "V-CLS")
     args = ["--session", str(out), "--uniform-session", str(UNIFORM), "--advanced-session", str(ADVANCED)]

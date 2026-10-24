@@ -392,6 +392,24 @@ def test_the_client_is_the_frozen_functions_output_with_only_044s_three_differen
         assert tier_set is name.startswith("L-")
 
 
+@pytest.mark.parametrize("session", ["V-ADM", "V-CLS", "mini"])
+def test_the_frozen_client_sends_its_c_warmups_and_no_ready_check(session):
+    """044 實作補記七: vLLM 0.30's `vllm bench serve` sends its ready check only with --ready-check-timeout-sec > 0
+    (serve.py :1954-1959 defaults it to 0; benchmark() :870-886 then prints 'Skipping endpoint ready check.'), so
+    stage_v_analysis.join_access_log expects exactly the C warmups without an id. Every point and block's client
+    leaves the flag at its default (or sets 0) and sends --num-warmups C."""
+    p = plan(session)
+    datasets = datasets_for(p)
+    for name, x in p["points"].items():
+        for r in range(1, p["n"] + 1):
+            argv = svp.bench_argv(p, PINS, name, block=r, datasets=datasets, **KW)
+            ready = [a for a in argv if a.startswith("--ready-check-timeout-sec")]
+            assert ready in ([], ["--ready-check-timeout-sec=0"]) or (
+                ready == ["--ready-check-timeout-sec"] and argv[argv.index(ready[0]) + 1] == "0"), (name, r, ready)
+            assert argv.count("--num-warmups") == 1, (name, r)
+            assert argv[argv.index("--num-warmups") + 1] == str(bp.num_warmups(x["C"])) == str(x["C"]), (name, r)
+
+
 def test_the_dataset_of_each_block():
     p = plan("V-CLS")
     assert p["points"]["L-U2K"]["datasets"] == {str(r): f"v1-2048-r{r}" for r in range(1, 6)}

@@ -55,7 +55,7 @@ def test_v1_prompts_are_the_o512_bases_and_outputs_are_seeded_uniform_on_1_512()
         for r in range(1, 6):
             rows = svd.spec(f"v1-{tier}-r{r}")
             assert {p for p, _ in rows} == {sd.WORKLOADS[base]["prompt"]}
-            assert rows[0][1] == 128                                  # warmups and the ready check resend row 0
+            assert rows[0][1] == 128                                  # the warmups resend row 0 (no ready check)
             outs = [o for _, o in rows[1:]]
             assert min(outs) >= 1 and max(outs) <= 512 and len(set(outs)) > 100
             rng = random.Random(int(hashlib.sha256(f"20261008:stage_v:v1:{tier}:{r}".encode()).hexdigest(), 16))

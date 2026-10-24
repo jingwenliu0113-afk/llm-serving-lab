@@ -57,9 +57,9 @@ V-CLS = ["GW-U32K", "GW-U2K-O512", "GW-U8K-O512", "GW-M8K-T", "L-U2K", "L-U8K"]
 # sha256 (the bytes served), classes (weighted-v1: both, in admission order), provisional (served with
 # --allow-provisional), queue ([stage_v.queue]), admission (weighted-v1, [stage_v.weighted_v1]), pacing (a tier of
 # [stage_v.pacing], or ""), dataset ("" for the random dataset; per_block: block r reads <dataset>-r<r>), out_pinned (L
-# points: --custom-output-len -1), view ("worse": the worse of upstream and client), unit (a [stage_v.units] unit, or
-# "" for a point that skips alone), bench_est_s (044's estimate), limits (what /readyz must report; weighted-v1: its
-# envelope).
+# points: --custom-output-len -1), view ("worse": the worse of upstream and client), unit (the [stage_v.units] product
+# unit the point belongs to, or "" for none; every point skips alone, 044 實作補記六 item 6), bench_est_s (044's
+# estimate), limits (what /readyz must report; weighted-v1: its envelope).
 
 [stage_v.points.GW-U32K]
 study = "V-GW"

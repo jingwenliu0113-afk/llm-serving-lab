@@ -222,15 +222,28 @@ RECORD_IT = ("write a decision log on its hours and end (its last raw file's tim
              "record that finished_at in its session.json, then start the next session (044 實作補記六)")
 
 
-def _session_dirs(repo_root, pattern: str = "*") -> list:
+def _session_dirs(repo_root, pattern: str = "*", *, not_after: str | None = None) -> list:
     """The session directories under results/stage_v matching pattern: every formal-* or smoke-v-* one (the runner
     creates it before anything can fail; a session.json may be missing after a hard kill) and any other directory
-    holding a session.json; never prereg-sim or another directory of plain results."""
+    holding a session.json; never prereg-sim or another directory of plain results. not_after (an ISO time; the report
+    only, 044 實作補記七): leave out a directory whose session.json records a started_at after it; one whose start
+    cannot be read stays in (fail closed). A not_after that is not an ISO time raises ValueError."""
+    when = None if not_after is None else dt.datetime.fromisoformat(not_after)
     root = Path(repo_root).joinpath(*sv.RESULTS)
     if not root.is_dir():
         return []
     return sorted(d for d in root.glob(pattern) if d.is_dir() and (
-        any(rx.fullmatch(d.name) for rx in SESSION_IDS.values()) or (d / "session.json").exists()))
+        any(rx.fullmatch(d.name) for rx in SESSION_IDS.values()) or (d / "session.json").exists())
+        and not (when is not None and _started_after(d, when)))
+
+
+def _started_after(d: Path, when: dt.datetime) -> bool:
+    """Whether d's session.json records a started_at after when; False when it cannot tell (no or an unreadable
+    session.json, no started_at, not an ISO time, or one not comparable with when)."""
+    try:
+        return dt.datetime.fromisoformat(json.loads((d / "session.json").read_text())["started_at"]) > when
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
 
 
 def _times(d: Path) -> tuple:
@@ -248,12 +261,14 @@ def _times(d: Path) -> tuple:
     return dt.datetime.fromisoformat(s["started_at"]), dt.datetime.fromisoformat(s["finished_at"]), s
 
 
-def hours_used(repo_root) -> tuple:
+def hours_used(repo_root, *, not_after: str | None = None) -> tuple:
     """(hours as an exact Fraction, problems): finished_at - started_at summed over every Stage V session under
     results/stage_v (044 全期總上限: the mini, formal ones, reruns and aborted ones alike); a session directory
-    without a finished session.json with both times is a problem (fail closed: 實作補記六)."""
+    without a finished session.json with both times is a problem (fail closed: 實作補記六). not_after: only the
+    directories _session_dirs keeps for it (stage_v_report: those that started by the reported session's start, 044
+    實作補記七); the runner passes none and checks every directory."""
     total, problems = dt.timedelta(), []
-    for d in _session_dirs(repo_root):
+    for d in _session_dirs(repo_root, not_after=not_after):
         try:
             start, end, _ = _times(d)
             total += end - start
@@ -262,13 +277,15 @@ def hours_used(repo_root) -> tuple:
     return Fraction(total // dt.timedelta(microseconds=1), 3600 * 10 ** 6), problems
 
 
-def gap_problems(repo_root, started_at: str, *, session_id: str | None = None, min_gap_h=sv.MIN_GAP_H) -> tuple:
+def gap_problems(repo_root, started_at: str, *, session_id: str | None = None, min_gap_h=sv.MIN_GAP_H,
+                 not_after: str | None = None) -> tuple:
     """(the previous formal V session {session_id, finished_at} or None, problems): among results/stage_v/formal-*
     other than session_id that started at or before started_at, the one that finished last must have finished at least
     min_gap_h hours before started_at (044: a formal session's lock window is >= 2 h after the previous one's); a
-    formal-* directory without a finished session.json with both times is a problem (fail closed: 實作補記六)."""
+    formal-* directory without a finished session.json with both times is a problem (fail closed: 實作補記六).
+    not_after: as hours_used's (stage_v_report only, 044 實作補記七)."""
     start, problems, prev = dt.datetime.fromisoformat(started_at), [], None
-    for d in _session_dirs(repo_root, "formal-*"):
+    for d in _session_dirs(repo_root, "formal-*", not_after=not_after):
         sid = d.name
         if sid == session_id:
             continue
@@ -493,6 +510,7 @@ class StageVHarness(rd.StageDHarness):
         if v and (self.gw is None or self.gw.poll() is not None):
             code = None if self.gw is None else self.gw.poll()
             row["reasons"] = [f"the gateway exited (code {code!r}) before this bench; not run (044)"]
+            self._fault(boot["tag"], row["reasons"], run=row["tag"])     # 實作補記四 item 4: before the bench too
             return self.decide(row, None)
         res, reasons = self.bench(row, self.client_argv(row))
         self.check_log(proc, "during the bench")
