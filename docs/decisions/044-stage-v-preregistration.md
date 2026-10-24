@@ -1,7 +1,7 @@
 # 044 — Stage V 事先登記（DRAFT）：Stage D 產品化的驗證研究（V-GW、V1、V2、V4）
 
 - 狀態：**DRAFT**（設計；待決事項已依建議定案，見文末）。harness、產品程式、一次 mini smoke 與兩輪審查都完成後凍結（見「凍結」）。凍結前不收任何 V 的正式數據。
-  - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）。尚待：generator 的 `--validation-session`、WSL 唯讀複核、dataset pin、GPU 視窗 0（產品 IT 與 mini），之後才凍結。
+  - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）；產生器的 `--validation-session` 路徑已完成（`feat/044-generator`，實作補記九；合成 session，沒有 Stage V 數據）。尚待：WSL 唯讀複核、dataset pin、GPU 視窗 0（產品 IT 與 mini），之後才凍結。
 - 日期：2026-10-24
 - 對應：
   - 043：7.3 的候選設計、7.4 的驗證研究、「使用者決定」；
@@ -1238,3 +1238,37 @@
 
 1. **session 時間必須可信**（`run_stage_v._times`，`hours_used` 與 `gap_problems` 都經過它）：實作補記六第 8 項要求操作者為被強制結束的 session 手寫 finished_at。時區寫錯時（例如 10:00Z 開始、17:00Z 結束，寫成 `17:00+08:00`，即 09:00Z），該 session 的時數是負的，12 h 全期上限少算，2 h 間隔也會在實際只隔 1 h 時通過，兩條規則都沒有任何提示。現在 started_at 或 finished_at 沒有時區 offset，或 finished_at 早於 started_at，都和未結束的目錄一樣是問題（runner 拒絕開始，report 拒絕）。runner 自己寫的時間一律帶 offset，不受影響。測試：錯誤時區、任一個或兩個沒有 offset，都讓 hours_used 與 gap_problems 各回報一個問題、runner 拒絕；同一時刻的不同 offset（0 h）可以。原本「沒有時區時時數照算、只有間隔無法判斷」的測試改為兩者都回報問題。突變：拿掉 offset 檢查或順序檢查，測試都失敗。
 2. **client argv 的 ready check 測試也看縮寫**（`tests/test_stage_v_plan.py`）：vLLM 的 `FlexibleArgumentParser` 保留 argparse 的前綴比對，並把 `_` 換成 `-`，所以 `--ready 600`、`--ready_check_timeout_sec=5` 也會打開 ready check。測試改為把每個 `--` 參數正規化後，凡是 `--ready-check-timeout-sec` 的前綴都必須取值 0（或不出現）。突變：在 argv 加上 `--ready 600` 或 `--ready_check_timeout_sec=5`，測試失敗；加上 `--ready-check-timeout-sec 0` 則通過。
+
+## 實作補記九（2026-10-24，產生器的 validation-session 路徑；沒有任何 Stage V 數據）
+
+`service/capserve/profile_gen.py` 的 `--validation-session` 路徑與 `service/tests/test_profile_gen_stage_v.py` 已依「產品對應」以 TDD 實作（時序第 8 步，在第一個正式 V session 之前；Mac 工作，不用 GPU）。產生器在請求路徑閉包之外（`__main__` 的 AST 閉包不含 profile_gen），`gateway_path_sha256` 仍為 `679a7c66…`；harness 一個位元組都沒有改，`harness_sha256` 仍為 `a1e4a564…`；研究程式仍不 import capserve。測試的 session 全部是合成的：由真的 `run_stage_v.run_session` 在 `test_run_stage_v` 的假 WSL 中寫出（`test_stage_v_analysis.fail_kw` 讓指定的 run FAIL），analysis.json 由真的 `stage_v_report` CLI 產生，所以 units、provenance、platform 的形狀都是真的。git 以假的回答代替（凍結 commit、它的 stage_v.toml、凍結模組、DEPLOYED_COMMIT 的請求路徑、base profile），git 的 helper 另以真的 repository 測試。下列是本文沒有寫死、實作時決定的細節，以及本文和程式不一致、依程式（§12 schema，實作補記一第 9 項）處理的地方。
+
+1. **CLI**：`--validation-session` 和 `--session` 互斥、擇一必填，只能配 `--out-dir`（給 `--out` 時 exit 2）。`--session` 指向 `results/stage_v/` 時 exit 2，訊息指向 `--validation-session`。選項只多這一個，沒有單位或 class 的選擇器（021 R1；`test_no_override_options` 已更新）。
+2. **沒有單位成立時 exit 0**：session 重現成功、只是沒有會寫檔的單位成立（全部不成立，或只有 VG-32K / VG-M8K-T）時，這是結果，不是拒絕：不寫任何檔、exit 0，stdout 的摘要 `{"holds": [...], "profiles": [], "written": "no profile: …"}` 說明原因。拒絕一律 exit 2、不寫檔，和 §8 / §9 相同。
+3. **只由 units 決定寫什麼**（`holding_units`）：單位只有在 `holds` 為 true、每一點的類別都是 PASS、而且（PACE-2K）沒有被否決時才寫。三個條件在可重現的正式 session 中等價，產生器仍逐一檢查。本文「只讀 analysis.json 的 units」解讀為「寫什麼只由 units 決定」：provenance 與 server 的值取自同一份 analysis.json 的 `provenance`、`platform`（report 為產生器寫的段），fingerprint 取自 session.json 的 boot 紀錄，和 §9 相同。
+4. **單位 → 內容**（依 §12 schema）：
+   - PACE-2K / PACE-8K：c1b（`COPY_BASE`）的 uniform-2k / uniform-8k 逐欄原樣，加上 `pacing`（單位 validation 的 pacing 與 queue）與 validation。
+   - W1：`admission` 段 = 單位 validation 的 weighted-v1 參數，其中研究 class `v-uniform-2k` / `v-uniform-8k` 改為 c1b 的複本 `uniform-2k` / `uniform-8k`（`STUDY_COPIES`），加上 queue、`measured_mixes`、provenance 的 `gateway_path_sha256` 與 V4 的 validation。PACE 單位不成立的成員是 c1b 的 class 原樣（不帶 pacing、validation）。PACE-2K 與 W1 都成立時，uniform-2k 同時是帶 pacing 的複本與 admission 的成員：loader 接受，pacing 與 weighted-v1 永遠不同時開啟，`served_classes` 依設定只比對其中一段。
+   - V1-2K / V1-8K：d-a2-b0（`V1_BASE`）的 uniform-2k-o512 / uniform-8k-o512，改名為 uniform-2k-o1-512 / uniform-8k-o1-512，max_concurrency = max_queue = `V1_C`（32 / 8），bound `validated`，source `stage_v:<單位>`。evidence 是 O512 class 的 evidence 原樣（scope、C_PROD 12 等描述的是 D-A2 的量測），`not_covered` 以 `v1_not_covered` 重算，另加 `output_distribution`、L 點的 5 個 dataset sha256（單位 validation 的 `datasets_sha256[L 點]`；GW 點輸出固定，沒有逐 block 的 dataset）與 `via_gateway` true。
+   - VG-32K / VG-M8K-T：不寫檔（`NO_FILE_UNITS`）。
+   - validation 取單位 validation 的 {study, unit, points, measured_classes, worst_r, n}（`capserve.profile.Validation` 的欄位）；queue、pacing、admission、datasets、mixes 放在 §12 規定的位置。
+   - class 的順序：複本（U2K、U8K），再 V1（2K、8K）。`admission` 一律寫出（不成立時為 null），`server.long_prefill_token_threshold` 寫 null。`base_profiles` 只列實際用到的 base（V-ADM 為 c1b，V-CLS 為 d-a2-b0）。本文的 validation_session 就是既有的 `source_session`（實作補記一第 9 項）。
+5. **凍結檢查**（比照 §8 / §9 的 `freeze_commit_problems`）：
+   - `--freeze-commit` 是第一次設定 `configs/stage_v.toml` `[freeze] stage_v = true` 的 commit（它的上一個 commit 與更早的歷史都沒有凍結過），是 session DEPLOYED_COMMIT 的祖先，該 commit 的 stage_v.toml 的 sha256 等於 session 記錄、產生器讀到的值。
+   - `STAGE_V_MODULES` 在凍結 commit、DEPLOYED_COMMIT 與產生器實際執行的檔案三者相同：`stage_v_plan.HARNESS_FILES` 的 5 個模組，加上 §9 的 Stage D 凍結檔與 5 個 Stage C 模組。本文沒有列出範圍；Stage V 的 harness 會 import 這些 Stage D / C 模組。
+   - `stage_v_plan.freeze_evidence_problems` 為空，stage_d.toml 與 capacity.toml 都已凍結（loader 的 §12 規則）。session 的 `harness_sha256`、記錄的 `gateway_path_sha256`、mini 證據與每個 pin 由重跑的 `stage_v_report.refusal_problems` 檢查。
+6. **DEPLOYED_COMMIT 的請求路徑**（`deployed_gateway_path_sha256`）：以 git（`ls-tree`、`show`）取出 DEPLOYED_COMMIT 追蹤的 `service/capserve/*`，寫到暫存目錄，由 `capserve.gateway_path` 自己計算 AST 閉包的 sha256，必須等於 stage_v.toml 的凍結值。閉包外的檔案（profile_gen、deploy）不同不影響；閉包內任一檔案不同、或 `__main__` 多 import 一個模組時拒絕。這和 report 檢查的「session 記錄的值」互相獨立，後者是 runner 在 WSL 上自己算的。
+7. **base profile 的「committed 位元組」**：解讀為 Stage V 凍結 commit 上的位元組。c1b 與 d-a2-b0 必須逐位元等於 `git show <凍結 commit>:<path>`，而且以 loader 載入為這個 checkout 的 verified profile；study profile 的 v- class 是凍結前由測試對這些位元組鎖定的。工作樹乾淨的檢查另外保證它們等於 HEAD。
+8. **重跑 report 的輸入**：uniform 一律讀 stage_d.toml `[stage_d] derived_from` 的 Core B uniform session（Stage V 與 Stage D 共用的凍結值；`stage_v_report` 的 CLI 不限定是哪一個），Advanced 只在 analysis.json 的 `advanced_references` 為 true 時讀。用了別的 uniform session 的 analysis.json 無法逐位元重現，因而被拒絕。
+9. **server**：V boot 的 workload 是點的 id，先換成該點的 `server_base`，再以 §9 的 `server_groups` 分組。B0 只能有一個 fingerprint，而且是產品的 B0（`stage_b_fingerprint`）。T 組（GW-M8K-T）也照 §9 檢查，雖然 §12 profile 只寫 B0。
+10. **只接受 formal-**：session_id 以 `formal-` 開頭、位於 `results/stage_v/<session_id>`。mini（`smoke-v-*`）由產生器本身、report 與 analysis（`holds` 要求不是 mini）三處拒絕。
+11. **重新產生的測試**：`test_profile_gen.regenerate` 依 prereg_section 分派到 `generate_stage_v`，並依 profile_id 選取（實作補記一第 9 項：「重新產生的測試在產生器那一步加入」）。目前沒有 commit 任何 §12 profile；分派與選取以合成 session 的 §12 profile 測試。
+12. **服務規則的端到端測試**：寫出的 profile 經 loader 載入後，`capserve.config.served_classes` 只在設定的 pacing（含 queue）或 admission 段與 profile 完全相同、而且 gateway_path_sha256 相同時才服務（serve 與 deploy 都一樣）。不同的 rate、另一個 tier 的參數、產品的 2 s / 300 s 佇列、不同的 max_queue、不同的請求路徑一律 ProfileError。V1 的 class 在沒有候選政策時以 512 輸出服務，帶 pacing 時拒絕。
+13. **發現但沒有處理的不一致**：`configs/stage_v.toml` `[stage_v.units]` 上方的註解仍寫舊的單位跳過規則（「once a run of one is not ok, all of them leave the later boots」），和實作補記六第 6 項的逐點規則不符；實作補記七第 2 項只改了 `[stage_v.points.GW-U32K]` 上方那一處。只是註解，值不變；不在本步範圍，凍結前（pin stage_v.toml 的位元組之前）修改。
+- **突變檢查**（只在記憶體中改模組原始碼：pytest plugin 在收集之前把改過的原始碼 exec 進 `capserve.profile_gen`；腳本留在本機 scratchpad，未納入 repo）：40 個突變全部被 `test_profile_gen_stage_v.py` 抓到，未突變的基準全部通過。包括：
+  - 凍結：產生器與 CLI 兩處的 stage_v、capacity、stage_d；凍結證據；freeze commit 的檢查整段拿掉、只比對 Stage D 模組、模組清單少了 Stage D / C；
+  - 請求路徑：拿掉比較、改算這個 checkout、讀不到時不報；
+  - base profile：拿掉位元組比較、不存在不報、拿掉 loader、問題不計入、`base_profiles` 一律列兩個；
+  - session 與重現：拿掉 report 的拒絕、逐位元重現、寫檔前的 loader 檢查、formal- 檢查、路徑檢查、SLO、server 分組、point 不換成 server_base；
+  - CLI：工作樹、out-dir、覆寫、接受 `--out`、`--session` 指向 Stage V、沒有單位時的說明與 exit 0；
+  - 單位篩選：不看 holds、不看否決、不看 PASS、全部單位；未知單位；成員一律不帶 pacing；PACE 複本不帶 validation；V1 用 O512 的 C_PROD；不重算 not_covered。
