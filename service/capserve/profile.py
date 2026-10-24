@@ -51,8 +51,10 @@
 serving_class (the active class of `capserve serve`, create_app and `deploy up`; a ProfileError no flag overrides)
 refuses an unavailable class (030 8.7), a verified class with max_output_tokens > 128 (043 §4: measured at exactly that
 many output tokens; shorter outputs, never measured, are not safer: U8K's C_PROD is 12 at 512 but C 9 FAILs at 128),
-and on a T profile every class but M8K-T with H-D2a supported (030 8.8: T only for a declared M8K deployment whose
-C_PROD beats B0's; uniform-8k-t is report only).
+on a T profile every class but M8K-T with H-D2a supported (030 8.8: T only for a declared M8K deployment whose
+C_PROD beats B0's; uniform-8k-t is report only), and on a B0 profile every class of a T workload
+(stage_d_plan.WORKLOADS; 030 8.8: T's limit is never served on B0; the loader refuses such a profile too,
+serving_class reads the model only).
 
 The server fingerprint is sha256 over the vLLM argv without argv[0] (the machine's binary path) and without
 --host / --port, together with core_b_plan.recorded_env; the deploy step (M1) refuses a verified profile whose
@@ -290,8 +292,9 @@ class CapacityProfile(_Strict):
     def serving_class(self, name: str) -> WorkloadClass:
         """The class a gateway may serve as its active_class, whatever flag is given: an unavailable class is refused
         (030 8.7: no verified number, never a fallback), and so is a verified class of more than 128 output tokens
-        (043 §4) and, on a T profile, every class but M8K-T with H-D2a supported (030 8.8); a verified 0 is returned
-        (not serviceable: refuse it)."""
+        (043 §4), on a T profile every class but M8K-T with H-D2a supported (030 8.8) and, on a B0 profile, every
+        class of a T workload (030 8.8: T's limit is never B0's; the loader refuses it too, this reads the model only);
+        a verified 0 is returned (not serviceable: refuse it)."""
         c = self.workload_class(name)
         if c.status == "unavailable":
             raise ProfileError(f"profile {self.profile_id} class {name!r} is unavailable ({c.unavailable_reason}): "
@@ -309,6 +312,10 @@ class CapacityProfile(_Strict):
                 raise ProfileError(f"profile {self.profile_id} class {name!r}: {hypothesis} is {verdict!r}, not "
                                    "supported: 030 8.8 serves T's M8K class only when its C_PROD exceeds B0's, so it "
                                    "is never served, whatever flag is given (043)")
+        elif c.evidence is not None and sdplan.WORKLOADS.get(c.evidence.workload, {}).get("server") == "T":
+            raise ProfileError(f"profile {self.profile_id} is for the B0 server and class {name!r} is workload "
+                               f"{c.evidence.workload}'s, measured on server T: 030 8.8: its limit is T's, never B0's, "
+                               "so it is never served on B0, whatever flag is given (043)")
         if self.verified and c.max_output_tokens > bp.N_GEN:
             raise ProfileError(f"profile {self.profile_id} class {name!r} has max_output_tokens {c.max_output_tokens} "
                                f"> {bp.N_GEN}: its limit holds for exactly {c.max_output_tokens} output tokens "

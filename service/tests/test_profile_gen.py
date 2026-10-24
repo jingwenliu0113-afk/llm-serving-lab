@@ -1237,6 +1237,18 @@ def test_a_stage_d_session_elsewhere_or_with_another_slo_is_refused(tmp_path):
     assert "SLO" in msg and "stage_d.toml" in msg
 
 
+def test_a_capacity_toml_with_another_slo_than_stage_d_toml_is_refused():
+    """037 §3: Stage D runs Stage C's S2, so capacity.toml's [slo] must be stage_d.toml's. Only capacity.toml's SLO is
+    changed here: the analysis and stage_d_report still agree with stage_d.toml, so this check alone refuses."""
+    cfg, pins, cap_sha, pins_sha = pg.load_configs(ROOT)
+    other = copy.deepcopy(cfg)
+    other["slo"]["tpot_p95_ms"] = 200
+    with pytest.raises(pg.GenerationError) as exc:
+        gen_d(configs=(other, pins, cap_sha, pins_sha))
+    (problem,) = exc.value.problems
+    assert "037 §3" in problem and "capacity.toml's" in problem and "stage_d.toml's SLO" in problem
+
+
 @pytest.mark.parametrize("git, match", [
     (RepoGit(dirty=" M service/capserve/profile_gen.py\n"), "uncommitted"),
     (RepoGit(ancestor=False), "DEPLOYED_COMMIT"),
@@ -1270,6 +1282,27 @@ def test_main_writes_all_or_nothing_and_never_overwrites(tmp_path, capsys):
     assert main_d(D_A1B, out) == 2
     assert [p.name for p in out.iterdir()] == [keep.name] and keep.read_text() == "keep"
     assert "already exists" in capsys.readouterr().err
+
+
+def test_main_writes_nothing_when_one_generated_profile_fails_the_loader(tmp_path, capsys, monkeypatch):
+    """043 §1.1 / §1.6: every generated document passes the loader before anything is written. A generator defect in
+    the -t document (synthetic: T's threshold 256, rehashed) leaves the valid -b0 one unwritten too."""
+    build = pg.build_stage_d_profiles
+
+    def defective(*args, **kwargs):
+        docs = build(*args, **kwargs)
+        doc = docs["verified-formal-20261023-d-a1b-t"]
+        doc["server"]["long_prefill_token_threshold"] = 256
+        doc["content_sha256"] = cp.content_sha256(doc)
+        return docs
+
+    monkeypatch.setattr(pg, "build_stage_d_profiles", defective)
+    out = tmp_path / "profiles"
+    out.mkdir()
+    assert main_d(D_A1B, out) == 2
+    err = capsys.readouterr().err
+    assert list(out.iterdir()) == []
+    assert "fails the loader" in err and "verified-formal-20261023-d-a1b-t" in err and "256" in err
 
 
 def test_main_never_writes_stage_d_profiles_under_results_or_into_no_directory(tmp_path, capsys):

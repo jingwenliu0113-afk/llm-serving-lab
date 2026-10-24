@@ -100,10 +100,12 @@ class Settings(_Strict):
     max_body_bytes: int = Field(1 << 20, ge=1)
     body_read_timeout_s: float = Field(10.0, gt=0)
     drain_timeout_s: int = Field(60, ge=0)
-    # 043 §7.2: how long uvicorn keeps an idle client connection open (its own default, 5 s, is raced by aiohttp's
-    # FIFO pool of 60 s and httpx's of 5 s: D-B's failures before the first token, 042); above both, so a client pool
-    # lets an idle connection expire before the gateway closes it. Idle sockets cost no request slot (the guard counts
-    # requests).
+    # 043 §7.2: how long uvicorn keeps an idle client connection open. Its own default, 5 s, is raced by a client pool
+    # keeping idle connections as long or longer (vllm bench's aiohttp pool: keepalive_timeout 60 s, FIFO; httpx's
+    # default 5 s): D-B's failures before the first token, 042. A pool whose idle limit is below 75 s (aiohttp's default
+    # 15 s, httpx's 5 s, vllm bench's 60 s) lets an idle connection expire before the gateway closes it; a client
+    # keeping idle connections longer or without a limit (Go's default 90 s, urllib3) can still race. Idle sockets
+    # cost no request slot (the guard counts requests).
     keep_alive_s: int = Field(75, ge=1)
     disconnect_poll_s: float = Field(0.25, gt=0)
     monitor_interval_s: float = Field(2.0, gt=0)

@@ -43,7 +43,7 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 
 ## Stage D 之後的適用條件（decision 042 / 043）
 
-**長度不一與經過 gateway**（D-C；只涉及 c1b 的 uniform class，每點 n = 5，在 C_PROD 的固定點）
+**長度不一與經過 gateway**（D-C；只涉及 c1b 的 uniform class，在 C_PROD 的固定點；要求的 n = 5，U2K-var 4 / 5 有效，r5 依跳過規則沒有執行）
 
 | class | 長度不一（直連 vLLM） | 經過 gateway |
 |---|---|---|
@@ -64,8 +64,9 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 
 **連線的 keep-alive**（043 對 042 說法的改正）
 - gateway → vLLM：httpx 的 `keepalive_expiry` 2 s 低於 vLLM 的 5 s，所以 gateway 不會重用 vLLM 正要關閉的連線。
-- client → gateway：之前 uvicorn 用預設的 5 s。aiohttp（閒置保留 60 s、FIFO 重用）或 httpx（預設 5 s）的 client 連到 gateway 時，可能遇到 D-B 推論的同一類競態：重用一條 gateway 正要關閉的連線，request 在第一個 token 之前就失敗。
-- **修正**：gateway 設定 `keep_alive_s`（預設 75 s）交給 uvicorn 的 `timeout_keep_alive`。75 s 高於 aiohttp 的 60 s 與 httpx 的 5 s，所以 client 端的連線池會先讓閒置的連線過期。
+- client → gateway：之前 uvicorn 用預設的 5 s。vLLM bench 的 aiohttp 連線池（keepalive_timeout 60 s、FIFO 重用；aiohttp 預設 15 s）或 httpx（預設 5 s）的 client 連到 gateway 時，可能遇到 D-B 推論的同一類競態：重用一條 gateway 正要關閉的連線，request 在第一個 token 之前就失敗。
+- **修正**：gateway 設定 `keep_alive_s`（預設 75 s）交給 uvicorn 的 `timeout_keep_alive`。閒置上限低於 75 s 的 client 連線池（aiohttp、httpx 的預設，以及 vLLM bench 的 60 s）會先讓閒置的連線過期；
+  閒置更久或不設上限的 client（例如 Go 預設 90 s、urllib3）仍有同類競態。
   - 代價是閒置的 socket 保留得比較久。Guard 數的是 request，不是連線，所以不影響准入。
   - 這是產品修正，不宣稱任何容量。它會改變 `capserve_sha256`，所以 D-C 的 H-D7 只對應舊的那一版。
   - 下一次 GPU 空閒、取得 lock 時，以 `rtx-verified.toml` 跑 IT-0 至 IT-6（不是容量量測）。
@@ -78,9 +79,19 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
   | uniform-2k（32） | 10.35 s（經過 gateway 10.37–10.42 s） |
   | uniform-8k（8） | 11.04 s（經過 gateway 11.00–11.10 s） |
   | uniform-32k（2，Stage D） | 12.8 s |
+  | uniform-2k-o512（32，Stage D） | 10.50 s |
   | uniform-8k-o512（12，Stage D） | 16.95 s |
 
-- 第二波已回到門檻內。產品不對第一波宣稱 SLO。
+- 第二波（idx 在 [C, 2C)）的最大 TTFT 回到門檻內的有（各有效 run 最大值的範圍；以 derived 檔的 request 算出，只寫在文件中）：
+  - c1b 固定長度：直連 uniform-2k 1.38 s、uniform-8k 2.47–2.48 s；經過 gateway（D-C）uniform-2k 1.71–1.73 s、uniform-8k 3.16–3.54 s（門檻 2 s / 6 s）；
+  - uniform-8k 長度不一（D-C）：2.07–2.12 s（門檻 6 s）；
+  - Stage D：uniform-32k 9.32–9.54 s（20 s）、uniform-8k-o512 2.52–2.55 s（6 s）、uniform-8k-t 5.38–5.61 s（6 s）、
+    mixed-8k-t 短類 5.73–5.93 s（6 s）、長類 11.02–11.40 s（20 s）。
+- 例外，第二波仍超過門檻：
+  - uniform-2k-o512：每個 run 的 idx 63 停在 4.24–4.36 s，是門檻 2 s 的 2.1–2.2 倍（同一波其他 request 最高 1.72–1.76 s）。
+    它在 vLLM 內等待，gateway 無法讓它逾時（見下一節「uniform-2k-o512 的 C 32 超過 C_KV 30」）。
+  - uniform-2k 長度不一（D-C）：第二波最大 2.04–2.39 s，超過 2 s（上面 FAIL 的來源）。
+- 產品不對第一波宣稱 SLO。
 - vLLM 大致依序 prefill：同時到達的第 j 個 request 的首 token 時間約為 j × 單一 prompt 的 prefill 時間（2K 約 324 ms、8K 約 1,389 ms），不論它在 gateway 還是在 vLLM 中等待。
 - 營運上以既有的 `capserve_queue_wait_seconds`、`capserve_ttft_seconds`（從到達起算）與 `capserve_upstream_ttft_seconds` 觀察湧入。
   容量以「准入之後」的 TTFT 定義，對外文件兩者並列。
@@ -116,6 +127,7 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 - **服務規則**（`serving_class`；`create_app` 拋出 ProfileError、`capserve serve` exit 2、`deploy up` 在 preflight 拒絕，任何旗標都不能覆寫）：
   - 輸出上限大於 128 的 verified class 不能作為 active class（043 §4）。
   - T profile 只服務 `mixed-8k-t`，而且要 H-D2a 為 supported（030 8.8：T 只用於明確宣告為 M8K 的部署）；`uniform-8k-t` 只作報告。
+  - B0 profile 上，T workload（U8K-T、M8K-T）的 class 一律拒絕（030 8.8：T 的上限不能用在 B0）。loader 已經拒絕這種 profile；`serving_class` 只讀 model，所以沒有經過 loader 的 profile 也擋得住。
   - `capserve.deploy` 只啟動 B0：profile 的 `server.long_prefill_token_threshold` 不是 null 時，preflight 拒絕。T 的部署要使用者決定（043 §6）。
   - `capserve serve` 是開發用的入口，不知道後端的 argv，無法擋住「profile 接到錯的 vLLM」（c1b 也一樣）。只有 `deploy up` 以 fingerprint 保證 server 正確。
 - **揭露**：
@@ -232,7 +244,7 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
   `capacity_sha256`、`pins_sha256` 必須等於這個 checkout（release）的 `configs/capacity.toml`、`configs/pins.toml`；
   `slo` 必須逐字等於 `capacity.toml` 的 `[slo]`；`profile_id` 必須是 `verified-<source_session>`，`analysis_path` 必須是
   `results/capacity/<source_session>/analysis.json`；每個 class 的名稱與 token 上限必須是它的 Stage C workload 的（下表），每個 workload 至多一個 class。
-  - §9（Stage D）的 profile 另外要求：`configs/stage_d.toml` 與 `capacity.toml` 都已凍結；`stage_d_sha256`、`capacity_sha256`、`pins_sha256` 等於這個 checkout 的檔案；
+  - §9（Stage D）的 profile 不套用上面 §8 的 `profile_id`、`analysis_path`、`slo` 與 class 表，改為要求：`configs/stage_d.toml` 與 `capacity.toml` 都已凍結；`stage_d_sha256`、`capacity_sha256`、`pins_sha256` 等於這個 checkout 的檔案；
     `slo` 逐字等於 `stage_d.toml` 的 `[slo]`；`profile_id` 為 `verified-<source_session>-<b0|t>`（依 `server.long_prefill_token_threshold`），
     `analysis_path` 為 `results/stage_d/<source_session>/analysis.json`；每個 class 是 D-A workload 的（下表），server、輸出長度與 `not_covered` 都要相符；
     `fingerprint_sha256` 是該 server（B0 或 T）的值。
@@ -271,7 +283,8 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
 
 - 每個 class 另附 Stage C 的證據（只作描述，不是上限）：適用範圍、C_PROD、C_SLO、C_KV、C_cap、旗標（例如 ABOVE_CKV）、先失守的項目、C_PROD 的餘裕與開場湧入。
   - Stage D 的 class 另外附上：server、量測時的輸出長度、其他時間窗的 C_PROD（c_full、c_late）、C_PROD 的有效 run 中最低的 attainment、
-    最多的 preemption 與最高的 KV 峰值（後兩者是整個 bench process 的值）、hypothesis 的判定，以及 `not_covered`。全部取自 analysis.json，產品程式不另外計算。
+    最多的 preemption 與最高的 KV 峰值（後兩者是整個 bench process 的值）、hypothesis 的判定，以及 `not_covered`。
+    數字都取自 analysis.json（margins 為 1 − worst_R，at_c_prod 為有效 run 的 min / max）；`not_covered` 由 `not_covered_for(workload, flags)` 決定；不從 derived 檔計算任何數字。
   - `/readyz` 另外列出 `class_status`、`bound`、`serviceable`、`server_variant`、`flags` 與 `not_covered`（043）。
 
 ## 與 vLLM 預設不同之處

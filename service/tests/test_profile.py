@@ -1,8 +1,9 @@
 """Tests for capserve/profile.py: the capacity profile schema, canonical hash, loader rules and server fingerprint
 (decision 029 "Capacity profile"; 027 §4), the per-class statuses of a verified profile (decision 030 8.7:
 verified with a number and its bound, verified 0 = refuse the class, unavailable with a reason and no number), and the
-Stage D profiles of decision 043 (§9: their classes, servers, fingerprints and evidence; the two serving_class
-refusals: an output limit above 128 tokens, and on a T profile anything but an M8K-T class with H-D2a supported)."""
+Stage D profiles of decision 043 (§9: their classes, servers, fingerprints and evidence; the serving_class refusals:
+an output limit above 128 tokens, on a T profile anything but an M8K-T class with H-D2a supported, and on a B0 profile
+a T workload's class)."""
 
 import copy
 import hashlib
@@ -601,6 +602,16 @@ def _edit_d_class(i):
     return edit
 
 
+def _append_on(server, workload, value):
+    """Append workload's class with evidence.server set to the profile's own server, so only the other half of the
+    server rule (the workload's server in stage_d_plan.WORKLOADS) can refuse it."""
+    def edit(d):
+        cls = stage_d_class(workload, value=value)
+        cls["evidence"]["server"] = server
+        d["classes"].append(cls)
+    return edit
+
+
 @pytest.mark.parametrize("server, edit, needle", [
     ("B0", lambda d: d["provenance"].update(stage_d_sha256=None), "stage_d_sha256"),
     ("B0", lambda d: d["provenance"].pop("stage_d_sha256"), "stage_d_sha256"),
@@ -620,12 +631,14 @@ def _edit_d_class(i):
     ("B0", _edit_d_class(0)(lambda c: c.update(name="uniform-32k-x")), "uniform-32k"),
     ("B0", _edit_d_class(0)(lambda c: c.update(max_prompt_tokens=32000)), "max_prompt_tokens"),
     ("B0", _edit_d_class(2)(lambda c: c.update(max_output_tokens=128)), "max_output_tokens"),
-    ("B0", _edit_d_class(0)(lambda c: c["evidence"].update(server="T")), "server"),
-    ("B0", _edit_d_class(0)(lambda c: c["evidence"].update(server=None)), "server"),
+    ("B0", _edit_d_class(0)(lambda c: c["evidence"].update(server="T")), "evidence.server is 'T'"),
+    ("B0", _edit_d_class(0)(lambda c: c["evidence"].update(server=None)), "evidence.server is None"),
     ("B0", _edit_d_class(2)(lambda c: c["evidence"].update(output_tokens=128)), "output_tokens"),
     ("B0", _edit_d_class(2)(lambda c: c["evidence"].update(output_tokens=None)), "output_tokens"),
-    ("B0", lambda d: d["classes"].append(stage_d_class("U8K-T", value=4)), "server"),        # a T class on B0
-    ("T", lambda d: d["classes"].append(stage_d_class("U32K", value=2)), "server"),          # a B0 class on T
+    ("B0", lambda d: d["classes"].append(stage_d_class("U8K-T", value=4)), "runs on server T"),     # a T class on B0
+    ("T", lambda d: d["classes"].append(stage_d_class("U32K", value=2)), "runs on server B0"),      # a B0 class on T
+    ("B0", _append_on("B0", "U8K-T", 4), "runs on server T"),     # the same, its evidence.server the profile's own
+    ("T", _append_on("T", "U32K", 2), "runs on server B0"),
     ("B0", _edit_d_class(0)(lambda c: c.update(source="stage_c:U32K:c_prod:EXACT")), "source"),
     ("B0", _edit_d_class(1)(lambda c: c["evidence"]["not_covered"].pop()), "not_covered"),   # drops the ABOVE_CKV one
     ("B0", _edit_d_class(0)(lambda c: c["evidence"]["not_covered"].append("in_vllm_wait_beyond_c_kv")), "not_covered"),
@@ -715,6 +728,20 @@ def test_on_a_t_profile_only_m8k_t_with_h_d2a_supported_is_served(tmp_path, pins
         with pytest.raises(cp.ProfileError) as exc:
             prof.serving_class("mixed-8k-t")
         assert "H-D2a" in str(exc.value) and "030 8.8" in str(exc.value)
+
+
+@pytest.mark.parametrize("workload", ["U8K-T", "M8K-T"])
+def test_a_t_workloads_class_on_a_b0_profile_is_never_served(pins, workload):
+    """030 8.8, defence in depth: the refusal reads the model only (create_app may get a profile the loader never saw),
+    so T's limit is never served on B0 even when the class's evidence.server claims B0."""
+    cls = stage_d_class(workload, value=4)
+    cls["evidence"]["server"] = "B0"
+    prof = cp.CapacityProfile.model_validate(stage_d_doc(pins, classes=[stage_d_class("U32K", value=2), cls]))
+    assert prof.server_variant == "B0"
+    with pytest.raises(cp.ProfileError) as exc:
+        prof.serving_class(cls["name"])
+    assert "030 8.8" in str(exc.value) and "server T" in str(exc.value) and workload in str(exc.value)
+    assert prof.serving_class("uniform-32k").max_concurrency == 2
 
 
 def test_a_t_profile_class_without_evidence_is_never_served(pins):

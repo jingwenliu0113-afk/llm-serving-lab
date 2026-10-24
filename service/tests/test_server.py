@@ -94,9 +94,10 @@ async def exchange(reader, writer) -> bytes | None:
 @pytest.mark.anyio
 @pytest.mark.parametrize("over, reused", [({}, True), ({"keep_alive_s": 5}, False)])
 async def test_a_client_connection_idle_longer_than_uvicorns_default_is_reused(monkeypatch, over, reused):
-    """043 §7.2: a client connection idle for IDLE_S (longer than uvicorn's default 5 s, which aiohttp's FIFO pool of
-    60 s and httpx's of 5 s race) is still open with the default keep_alive_s, and a completion on it completes
-    normally; with keep_alive_s = 5 (uvicorn's default, before 043) the gateway has closed it.
+    """043 §7.2: a client connection idle for IDLE_S (longer than uvicorn's default 5 s, which vllm bench's aiohttp
+    pool, keepalive_timeout 60 s and FIFO, and httpx's default 5 s race) is still open with the default keep_alive_s,
+    and a completion on it completes normally; with keep_alive_s = 5 (uvicorn's default, before 043) the gateway has
+    closed it.
 
     The idle time is the event loop's clock jumping IDLE_S ahead: uvicorn closes an idle connection with
     loop.call_later(timeout_keep_alive), so every timer due within the jump fires at once and the test takes no wall

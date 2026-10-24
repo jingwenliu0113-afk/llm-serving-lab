@@ -296,7 +296,7 @@
 - **多 class 准入與開場湧入的產品設計**（NEXT 中「等 Stage D 的結果」的兩項）：依本文 D5 與 D-A2 的數字另寫 decision，不在本文決定。
 - **補記（2026-10-24）**：以上各項的產品設計與實作見 043。本文其他內容（數據與判定）都不變。
   - 產生器接受 D-A 的 session，寫出三份 verified profile，都只 commit、不釘選：B0 依 session 拆成 `-d-a1b-b0`（U32K）與 `-d-a2-b0`（U2K-O512、U8K-O512），T 一份 `-d-a1b-t`（U8K-T、M8K-T）。
-    和上面「一份 B0 profile」的字面不同，理由見 043 §2。
+    和上面把 B0 的三個 class 放在一份 profile 的寫法不同，理由見 043 §2。
   - 輸出上限大於 128 的 class（兩個 O512）與 T 的 `uniform-8k-t` 不能作為 active class；deploy 只啟動 B0。
   - D-B 與 D-C 寫進 `service/README.md` 的適用條件；多 class 准入與開場湧入的 pacing 只有候選設計，要先通過驗證研究才上線。
 

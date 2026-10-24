@@ -10,8 +10,10 @@
   with its own plain 503 (no Retry-After, no x-request-id, never seen by the guard or the metrics). The guard's
   pending cap is the only request limit.
 - Client keep-alive (043 §7.2): timeout_keep_alive = keep_alive_s (75 s), not uvicorn's 5 s, which a client pool
-  reusing its connections longer (aiohttp 60 s, FIFO) or as long (httpx 5 s) races: a request on a connection the
-  gateway is just closing fails before its first token (the race 042 infers for D-B's invalid run). Upstream, httpx's
+  reusing its connections longer (vllm bench's aiohttp pool: keepalive_timeout 60 s, FIFO) or as long (httpx 5 s)
+  races: a request on a connection the gateway is just closing fails before its first token (the race 042 infers for
+  D-B's invalid run). Only a pool whose idle limit is below 75 s (aiohttp's default 15 s, httpx's 5 s, vllm bench's
+  60 s) is out of the race; a longer or unlimited one (Go's default 90 s, urllib3) can still hit it. Upstream, httpx's
   keepalive_expiry 2 s already stays below vLLM's 5 s (capserve/upstream.py).
 - Drain: handle_exit marks the gateway draining on its event loop (call_soon_threadsafe; the signal handler must not
   touch the queue directly), then lets uvicorn shut down: listeners close at once, queued requests get 503 draining,

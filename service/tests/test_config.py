@@ -20,7 +20,7 @@ def test_defaults_from_a_minimal_toml(tmp_path):
     assert (s.max_body_bytes, s.body_read_timeout_s, s.drain_timeout_s) == (1 << 20, 10.0, 60)
     assert (s.monitor_interval_s, s.monitor_timeout_s, s.monitor_fail_threshold) == (2.0, 2.0, 3)
     assert s.disconnect_poll_s == 0.25
-    assert s.keep_alive_s == 75   # 043 §7.2: above aiohttp's 60 s and httpx's 5 s pools (uvicorn's own default is 5)
+    assert s.keep_alive_s == 75   # 043 §7.2: above vllm bench's aiohttp pool (60 s) and httpx's 5 s (uvicorn's is 5)
     assert s.retry_after_s.model_dump() == {"queue_full": 2, "queue_timeout": 2, "backend_unavailable": 5,
                                             "draining": 5, "mode": "adaptive", "min_s": 1.0, "max_s": 60.0}
     assert s.max_pending(CLS) == 4 + 4 + 16
