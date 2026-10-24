@@ -530,3 +530,48 @@ H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。本節�
 - **E3（正式，Mac 與 RTX）**：8 個設定（4B 與 9B 的 Q8_0、Q6_K、Q4_K_M、Q4_0），只量 L 2048，每個平台在同一 session 內擬合。
   - H-E3a：非比例成分的重現（3 個舊格式的跨 size 截距 > 2 SE）；H-E3b：兩個 size 的 r(Q4_0) − r(Q4_K_M) 都為負且超出 max(2 SE, κ)，不預測；依 041 的解讀表判讀。
 - **輸出**：`results/stage_e/<session>/`；設計前看過的重算在 `results/stage_e/prereg-tally/`（descriptive_only）。
+
+## 12. Stage V addendum：Stage D 產品化的驗證研究（decision 043、044）
+
+**狀態：DRAFT**。harness、044 的產品程式、一次 mini smoke 與兩輪審查完成後，連同 `configs/stage_v.toml` 一起凍結
+（`freeze.stage_v = true`、`tests/test_stage_v_frozen.py`）。凍結前沒有任何 Stage V 數據。
+本節只摘要；完整規則、揭露與依據見 decision 044。第 1–11 節不變，Phase 1–3 既有的判定不受影響。
+
+- **沿用 §8 / §9（030、039 D-C）**：
+  - 固定點，n = 5，每個 run 一次 boot，block 以 `capacity_plan.block_order` 洗牌；
+  - 030 8.1 的單點類別，guard band 0.05，取最差的 run；
+  - W = [C, N − C)、N = max(200, 10C)；跳過規則；無效的 run 不補跑；
+  - 有效性含 031，sentinel 閘門 3%、replay；
+  - gateway 以子 process 啟動，研究程式不 import capserve；凍結的 Stage C / D 模組只 import。
+- **SLO**：S2。
+- **V-GW**：經過 gateway 在 C_PROD。點為 U32K @ 2、U2K-O512 @ 32、U8K-O512 @ 12、M8K-T @ 4（T）；判定用 client 端的 TTFT。
+- **V1**：輸出在 [1, 512] 均勻（每點 5 條 pin 住的序列），U2K @ 32、U8K @ 8，經過 gateway；TPOT 只算 out ≥ 2。
+- **V2**：prefill pacing（2K 9,600 / 5,920 tok/s，8K 32,256 / 5,800 tok/s），經過 gateway。
+  - 點為 U2K @ 32、U8K @ 8、var-2048 @ 32 的開，以及 U2K @ 32 與 var-2048 @ 32 的關（對照組）；
+  - 判定取 upstream 與 client 兩個類別中較差者；
+  - manipulation check（第一波的 prefill_wait）不成立時 run 無效；
+  - 非平凡條件 N1：vLLM 內平均 ≥ 0.9 C；
+  - var 那一對不作閘門，只作否決（pacing 讓通過的 var 不再通過時否決）。
+- **V4**：`weighted-v1`（單位 1 / 4、預算 32、上限 32 / 8、嚴格 FIFO），pacing 關閉，client 32。
+  - 2K / 8K 的 90/10 與 50/50，每個 mix 5 條序列；
+  - 判定用 upstream 的 TTFT：2K 每個 run 對 2 s，8K 跨 run 合併對 6 s，TPOT 對 100 ms；
+  - 非平凡條件：T_W 中 vLLM 內平均單位數 U_W ≥ 28.8，否則為 TRIVIAL（not supported）。
+- **逐 request 擷取**：gateway 的 access log 以 `client_request_id` 雙射對應 bench 的每個 request，記錄 queue_wait、
+  prefill_wait、ttft、upstream_ttft，以及 monotonic 的到達、送出、釋放時間。
+- **gateway 是被操弄的變因**：`capserve serve` 的 import 閉包（AST 計算）以 `gateway_path_sha256` 凍結；
+  研究用的佇列設定（V2 / V4 為 120 s / 600 s）記錄在設定檔，和產品設定分開。
+- **Hypotheses**（預測寫在數據之前）：
+  - H-GW1–4：GW-M8K-T 預測 not supported，其他 supported；
+  - H-L1–2：supported；
+  - H-P1–3：var-pace 預測 not supported；
+  - H-W0–2：W-90 / W-50 預測 not supported。
+- **session**：mini 一次；`formal-*-v-adm`（V2 + V4，約 2.75 h，上限 3.5 h）、`formal-*-v-cls`（V-GW + V1，約 5.3 h，
+  上限 7.0 h），之間 ≥ 2 h；全期上限 12 h。
+  - 超過 session 的上限時不再開始新的 boot，剩下的點為 NT；
+  - 一個產品單位中有任一點不是 ok，該單位的其他點不再測。
+- **產品對應**：每個單位只在它列出的每一點都 PASS 時成立。
+  - 產生器（`profile_gen --validation-session`）只為成立的單位寫出 §12 verified profile：V1 的 `validated` class、
+    `pacing` 段、`admission` 段；
+  - V-GW 的通過只讓 uniform-32k / mixed-8k-t 成為正式釘選的候選；
+  - 正式釘選不會自動改變（037 §2）。
+- **輸出**：`results/stage_v/<session>/analysis.json`。
