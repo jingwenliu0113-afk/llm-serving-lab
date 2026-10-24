@@ -1209,8 +1209,11 @@ def test_the_sessions_here_must_add_up_to_the_hours_the_session_counted(reruns, 
         d.mkdir()
         keep = ("session_id", "started_at", "finished_at", "previous_formal", "in_progress")
         (d / "session.json").write_text(json.dumps({k: rec[k] for k in keep}))
-    (msg,) = stop_rule(problems(rerun))
-    assert HOURS in msg and "fail closed" in msg and f"{RERUN}'s hours_used_h" in msg
+    got = stop_rule(problems(rerun))
+    (msg,) = [p for p in got if HOURS in p]
+    assert "fail closed" in msg and f"{RERUN}'s hours_used_h" in msg
+    assert [p for p in got if p != msg] == ([] if how != "a decoy" else         # the moved original is read too
+                                            [p for p in got if f"archive-{FIRST}" in p and "analysis.json" in p])
 
 
 def test_a_renamed_session_of_the_other_plan_is_found_by_its_session_id(reruns, tmp_path):
@@ -1316,6 +1319,53 @@ def test_a_session_just_before_a_preflight_abort_is_found_by_the_hours(preflight
         shutil.rmtree(s["root"].joinpath(*sv.RESULTS, "formal-t-v-p1"))
     (msg,) = stop_rule(problems(s))
     assert (HOURS in msg and "fail closed" in msg) if deleted else ("formal-t-v-p1" in msg and "analysis.json" in msg)
+
+
+@pytest.mark.parametrize("name", ["archive-formal-t-v-p1", "formal_t-v-p1", "invalid-formal-t-v-p1"])
+@pytest.mark.parametrize("reported", [True, False], ids=["reported", "never reported"])
+def test_a_valid_session_renamed_out_of_the_formal_names_still_blocks(preflights, tmp_path, name, reported):
+    """The independent check's probe: the valid V-ADM just before a preflight abort, renamed inside results/stage_v to
+    a name that is no session id, still counts toward the hours (it has a session.json), but neither the walk nor the
+    rerun loop read only formal-* any more: it is read like any formal-* directory, so its analysis.json or its
+    renamed directory refuses the rerun (044 實作補記十第 12 項)."""
+    s = clone(preflights["formal-t-v-p3"], tmp_path)
+    results = s["root"].joinpath(*sv.RESULTS)
+    if not reported:
+        never_reported(results / "formal-t-v-p1")
+    (results / "formal-t-v-p1").rename(results / name)
+    got = stop_rule(problems(s))
+    assert got and any(name in p and ("analysis.json" in p if reported else "renamed" in p) for p in got)
+
+
+def hard_killed(d: Path, **extra) -> None:
+    """What a hard kill (SIGKILL, OOM, wsl --shutdown, a reboot) leaves, the record written at the mkdir, after the
+    044 實作補記六 operation: finished_at recorded, in_progress false (no previous_formal, aborted or env_valid)."""
+    rec = json.loads((d / "session.json").read_text())
+    keep = ("schema_version", "session_id", "stage", "session", "kind", "mode", "formal", "started_at", "out")
+    (d / "session.json").write_text(json.dumps({**{k: rec[k] for k in keep if k in rec}, "boots": [], "runs": {},
+                                                "finished_at": rec["finished_at"], "in_progress": False, **extra}))
+
+
+@pytest.mark.parametrize("sid", ["formal-t-v-c1", "formal-t-v-a4"])
+def test_a_hard_killed_attempt_recorded_by_the_operation_blocks_nothing(attempts, tmp_path, sid):
+    """A hard-killed attempt has only the provisional record; after the 實作補記六 operation the runner starts the next
+    session, and the generator's walk goes on past it by the runner's own rule (as past a preflight abort), so the valid
+    V-ADM after it still writes its profile (044 實作補記十第 12 項)."""
+    s = clone(attempts, tmp_path)
+    hard_killed(s["root"].joinpath(*sv.RESULTS, sid))
+    docs, holds = gen(s)
+    assert holds == ["PACE-2K", "PACE-8K", "W1"] and list(docs) == ["verified-formal-t-v-b-b0"]
+
+
+def test_an_unconfirmed_plan_of_the_other_session_says_so(reruns, tmp_path):
+    """The V-CLS between, its plan.json deleted by mistake: the rerun is refused because its plan cannot be confirmed,
+    and the message says that instead of calling the V-CLS a V-ADM session (044 實作補記十第 12 項)."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    (rerun["root"].joinpath(*sv.RESULTS, BETWEEN) / "plan.json").unlink()
+    got = [p for p in stop_rule(problems(rerun)) if BETWEEN in p]
+    assert got and all("fail closed" in p for p in got)
+    assert any("V-CLS" in p and "plan.json" in p for p in got)
+    assert not any(f"earlier V-ADM session {BETWEEN}" in p for p in got)
 
 
 # ------------------------------------------------------------------ the CLI --

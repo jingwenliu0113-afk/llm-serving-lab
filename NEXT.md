@@ -56,7 +56,7 @@
   - [x] 044 凍結前審查兩輪與修正後的獨立檢查（實作補記六、七、八）。第二輪的 must-fix：vLLM 0.30 bench 預設不送 ready check（`--ready-check-timeout-sec` 0），
         沒有 id 的 completion 紀錄改為剛好 C 筆（原本要求 ≥ C + 1，會讓每個 V run 無效）；另有：bench 之前 gateway 結束記為 fault、report 只看在本 session 之前開始的目錄、
         session 時間必須帶 offset 且不倒退。由我決定、凍結前使用者仍可改：跳過規則改為逐點（實作補記六第 6 項）。
-  - [x] 044 產生器的 `--validation-session` 路徑（Mac、0 GPU，TDD，合成 session；`feat/044-generator`，實作補記九；審查見實作補記十，含停止規則的重跑檢查：較早的 session 有 analysis.json 就拒絕，否則只有正面證據證明它無效時才放行，Mac 上的 Stage V 目錄必須加總等於開始時記錄的時數，其餘 fail closed；防誠實的錯誤、不防蓄意竄改，第 1、10、11 項）：只由 analysis.json 的 units 寫出至多一份 §12 profile，
+  - [x] 044 產生器的 `--validation-session` 路徑（Mac、0 GPU，TDD，合成 session；`feat/044-generator`，實作補記九；審查見實作補記十，含停止規則的重跑檢查：較早的 session 有 analysis.json 就拒絕，否則只有正面證據證明它無效時才放行，Mac 上的 Stage V 目錄必須加總等於開始時記錄的時數，其餘 fail closed；防誠實的錯誤、不防蓄意竄改，第 1、10、11、12 項）：只由 analysis.json 的 units 寫出至多一份 §12 profile，
         沒有會寫檔的單位成立時 exit 0、不寫檔；凍結、DEPLOYED_COMMIT 的請求路徑、base profile、工作樹、mini 一律拒絕；`gateway_path_sha256` 不變；40 個突變全部被抓到，實作補記十第 11 項另 27 個也全部被抓到。
   - [ ] 044 之後（**等 GPU 空閒**）：WSL 唯讀複核（CustomDataset output_tokens、/tokenize、x-request-id、aiohttp、ready check 預設略過）→
         WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT-0–6、mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。順序排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後。

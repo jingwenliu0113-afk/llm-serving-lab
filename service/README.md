@@ -262,7 +262,7 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
     一個目錄只有在 plan.json 等於它 session.json 記錄的 `plan_sha256`、兩者的 session 也相同時才算另一個 plan；
     目錄改過名、檔案和它的 session.json 記錄不符、`refusal_problems` 不為空、分析失敗、其他錯誤、這樣的 `formal-*` 目錄讀不到 session.json 或 started_at、`previous_formal` 鏈上的正式 session 不在 Mac 上、
     Mac 上不晚於本 session 開始的 Stage V 目錄扣掉它自己之後的時數加總不等於它開始時記錄的 `hours_used_h`（先取回每個 Stage V session），都拒絕；
-    防的是誠實的錯誤，不防蓄意修改 session.json；每個 session 最多 2 次嘗試仍由操作者負責，044 實作補記十第 1、10、11 項）；
+    防的是誠實的錯誤，不防蓄意修改 session.json；每個 session 最多 2 次嘗試仍由操作者負責，044 實作補記十第 1、10、11、12 項）；
     停止規則的新凍結（解凍再凍結，或一直凍結、只更新 mini 與 `gateway_path_sha256`）之下的 session 一律拒絕，要等該凍結的 decision 一併修改產生器的「第一次凍結」規則（044 實作補記十第 2 項）。
   - 產生器不在 gateway 的請求路徑閉包內，修改它不會改變 `gateway_path_sha256`。
 - 輸出是決定性的（沒有時間戳記）；每個 commit 過的 verified profile 都由 Mac 測試重新產生並比對（忽略 generator_commit）。

@@ -1169,11 +1169,12 @@ def previous_formal_problems(d: Path, s: dict, *, root: Path, dirs: list) -> lis
                                 "is an earlier valid session of this plan under this freeze is unknown: fetch every "
                                 "formal Stage V session before generating")]
             e, rec = by_id[pid]
-        elif rec.get("aborted"):
+        elif rec.get("aborted") or "env_valid" not in rec:   # a preflight abort, or a hard kill's record (第 12 項)
             try:                                          # its own 2 h gap problems are the report's (044 實作補記七)
                 prev, _ = rv.gap_problems(root, rec["started_at"], session_id=e.name)
             except (KeyError, TypeError, ValueError) as exc:
-                return [_closed(f"{who} (aborted in its preflight) records no previous_formal and no usable start "
+                return [_closed(f"{who} (aborted in its preflight, or hard-killed) records no previous_formal and no "
+                                f"usable start "
                                 f"({type(exc).__name__}: {exc}): the formal sessions before it cannot be told")]
             if prev is None:
                 return []
@@ -1246,7 +1247,9 @@ def rerun_problems(d: Path, cap: dict, *, root: Path, evaluate: Callable) -> lis
     (hours_problems). The 2-attempt cap stays with the operator (044 實作補記四第 4 項, 實作補記十). It guards against
     honest mistakes, not deliberate edits of a session.json (it has no sha256 of its own; 實作補記十第 11 項)."""
     s, plan = cap["session"], cap["plan"].get("session")
-    dirs = sorted(p for p in root.joinpath(*STAGE_V_RESULTS).glob("formal-*") if p.is_dir())
+    dirs = sorted({*(p for p in root.joinpath(*STAGE_V_RESULTS).glob("formal-*") if p.is_dir()),   # and a session
+                   *(p for p in rv._session_dirs(root)                                       # renamed to no id
+                     if not any(rx.fullmatch(p.name) for rx in rv.SESSION_IDS.values()))})  # (實作補記十第 12 項)
     problems = previous_formal_problems(d, s, root=root, dirs=dirs)
     try:
         start = _started_at(s)
@@ -1269,6 +1272,12 @@ def rerun_problems(d: Path, cap: dict, *, root: Path, evaluate: Callable) -> lis
                             "fail closed")
             continue
         if began >= start or any(rec.get(k) != s.get(k) for k in STAGE_V_FREEZE_SHAS):
+            continue
+        if other is None and rec.get("session") not in (None, plan):
+            problems.append(_closed(f"{e.name} records the plan session {rec.get('session')!r}, but its plan.json is "
+                                    "not the plan its session.json records it ran (plan_sha256), so whether it is an "
+                                    f"earlier {plan} session under this freeze cannot be confirmed (044 實作補記十第 12 "
+                                    "項)"))
             continue
         if (e / svr.ANALYSIS_NAME).exists():
             problems.append(f"{s.get('session_id')} reruns the earlier {plan} session {e.name} (started "
