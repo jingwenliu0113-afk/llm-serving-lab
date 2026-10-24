@@ -1,7 +1,7 @@
 # 042 — Stage D 的結果（formal-20261023-d-a1b、-d-a2、-d-b、-d-c）
 
 - 狀態：**結果**。四個 session 都有效，判定全部依 039 凍結的規則（凍結 commit `fd95164`），沒有任何事後的修改。
-  D-B 唯一一個無效 run 的原因目前是推論，等 GPU 空閒時以 raw 確認（見 D-B），確認結果不會改變任何判定。
+  D-B 唯一一個無效 run 的原因：2026-10-25 已以 raw 確認和推論一致（見 D-B），判定不變。
 - 日期：2026-10-24
 - 對應：039（事先登記）、030（沿用的規則）、031（閒置與 spill）、035（c1b，H-D2 的比較對象與 λ_ref 的來源）、037、038
 - 輸出（commit `62869cf`）：
@@ -203,7 +203,7 @@
   - block 1 的順序是 0.9 → 0.7 → 0.8。0.9 的 FAIL 只移除 0.9 以上；讓 0.7、0.8 原本計畫的 8 個 run 都沒有執行的，是 0.7 的那一個無效 run（030 的跳過規則，無效的 run 不補跑）。K 的最低點 0.7 是 NT（不是 PASS / MARGINAL，也不是 FAIL），所以依 030 8.1 的狀態表（039：其他與 030 相同），λ_SLO、λ_PROD 都沒有值，狀態為 NT；030 8.9 也把接近邊界的點為 NT 的情況列為無法解讀。
   - **只作描述，不是估計量**：階段 S 到 0.8 都通過（0.8 為 0.737 / 0.854），C-i4-r1（0.8）通過、C-i5-r1（0.9）FAIL。描述上的邊界在 0.8 與 0.9 之間，但依 030 8.4，階段 S 的 run 不進入估計量，不得用它補上 U2K 的數字。
   - 各點的平均並發：0.7 為 9.15（S）/ 10.64（C，無效），0.8 為 13.12 / 12.90，0.9 為 22.72 / 21.96；封閉迴路的 C_PROD 是 32。
-- **兩個失敗 request 的原因（推論，待 raw 確認）**：最可能是凍結的 bench client 的連線重用競態。
+- **兩個失敗 request 的原因（raw 已確認，2026-10-25；機制仍是推論，但所有可觀察的證據都和它一致）**：凍結的 bench client 的連線重用競態。
   - 失敗的 request ttft、latency、out 都是 0，也就是在收到第一個 chunk 之前就失敗。失敗當下在途只有 4 與 10 個；同一到達率的階段 S run 完成 535 / 535，更高的到達率都沒有失敗。所以和負載無關。
   - `vllm bench serve` 以 aiohttp 連線池重用連線（keepalive_timeout 60 s）。WSL 的 bench client 使用 aiohttp 3.14.3：`configs/vllm.lock.txt`（pins 的 `vllm.lock_file`）釘選這個版本，pins 註明 WSL .venv 與 lock 一致，022 只以 `--no-deps` 加裝 pandas，env 的 freeze_sha256 自 2026-10-10 到 D-B 都沒變。
     這個版本的連線池是 FIFO（取用 `popleft`、放回 `append`；3.13.2 與 3.14.5 的原始碼都是如此），總是重用閒置最久、仍連著的連線。
@@ -214,6 +214,11 @@
     C 超過 KV 容量或 warmup 中有大量 preemption 時（例如 U2K-O512 C 39 / 46 / 60、U8K-O512 C 14 / 16、U32K C 4），這個時間差會超過 5 s，所以這些 run 開始時有一次很小的暴露。
     已 commit 的 1,196 列 row 中，只有這一列 failed > 0，封閉迴路的 row 都是 0。產品的 gateway 正是為此把上游的 keepalive_expiry 設為 2 s（低於 5 s）。
   - b003 的 server log 大小沒有超出其他 boot 的線性模型，看不出 server 端的 traceback。
+  - **raw 的確認**（2026-10-25，GPU 空閒時以 `tools/rtx/fetch_raw.sh` 唯讀取回，sha256 都和 raw_manifest 相符；raw/ 不進 git）：
+    - `C-U2K-P-i3-r1.bench.log`（sha256 `96a2d194…`）：bench 跳過 ready check、10 個 warmup 完成之後開始主要的 run；兩個失敗分別是 `aiohttp.client_exceptions.ServerDisconnectedError: Server disconnected` 與 `ClientOSError: [Errno 104] Connection reset by peer`（底層 `ConnectionResetError`），兩者都發生在 `session.post` 之後、`resp.start` 讀取回應標頭時（`endpoint_request_func.py:204`），也就是 server 沒有回任何位元組就關閉了連線。
+    - `b003-C-U2K-P-r1.server.log`（sha256 `3cfa05f0…`）：依 `POST /tokenize` 切成三段（這個 boot 的三個 run），第二段（C-i3-r1）的 `POST /v1/completions` 剛好 543 筆 = 成功的 533 + warmup 10，全部 200；兩個失敗的 request 沒有任何 access log。bench 期間 server 沒有任何 error 或 warning，唯一的 ERROR 是 23:56:16 關閉時的 `EngineDeadError`（teardown 的 abort，每個 boot 都有）。
+    - WSL 的 `.venv` 中 aiohttp 為 3.14.3（`import aiohttp` 讀出），和 lock 一致。
+    - 結論：失敗的兩筆在 server 端從未被處理，server 也沒有異常；client 在送出後、收到回應之前被 server 關閉連線。這正是 keep-alive 關閉與連線重用相撞的樣子，和上面的時序模擬一致。uvicorn 不記錄 keep-alive 的關閉，所以無法直接看到「server 在那一刻關閉了閒置連線」，機制仍標為推論；判定（U2K-P 為 NT）不變。
   - **待確認**：`raw/C-U2K-P-i3-r1.bench.log`（sha256 `96a2d194…`）中 vLLM bench 印出的錯誤。GPU 空閒時以 `fetch_raw.sh` 唯讀取回並核對 sha256，並以 `.venv/bin/python -m pip show aiohttp` 唯讀複核版本。
   - 不論原因為何，依 013 / 030 都不補跑，U2K-P 的判定維持 NT。
 
@@ -267,7 +272,7 @@
 - **mixed 沒有開放迴路與 D-C 的數字**（039 事先寫明要列入限制）：D-B 不做 mixed，因為 mixed 的容量只有 2，Poisson 到達下的變異會被長 request 主導。
   D-C 也只驗證 uniform 兩類在 C_PROD 這一點，mixed 在長度不一或經過 gateway 時都沒有量過（report 的 not_supported 也這樣寫）。
 - D-A 的結果是封閉迴路、准入之後的延遲；D-B 是不靠准入控制時 vLLM 本身的到達率上限，不是 gateway 的上限（039）。
-- **開放迴路的協定缺陷**（推論，待 raw 確認）：在凍結的協定下，任何開放迴路 run 都有一個和到達率無關的小機率，被 client 端的連線錯誤判為無效（D-B 的 18 個開放迴路 run 共 7,397 個 request，失敗 2 個）。
+- **開放迴路的協定缺陷**（raw 已確認與推論一致，見 D-B）：在凍結的協定下，任何開放迴路 run 都有一個和到達率無關的小機率，被 client 端的連線錯誤判為無效（D-B 的 18 個開放迴路 run 共 7,397 個 request，失敗 2 個）。
   封閉迴路在量測期間不受影響，只在 warmup 轉入第一波、而且 warmup 的完成時間相差超過 5 s 時有一次很小的暴露；已 commit 的封閉迴路 row 都沒有失敗。要修正（例如提高 server 的 keep-alive，或讓 client 不重用接近過期的連線），需要新的 decision log 與新的 session，不能補跑 D-B。
 - 固定長度的封閉迴路排程幾乎是決定性的：同一點的 run 之間 preemption 次數完全相同（U2K-O512 C 32 每個 run 都是 30 次），n = 5 確認的是重現性，不是不同的狀態（030 8.9 的格狀結構限制）。
 - raw/ 沒有取回 Mac（STORAGE_PLAN），所以 raw → derived 這一步只能信任 runner 的檢查與 sha256；bench 實際送出的 input_lens、gateway log 與 server log 都只在 WSL。

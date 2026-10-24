@@ -41,8 +41,8 @@
   - [x] 取回（不含 raw/）、四份 report、D5（`62869cf`）。report 的判定：H-D1、H-D2a、H-D2b supported；
         H-D3 U2K-O512 not supported、U8K-O512 supported；H-D4 U2K-P NT、U8K-P supported；H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。
   - [x] 判讀與結果文件 **042**：每個 session 與 D5 各由一個 agent 抽取、第二個 agent 反駁，判定全部和 report 一致；039 執行紀錄二與文字更正、PREREGISTRATION §9 註記。
-  - [ ] D-B 無效 run（C-U2K-P-i3-r1）的原因（**等 GPU 空閒**）：`tools/rtx/fetch_raw.sh` 唯讀取回 `raw/C-U2K-P-i3-r1.bench.log`（sha256 `96a2d194…`），
-        並查 WSL venv 的 aiohttp 版本，確認 042 推論的 keep-alive 競態；只更新 042 的說明，判定不變（U2K-P 仍為 NT）。
+  - [x] D-B 無效 run（C-U2K-P-i3-r1）的原因（2026-10-25，raw 唯讀取回）：bench.log 的兩個失敗是 ServerDisconnected / ECONNRESET，發生在讀回應標頭時；
+        server log 該段剛好 533 + 10 warmup 筆 completion、全部 200，bench 期間沒有錯誤；WSL aiohttp 3.14.3。和 042 的 keep-alive 競態一致，判定不變（042 已更新）。
   - [x] 產品設計 **043**（DRAFT，`76115eb`）：三份設計經三位評審比較。待決事項 1–7 依建議定案：3 份不釘選的 verified profile、
         輸出上限 > 128 的 class 不能作為 active class、T 只服務 mixed-8k-t 而且現在不部署、正式釘選與 active class 不變、開場湧入維持現況。
   - [x] 043 實作（0 GPU，TDD）：loader 與 §9、產生器接受 D-A session、三份不釘選的 verified profile（`-d-a1b-b0`、`-d-a1b-t`、`-d-a2-b0`）、
@@ -94,7 +94,9 @@
   - GPU 佇列（2026-10-24）：Stage D 結束後，另一個專案的 `agent_gym_serve` 自 01:09Z 起持有 GPU lock；不搶占。
         lock 空出後依序：部署 HEAD（`deploy_bundle.py`）→ E1-P seed 檢查與 smoke → D-B 的 raw 取證 → E1-D 取回 → Q3 下載 → E3 / Stage Q 的 RTX pilot → E2。
   - [ ] E1-P（**等 GPU 空閒**，WSL）：
-        1. seed 檢查（只用 CPU，`flock -n` 下）：`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e1p_seed_check.py` → Mac 上 `tools/rtx/fetch_seed_check.sh`（核對 sha256）→ commit。不通過時（seed B 有 prompt 不是 8,064，或 A、B 相同）要另寫 decision log 換 seed，不能自行改。
+        1. [x] seed 檢查通過（2026-10-25，部署 `b517cdc`，`637d70f`）：N 200 與 16，seed A、B 的每個 prompt 在 server 端都是 8,064 token，兩個 seed 不同。原本的指令：seed 檢查（只用 CPU，`flock -n` 下）：`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e1p_seed_check.py` → Mac 上 `tools/rtx/fetch_seed_check.sh`（核對 sha256）→ commit。不通過時（seed B 有 prompt 不是 8,064，或 A、B 相同）要另寫 decision log 換 seed，不能自行改。
+        2. smoke 的第一次嘗試 `smoke-e1p-20261025`（2026-10-24 23:46Z）在第一次 boot 前被 031 的閒置檢查拒絕：GPU 閒置佔用 1,179 MiB，超過上限 1,018 MiB（之前的 session 閒置時約 650–720 MiB）。
+           Windows 端開著的桌面程式（ChatGPT、工作管理員、設定、Windows Terminal、codex-computer-use 等）用掉 GPU 記憶體；依規則不關閉 Windows 程序，等使用者處理後以新的 id 重跑 smoke。
         2. smoke：`python benchmarks/stage_e1p_plan.py --mode smoke --out ~/e1p-smoke-plan.json`，`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_e1p.py --plan ~/e1p-smoke-plan.json --out results/stage_e/smoke-e1p-<date> --gpu-lock-held --smoke`
         3. 取回、凍結（`freeze.e1p = true`、`smoke_e1p`）→ 正式（約 2.5 h，上限 3.0 h 減 smoke 的時間）→ `stage_e1p_analysis.py --out results/stage_e/e1p-analysis-<date>/e1p.json`。
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
