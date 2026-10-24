@@ -60,7 +60,7 @@
         沒有會寫檔的單位成立時 exit 0、不寫檔；凍結、DEPLOYED_COMMIT 的請求路徑、base profile、工作樹、mini 一律拒絕；`gateway_path_sha256` 不變；40 個突變全部被抓到。
   - [ ] 044 之後（**等 GPU 空閒**）：WSL 唯讀複核（CustomDataset output_tokens、/tokenize、x-request-id、aiohttp、ready check 預設略過）→
         WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT-0–6、mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。順序排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後。
-        凍結前（pin `configs/stage_v.toml` 之前）另改 `[stage_v.units]` 上方仍寫舊單位跳過規則的註解（Mac，實作補記九第 13 項）。
+        [x] `[stage_v.units]` 上方的註解已改為逐點跳過規則（Mac，實作補記九第 13 項、實作補記十第 9 項；在 pin `configs/stage_v.toml` 之前）。
 - **Stage Q**（decision 040，DRAFT；PREREGISTRATION §10）：
   - [x] Q1 / Q2 harness 與凍結檢查（`f65c081`、`49b88af`）：`configs/stage_q.toml`，三個 pilot 是凍結的證據，分析只接受凍結後的正式 session。
   - [x] Q3 harness（`quality/stage_q3.py`、`configs/stage_q3.toml`，獨立的凍結）。

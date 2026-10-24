@@ -248,12 +248,17 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
     - PACE-2K / PACE-8K：c1b 的 `uniform-2k` / `uniform-8k` 原樣，加上量過的 `pacing`（含佇列設定）與 `validation`；
     - W1：`admission` 段（weighted-v1 的參數、佇列設定、量過的 mix 0.9 / 0.5、`gateway_path_sha256`、`validation`），成員是 c1b 的複本；
     - V1-2K / V1-8K：`uniform-2k-o1-512`（32）/ `uniform-8k-o1-512`（8），bound `validated`，evidence 為 d-a2-b0 的 O512 class 加上輸出分布、5 個 dataset 與 `via_gateway`；
+      V1 class 的 evidence 中 scope、C_PROD、C_KV、flags、hypotheses 是 d-a2-b0 O512 class 在 D-A2 全部輸出 512 token 時的量測，
+      它驗證的範圍是 `output_distribution` 加上 `validation`（C = `V1_C`，經過 gateway 的 client 視角）；
     - VG-32K / VG-M8K-T 不寫檔（只是正式釘選的候選）。
   - 沒有會寫檔的單位成立時，不寫任何檔、exit 0，摘要的 `written` 說明原因。
   - 另外的拒絕：`configs/stage_v.toml` 沒有凍結或凍結證據不全；`--freeze-commit` 不是第一次設定 `[freeze] stage_v = true` 的 commit
     （`stage_v_plan.HARNESS_FILES`、Stage D 與 Stage C 的凍結模組在凍結 commit、DEPLOYED_COMMIT 與產生器實際執行的檔案三者相同）；
     DEPLOYED_COMMIT 上請求路徑的 `gateway_path_sha256` 不是凍結值；c1b 或 d-a2-b0 不是凍結 commit 上的位元組；session 不是 `results/stage_v/formal-…`（mini 一律拒絕）；
-    `stage_v_report` 會拒絕它，或唯讀重跑無法逐位元組重現 `analysis.json`；boot 的 server 不是該點的產品 server。
+    `stage_v_report` 會拒絕它，或唯讀重跑無法逐位元組重現 `analysis.json`；boot 的 server 不是該點的產品 server；
+    同一個 plan（V-ADM / V-CLS）在同一次凍結下（記錄的 `stage_v_sha256`、`harness_sha256`、`gateway_path_sha256` 相同）已有一個較早開始、`stage_v_report` 接受的 session
+    （044 停止規則「不重跑有效的 session 來換 PASS」；這樣的 `formal-*` 目錄讀不到 session.json 或 started_at 時也拒絕，fail closed；每個 session 最多 2 次嘗試仍由操作者負責，044 實作補記十第 1 項）；
+    停止規則的新凍結（解凍再凍結，或一直凍結、只更新 mini 與 `gateway_path_sha256`）之下的 session 一律拒絕，要等該凍結的 decision 一併修改產生器的「第一次凍結」規則（044 實作補記十第 2 項）。
   - 產生器不在 gateway 的請求路徑閉包內，修改它不會改變 `gateway_path_sha256`。
 - 輸出是決定性的（沒有時間戳記）；每個 commit 過的 verified profile 都由 Mac 測試重新產生並比對（忽略 generator_commit）。
   這個測試掃描所有 tracked 檔案（`results/` 之外），任何路徑、任何副檔名中 `status` 為 `verified` 的 JSON 都要能重新產生。

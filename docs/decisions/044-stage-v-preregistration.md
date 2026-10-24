@@ -1,7 +1,7 @@
 # 044 — Stage V 事先登記（DRAFT）：Stage D 產品化的驗證研究（V-GW、V1、V2、V4）
 
 - 狀態：**DRAFT**（設計；待決事項已依建議定案，見文末）。harness、產品程式、一次 mini smoke 與兩輪審查都完成後凍結（見「凍結」）。凍結前不收任何 V 的正式數據。
-  - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）；產生器的 `--validation-session` 路徑已完成（`feat/044-generator`，實作補記九；合成 session，沒有 Stage V 數據）。尚待：WSL 唯讀複核、dataset pin、GPU 視窗 0（產品 IT 與 mini），之後才凍結。
+  - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）；產生器的 `--validation-session` 路徑已完成並經審查（`feat/044-generator`，實作補記九、十；合成 session，沒有 Stage V 數據）。尚待：WSL 唯讀複核、dataset pin、GPU 視窗 0（產品 IT 與 mini），之後才凍結。
 - 日期：2026-10-24
 - 對應：
   - 043：7.3 的候選設計、7.4 的驗證研究、「使用者決定」；
@@ -390,9 +390,9 @@
 - **gateway 造成的無效 run**（gateway 結束、5xx、對應不完整、(j) 被違反、`/readyz` 不符）：
   - 不開始下一個 V session，先寫 decision log；
   - 修正 capserve 之後，要新的凍結與新的 mini；
-  - 兩個 session 都在新的凍結下重跑。舊結果只對舊的 sha 有效，依服務規則不能上線。
+  - 兩個 session 都在新的凍結下重跑。舊結果只對舊的 sha 有效，依服務規則不能上線（由 §12 loader 機械式保證；新凍結下的 session 要等新的 decision 修改產生器的第一次凍結規則，實作補記十第 2 項）。
 - **看到數據之後不改**：指標、view、門檻、時間窗、0.9、序列、政策參數、佇列設定、跳過規則。
-  - 不重跑有效的 session 來換 PASS；新的參數就是新的研究。
+  - 不重跑有效的 session 來換 PASS；新的參數就是新的研究（產生器機械式檢查，實作補記十第 1 項）。
 - **GPU**：
   - 拿不到 lock 就等，標記 blocked，繼續 Mac 上的工作，不搶占，不刪別人的 lock；
   - 每個 session 一個前景 ssh；
@@ -723,18 +723,18 @@
 | （描述） | var 那一對 | 只改 README | 依 V2 的 2×2 讀法；不得宣稱 pacing 修好 var | — |
 
 - **產生器**：`python -m capserve.profile_gen --validation-session results/stage_v/<sid> --freeze-commit <stage_v 的凍結 commit> --out-dir service/profiles`。
-  - 只讀 analysis.json 的 `units`；
+  - 只讀 analysis.json 的 `units`（寫什麼只由 units 決定；provenance / platform 與 session.json 的讀取見實作補記九第 3 項）；
   - 以 `stage_v_report.report()` 唯讀重跑，結果必須逐位元相同；
   - 每個 session 最多一份 `verified-<sid>-b0.json`，只含成立的單位；
-  - 下列情況拒絕：凍結檢查不符、部署 commit 的 `gateway_path_sha256` 和凍結值不同、base profile 不是 committed 的位元組、工作樹不乾淨。
+  - 下列情況拒絕：凍結檢查不符、部署 commit 的 `gateway_path_sha256` 和凍結值不同、base profile 不是 committed 的位元組、工作樹不乾淨；另有同一次凍結下有效 session 的重跑（實作補記十第 1 項）。
 - **§12 的 provenance**：
-  - validation_session、analysis 的 path 與 sha；
+  - validation_session（程式的 source_session，實作補記一第 9 項）、analysis 的 path 與 sha；
   - stage_v_sha256、gateway_path_sha256、capserve_sha256；
   - base_profiles [{id, content_sha256}]；
   - freeze / generator / deployed commit、pins、gpu、driver。
 - **§12 的 class**：
-  - 複本：逐欄等於 base class，再加上 `validation` {study, points, class, worst_R client / upstream, n}；
-  - V1 的 class：evidence 記錄 {dist "uniform[1,512]"、5 個 dataset 的 sha、via_gateway true、兩點的 worst_R}；
+  - 複本：逐欄等於 base class，再加上 `validation` {study, points, class, worst_R client / upstream, n}（measured_classes、unit；worst_R 在 validation.worst_r，實作補記一第 9 項）；
+  - V1 的 class：evidence 記錄 {dist "uniform[1,512]"、5 個 dataset 的 sha、via_gateway true、兩點的 worst_R}（兩點的 worst_R 在 validation.worst_r，實作補記一第 9 項）；
   - `not_covered` 依 enum 重算：移除 `via_gateway` 與 `output_length_other_than_measured`，加入 `output_length_distribution`。
 
 ## 揭露
@@ -1254,7 +1254,7 @@
    - validation 取單位 validation 的 {study, unit, points, measured_classes, worst_r, n}（`capserve.profile.Validation` 的欄位）；queue、pacing、admission、datasets、mixes 放在 §12 規定的位置。
    - class 的順序：複本（U2K、U8K），再 V1（2K、8K）。`admission` 一律寫出（不成立時為 null），`server.long_prefill_token_threshold` 寫 null。`base_profiles` 只列實際用到的 base（V-ADM 為 c1b，V-CLS 為 d-a2-b0）。本文的 validation_session 就是既有的 `source_session`（實作補記一第 9 項）。
 5. **凍結檢查**（比照 §8 / §9 的 `freeze_commit_problems`）：
-   - `--freeze-commit` 是第一次設定 `configs/stage_v.toml` `[freeze] stage_v = true` 的 commit（它的上一個 commit 與更早的歷史都沒有凍結過），是 session DEPLOYED_COMMIT 的祖先，該 commit 的 stage_v.toml 的 sha256 等於 session 記錄、產生器讀到的值。
+   - `--freeze-commit` 是第一次設定 `configs/stage_v.toml` `[freeze] stage_v = true` 的 commit（它的上一個 commit 與更早的歷史都沒有凍結過），是 session DEPLOYED_COMMIT 的祖先，該 commit 的 stage_v.toml 的 sha256 等於 session 記錄、產生器讀到的值。停止規則的新凍結之下的 session 因此一律被拒絕，要由該凍結的 decision 一併修改這條規則（實作補記十第 2 項）。
    - `STAGE_V_MODULES` 在凍結 commit、DEPLOYED_COMMIT 與產生器實際執行的檔案三者相同：`stage_v_plan.HARNESS_FILES` 的 5 個模組，加上 §9 的 Stage D 凍結檔與 5 個 Stage C 模組。本文沒有列出範圍；Stage V 的 harness 會 import 這些 Stage D / C 模組。
    - `stage_v_plan.freeze_evidence_problems` 為空，stage_d.toml 與 capacity.toml 都已凍結（loader 的 §12 規則）。session 的 `harness_sha256`、記錄的 `gateway_path_sha256`、mini 證據與每個 pin 由重跑的 `stage_v_report.refusal_problems` 檢查。
 6. **DEPLOYED_COMMIT 的請求路徑**（`deployed_gateway_path_sha256`）：以 git（`ls-tree`、`show`）取出 DEPLOYED_COMMIT 追蹤的 `service/capserve/*`，寫到暫存目錄，由 `capserve.gateway_path` 自己計算 AST 閉包的 sha256，必須等於 stage_v.toml 的凍結值。閉包外的檔案（profile_gen、deploy）不同不影響；閉包內任一檔案不同、或 `__main__` 多 import 一個模組時拒絕。這和 report 檢查的「session 記錄的值」互相獨立，後者是 runner 在 WSL 上自己算的。
@@ -1264,7 +1264,7 @@
 10. **只接受 formal-**：session_id 以 `formal-` 開頭、位於 `results/stage_v/<session_id>`。mini（`smoke-v-*`）由產生器本身、report 與 analysis（`holds` 要求不是 mini）三處拒絕。
 11. **重新產生的測試**：`test_profile_gen.regenerate` 依 prereg_section 分派到 `generate_stage_v`，並依 profile_id 選取（實作補記一第 9 項：「重新產生的測試在產生器那一步加入」）。目前沒有 commit 任何 §12 profile；分派與選取以合成 session 的 §12 profile 測試。
 12. **服務規則的端到端測試**：寫出的 profile 經 loader 載入後，`capserve.config.served_classes` 只在設定的 pacing（含 queue）或 admission 段與 profile 完全相同、而且 gateway_path_sha256 相同時才服務（serve 與 deploy 都一樣）。不同的 rate、另一個 tier 的參數、產品的 2 s / 300 s 佇列、不同的 max_queue、不同的請求路徑一律 ProfileError。V1 的 class 在沒有候選政策時以 512 輸出服務，帶 pacing 時拒絕。
-13. **發現但沒有處理的不一致**：`configs/stage_v.toml` `[stage_v.units]` 上方的註解仍寫舊的單位跳過規則（「once a run of one is not ok, all of them leave the later boots」），和實作補記六第 6 項的逐點規則不符；實作補記七第 2 項只改了 `[stage_v.points.GW-U32K]` 上方那一處。只是註解，值不變；不在本步範圍，凍結前（pin stage_v.toml 的位元組之前）修改。
+13. **發現但沒有處理的不一致**：`configs/stage_v.toml` `[stage_v.units]` 上方的註解仍寫舊的單位跳過規則（「once a run of one is not ok, all of them leave the later boots」），和實作補記六第 6 項的逐點規則不符；實作補記七第 2 項只改了 `[stage_v.points.GW-U32K]` 上方那一處。只是註解，值不變；不在本步範圍，凍結前（pin stage_v.toml 的位元組之前）修改。（已處理：實作補記十第 9 項。）
 - **突變檢查**（只在記憶體中改模組原始碼：pytest plugin 在收集之前把改過的原始碼 exec 進 `capserve.profile_gen`；腳本留在本機 scratchpad，未納入 repo）：40 個突變全部被 `test_profile_gen_stage_v.py` 抓到，未突變的基準全部通過。包括：
   - 凍結：產生器與 CLI 兩處的 stage_v、capacity、stage_d；凍結證據；freeze commit 的檢查整段拿掉、只比對 Stage D 模組、模組清單少了 Stage D / C；
   - 請求路徑：拿掉比較、改算這個 checkout、讀不到時不報；
@@ -1272,3 +1272,56 @@
   - session 與重現：拿掉 report 的拒絕、逐位元重現、寫檔前的 loader 檢查、formal- 檢查、路徑檢查、SLO、server 分組、point 不換成 server_base；
   - CLI：工作樹、out-dir、覆寫、接受 `--out`、`--session` 指向 Stage V、沒有單位時的說明與 exit 0；
   - 單位篩選：不看 holds、不看否決、不看 PASS、全部單位；未知單位；成員一律不帶 pacing；PACE 複本不帶 validation；V1 用 O512 的 C_PROD；不重算 not_covered。
+
+## 實作補記十（2026-10-24，產生器審查；沒有任何 Stage V 數據）
+
+產生器的 validation-session 路徑（實作補記九）經過三個獨立審查（規格對應、拒絕與 fail closed、以真的 git 端到端），每項再由第二個 agent 嘗試反駁。下列 9 項依 TDD 處理：先寫會失敗的測試，再改程式，並以 in-process 的突變確認新規則有測試抓得到。只改產生器、它的測試、`configs/stage_v.toml` 的一處註解與文件。產生器在請求路徑閉包之外，`gateway_path_sha256` 仍為 `679a7c66…`；harness 一個位元組都沒有改，`harness_sha256` 仍為 `a1e4a564…`；不需要新的 mini。沒有任何 Stage V 數據。
+
+1. **「不重跑有效的 session 來換 PASS」由產生器機械式檢查**（`rerun_problems`）：
+   - 問題：runner、report 與產生器都沒有檢查這條停止規則。審查以真的 runner 與 report 重現：第一次 V-ADM 有效、沒有單位成立；6 h 後在同一次凍結下再跑一次 V-ADM、全部 PASS，產生器照樣寫出 PACE 與 W1。2 h 間隔與 12 h 上限都允許這樣的重跑。
+   - 新規則：在 `results/stage_v/formal-*` 中（本 session 以外），選出 session.json 的 started_at 早於本 session、plan 的 session（V-ADM / V-CLS）和本 session 相同、記錄的 `stage_v_sha256`、`harness_sha256`、`gateway_path_sha256` 都和本 session 相同（同一次凍結）的目錄。只要其中一個有效，就拒絕（exit 2、不寫檔），訊息指出較早的 session 並引用這條規則。有效 = `stage_v_report.report()` 唯讀重跑不拒絕（refusal_problems 為空，所以沒有中止、env 有效；sentinel 閘門通過；replay 一致）。
+   - fail closed：同一個 plan、或 plan.json 讀不到的 `formal-*` 目錄，沒有可讀的 session.json 或帶 offset 的 started_at（實作補記八）時拒絕；選出的 session 無法載入或評估時拒絕；本 session 沒有可讀的 started_at 時也拒絕。
+   - 不受影響的情況：
+     - 較早的 session 本身：規則只往前看，之後的重跑不改變它的結果；
+     - 另一個 plan 的 session；
+     - 在 preflight 就中止、沒有記錄三個 sha 的 session：不讀它（不算嘗試，030 8.4）；
+     - 另一次凍結下的 session：停止規則要求新的凍結下兩個 session 都重跑。
+   - 不機械化「每個 session 最多 2 次嘗試」：哪些中止的 session 算嘗試、第 3 次要先寫 decision log 由使用者決定，仍由操作者負責（實作補記四第 4 項）。產生器保證的是：同一次凍結下，有效 session 之後的重跑寫不出 profile。
+   - 測試（同一個 repo root 中，以真的 runner 與 report CLI 跑三個 session：V-ADM 沒有單位成立、6 h 後 V-CLS、再 6 h 後 V-ADM 全部 PASS）：
+     - 重跑被拒絕，CLI exit 2、不寫檔；
+     - 較早的 V-ADM 照常產生（沒有單位成立的結果），中間的 V-CLS 照常寫出 V1；
+     - 較早的 session 中止、env 無效或 sentinel 閘門失敗時不擋；三個 sha 任一不同、或在 preflight 中止時不擋；
+     - 同一個 plan 的目錄沒有 session.json、不是 JSON、沒有 started_at、沒有 offset、沒有 plan.json，或空的 `formal-*` 目錄，以及本 session 沒有 started_at，都拒絕；
+     - 另一個 plan 的目錄讀不到時不屬於這條規則（report 的 2 h 間隔仍然拒絕）。
+2. **停止規則的新凍結**（選項 B：最小、fail closed）：
+   - 產生器仍只接受第一次凍結（實作補記九第 5 項）。停止規則要求：gateway 造成的無效 run 之後修正 capserve、做新的凍結與新的 mini、兩個 session 都重跑。在新的凍結下，產生器一律拒絕：
+     - 傳新的凍結 commit：stage_v.toml 已經凍結過（解凍再凍結），或上一個 commit 已凍結（一直凍結、只更新 mini 與 `gateway_path_sha256`）；
+     - 傳第一次的凍結 commit：stage_v.toml 在凍結之後改變。
+   - 所以停止規則要求的那份新 decision log，必須同時修改 profile_gen 的「第一次凍結」規則，新凍結下的 session 才能產生 profile。profile_gen 在凍結之外（本文「凍結」：deploy、itest、loadtest、profile_gen 不受影響），修改它不需要新的 mini。
+   - 「舊結果只對舊的 sha 有效，依服務規則不能上線」對每個 class 都由 loader 機械式成立，V1 也一樣：新的凍結必然改變 `configs/stage_v.toml`（`[freeze]` 的 mini 與 `gateway_path_sha256`），§12 loader 比對 provenance 的 `stage_v_sha256` 與這個 checkout 的 stage_v.toml、`gateway_path_sha256` 與凍結值，所以舊 session 的 profile 整份無法載入，serve 與 deploy 都一樣。新的凍結之前，V1 的 class 在別的請求路徑上依待決事項第 4 項只揭露 `gateway_validated: false`。
+   - 上面三種拒絕訊息（Stage V 才有）都指向本項；§8 / §9 的訊息不變。測試：
+     - 真的 git：第一次凍結 → 修正 capserve（解凍，或一直凍結）→ 新的凍結 → 部署；傳新的凍結 commit 與傳第一次的凍結 commit，各只有一個拒絕，而且都指向本項；
+     - 寫出的 §12 profile（V-CLS，V1 class）在 stage_v.toml 的 mini、`gateway_path_sha256` 或兩者改變之後，loader 拒絕載入。
+   - 只記錄、不改程式：§8 / §9 沿用的凍結語意中，若第一次凍結 F1 之後解凍再凍結、DEPLOYED 在之後，傳 F1 仍可能通過：只要 F1 的 stage_v.toml 與模組的位元組等於 session 執行的位元組，產生器不檢查 F1 到 DEPLOYED 之間是否一直保持凍結。停止規則的新凍結必然改變 stage_v.toml，所以這個情況只在改回完全相同的位元組時發生。
+3. **DEPLOYED_COMMIT 的閉包無法解析時是拒絕，不是 traceback**（`deployed_gateway_path_sha256`）：閉包內的檔案語法錯誤、不是 UTF-8 或含 NUL 時，ast 丟出 SyntaxError。它不在 `generate_stage_v` 攔下的例外內，CLI 原本以 traceback 結束（exit 1，沒有寫檔）。現在攔下 SyntaxError、ValueError、OSError、UnicodeDecodeError，回報 `cannot hash the request path at DEPLOYED_COMMIT …`（exit 2）。測試：三種內容參數化，函式、產生器與 CLI 三層都檢查。
+4. **閉包以凍結的研究端副本雜湊**：`deployed_gateway_path_sha256` 改用 `stage_v_plan.gateway_path_sha256`，不再用產品端的 `capserve.gateway_path`。研究端是凍結模組，在 `STAGE_V_MODULES` 的檢查之內。V-CLS 之後 capserve（包括 gateway_path.py）可以修改；產品端的演算法之後即使改變，重新產生的測試也不會拒絕有效的 session。兩端在這個 checkout 上相同的測試保留；新測試把產品端的函式換成別的值，產生的 profile 不變。
+5. **stdout 的摘要**：Stage V 的每份 profile 多 `admission`（政策名稱或 null）。每個 class 改為 {status, max_concurrency, bound, pacing, unit}：pacing 為 {burst_tokens, rate_tokens_per_s} 或 null，unit 為 validation 的 unit 或 null。因此只有 W1 成立的 profile，和 c1b 的複本區分得出來。摘要以 `ensure_ascii=False` 印出，「產品對應」不再被跳脫成 `\u`。§8 / §9 的摘要不變。
+6. **`--help` 的說明**改為 `verified capacity profiles from a frozen Stage C, D or V analysis (M2; 044 §12)`。
+7. **V1 class 的 evidence**：service/README.md 的 Stage V 段補一句。§12 V1 class 的 evidence 中，scope、C_PROD、C_KV、flags、hypotheses 是 d-a2-b0 的 O512 class 在 D-A2 全部輸出 512 token 時的量測；它驗證的範圍是 `output_distribution` 加上 `validation`（C = `V1_C`，經過 gateway 的 client 視角）。schema 不變（實作補記九第 4 項）。
+8. **本文的原處加註**：
+   - 「產品對應」的產生器：「只讀 analysis.json 的 units」（實作補記九第 3 項），以及拒絕清單（本補記第 1 項）；
+   - §12 provenance 的 validation_session，就是程式的 source_session；
+   - §12 class 的 validation 欄位與 V1 evidence 的 worst_R（實作補記一第 9 項）；
+   - 停止規則的兩處：不重跑有效 session（第 1 項）、新的凍結（第 2 項）；
+   - 實作補記九第 5 項（第 2 項）與第 13 項（已處理）。
+9. **`configs/stage_v.toml` `[stage_v.units]` 上方的註解**改為逐點規則（實作補記六第 6 項）：「a unit holds only when each of its points PASSes; a point whose run is not ok leaves only its own later boots, its unit partners still run」。只改註解，tomllib 解析的結果相同（已確認）。stage_v.toml 的 sha256 因此改變；它還沒有被 pin，凍結那一步才 pin。實作補記九第 13 項與 NEXT.md 的對應一行已標為完成。
+- **突變檢查**（只在記憶體中改 `capserve.profile_gen` 的原始碼，方法同實作補記九；腳本留在本機 scratchpad，未納入 repo）：29 個突變中 27 個被測試抓到，另外 2 個是等價突變；未突變的基準全部通過。
+  - 第 1 項（13 個）：
+    - 抓到 11 個：拿掉整個檢查、不看先後、不看 plan、不看三個 sha、無效的 session 也擋、有效的 session 不擋、讀不到 session.json 時略過、無法載入時略過、讀不到的 plan 當成別的 plan、不要求 offset、本 session 沒有 started_at 時略過；
+    - 「不看三個 sha」只由 preflight 中止、沒有記錄 sha 的 session 抓到：其他情況下，report 的 refusal_problems 本身就比對這三個 sha；
+    - 等價的 2 個：不排除本 session（它的 started_at 不早於自己）、同時開始的 session 也算較早（同時開始的兩個 session 依 2 h 間隔都無效）。
+  - 第 2 項（4 個）：三個訊息各自不指向本補記，以及指向的文字整段拿掉；
+  - 第 3 項（3 個）：不攔例外、不攔 SyntaxError、攔下卻不回報（會照常寫出 profile）；
+  - 第 4 項（2 個）：改回產品端的演算法、改算這個 checkout 的檔案；
+  - 第 5 項（6 個）：不寫 admission、pacing、unit，pacing 帶 queue，改回舊的摘要，`ensure_ascii` 改回預設；
+  - 第 6 項（1 個）：說明改回舊的文字。
