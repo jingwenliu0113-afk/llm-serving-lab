@@ -301,14 +301,15 @@ def test_a_changed_profile_is_a_problem(tmp_path):
 
 # ------------------------------------------------------------------ units, timeouts, hours --
 
-def test_units_live_in_one_formal_session_and_controls_skip_alone():
+def test_units_live_in_one_formal_session_and_every_point_skips_alone():
+    """044 實作補記六: the inherited 039 / 030 skip rule, per point; a unit still needs each of its points to PASS
+    (stage_v_analysis.units), but no unit drops its other points (the replay and runner tests play it)."""
     for unit, points in svp.UNITS.items():
         assert any(set(points) <= set(svp.SESSIONS[s]) for s in ("V-ADM", "V-CLS")), unit
         for p in points:
-            assert svp.POINTS[p]["unit"] == unit and svp.skip_group(p) == points
+            assert svp.POINTS[p]["unit"] == unit
     assert {p for p, x in svp.POINTS.items() if not x["unit"]} == {"P-U2K-var", "F-U2K-var", "F-U2K", "W-mini"}
-    for p in ("P-U2K-var", "F-U2K-var", "F-U2K", "W-mini"):
-        assert svp.skip_group(p) == [p]          # the var pair and F-U2K never kill PACE-2K's point (044 V2)
+    assert not hasattr(svp, "skip_group")                                   # no group: a point skips alone
     assert svp.VETOES == {"PACE-2K": {"control": "F-U2K-var", "paced": "P-U2K-var"}}
 
 
@@ -596,15 +597,30 @@ def test_the_freeze_evidence_is_a_passed_mini_of_this_harness_on_the_frozen_requ
     assert any("no readable" in p for p in svp.freeze_evidence_problems(c, tmp_path))
     d = tmp_path.joinpath(*svp.RESULTS, "smoke-v-20261101")
     d.mkdir(parents=True)
+    v = c["stage_v"]
+    profiles = {p: v["points"][p]["profile_sha256"] for p in svp.SESSIONS["mini"]}
+    data = {k: v["datasets"][k] for k in ("v1-mini-8192", "v4-mini", "var-2048", "mixed-8192")}   # what the mini reads
+    assert set(data) == set(plan("mini")["datasets"])
     good = {"mode": "mini", "session": "mini", "formal": False, "smoke": {"ok": True}, "harness_sha256": "b" * 64,
-            "gateway_path_sha256": HEX}
+            "gateway_path_sha256": HEX, "profile_sha256": profiles, "dataset_sha256": data}
     (d / "session.json").write_text(json.dumps(good))
     assert svp.freeze_evidence_problems(c, tmp_path) == []
     for key, value, needle in (("smoke", {"ok": False}, "passed"), ("formal", True, "passed"),
                                ("session", "V-ADM", "passed"), ("harness_sha256", "0" * 64, "another harness"),
-                               ("gateway_path_sha256", "0" * 64, "gateway_path_sha256")):
+                               ("gateway_path_sha256", "0" * 64, "gateway_path_sha256"),
+                               ("profile_sha256", {**profiles, "W-mini": "0" * 64}, "profile_sha256"),   # 實作補記六:
+                               ("profile_sha256", {k: x for k, x in profiles.items() if k != "P-U2K"}, "profile"),
+                               ("profile_sha256", None, "profile_sha256"),
+                               ("dataset_sha256", {**data, "v4-mini": "0" * 64}, "dataset_sha256"),  # its bytes are
+                               ("dataset_sha256", {k: x for k, x in data.items() if k != "var-2048"}, "dataset"),
+                               ("dataset_sha256", {**data, "v4-90-r1": v["datasets"]["v4-90-r1"]}, "dataset"),
+                               ("dataset_sha256", None, "dataset_sha256")):                         # the pins'
         (d / "session.json").write_text(json.dumps({**good, key: value}))
-        assert any(needle in p for p in svp.freeze_evidence_problems(c, tmp_path)), key
+        assert any(needle in p for p in svp.freeze_evidence_problems(c, tmp_path)), (key, value)
+    moved = copy.deepcopy(c)                                    # a pin moved after the mini: its evidence is void
+    moved["stage_v"]["points"]["GW-U8K-O512"]["profile_sha256"] = "1" * 64
+    (d / "session.json").write_text(json.dumps(good))
+    assert any("GW-U8K-O512" in p for p in svp.freeze_evidence_problems(moved, tmp_path))
 
 
 # ------------------------------------------------------------------ plans --
@@ -652,7 +668,7 @@ def test_the_formal_plans():
         used = {k for x in p["points"].values() for k in (x["datasets"] or {}).values()}
         assert p["datasets"] == {k: CFG["stage_v"]["datasets"][k] for k in used}
         for name, x in p["points"].items():
-            assert x["skip_group"] == svp.skip_group(name) and x["forced_timeout_blocks"] == []
+            assert "skip_group" not in x and x["forced_timeout_blocks"] == []
             assert x["queue_settings"] == CFG["stage_v"]["queue"][x["queue"]]
             assert x["judged_views"] == {"client": ["client"], "upstream": ["upstream"],
                                          "worse": ["upstream", "client"]}[x["view"]]
@@ -667,7 +683,8 @@ def test_the_formal_plans():
 
 def test_the_mini_plan():
     """044 mini: N 20, n 2, sentinel at C 2, the mini's C per point, v1-mini-8192 for L-U8K, W-mini's 33-unit wave,
-    GW-U8K-O512's forced timeout in block 2; formal pacing and policy parameters."""
+    GW-U8K-O512's forced timeout in block 1, so the skip rule drops its block 2 (實作補記六); formal pacing and policy
+    parameters."""
     p = plan("mini")
     assert p["mini"] == svp.MINI and p["n"] == 2 and p["hour_cap_h"] == 1.0
     assert {n: x["C"] for n, x in p["points"].items()} == {"GW-U8K-O512": 4, "L-U8K": 4, "GW-M8K-T": 2, "P-U2K": 8,
@@ -676,9 +693,10 @@ def test_the_mini_plan():
     assert (p["sentinel"]["C"], p["sentinel"]["N"]) == (2, 20)
     assert p["points"]["L-U8K"]["datasets"] == {"1": "v1-mini-8192", "2": "v1-mini-8192"}
     assert p["points"]["W-mini"]["datasets"] == {"1": "v4-mini", "2": "v4-mini"}
-    assert p["points"]["GW-U8K-O512"]["forced_timeout_blocks"] == [2]
-    assert p["points"]["GW-U8K-O512"]["limits"]["max_concurrency"] == 12      # /readyz shows the class's 12
-    assert p["points"]["L-U8K"]["skip_group"] == ["L-U8K", "GW-U8K-O512"]    # the unit dies with the forced timeout
+    assert {n: x["forced_timeout_blocks"] for n, x in p["points"].items()} == {
+        "GW-U8K-O512": [1], "L-U8K": [], "GW-M8K-T": [], "P-U2K": [], "F-U2K-var": [], "W-mini": []}
+    assert p["block_orders"]["2"].index("GW-U8K-O512") < p["block_orders"]["2"].index("GW-M8K-T")   # a skip, then
+    assert p["points"]["GW-U8K-O512"]["limits"]["max_concurrency"] == 12      # the stop; /readyz shows the class's 12
     assert p["points"]["P-U2K"]["pacing_params"] == {"burst_tokens": 9600, "rate_tokens_per_s": 5920}
     assert p["points"]["W-mini"]["admission_params"] == svp.WEIGHTED_V1
     assert p["points"]["W-mini"]["timeout_s"] == sd.timeout_s(sd.tau1(SD_CFG, "U8K-gw"), 20)

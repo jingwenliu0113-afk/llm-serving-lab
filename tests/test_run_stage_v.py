@@ -94,10 +94,11 @@ class Jitter(dict):
 class World(td.World):
     """test_run_stage_d's fake WSL plus 044's gateway: capserve serve exits (2) on a provisional profile without
     --allow-provisional; /readyz is readyz_body unless readyz(body, label) edits it; a V bench's requests are
-    test_stage_v_analysis.make_reqs(plan, point, block, **kw(point, block)) and its access-log lines carry the bench's
-    --request-id-prefix (vLLM's own default without one). The main run's access-log lines reach the log file only when
-    the gateway stops (the reader drains the pipe at EOF): a log parsed before gateway_down misses them. dies: (point,
-    block) whose gateway exits during the bench; slow(point, block) -> extra seconds a bench takes."""
+    test_stage_v_analysis.make_reqs(plan, point, block, **kw(point, block)) and its access-log lines
+    (test_stage_v_analysis.log_text: a random-dataset client's POST /tokenize 404 first, as vLLM 0.30's) carry the
+    bench's --request-id-prefix (vLLM's own default without one). The main run's access-log lines reach the log file
+    only when the gateway stops (the reader drains the pipe at EOF): a log parsed before gateway_down misses them.
+    dies: (point, block) whose gateway exits during the bench; slow(point, block) -> extra seconds a bench takes."""
 
     def __init__(self, tmp_path, plan, *, kw=None, readyz=None, dies=(), slow=None, **k):
         super().__init__(tmp_path, **k)
@@ -197,13 +198,16 @@ def make_repo(tmp_path):
     return root, paths, sha
 
 
-def evidence(root, *, started="2026-11-01T09:00:00+00:00", finished="2026-11-01T09:40:00+00:00"):
+def evidence(root, cfg, *, started="2026-11-01T09:00:00+00:00", finished="2026-11-01T09:40:00+00:00"):
+    """A passed mini of this harness on this request path, of cfg's pinned profiles and datasets (the freeze's)."""
     d = root.joinpath(*sv.RESULTS, MINI_ID)
     d.mkdir(parents=True, exist_ok=True)
+    v = cfg["stage_v"]
     (d / "session.json").write_text(json.dumps({
         "mode": "mini", "session": "mini", "formal": False, "smoke": {"ok": True},
         "harness_sha256": sv.harness_sha256(), "gateway_path_sha256": sv.gateway_path_sha256(), "started_at": started,
-        "finished_at": finished}))
+        "finished_at": finished, "profile_sha256": {p: v["points"][p]["profile_sha256"] for p in sv.SESSIONS["mini"]},
+        "dataset_sha256": {k: v["datasets"][k] for k in ("mixed-8192", "v1-mini-8192", "v4-mini", "var-2048")}}))
 
 
 def configs(root, sha, *, formal):
@@ -216,7 +220,7 @@ def configs(root, sha, *, formal):
     p["core_b"]["mix_dataset_sha256"] = {**p["core_b"]["mix_dataset_sha256"], "8192": sha[sv.MIX_DATASET]}
     if formal:
         c["freeze"].update(stage_v=True, mini=MINI_ID, gateway_path_sha256=sv.gateway_path_sha256())
-        evidence(root)
+        evidence(root, c)
     return c, d, p
 
 
@@ -363,6 +367,12 @@ def test_the_gateway_stops_before_the_server_and_the_log_is_read_after_it(tmp_pa
             assert ev[i + 3] == f"gateway:signal:{int(signal.SIGTERM)}" and ev[i + 4].startswith("server:signal")
     a, rows = analysis(out)
     assert a["replay"]["ok"] and all(r["valid"] for r in rows)                # every main line joined
+    plan = json.loads((out / "plan.json").read_text())
+    for b in (b for b in s["boots"] if b["phase"] == "V"):                   # the random dataset's /tokenize probe
+        log = rv.access_log_text((out / "raw" / f"{b['tag']}.gateway.log").read_text())
+        probes = [e for e in map(json.loads, (x for x in log.splitlines() if x.startswith("{")))
+                  if e["path"] == "/tokenize"]
+        assert len(probes) == tva.random_client(plan, b["workload"]) and all(e["status"] == 404 for e in probes)
 
 
 def test_a_v_run_without_its_request_id_prefix_cannot_join(tmp_path, monkeypatch):
@@ -433,8 +443,10 @@ def test_a_gateway_that_dies_during_a_bench_invalidates_the_run(tmp_path):
     a, rows = analysis(out)
     bad = [r for r in rows if r["workload"] == "W-50"]
     assert len(bad) == 1 and not bad[0]["valid"] and any("gateway exited" in x for x in bad[0]["reasons"])
-    assert a["replay"]["ok"] and a["points"]["W-50"]["class"] == "NT" and a["points"]["W-90"]["class"] == "NT"
-    assert not [r for r in rows if r["workload"] in ("W-90", "W-50") and r["block"] > 1]   # the unit W1 is dead
+    assert a["replay"]["ok"] and a["points"]["W-50"]["class"] == "NT" and a["points"]["W-90"]["class"] == "PASS"
+    assert not [r for r in rows if r["workload"] == "W-50" and r["block"] > 1]             # W-50 alone skips
+    assert [r["block"] for r in rows if r["workload"] == "W-90"] == [1, 2, 3, 4, 5]      # (044 實作補記六)
+    assert a["units"]["W1"]["holds"] is False
     assert any(f.get("run") == bad[0]["tag"] for f in s["gateway_faults"])
 
 
@@ -510,7 +522,7 @@ def test_formal_sessions_are_at_least_2_hours_apart(tmp_path):
                                                    "finished_at": "2026-11-02T07:30:00+00:00"}))
     with pytest.raises(rv.RunError, match="formal-t-zz-late finished at 2026-11-02T07:30"):
         session(tmp_path / "late", "V-ADM", repo=(root, paths, sha))
-    (late / "session.json").unlink()
+    shutil.rmtree(late)
     write(None)
     with pytest.raises(rv.RunError, match="formal-t-prev"):
         session(tmp_path / "again", "V-ADM", repo=(root, paths, sha))
@@ -526,6 +538,74 @@ def test_formal_sessions_are_at_least_2_hours_apart(tmp_path):
                                                   "finished_at": "2026-11-02T08:30:00+00:00"}))
     out, s, w = session(tmp_path / "m", "mini", mode="mini", repo=mini_root)
     assert s["mode"] == "mini"
+
+
+def test_a_session_directory_without_a_finished_session_json_is_refused(tmp_path):
+    """044 全期總上限 / 2 h, fail closed (實作補記六): a formal-* or smoke-v-* directory whose session.json is missing,
+    unreadable or still in progress (a session killed hard: SIGKILL, OOM, wsl --shutdown, a reboot) has hours and an
+    end nobody can tell, so hours_used, gap_problems and every later session refuse until a decision log records them."""
+    root, paths, sha = make_repo(tmp_path)
+    base = root.joinpath(*sv.RESULTS)
+    other = base / "prereg-sim"                                              # not a session: never read
+    other.mkdir(parents=True)
+    (other / "sim.json").write_text("{}")
+    assert rv.hours_used(root) == (0, []) and rv.gap_problems(root, T0.isoformat()) == (None, [])
+    crashed = base / "formal-t-crashed"
+    crashed.mkdir()
+    (crashed / "plan.json").write_text("{}")
+    (crashed / "rows.jsonl").write_text("")
+    for got in (rv.hours_used(root)[1], rv.gap_problems(root, T0.isoformat())[1]):
+        assert len(got) == 1 and "formal-t-crashed" in got[0] and "no session.json" in got[0]
+    with pytest.raises(rv.RunError, match="formal-t-crashed.*no session.json"):
+        session(tmp_path, "V-CLS", repo=(root, paths, sha))
+    (crashed / "session.json").write_text("{not json")
+    assert "formal-t-crashed" in rv.hours_used(root)[1][0] and rv.gap_problems(root, T0.isoformat())[1]
+    (crashed / "session.json").write_text(json.dumps({"session_id": "formal-t-crashed", "in_progress": True,
+                                                      "started_at": "2026-11-01T09:00:00+00:00",
+                                                      "finished_at": None}))
+    for got in (rv.hours_used(root)[1], rv.gap_problems(root, T0.isoformat())[1]):
+        assert len(got) == 1 and "never finished" in got[0]
+    (crashed / "session.json").write_text(json.dumps({"session_id": "formal-t-crashed", "in_progress": True,
+                                                      "started_at": "2026-11-01T09:00:00+00:00",
+                                                      "finished_at": "2026-11-01T10:00:00+00:00"}))
+    assert rv.hours_used(root)[1] and rv.gap_problems(root, T0.isoformat())[1]   # still marked in progress
+    shutil.rmtree(crashed)
+    mini = base / "smoke-v-crashed"                                          # a mini counts toward the 12 h too
+    mini.mkdir()
+    (mini / "plan.json").write_text("{}")
+    assert "smoke-v-crashed" in rv.hours_used(root)[1][0] and rv.gap_problems(root, T0.isoformat()) == (None, [])
+    with pytest.raises(rv.RunError, match="smoke-v-crashed"):
+        session(tmp_path / "m", "mini", mode="mini", repo=(root, paths, sha))
+
+
+def test_session_json_is_written_right_after_the_directory_and_on_every_exit(tmp_path):
+    """A provisional session.json (in_progress, finished_at null) exists from the mkdir on, so a hard kill leaves a
+    record the next session refuses; every exit Python sees, a preflight refusal included, finishes it (countable)."""
+    seen = []
+
+    class Peek(td.Env):
+        def __call__(self, out_path, gpu_lock_held):
+            seen.append(json.loads((Path(out_path).parent.parent / "session.json").read_text()))
+            return super().__call__(out_path, gpu_lock_held)
+
+    out, s, w = session(tmp_path / "a", "V-ADM", capture_env=Peek())
+    assert seen[0]["in_progress"] is True and seen[0]["finished_at"] is None and seen[0]["session_id"] == out.name
+    assert seen[0]["started_at"] == s["started_at"] and s["in_progress"] is False and isinstance(s["finished_at"], str)
+
+    class Vllm(Peek):
+        def __call__(self, out_path, gpu_lock_held):
+            rec = super().__call__(out_path, gpu_lock_held)
+            rec["runtime"]["vllm"]["vllm"] = "0.31.0"
+            return rec
+
+    with pytest.raises(rv.RunError, match="0.31.0"):
+        session(tmp_path / "b", "V-ADM", capture_env=Vllm())
+    out = out_dir(tmp_path / "b" / "repo", "V-ADM", "formal")
+    rec = json.loads((out / "session.json").read_text())
+    assert rec["in_progress"] is False and isinstance(rec["finished_at"], str) and "0.31.0" in rec["aborted"]
+    assert rec["env_valid"] is False and rec["outcomes"]["runs"] == 0
+    used, problems = rv.hours_used(tmp_path / "b" / "repo")
+    assert problems == [] and used > 0                                       # the refused session's minutes count
 
 
 # ------------------------------------------------------------------ refusals --
@@ -550,7 +630,10 @@ def test_refusals_before_anything_starts(tmp_path):
     with pytest.raises(rv.RunError, match="toolchain"):
         session(tmp_path / "i", "V-ADM", toolchain_check=lambda env: ["nvcc missing"])
     root = make_repo(tmp_path / "j")
-    out_dir(root[0], "V-ADM", "formal").mkdir(parents=True)
+    done = out_dir(root[0], "V-ADM", "formal")                              # a finished session of the same id
+    done.mkdir(parents=True)
+    (done / "session.json").write_text(json.dumps({"started_at": "2026-10-30T00:00:00+00:00",
+                                                   "finished_at": "2026-10-30T01:00:00+00:00"}))
     with pytest.raises(rv.RunError, match="exists"):
         session(tmp_path / "j", "V-ADM", repo=root)
 
@@ -620,11 +703,18 @@ def test_the_mini_smoke_passes_and_discards_latencies(tmp_path):
     assert smoke["ok"] is True, smoke
     assert s["mode"] == "mini" and s["formal"] is False and s["session"] == "mini" and s["stage"] == "V-mini"
     assert len(s["harness_sha256"]) == 64 and s["gateway_path_sha256"] == sv.gateway_path_sha256()
-    assert smoke["timeouts"] == [["GW-U8K-O512", 2]]
-    assert s["cap_stop"]["forced"] is True and s["cap_stop"]["block"] == 2
+    assert smoke["timeouts"] == [["GW-U8K-O512", 1]]                         # 044 實作補記六: block 1, so ...
+    assert smoke["skipped"] == [[2, "GW-U8K-O512"]] and smoke["checks"]["skip_walked"]   # ... its block 2 is skipped
+    assert (s["cap_stop"]["forced"], s["cap_stop"]["block"], s["cap_stop"]["point"]) == (True, 2, "GW-M8K-T")
+    assert [r["block"] for r in load(out)[0]["rows"] if r["workload"] == "L-U8K"] == [1, 2]
     plan = json.loads((out / "plan.json").read_text())
     assert plan["slo"] == rc.MINI_SLO and plan["points"]["L-U8K"]["datasets"]["1"] == "v1-mini-8192"
     assert not list((out / "raw").glob("*.bench.json"))
+    v_logs = sorted(f"raw/{b['tag']}.gateway.log" for b in s["boots"] if b["phase"] == "V")
+    assert not list((out / "raw").glob("*.gateway.log"))                    # every request's gateway times: gone ...
+    manifest = json.loads((out / "raw_manifest.json").read_text())["files"]
+    assert set(v_logs) <= set(manifest) and s["gateway_logs_discarded"] == v_logs   # ... their sha256 kept
+    assert all(len(manifest[f]["sha256"]) == 64 for f in v_logs)
     for p in (out / "derived").glob("*-requests.jsonl"):
         assert all(set(json.loads(x)) == {"idx", "cls", "out"} for x in p.read_text().splitlines())
     l8 = [argv for argv in w.bench_argvs if "--custom-output-len" in argv and "v1-mini-8192" in " ".join(argv)]
@@ -633,8 +723,12 @@ def test_the_mini_smoke_passes_and_discards_latencies(tmp_path):
     checks = smoke["checks"]
     assert checks["prefill_waited"] and checks["queued"] and checks["nontrivial_computable"]
     assert checks["forced_cap_stop"] and checks["gateway_ok"] and checks["recorded_hashes"]
-    freeze = {"freeze": {"stage_v": True, "mini": out.name, "gateway_path_sha256": sv.gateway_path_sha256()}}
-    assert sv.freeze_evidence_problems(freeze, tmp_path / "repo") == []      # this mini is the freeze's evidence
+    sha = {p.stem: hashlib.sha256(p.read_bytes()).hexdigest() for p in (tmp_path / "repo" / "data").glob("*.jsonl")}
+    c = configs(tmp_path / "repo", sha, formal=False)[0]
+    c["freeze"].update(stage_v=True, mini=out.name, gateway_path_sha256=sv.gateway_path_sha256())
+    assert sv.freeze_evidence_problems(c, tmp_path / "repo") == []          # this mini is the freeze's evidence
+    c["stage_v"]["datasets"]["v4-mini"] = "0" * 64                          # (實作補記六: of these pinned bytes)
+    assert any("v4-mini" in x for x in sv.freeze_evidence_problems(c, tmp_path / "repo"))
 
 
 def test_a_mini_whose_forced_timeout_never_hits_fails(tmp_path):
@@ -643,10 +737,15 @@ def test_a_mini_whose_forced_timeout_never_hits_fails(tmp_path):
 
     with pytest.raises(rv.RunError, match="plan .* differs"):
         session(tmp_path / "a", "mini", mode="mini", plan_over=plan_over)
+
+    def edit(body, label):                              # its boot fails before the bench: no timeout ever runs
+        if label.startswith("V-GW-U8K-O512-r1"):
+            body["limits"]["max_concurrency"] = 4
+
     out, s, w = session(tmp_path / "b", "mini", mode="mini",
-                        world=lambda plan: World(tmp_path / "b", plan, dies={("L-U8K", 1)}))
+                        world=lambda plan: World(tmp_path / "b", plan, readyz=edit))
     smoke = json.loads((out / "smoke.json").read_text())
-    assert smoke["ok"] is False and smoke["timeouts"] == [] and smoke["invalid_runs"]
+    assert smoke["ok"] is False and smoke["timeouts"] == [] and smoke["checks"]["forced_timeouts_hit"] is False
 
 
 def test_build_mini_plan_changes_only_the_slo_and_the_stage():
@@ -744,6 +843,26 @@ def test_a_run_that_breaks_j_is_invalid_and_a_gateway_fault(tmp_path):
         [x for x in row["reasons"] if "(044 (j))" in x]]
 
 
+def test_j_reads_the_warmups_intervals_the_access_log_records(tmp_path, monkeypatch):
+    """044 (j) over the whole bench process (實作補記六): each V row records the ready check's and the warmups'
+    intervals from the access log; a warmup still in vLLM when the main run starts breaks (j)."""
+    real = tva.log_text
+
+    def lingering(p, point, block, reqs, **kw):
+        return real(p, point, block, reqs, **({**kw, "warm_release": 0.5} if (point, block) == ("P-U8K", 1) else kw))
+
+    monkeypatch.setattr(tva, "log_text", lingering)
+    out, s, w = session(tmp_path, "V-ADM")
+    a, rows = analysis(out)
+    plan = json.loads((out / "plan.json").read_text())
+    for r in (r for r in rows if r["phase"] == "V" and r["valid"]):
+        assert len(r["warmups"]) == plan["points"][r["workload"]]["C"] + 1
+        assert all(s <= e < 0 for s, e, _ in r["warmups"]) and r["warmups"][0] == [-40.0, -39.0, 1]
+    bad = next(r for r in rows if r["workload"] == "P-U8K")
+    assert not bad["valid"] and any("16 requests" in x and "(044 (j))" in x for x in bad["reasons"]), bad["reasons"]
+    assert a["replay"]["ok"] and any(f["run"] == bad["tag"] for f in s["gateway_faults"])
+
+
 def test_a_gateway_port_taken_while_the_server_starts_aborts_the_session(tmp_path):
     calls = []
 
@@ -822,7 +941,7 @@ def test_an_invalid_start_sentinel_stops_the_session(tmp_path):
         session(tmp_path, "V-ADM", world=lambda plan: Bad(tmp_path, plan))
 
 
-def test_a_failing_run_kills_its_unit(tmp_path):
+def test_a_failing_run_skips_its_point_and_its_unit_cannot_hold(tmp_path):
     def kw(point, block):
         base = tva.ok_kw(point, block)
         return {**base, "ttft": 9000.0} if (point, block) == ("GW-U2K-O512", 1) else base
@@ -831,19 +950,19 @@ def test_a_failing_run_kills_its_unit(tmp_path):
     a, rows = analysis(out)
     fail = next(r for r in rows if r["workload"] == "GW-U2K-O512")
     assert fail["valid"] and fail["outcome"] == "fail" and a["replay"]["ok"]
-    order = json.loads((out / "plan.json").read_text())["block_orders"]["1"]
-    l_first = order.index("L-U2K") < order.index("GW-U2K-O512")
-    assert [r["block"] for r in rows if r["workload"] == "L-U2K"] == ([1] if l_first else [])
-    assert a["points"]["GW-U2K-O512"]["class"] == "FAIL" and a["units"]["V1-2K"]["holds"] is False
+    assert [r["block"] for r in rows if r["workload"] == "GW-U2K-O512"] == [1]
+    assert [r["block"] for r in rows if r["workload"] == "L-U2K"] == [1, 2, 3, 4, 5]     # 044 實作補記六: per point
+    assert a["points"]["GW-U2K-O512"]["class"] == "FAIL" and a["points"]["L-U2K"]["class"] == "PASS"
+    assert a["units"]["V1-2K"]["holds"] is False and a["hypotheses"]["H-L1"]["verdict"] == "supported"
 
 
 def test_the_minis_forced_stop_comes_before_its_last_still_planned_v_boot(tmp_path):
     out, s, w = session(tmp_path, "mini", mode="mini",
                         world=lambda plan: World(tmp_path, plan, dies={("GW-M8K-T", 1)}))
-    stop = s["cap_stop"]
-    assert (stop["block"], stop["point"], stop["forced"]) == (2, "GW-U8K-O512", True)
+    stop = s["cap_stop"]                                # GW-U8K-O512's block 2 is skipped (its forced timeout)
+    assert (stop["block"], stop["point"], stop["forced"]) == (2, "L-U8K", True)
     smoke = json.loads((out / "smoke.json").read_text())
-    assert smoke["checks"]["replay_clean"] and not smoke["ok"]               # its forced timeout never ran
+    assert smoke["checks"]["replay_clean"] and not smoke["ok"] and smoke["invalid_runs"]   # GW-M8K-T's r1
 
 
 def test_each_mini_check_can_fail(tmp_path, monkeypatch):
@@ -883,13 +1002,17 @@ def test_each_mini_check_can_fail(tmp_path, monkeypatch):
         "nontrivial_computable": empty_t_w,
         "recorded_hashes": lambda c: c["session"].update(gateway_path_sha256=None),
         "clean_teardowns": lambda c: c["session"].update(teardown_problems=[{"boot": "b", "reasons": ["x"]}]),
+        "skip_walked": lambda c: c["plan"]["points"]["GW-U8K-O512"].update(forced_timeout_blocks=[2]),
     }
     assert set(cases) == set(rv.mini_checks(plan, session_rec, rows, reqs)["checks"])
     for name, change in cases.items():
-        c = copy.deepcopy({"session": session_rec, "rows": rows, "reqs": reqs})
+        c = copy.deepcopy({"plan": plan, "session": session_rec, "rows": rows, "reqs": reqs})
         change(c)
-        got = rv.mini_checks(plan, c["session"], c["rows"], c["reqs"])
+        got = rv.mini_checks(c["plan"], c["session"], c["rows"], c["reqs"])
         assert got["checks"][name] is False and got["ok"] is False, name
+    c = copy.deepcopy(plan)                                     # a forced point whose later run was not skipped
+    c["points"]["L-U8K"]["forced_timeout_blocks"] = [1]
+    assert rv.mini_checks(c, session_rec, rows, reqs)["checks"]["skip_walked"] is False
 
 
 def test_an_interrupt_while_the_gateway_starts_still_stops_it(tmp_path):

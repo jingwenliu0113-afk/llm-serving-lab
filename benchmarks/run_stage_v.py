@@ -28,8 +28,8 @@ session of stage_v_plan (the mini, V-ADM or V-CLS). Core, Stage C and Stage D mo
 - _v_machine (044 Sessions): sentinel; blocks r = 1..n in the plan's block orders, one boot and one V run per active
   point; before each V boot the hour cap (stage_v_plan.cap_allows on the elapsed time; the mini also stops before its
   last planned V boot, forced): a stop is session["cap_stop"] = {block, point, elapsed_s, forced} and every later run
-  is not run (no row); once a run is not ok (invalid, fail or trivial), its point's skip group (its product unit: the
-  unit is dead) leaves the later boots; sentinel (it runs after a cap stop too).
+  is not run (no row); once a run is not ok (invalid, fail or trivial), its point alone leaves the later boots (the
+  inherited 039 / 030 rule, per point, for every unit: 044 實作補記六); sentinel (it runs after a cap stop too).
 - Gateway faults (044: a gateway-caused invalid run stops the next V session until a decision log): a gateway that
   failed its boot checks, exited, whose log reader did not join, whose access log does not join, or whose run broke (j)
   is listed in session["gateway_faults"].
@@ -40,12 +40,17 @@ does not run its plan (the mini runs only the mini plan); stage_v.toml breaks 04
 stage_v_plan.build_plan of these stage_v.toml / stage_d.toml / pins bytes; the request path is not the frozen one
 (stage_v_plan.gateway_path_problems) or a point's profile not its pinned bytes (profile_problems); a dataset the
 session reads missing or not its pinned sha256 (the mini's too: 044 pins them before it); the 12 h total over every
-Stage V session's recorded hours (hours_used) plus this session's cap; formal: a previous formal V session finished
-less than 2 h ago (gap_problems), Stage B, inherited engine variables, the server env, the freeze evidence (the passed
-mini of this harness on the frozen request path), and the preflight's deployed clean tree and pinned vLLM.
+Stage V session's recorded hours (hours_used) plus this session's cap, or a formal-* / smoke-v-* directory without a
+finished session.json (a session killed hard: its hours unknown); formal: a previous formal V session finished less
+than 2 h ago, or one whose end is unknown (gap_problems), Stage B, inherited engine variables, the server env, the
+freeze evidence (the passed mini of this harness on the frozen request path), and, after the session directory exists
+(its session.json is then finished as aborted), the preflight's deployed clean tree and pinned vLLM. From its mkdir on
+a session has a session.json: provisional (in_progress, finished_at null), finished on every exit Python sees (044
+實作補記六).
 
 Modes: --formal, or --mini (044 mini smoke before the freeze: the mini plan with run_capacity's dummy SLO and N = 20;
-its verdict, mini_checks, goes to smoke.json and every latency is discarded, as run_capacity's).
+its verdict, mini_checks, goes to smoke.json and every latency is discarded, as run_capacity's: run_capacity.mask_smoke,
+then its raw/*.gateway.log, whose sha256 the raw manifest keeps; 044 實作補記六).
 
 Usage (WSL, ~/llm-serving-lab, the plan from benchmarks/stage_v_plan.py):
     flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_v.py --plan stage-v-plan.json \\
@@ -209,27 +214,51 @@ def summarize(res: dict, *, plan: dict, row: dict) -> dict:
 
 # ---------------------------------------------------------------- hours and the gap (044 停止規則與時數上限)
 
-def _session_files(repo_root, pattern: str = "*") -> list:
+class Unfinished(ValueError):
+    """A session directory without a finished session.json: started, never recorded its end (044 實作補記六)."""
+
+
+RECORD_IT = ("write a decision log on its hours and end (its last raw file's time, or started_at + its hour cap), "
+             "record that finished_at in its session.json, then start the next session (044 實作補記六)")
+
+
+def _session_dirs(repo_root, pattern: str = "*") -> list:
+    """The session directories under results/stage_v matching pattern: every formal-* or smoke-v-* one (the runner
+    creates it before anything can fail; a session.json may be missing after a hard kill) and any other directory
+    holding a session.json; never prereg-sim or another directory of plain results."""
     root = Path(repo_root).joinpath(*sv.RESULTS)
-    return sorted(root.glob(f"{pattern}/session.json")) if root.is_dir() else []
+    if not root.is_dir():
+        return []
+    return sorted(d for d in root.glob(pattern) if d.is_dir() and (
+        any(rx.fullmatch(d.name) for rx in SESSION_IDS.values()) or (d / "session.json").exists()))
 
 
-def _times(path: Path) -> tuple:
+def _times(d: Path) -> tuple:
+    """(started_at, finished_at, session) of a session directory; Unfinished (a ValueError) without a finished
+    session.json."""
+    path = d / "session.json"
+    if not path.is_file():
+        raise Unfinished(f"no session.json: a session that started and never finished (killed hard?); {RECORD_IT}")
     s = json.loads(path.read_text())
+    if not isinstance(s, dict):
+        raise Unfinished("its session.json is not a session record")
+    if s.get("in_progress") is True or s.get("finished_at") is None:
+        raise Unfinished(f"its session.json says it never finished (in_progress {s.get('in_progress')!r}, "
+                         f"finished_at {s.get('finished_at')!r}: killed hard?); {RECORD_IT}")
     return dt.datetime.fromisoformat(s["started_at"]), dt.datetime.fromisoformat(s["finished_at"]), s
 
 
 def hours_used(repo_root) -> tuple:
     """(hours as an exact Fraction, problems): finished_at - started_at summed over every Stage V session under
-    results/stage_v (044 全期總上限: the mini, formal ones, reruns and aborted ones alike); a session.json without both
-    times is a problem (fail closed)."""
+    results/stage_v (044 全期總上限: the mini, formal ones, reruns and aborted ones alike); a session directory
+    without a finished session.json with both times is a problem (fail closed: 實作補記六)."""
     total, problems = dt.timedelta(), []
-    for path in _session_files(repo_root):
+    for d in _session_dirs(repo_root):
         try:
-            start, end, _ = _times(path)
+            start, end, _ = _times(d)
             total += end - start
         except (OSError, ValueError, KeyError, TypeError) as exc:
-            problems.append(f"{path.parent.name}: cannot count its hours ({type(exc).__name__}: {exc}) (044 全期總上限)")
+            problems.append(f"{d.name}: cannot count its hours ({type(exc).__name__}: {exc}) (044 全期總上限)")
     return Fraction(total // dt.timedelta(microseconds=1), 3600 * 10 ** 6), problems
 
 
@@ -237,14 +266,14 @@ def gap_problems(repo_root, started_at: str, *, session_id: str | None = None, m
     """(the previous formal V session {session_id, finished_at} or None, problems): among results/stage_v/formal-*
     other than session_id that started at or before started_at, the one that finished last must have finished at least
     min_gap_h hours before started_at (044: a formal session's lock window is >= 2 h after the previous one's); a
-    session.json without both times is a problem (fail closed)."""
+    formal-* directory without a finished session.json with both times is a problem (fail closed: 實作補記六)."""
     start, problems, prev = dt.datetime.fromisoformat(started_at), [], None
-    for path in _session_files(repo_root, "formal-*"):
-        sid = path.parent.name
+    for d in _session_dirs(repo_root, "formal-*"):
+        sid = d.name
         if sid == session_id:
             continue
         try:
-            begun, end, s = _times(path)
+            begun, end, s = _times(d)
             if begun <= start and (prev is None or end > prev[1]):
                 prev = (sid, end, s["finished_at"])
         except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -444,8 +473,9 @@ class StageVHarness(rd.StageDHarness):
         joined = {}
         if read:
             text = access_log_text(rc._read(self.raw / f"{tag}.gateway.log"))
-            found, joined = sva.join_access_log(text, plan=self.plan, point=row["workload"], block=row["block"])
+            found, joined, warm = sva.join_access_log(text, plan=self.plan, point=row["workload"], block=row["block"])
             row["access_log"] = {"log": f"raw/{tag}.gateway.log", "problems": found, "joined": len(joined)}
+            row["warmups"] = sva.warmup_spans(warm, joined, x=self.plan["points"][row["workload"]])   # (j): 實作補記六
             problems += found
         if problems:
             self._fault(tag, problems, run=row["tag"])
@@ -496,7 +526,8 @@ class StageVHarness(rd.StageDHarness):
                 if not ok:
                     row["reasons"], row["valid"] = list(why), False
                     x = self.plan["points"][row["workload"]]
-                    j = sva.inflight_problems(sva.in_vllm(reqs, C=x["C"], N=x["N"]), x=x)
+                    warm = row["warmups"] if not sva.warmup_problems(row, x) else ()
+                    j = sva.inflight_problems(sva.in_vllm(reqs, C=x["C"], N=x["N"], warmups=warm), x=x) if reqs else []
                     if j:
                         self._fault(self.session["boots"][row["boot"]]["tag"], j, run=row["tag"])
             row["outcome"] = sva.run_outcome(row, reqs, self.plan)
@@ -513,8 +544,8 @@ def _sentinel(h: StageVHarness, position: str) -> list:
 
 def _v_machine(h: StageVHarness) -> None:
     """044: sentinel; blocks r = 1..n in the plan's block orders, one boot and one V run per active point, the hour cap
-    before each V boot (the mini: a forced stop before its last planned one), the skip group of a run that is not ok;
-    sentinel."""
+    before each V boot (the mini: a forced stop before its last planned one), a point whose run is not ok skips its
+    later boots; sentinel."""
     plan = h.plan
     start = _sentinel(h, "start")
     if not start[0]["valid"]:
@@ -533,7 +564,7 @@ def _v_machine(h: StageVHarness) -> None:
             break
         rows = h.boot(h.new_boot("V", p, block=r, elapsed_s=elapsed), rc._fixed([x["C"]]), [x["C"]])
         if rows[0]["outcome"] != "ok":
-            dropped |= set(x["skip_group"])
+            dropped.add(p)                            # 044 實作補記六: the point alone (039 / 030), never its unit
     _sentinel(h, "end")
 
 
@@ -541,20 +572,22 @@ def _v_machine(h: StageVHarness) -> None:
 
 def build_mini_plan(plan: dict) -> dict:
     """The mini's session plan: stage_v_plan's mini plan (n 2, N 20, the sentinel at C 2, each point's mini C,
-    v1-mini-8192, GW-U8K-O512's block 2 forced to time out) with run_capacity's dummy SLO no valid run can miss; N = 20
-    is run_stage_d.mini_num_prompts' patch for the session."""
+    v1-mini-8192, GW-U8K-O512's block 1 forced to time out, so the skip rule drops its block 2) with run_capacity's
+    dummy SLO no valid run can miss; N = 20 is run_stage_d.mini_num_prompts' patch for the session."""
     p = copy.deepcopy(plan)
     p.update(slo=MINI_SLO, stage=f"{sv.STAGE}-mini")
     return p
 
 
 def mini_checks(plan: dict, session: dict, rows: list, requests: dict) -> dict:
-    """044 mini smoke's verdict: the replay is clean (order, skips, the dead unit, the forced cap stop); every run valid
-    but the forced timeout, which hit; the derived schema; every boot passed its checks, its gateway answered with the
-    point's /readyz tuple and stopped cleanly; pacing made a first-wave request wait and weighted-v1 queued one; U_W
-    and N1 computed; the session records harness_sha256 and gateway_path_sha256; clean teardowns."""
-    replay = sva.replay_problems(plan, session["boots"], rows, requests, cap_stop=session.get("cap_stop"))
+    """044 mini smoke's verdict: the replay is clean (order, skips, the forced cap stop); every run valid but the forced
+    timeout, which hit; the skip rule walked: each later block's run of a forced point was skipped, and there is one
+    (skip_walked, 實作補記六); the derived schema; every boot passed its checks, its gateway answered with the point's
+    /readyz tuple and stopped cleanly; pacing made a first-wave request wait and weighted-v1 queued one; U_W and N1
+    computed; the session records harness_sha256 and gateway_path_sha256; clean teardowns."""
+    replay, sched = sva.schedule(plan, session["boots"], rows, requests, cap_stop=session.get("cap_stop"))
     forced = sorted([p, r] for p, x in plan["points"].items() for r in x["forced_timeout_blocks"])
+    walk = [[later, p] for p, r in forced for later in range(r + 1, plan["n"] + 1)]
     bad = [r["tag"] for r in rows if not r.get("valid") and [r["workload"], r.get("block")] not in forced]
     hit = sorted([r["workload"], r.get("block")] for r in rows if r.get("timeout"))
     schema = all(set(q) == set(sva.DERIVED_KEYS if r["phase"] == "V" else rd.DERIVED_KEYS)
@@ -574,9 +607,10 @@ def mini_checks(plan: dict, session: dict, rows: list, requests: dict) -> dict:
         "nontrivial_computable": any(c is not None for c in conditions)
         and all(c is None or c["value"] is not None for c in conditions),
         "recorded_hashes": all(sv._sha(session.get(k)) for k in ("harness_sha256", "gateway_path_sha256")),
-        "clean_teardowns": not session.get("teardown_problems")}
+        "clean_teardowns": not session.get("teardown_problems"),
+        "skip_walked": bool(walk) and all(w in sched["skipped"] for w in walk)}
     return {"ok": all(checks.values()), "checks": checks, "replay_problems": replay, "invalid_runs": bad,
-            "timeouts": hit}
+            "timeouts": hit, "skipped": sched["skipped"]}
 
 
 # ---------------------------------------------------------------- session
@@ -680,60 +714,72 @@ def run_session(plan: dict, *, cfg: dict, stage_d_cfg: dict, pins: dict, pins_sh
     out = Path(out_dir)
     if out.exists():
         raise RunError(f"{out} exists; sessions are never resumed or overwritten (rerun under a new id)")
-    for d in ("raw", "env", "derived"):
-        (out / d).mkdir(parents=True)
-    rc._write_json(out / "plan.json", session_plan)
-    pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=True) if capture_env else {}
-    repo = pre.get("repo") or {}
-    vllm = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
-    if formal:
-        if vllm != pins["vllm"]["version"]:
-            raise RunError(f"vLLM {vllm!r} in the preflight != pinned {pins['vllm']['version']} (003; 030 8.6)")
-        bad = env_problems(pre, rc.PLATFORM) + provenance_problems(pre, pre)
-        if repo.get("source") != "DEPLOYED_COMMIT":
-            bad.append(f"repo source {repo.get('source')!r}: the code is not a deployed bundle (one DEPLOYED_COMMIT)")
-        if bad:
-            raise RunError("preflight: " + "; ".join(bad))
-    sb = pins["stage_b"]
+    # 044 實作補記六: from the mkdir on, session.json exists: provisional (in_progress, finished_at null) until the
+    # finally below finishes it on every exit Python sees, so a hard kill leaves a record hours_used / gap_problems
+    # refuse instead of a directory they cannot see.
     session = {"schema_version": SCHEMA_VERSION, "session_id": session_id, "stage": session_plan["stage"],
                "session": plan["session"], "kind": plan["kind"], "mode": mode, "formal": formal,
-               "gpu_lock_held": gpu_lock_held, "plan_sha256": sha256_json(session_plan), "pins_sha256": pins_sha256,
-               "stage_v_sha256": stage_v_sha256, "stage_d_sha256": stage_d_sha256,
-               "plan_pins_sha256": plan.get("pins_sha256"), "plan_stage_v_sha256": plan.get("stage_v_sha256"),
-               "plan_stage_d_sha256": plan.get("stage_d_sha256"), "started_at": started,
-               "hours_used_h": float(used), "previous_formal": previous,
-               "preflight": "env/preflight.json" if capture_env else None, "repo_commit": repo.get("commit"),
-               "repo_source": repo.get("source"), "vllm": vllm,
-               "server": {"gdn_prefill_backend": sb["gdn_prefill_backend"],
-                          "gpu_memory_utilization": sb["gpu_memory_utilization"], "port": PORT, "vllm_bin": vllm_bin},
-               "datasets": {k: str(datasets[k]) for k in sorted(data_sha)}, "dataset_sha256": data_sha,
-               "server_env": ra.recorded_server_env(server_env), "inherited_unlisted": bp.inherited_unlisted(base_env),
-               "gpu_idle": gi.criterion(sb["v_total_mib"]), "boots": [], "runs": {}, "derived_sha256": {},
-               "cap_stop": None, "gateway_faults": [], "out": str(out), "result_dir": str(out / "raw"),
-               "root": str(ROOT), "gateway_python": gateway_python, "harness_sha256": sv.harness_sha256(ROOT),
-               "gateway_path_sha256": sv.gateway_path_sha256(ROOT), "capserve_sha256": rd.capserve_sha256(ROOT),
-               "profile_sha256": {p: rc._sha256_file(ROOT / x["profile"]) for p, x in plan["points"].items()}}
-    fh = open(out / "rows.jsonl", "w")
-    h = StageVHarness(plan=session_plan, pins=pins, out=out, session=session, formal=formal, pre=pre, rows_fh=fh,
-                      popen=popen, signal_group=signal_group, group_alive=group_alive, http_get=http_get,
-                      run_bench=run_bench, gpu_sample=gpu_sample, compute_apps=compute_apps,
-                      shared_usage=shared_usage, lock_held_check=lock_held_check, capture_env=capture_env,
-                      base_env=base_env, vllm_bin=vllm_bin, sample_interval=sample_interval, now=now, sleep=sleep,
-                      clock=clock, datasets=datasets, gateway_python=gateway_python, port_free=port_free, t0=t0)
+               "started_at": started, "finished_at": None, "in_progress": True, "boots": [], "runs": {},
+               "out": str(out)}
+    for d in ("raw", "env", "derived"):
+        (out / d).mkdir(parents=True)
+    rc._write_json(out / "session.json", session)
+    h = fh = None
     try:
         try:
+            rc._write_json(out / "plan.json", session_plan)
+            pre = capture_env(out_path=out / "env" / "preflight.json", gpu_lock_held=True) if capture_env else {}
+            repo = pre.get("repo") or {}
+            vllm = ((pre.get("runtime") or {}).get("vllm") or {}).get("vllm")
+            if formal:
+                if vllm != pins["vllm"]["version"]:
+                    raise RunError(f"vLLM {vllm!r} in the preflight != pinned {pins['vllm']['version']} (003; 030 "
+                                   "8.6)")
+                bad = env_problems(pre, rc.PLATFORM) + provenance_problems(pre, pre)
+                if repo.get("source") != "DEPLOYED_COMMIT":
+                    bad.append(f"repo source {repo.get('source')!r}: the code is not a deployed bundle (one "
+                               "DEPLOYED_COMMIT)")
+                if bad:
+                    raise RunError("preflight: " + "; ".join(bad))
+            sb = pins["stage_b"]
+            session.update({
+                "gpu_lock_held": gpu_lock_held, "plan_sha256": sha256_json(session_plan), "pins_sha256": pins_sha256,
+                "stage_v_sha256": stage_v_sha256, "stage_d_sha256": stage_d_sha256,
+                "plan_pins_sha256": plan.get("pins_sha256"), "plan_stage_v_sha256": plan.get("stage_v_sha256"),
+                "plan_stage_d_sha256": plan.get("stage_d_sha256"), "hours_used_h": float(used),
+                "previous_formal": previous, "preflight": "env/preflight.json" if capture_env else None,
+                "repo_commit": repo.get("commit"), "repo_source": repo.get("source"), "vllm": vllm,
+                "server": {"gdn_prefill_backend": sb["gdn_prefill_backend"],
+                           "gpu_memory_utilization": sb["gpu_memory_utilization"], "port": PORT, "vllm_bin": vllm_bin},
+                "datasets": {k: str(datasets[k]) for k in sorted(data_sha)}, "dataset_sha256": data_sha,
+                "server_env": ra.recorded_server_env(server_env),
+                "inherited_unlisted": bp.inherited_unlisted(base_env), "gpu_idle": gi.criterion(sb["v_total_mib"]),
+                "derived_sha256": {}, "cap_stop": None, "gateway_faults": [], "result_dir": str(out / "raw"),
+                "root": str(ROOT), "gateway_python": gateway_python, "harness_sha256": sv.harness_sha256(ROOT),
+                "gateway_path_sha256": sv.gateway_path_sha256(ROOT), "capserve_sha256": rd.capserve_sha256(ROOT),
+                "profile_sha256": {p: rc._sha256_file(ROOT / x["profile"]) for p, x in plan["points"].items()}})
+            fh = open(out / "rows.jsonl", "w")
+            h = StageVHarness(plan=session_plan, pins=pins, out=out, session=session, formal=formal, pre=pre,
+                              rows_fh=fh, popen=popen, signal_group=signal_group, group_alive=group_alive,
+                              http_get=http_get, run_bench=run_bench, gpu_sample=gpu_sample,
+                              compute_apps=compute_apps, shared_usage=shared_usage, lock_held_check=lock_held_check,
+                              capture_env=capture_env, base_env=base_env, vllm_bin=vllm_bin,
+                              sample_interval=sample_interval, now=now, sleep=sleep, clock=clock, datasets=datasets,
+                              gateway_python=gateway_python, port_free=port_free, t0=t0)
             with rd.mini_num_prompts(plan["mini"]["N"]) if mode == "mini" else contextlib.nullcontext():
                 _v_machine(h)
             if mode == "mini":
                 session["smoke"] = mini_checks(session_plan, session, h.rows, h.requests)
         finally:
-            fh.close()
+            if fh is not None:
+                fh.close()
     except BaseException as exc:
         session["aborted"] = f"{type(exc).__name__}: {exc}"
         raise
     finally:
-        session.update(finished_at=clock(), outcomes=rc._outcomes(h.rows, session), env_flags=h.env_flags,
-                       env_valid=not h.env_flags)
+        flags = h.env_flags if h is not None else []
+        session.update(finished_at=clock(), in_progress=False, outcomes=rc._outcomes(h.rows if h else [], session),
+                       env_flags=flags, env_valid=h is not None and not flags)
         if not formal:
             if "smoke" not in session:
                 session["smoke"] = {"ok": False, "aborted": session.get("aborted")}
@@ -741,8 +787,14 @@ def run_session(plan: dict, *, cfg: dict, stage_d_cfg: dict, pins: dict, pins_sh
             rc.mask_smoke(out)
             for rec in session["runs"].values():
                 rec.pop("startup_s", None)
-        session["rows_sha256"] = rc._sha256_file(out / "rows.jsonl")
+        rows_path = out / "rows.jsonl"
+        session["rows_sha256"] = rc._sha256_file(rows_path) if rows_path.is_file() else None
         write_raw_manifest(out)
+        if not formal:                    # 044 實作補記六: the smoke's per-request gateway times go too; the raw
+            logs = sorted((out / "raw").glob("*.gateway.log"))            # manifest above keeps their sha256
+            for path in logs:
+                path.unlink()
+            session["gateway_logs_discarded"] = [path.relative_to(out).as_posix() for path in logs]
         rc._write_json(out / "session.json", session)
     return session
 

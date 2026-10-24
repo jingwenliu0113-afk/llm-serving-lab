@@ -10,8 +10,10 @@ only supplies what 039 did not have:
   upstream_ttft_s, duration_s, t_arrival_s <= t_sent_s <= t_released_s (pacing: prefill_wait_s; weighted-v1:
   admission_class and its admission_units); no other client_request_id; at least C + 1 records without an id (the
   bench's ready check, which may retry, and its C warmups), every one status 200 and outcome ok, all arriving before
-  the first main request; /healthz, /readyz and /metrics are never read; any other route is a problem; pacing off:
-  no completion record waited for tokens (E);
+  the first main request; /healthz, /readyz and /metrics are never read; a random-dataset client's bench
+  (random_dataset) sends exactly one POST /tokenize without an id before every completion record, which the gateway
+  answers 404 (vLLM 0.30's prompt alignment, skipped then: 044 實作補記六), and no other client sends one; any other
+  route is a problem; pacing off: no completion record waited for tokens (E);
 - the derived requests (gateway_requests): run_stage_d.derived_requests' columns with the gateway's gw_queue_wait_ms,
   gw_prefill_wait_ms, gw_ttft_ms, gw_upstream_ttft_ms, gw_arrival_s / gw_sent_s / gw_released_s (seconds from the
   run's earliest main arrival), units (weighted-v1: the record's admission_units, else 1) and out_planned; a W
@@ -24,26 +26,30 @@ only supplies what 039 did not have:
   + (latency - ttft), so TPOT is unchanged); the W SLO view (slo_view_w: run_eval at L 2048, mix "mixed" with the 8K
   tier on the long class's 32K slot, so 2K is judged per run and 8K pooled over the runs on 6 s, never a skip);
 - in vLLM (in_vllm): the half-open intervals [t_sent, t_released), exact (Fraction): over T_W = [t_arrival(idx C),
-  t_arrival(idx N - C)) the time averages of units (U_W) and of requests (N1's), and over the whole run the peaks
-  (044 (j): requests <= C; weighted-v1 units <= the budget and each class <= its cap); the 1 Hz sampler's peak is
-  reported beside them;
+  t_arrival(idx N - C)) the time averages of the main requests' units (U_W) and requests (N1's), and over the whole
+  bench process, the ready check's and the warmups' intervals included (row["warmups"], warmup_spans of the id-less
+  records: 044 實作補記六), the peaks (044 (j): requests <= C; weighted-v1 units <= the budget and each class <= its
+  cap); the 1 Hz sampler's peak is reported beside them;
 - E (manipulation_e, V2): pacing on, at least C - b - 1 first-wave requests (idx < C) waited for tokens, b the most of
   the first wave's shortest prompts that fit in the burst (uniform: the prompt; var: stage_d_datasets.lengths, the
   pinned var-2048's); pacing off, none waited;
-- run outcome (run_outcome): invalid (the runner's verdict, the derived checks, (j), E), fail (valid, a judged view's
-  maxR_run > 1), trivial (valid, no fail, V4's U_W < 0.9 x the budget or V2's N1 < 0.9 C), ok;
+- run outcome (run_outcome): invalid (the runner's verdict, the derived checks, the warmups' intervals
+  (warmup_problems), (j), E), fail (valid, a judged view's maxR_run > 1), trivial (valid, no fail, V4's U_W < 0.9 x
+  the budget or V2's N1 < 0.9 C), ok;
 - point class (point_class), FAIL > TRIVIAL > NT > MARGINAL > PASS over the judged views (V-GW, V1 client; V2 the
   worse of upstream and client; V4 upstream): FAIL a fail run or a pooled R_long > 1; TRIVIAL a trivial run; NT fewer
   than n ok runs; PASS n ok runs with every judged term <= 1 - m; else MARGINAL. Descriptive: both views in W' and
   full, WINDOW_SENSITIVE, the first and second waves, the per-request decomposition (transport, gateway, vLLM, queue,
   prefill), in-vLLM averages, V1's output-length bins, V4's 8K count in W (stage_v_datasets.window_counts);
 - the replay (replay_problems): blocks r = 1..n in capacity_plan.block_order, one boot and one V run per active point;
-  once a run is not ok its point's skip group (stage_v_plan.skip_group: its product unit, the unit is dead) leaves
-  the later boots, the same block's included; before every V boot the hour cap on the boot's recorded elapsed_s
-  (stage_v_plan.cap_allows), a session's cap_stop {block, point, elapsed_s, forced} where the cap first stops it
-  (the mini: forced, before its last planned V boot), every later planned run not run (cap);
+  once a run is not ok (invalid, fail or trivial) its point leaves the later blocks, and only it: its unit's other
+  points keep running (the inherited 039 / 030 rule, per point: 044 實作補記六); before every V boot the hour cap on
+  the boot's recorded elapsed_s (stage_v_plan.cap_allows), a session's cap_stop {block, point, elapsed_s, forced}
+  where the cap first stops it (the mini: forced, before its last planned V boot), every later planned run not run
+  (cap);
 - hypotheses (044 H-GW1-4, H-L1-2, H-P1-3, H-W0-2): PASS supported, FAIL and TRIVIAL not supported, MARGINAL
-  inconclusive, NT NT; H-W0 every valid W run's U_W >= 0.9 x 32;
+  inconclusive, NT NT; each prediction the point classes 044 names (H-GW4 MARGINAL or FAIL) and prediction_met
+  mechanically (044 實作補記六); H-W0 every valid W run's U_W >= 0.9 x 32;
 - units (the generator's only input, 044 產品對應): a unit holds when the session is valid (replay, sentinel gate,
   formal) and each of its points PASSes, PACE-2K unless vetoed (F-U2K-var PASS and P-U2K-var not); readings: V2's
   two 2 x 2 tables.
@@ -77,7 +83,9 @@ WINDOWS = ca.WINDOWS
 VIEWS = sv.VIEWS
 COMPLETION_PATH = "/v1/completions"
 EXEMPT_PATHS = ("/healthz", "/readyz", "/metrics")      # capserve.guard's (never imported): never joined
+TOKENIZE_PATH = "/tokenize"     # vLLM 0.30 bench's prompt alignment (serve.py _align_prompts_to_server_tokenizer)
 LOG_FIELDS = ("queue_wait_s", "ttft_s", "upstream_ttft_s", "duration_s", "t_arrival_s", "t_sent_s", "t_released_s")
+ANON_FIELDS = ("t_arrival_s", "t_sent_s", "t_released_s")   # an id-less completion record's (044 (h), (j))
 CLIENT_KEYS = ("idx", "cls", "ttft_ms", "latency_ms", "out", "start_s")   # run_stage_d.derived_requests
 GATEWAY_KEYS = ("out_planned", "units", "gw_queue_wait_ms", "gw_prefill_wait_ms", "gw_ttft_ms", "gw_upstream_ttft_ms",
                 "gw_arrival_s", "gw_sent_s", "gw_released_s")
@@ -85,11 +93,14 @@ DERIVED_KEYS = CLIENT_KEYS + GATEWAY_KEYS
 TIMES = ("gw_arrival_s", "gw_sent_s", "gw_released_s")   # the log's t_arrival_s, t_sent_s, t_released_s
 OUT_BINS = ((1, 16), (17, 64), (65, 128), (129, 256), (257, 512))
 FORCED_TIMEOUT_S = 5                                     # run_capacity.MINI_FORCED_TIMEOUT_S: the mini's forced timeout
-HYPOTHESES = {"H-GW1": ("GW-U32K", "supported"), "H-GW2": ("GW-U2K-O512", "supported"),
-              "H-GW3": ("GW-U8K-O512", "supported"), "H-GW4": ("GW-M8K-T", "not supported"),
-              "H-L1": ("L-U2K", "supported"), "H-L2": ("L-U8K", "supported"), "H-P1": ("P-U2K", "supported"),
-              "H-P2": ("P-U8K", "supported"), "H-P3": ("P-U2K-var", "not supported"),
-              "H-W1": ("W-90", "not supported"), "H-W2": ("W-50", "not supported")}
+# 044's predictions as the point classes they name (實作補記六): supported {PASS}; not supported {FAIL, TRIVIAL}, the
+# classes verdict() maps to it; H-GW4 "not supported（MARGINAL 或 FAIL）" as 044 writes it
+SUPPORTED, NOT_SUPPORTED_CLASSES = frozenset({"PASS"}), frozenset({"FAIL", "TRIVIAL"})
+HYPOTHESES = {"H-GW1": ("GW-U32K", SUPPORTED), "H-GW2": ("GW-U2K-O512", SUPPORTED),
+              "H-GW3": ("GW-U8K-O512", SUPPORTED), "H-GW4": ("GW-M8K-T", frozenset({"MARGINAL", "FAIL"})),
+              "H-L1": ("L-U2K", SUPPORTED), "H-L2": ("L-U8K", SUPPORTED), "H-P1": ("P-U2K", SUPPORTED),
+              "H-P2": ("P-U8K", SUPPORTED), "H-P3": ("P-U2K-var", NOT_SUPPORTED_CLASSES),
+              "H-W1": ("W-90", NOT_SUPPORTED_CLASSES), "H-W2": ("W-50", NOT_SUPPORTED_CLASSES)}
 H_W0 = ("W-90", "W-50")                                  # every valid run's U_W >= 0.9 x 32; predicted to hold
 W_EFFECTIVE = {"v4-90": 24.6, "v4-50": 12.8}             # 043 7.3 A's effective concurrency (requests; descriptive)
 VAR_PAIR = ("P-U2K-var", "F-U2K-var")
@@ -139,6 +150,38 @@ def _units_of(x: dict, prompt) -> int:
 
 # ---------------------------------------------------------------- the access log (044 (h), (i))
 
+def random_dataset(x: dict) -> bool:
+    """Whether the point's client is `vllm bench serve --dataset-name random`: stage_d_plan.bench_argv_for of a uniform
+    client base. Only that client aligns its prompts to the server's tokenizer (vLLM 0.30 serve.py main_async: random
+    and prefix_repetition), with one POST {base_url}/tokenize before its ready check."""
+    return sd.workload(x["client_base"])["mix"] == "uniform"
+
+
+def _probe_problems(probes: list, *, x: dict, first) -> list:
+    """044 實作補記六: the random dataset's bench sends exactly one POST /tokenize (no x-request-id) before its ready
+    check; the gateway has no /tokenize route, so it answers 404 and the bench skips its alignment (a no-op: it
+    tokenizes with the served snapshot). Any other /tokenize record, or none, is a problem. first: the earliest
+    completion record's t_arrival_s."""
+    if not random_dataset(x):
+        return [f"access-log line {k}: POST /tokenize from a custom-dataset client, whose bench never aligns its "
+                "prompts (044 (h), 實作補記六)" for k, _ in probes]
+    problems = []
+    if len(probes) != 1:
+        problems.append(f"{len(probes)} POST /tokenize records; vLLM 0.30's random-dataset bench sends exactly one, "
+                        "before its ready check (044 實作補記六)")
+    for k, e in probes:
+        if e.get("status") != 404:
+            problems.append(f"access-log line {k}: POST /tokenize status {e.get('status')!r}, not 404 (the gateway has "
+                            "no /tokenize route; 044 實作補記六)")
+        t = e.get("t_arrival_s")
+        if not _finite(t):
+            problems.append(f"access-log line {k}: POST /tokenize t_arrival_s missing or not a number (044 (h))")
+        elif first is not None and not t < first:
+            problems.append(f"access-log line {k}: POST /tokenize arrived at {t}, not before every completion record "
+                            f"({first}): the bench aligns before its ready check (044 實作補記六)")
+    return problems
+
+
 def _entry_problems(e: dict, line: int, x: dict, main: bool) -> list:
     problems = []
     if e.get("status") != 200 or e.get("outcome") != "ok":
@@ -146,10 +189,13 @@ def _entry_problems(e: dict, line: int, x: dict, main: bool) -> list:
                         "4xx, 429 or 5xx, main requests and warmups alike)")
     if not x["pacing"] and _finite(e.get("prefill_wait_s")) and e["prefill_wait_s"] > 0:
         problems.append(f"access-log line {line}: prefill_wait_s {e['prefill_wait_s']} with pacing off (044 (m) E)")
-    if not main:
-        if not _finite(e.get("t_arrival_s")):
-            problems.append(f"access-log line {line}: t_arrival_s missing or not a number (044 (h))")
-        return problems
+    if not main:                        # the ready check and the warmups: their interval is (j)'s too (實作補記六)
+        missing = [k for k in ANON_FIELDS if not _finite(e.get(k))]
+        if missing:
+            return problems + [f"access-log line {line} lacks {missing} as numbers (044 (h), (j))"]
+        if not e["t_arrival_s"] <= e["t_sent_s"] <= e["t_released_s"]:
+            problems.append(f"access-log line {line}: t_arrival_s <= t_sent_s <= t_released_s fails (044 (j))")
+        return problems + _admission_problems(e, line, x)
     need = LOG_FIELDS + (("prefill_wait_s",) if x["pacing"] else ())
     missing = [k for k in need if not _finite(e.get(k))]
     if missing:
@@ -160,25 +206,30 @@ def _entry_problems(e: dict, line: int, x: dict, main: bool) -> list:
         problems.append(f"access-log line {line}: t_released_s {e['t_released_s']} before t_sent_s {e['t_sent_s']}")
     if any(e[k] < 0 for k in ("queue_wait_s", "prefill_wait_s") if k in need):
         problems.append(f"access-log line {line}: a negative wait")
-    if x["admission"]:
-        classes = {c["name"]: c["units"] for c in x["admission_params"]["classes"]}
-        cls, units = e.get("admission_class"), e.get("admission_units")
-        if cls not in classes:
-            problems.append(f"access-log line {line}: admission_class {cls!r} is not one of {sorted(classes)} "
-                            "(044 (h))")
-        elif type(units) is not int or units != classes[cls]:
-            problems.append(f"access-log line {line}: admission_units {units!r} != {cls}'s {classes[cls]} (044 (h))")
-    return problems
+    return problems + _admission_problems(e, line, x)
+
+
+def _admission_problems(e: dict, line: int, x: dict) -> list:
+    if not x["admission"]:
+        return []
+    classes = {c["name"]: c["units"] for c in x["admission_params"]["classes"]}
+    cls, units = e.get("admission_class"), e.get("admission_units")
+    if cls not in classes:
+        return [f"access-log line {line}: admission_class {cls!r} is not one of {sorted(classes)} (044 (h))"]
+    if type(units) is not int or units != classes[cls]:
+        return [f"access-log line {line}: admission_units {units!r} != {cls}'s {classes[cls]} (044 (h))"]
+    return []
 
 
 def join_access_log(text: str, *, plan: dict, point: str, block: int) -> tuple:
-    """(problems, {idx: access-log record}) of one run's gateway log (044 (h), (i)); [] problems when the log and the
-    run's N requests are a bijection under the module docstring's rules. Lines that are not JSON objects (uvicorn,
-    capserve's own prints, tracebacks) are not records; a line starting with "{" must be one."""
+    """(problems, {idx: access-log record}, [id-less completion records]) of one run's gateway log (044 (h), (i));
+    [] problems when the log and the run's N requests are a bijection under the module docstring's rules. The id-less
+    records are the bench's ready check and warmups (warmup_spans: (j) reads their intervals too). Lines that are not
+    JSON objects (uvicorn, capserve's own prints, tracebacks) are not records; a line starting with "{" must be one."""
     x = plan["points"][point]
     n, C = x["N"], x["C"]
     prefix = sv.run_tag("V", point, C, block=block) + "-"
-    problems, joined, lines, anon = [], {}, {}, []
+    problems, joined, lines, anon, probes, arrivals = [], {}, {}, [], [], []
     for k, line in enumerate(text.splitlines(), start=1):
         line = line.strip()
         if not line.startswith("{"):
@@ -192,10 +243,15 @@ def join_access_log(text: str, *, plan: dict, point: str, block: int) -> tuple:
             continue
         if e["path"] in EXEMPT_PATHS:
             continue
+        if e["path"] == TOKENIZE_PATH and e.get("method") == "POST" and e.get("client_request_id") is None:
+            probes.append((k, e))                       # the random dataset's alignment probe (_probe_problems)
+            continue
         if e["path"] != COMPLETION_PATH or e.get("route") != "completions" or e.get("method") != "POST":
             problems.append(f"access-log line {k}: {e.get('method')} {e['path']} is not the completion route of this "
                             "run (044 (h))")
             continue
+        if _finite(e.get("t_arrival_s")):
+            arrivals.append(e["t_arrival_s"])
         cid = e.get("client_request_id")
         if cid is None:
             problems += _entry_problems(e, k, x, main=False)
@@ -224,7 +280,30 @@ def join_access_log(text: str, *, plan: dict, point: str, block: int) -> tuple:
     if late:
         problems.append(f"access-log lines {late}: completion requests without the run's id arrived during the main "
                         "run (044 (h): only the ready check and the warmups come without one, before it)")
-    return problems, joined
+    problems += _probe_problems(probes, x=x, first=min(arrivals, default=None))
+    return problems, joined, [e for _, e in anon]
+
+
+def warmup_spans(warmups: list, joined: dict, *, x: dict) -> list:
+    """044 (j) over the whole bench process (實作補記六): [[t_sent_s, t_released_s, units], ...] of the id-less
+    completion records (join_access_log's third value: the ready check and the warmups), in seconds from the run's
+    earliest main arrival, rounded to the µs as gateway_requests' times; the runner records them as row["warmups"]."""
+    t0 = min((e["t_arrival_s"] for e in joined.values() if _finite(e.get("t_arrival_s"))), default=None)
+    return [[round(e["t_sent_s"] - t0, 6), round(e["t_released_s"] - t0, 6),
+             e.get("admission_units") if x["admission"] else 1]
+            for e in warmups if t0 is not None and _finite(e.get("t_sent_s")) and _finite(e.get("t_released_s"))]
+
+
+def warmup_problems(row: dict, x: dict) -> list:
+    """row["warmups"] (warmup_spans) as (j) needs them: at least C + 1 intervals (the ready check and the C warmups),
+    each [sent, released, units] with sent <= released and units of a class of the point (1 without weighted-v1)."""
+    w = row.get("warmups")
+    units = {c["units"] for c in x["admission_params"]["classes"]} if x["admission"] else {1}
+    ok = isinstance(w, list) and len(w) >= bp.num_warmups(x["C"]) + 1 and all(
+        isinstance(s, list) and len(s) == 3 and _finite(s[0]) and _finite(s[1]) and s[0] <= s[1]
+        and type(s[2]) is int and s[2] in units for s in w)
+    return [] if ok else [f"(j): the row records no well-formed warmup intervals (the ready check and >= C warmups, "
+                          f"[sent, released, units]): {w!r:.200} (044 實作補記六)"]
 
 
 def _ms(v):
@@ -394,13 +473,16 @@ def _eval(reqs: list, plan: dict, x: dict, *, view: str, slo: dict, window: str 
 
 # ---------------------------------------------------------------- in vLLM (044 (j), U_W, N1) and E
 
-def in_vllm(reqs: list, *, C: int, N: int) -> dict:
-    """Requests and units in vLLM on [gw_sent_s, gw_released_s): exact time averages over T_W ("_u_w", "_n_w"; None
-    when T_W is empty) and peaks over the whole run (releases before sends at one instant: half-open intervals)."""
+def in_vllm(reqs: list, *, C: int, N: int, warmups=()) -> dict:
+    """Requests and units in vLLM on [gw_sent_s, gw_released_s): exact time averages of the main requests over T_W
+    ("_u_w", "_n_w"; None when T_W is empty) and peaks over the whole bench process, the ready check's and the
+    warmups' intervals (warmups: [[sent, released, units], ...], warmup_spans) included (044 (j), 實作補記六); releases
+    before sends at one instant: half-open intervals."""
     by = {q["idx"]: q for q in reqs}
     a, b = Fraction(by[C]["gw_arrival_s"]), Fraction(by[N - C]["gw_arrival_s"])
     spans = [(Fraction(q["gw_sent_s"]), Fraction(q["gw_released_s"]), q["units"]) for q in reqs]
-    events = sorted([(s, 1, u) for s, _, u in spans] + [(r, 0, u) for _, r, u in spans])
+    warm = [(Fraction(s), Fraction(r), u) for s, r, u in warmups]
+    events = sorted([(s, 1, u) for s, _, u in spans + warm] + [(r, 0, u) for _, r, u in spans + warm])
     now_n = now_u = peak_n = peak_u = 0
     per, peak_per = {}, {}
     for _, kind, u in events:
@@ -482,7 +564,9 @@ def run_valid(row: dict, reqs, plan: dict) -> tuple:
     x = plan["points"][row["workload"]]
     problems = derived_problems(reqs, plan=plan, point=row["workload"], block=row["block"])
     if not problems:
-        problems = inflight_problems(in_vllm(reqs, C=x["C"], N=x["N"]), x=x)
+        problems = warmup_problems(row, x)
+    if not problems:
+        problems = inflight_problems(in_vllm(reqs, C=x["C"], N=x["N"], warmups=row["warmups"]), x=x)
         e = manipulation_e(reqs, x=x)
         if e is not None and not e["ok"]:
             problems.append(f"E: {e['waited']} requests waited for tokens; pacing {'on' if e['pacing'] else 'off'} "
@@ -607,8 +691,8 @@ def _row_plan_problems(plan: dict, row: dict) -> list:
 
 
 def _schedule(plan: dict, boots: list, rows: list, requests: dict, cap_stop) -> tuple:
-    """(problems, {"skipped", "not_run_cap"}): replay_problems' work and the planned runs it found skipped (a dead
-    unit) or not run (the hour cap)."""
+    """(problems, {"skipped", "not_run_cap"}): replay_problems' work and the planned runs it found skipped (the point
+    had a run that was not ok) or not run (the hour cap)."""
     sched = {"skipped": [], "not_run_cap": []}
     for r in range(1, plan["n"] + 1):
         want = cp.block_order(plan["seed"], r, list(plan["points"]))
@@ -713,7 +797,7 @@ def _schedule(plan: dict, boots: list, rows: list, requests: dict, cap_stop) -> 
                 problems.append(f"V {rows_b[0]['tag']}: recorded outcome {rows_b[0].get('outcome')!r}, recomputed "
                                 f"{outcome!r}")
             if outcome != "ok":
-                dropped |= set(x["skip_group"])
+                dropped.add(p)                          # 044 實作補記六: the point alone (039 / 030)
         if cap_stop is not None and not stopped:
             problems.append(f"the recorded cap stop {cap_stop!r} is not where this replay stops (044 時數上限)")
         sentinel("end")
@@ -724,10 +808,16 @@ def _schedule(plan: dict, boots: list, rows: list, requests: dict, cap_stop) -> 
     return problems, sched
 
 
+def schedule(plan: dict, boots: list, rows: list, requests: dict, *, cap_stop=None) -> tuple:
+    """(replay_problems, {"skipped": [[block, point], ...], "not_run_cap": [...]}): the replay and the planned runs it
+    found skipped (the skip rule) or not run (the hour cap)."""
+    return _schedule(plan, boots, rows, requests, cap_stop)
+
+
 def replay_problems(plan: dict, boots: list, rows: list, requests: dict, *, cap_stop=None) -> list:
-    """Every boot, outcome, skip (trivial runs and dead units included) and hour-cap decision recomputed from the rows
-    and the recorded times; [] when the session ran exactly what 044 prescribes for its own data."""
-    return _schedule(plan, boots, rows, requests, cap_stop)[0]
+    """Every boot, outcome, skip (trivial and invalid runs included) and hour-cap decision recomputed from the rows and
+    the recorded times; [] when the session ran exactly what 044 prescribes for its own data."""
+    return schedule(plan, boots, rows, requests, cap_stop=cap_stop)[0]
 
 
 # ---------------------------------------------------------------- per point
@@ -772,7 +862,7 @@ def point_analysis(plan: dict, point: str, rows: list, requests: dict, *, slo: d
         for v in VIEWS:
             for w in WINDOWS:
                 evals[v][w].append(e[v][w])
-        iv = in_vllm(reqs, C=x["C"], N=x["N"])
+        iv = in_vllm(reqs, C=x["C"], N=x["N"], warmups=row["warmups"])
         nt = nontrivial(iv, x=x, plan=plan)
         outcome = _outcome(any(e[v]["steady"]["fail"] for v in x["judged_views"]), nt)
         view_reqs = {"client": reqs, "upstream": upstream_view(reqs)}
@@ -825,18 +915,22 @@ def verdict(klass: str) -> str:
 
 
 def hypotheses(points: dict) -> dict:
+    """044's hypotheses: each point's class, verdict and prediction (the classes 044 predicts) with prediction_met
+    mechanically (None: NT, not tested); H-W0 on every valid W run's U_W, predicted supported."""
     out = {}
-    for h, (p, prediction) in HYPOTHESES.items():
+    for h, (p, predicted) in HYPOTHESES.items():
         if p in points:
-            out[h] = {"point": p, "class": points[p]["class"], "verdict": verdict(points[p]["class"]),
-                      "prediction": prediction}
+            k = points[p]["class"]
+            out[h] = {"point": p, "class": k, "verdict": verdict(k), "predicted_classes": sorted(predicted),
+                      "prediction_met": None if k == "NT" else k in predicted}
     if all(p in points for p in H_W0):
         valid = {p: [r for r in points[p].get("runs") or [] if r.get("valid")] for p in H_W0}
         if any(not r["nontrivial"]["ok"] for rs in valid.values() for r in rs):
             v = "not supported"
         else:
             v = "supported" if all(valid.values()) else "NT"
-        out["H-W0"] = {"points": list(H_W0), "verdict": v, "prediction": "supported"}
+        out["H-W0"] = {"points": list(H_W0), "verdict": v, "prediction": "supported",
+                       "prediction_met": None if v == "NT" else v == "supported"}
     return out
 
 

@@ -219,6 +219,22 @@ def test_formal_sessions_are_at_least_2_hours_apart(tmp_path):
     assert report(out, root, cfgs)["replay"]["ok"]
 
 
+@pytest.mark.parametrize("name", ["formal-t-crashed", "smoke-v-crashed"])
+def test_a_session_directory_without_a_finished_session_json_is_refused(tmp_path, name):
+    """044 實作補記六: another session that started and never recorded its end (a hard kill) leaves the 12 h total and
+    the 2 h gap unknown; the report refuses as the runner does."""
+    out, s, root, cfgs = formal(tmp_path, "V-ADM")
+    crashed = root.joinpath(*sv.RESULTS, name)
+    crashed.mkdir()
+    (crashed / "plan.json").write_text("{}")
+    with pytest.raises(svr.ReportError, match=f"{name}: .*no session.json"):
+        report(out, root, cfgs)
+    (crashed / "session.json").write_text(json.dumps({"in_progress": True, "started_at": s["started_at"],
+                                                      "finished_at": None}))
+    with pytest.raises(svr.ReportError, match=f"{name}: .*never finished"):
+        report(out, root, cfgs)
+
+
 def test_the_cli_writes_only_the_sessions_analysis_and_a_rerun_is_byte_identical(tmp_path, monkeypatch, capsys):
     out, s, root, (c, d, p) = formal(tmp_path, "V-CLS")
     args = ["--session", str(out), "--uniform-session", str(UNIFORM), "--advanced-session", str(ADVANCED)]

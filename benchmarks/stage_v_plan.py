@@ -18,10 +18,11 @@ every timeout stage_d_plan.timeout_s of stage_d_plan.tau1 on the frozen stage_d.
   queue settings ("product" 2 s / 300 s, or "slow" 120 s / 600 s), weighted-v1 or pacing (never both), the dataset
   (per_block: block r reads <dataset>-r<r>), out_pinned (L points: every row's own output length), the judging view,
   the product unit, the bench estimate and the /readyz limits the gateway must report (weighted-v1: its envelope).
-- Units (UNITS, 044 產品對應): a unit holds only when each of its points PASSes, so once a run of one of its points
-  is not ok, every point of the unit leaves the later boots (skip_group). The V2 controls and the var pair belong to
-  no unit and skip alone: the predicted var FAIL never stops P-U2K; PACE-2K is vetoed instead (VETOES) when
-  F-U2K-var PASSes and P-U2K-var does not.
+- Units (UNITS, 044 產品對應): a unit holds only when each of its points PASSes. Skipping is the inherited 039 / 030
+  rule, per point, for every point (044 實作補記六): once a run of a point is not ok, that point alone leaves the
+  later boots; its unit's other points keep running, so each point's own hypothesis stays answerable, and the unit
+  cannot hold. The V2 controls and the var pair belong to no unit: the predicted var FAIL never stops P-U2K; PACE-2K
+  is vetoed instead (VETOES) when F-U2K-var PASSes and P-U2K-var does not.
 - Client argv (bench_argv): the frozen function's output with only 044's three differences: --base-url port 8000 ->
   8080 where the frozen function gives 8000; L points only, --custom-output-len 128 -> -1 (vLLM 0.30 reads each row's
   output_tokens only then); --request-id-prefix <tag>- appended on every gateway run (its default is
@@ -42,8 +43,9 @@ every timeout stage_d_plan.timeout_s of stage_d_plan.tau1 on the frozen stage_d.
 - The request path (gateway_path_files, gateway_path_sha256): the import closure of service/capserve/__main__.py,
   computed from the source with ast and never by importing (research never imports capserve), with the same
   algorithm as capserve.gateway_path; service/tests assert both ends agree on the checkout.
-- Freeze evidence: the mini's session.json records harness_sha256 (HARNESS_FILES, the five Stage V modules) and
-  gateway_path_sha256; both must be the current harness's and the frozen request path's.
+- Freeze evidence: the mini's session.json records harness_sha256 (HARNESS_FILES, the five Stage V modules),
+  gateway_path_sha256, each point's profile_sha256 and each dataset's dataset_sha256; they must be the current
+  harness's, the frozen request path's and the bytes stage_v.toml pins (044 實作補記六).
 
 Usage (CPU only, Mac or WSL):
     python3 benchmarks/stage_v_plan.py --session V-ADM --out stage-v-plan.json [--formal]
@@ -187,13 +189,15 @@ DATASETS = tuple([f"v1-{t}-r{r}" for t in (2048, 8192) for r in range(1, N_RUNS 
 VAR_DATASET = "var-2048"               # D-C's, pinned in stage_d.toml
 MIX_DATASET = "mixed-8192"             # 007's 8K mix, pinned in pins.toml
 # The mini (044 mini smoke): n 2, N 20 (run_stage_d.MINI_N), the sentinel at C 2 (run_capacity.MINI_SENTINEL_C), each
-# point's mini C, L-U8K on v1-mini-8192 (outputs 1 / 2 / 512 in rows 5-7), GW-U8K-O512's block 2 forced to time out
-# (the skip rule and the dead unit). Its bench estimates are rough N = 20 values for its own cap check only; the
-# dummy SLO, N, the forced timeout and the forced cap stop before the last planned V boot are the runner's.
+# point's mini C, L-U8K on v1-mini-8192 (outputs 1 / 2 / 512 in rows 5-7), GW-U8K-O512's block 1 forced to time out
+# so the skip rule drops its block 2 (044 實作補記六: with n = 2 only a block-1 timeout leaves a later run of the same
+# point to skip; L-U8K keeps both runs for its output_lens pins). Its bench estimates are rough N = 20 values for its
+# own cap check only; the dummy SLO, N, the forced timeout and the forced cap stop before the last planned V boot are
+# the runner's.
 MINI = {"n": 2, "N": 20, "sentinel_C": 2,
         "C": {"GW-U8K-O512": 4, "L-U8K": 4, "GW-M8K-T": 2, "P-U2K": 8, "F-U2K-var": 4, "W-mini": 9},
         "datasets": {"L-U8K": "v1-mini-8192"},
-        "forced_timeout": {"GW-U8K-O512": [2]},
+        "forced_timeout": {"GW-U8K-O512": [1]},
         "bench_est_s": {"GW-U8K-O512": 90, "L-U8K": 60, "GW-M8K-T": 60, "P-U2K": 20, "F-U2K-var": 15, "W-mini": 30,
                         "sentinel": 20}}
 TOP_KEYS = {"schema_version", "freeze", "stage_v", "slo", "secondary_slo"}
@@ -218,12 +222,6 @@ class PlanError(bp.PlanError):
 
 def _sha(value) -> bool:
     return isinstance(value, str) and _HEX64.fullmatch(value) is not None
-
-
-def skip_group(point: str) -> list:
-    """The points that leave the later boots once a run of point is not ok: its unit's, or point alone (044)."""
-    unit = POINTS[point]["unit"]
-    return list(UNITS[unit]) if unit else [point]
 
 
 # ---------------------------------------------------------------- stage_v.toml (044)
@@ -337,9 +335,16 @@ def harness_sha256(root=ROOT) -> str:
     return h.hexdigest()
 
 
+def mini_dataset_keys() -> list:
+    """The datasets the mini reads (its points' datasets, MINI's own for L-U8K), sorted."""
+    return sorted({MINI["datasets"].get(p, POINTS[p]["dataset"]) for p in SESSIONS["mini"]} - {""})
+
+
 def freeze_evidence_problems(cfg: dict, root) -> list:
     """Once freeze.stage_v is true: the named mini exists under root/results/stage_v as a passed non-formal mini smoke
-    of the current harness (harness_sha256) that ran the frozen request path (gateway_path_sha256). [] before."""
+    of the current harness (harness_sha256) that ran the frozen request path (gateway_path_sha256) and served and read
+    the bytes stage_v.toml pins now: each mini point's profile_sha256 and each dataset it read (044 實作補記六). []
+    before."""
     freeze = cfg.get("freeze") or {}
     if freeze.get("stage_v") is not True:
         return []
@@ -358,6 +363,15 @@ def freeze_evidence_problems(cfg: dict, root) -> list:
     if s.get("gateway_path_sha256") != freeze.get("gateway_path_sha256"):
         problems.append(f"freeze.mini: {sid} ran request path {s.get('gateway_path_sha256')!r}, not the frozen "
                         f"gateway_path_sha256 {freeze.get('gateway_path_sha256')!r}")
+    v = cfg.get("stage_v") or {}
+    pins = {p: ((v.get("points") or {}).get(p) or {}).get("profile_sha256") for p in SESSIONS["mini"]}
+    if s.get("profile_sha256") != pins:
+        problems.append(f"freeze.mini: {sid} served profile_sha256 {s.get('profile_sha256')!r}, not the pinned {pins} "
+                        "(044 實作補記六: a profile changed after the mini voids its evidence)")
+    data = {k: (v.get("datasets") or {}).get(k) for k in mini_dataset_keys()}
+    if s.get("dataset_sha256") != data:
+        problems.append(f"freeze.mini: {sid} read dataset_sha256 {s.get('dataset_sha256')!r}, not the pinned {data} "
+                        "(044 實作補記六)")
     return problems
 
 
@@ -637,8 +651,7 @@ def _plan_point(cfg: dict, stage_d_cfg: dict, point: str, *, n: int, mini: bool)
              admission_params=copy.deepcopy(v["weighted_v1"]) if x["admission"] else None,
              pacing_params={k: v["pacing"][x["pacing"]][k] for k in PACING_PARAMS} if x["pacing"] else None,
              datasets={str(r): f"{key}-r{r}" if per_block else key for r in range(1, n + 1)} if key else None,
-             skip_group=skip_group(point), forced_timeout_blocks=list(MINI["forced_timeout"].get(point, []))
-             if mini else [])
+             forced_timeout_blocks=list(MINI["forced_timeout"].get(point, [])) if mini else [])
     return x
 
 

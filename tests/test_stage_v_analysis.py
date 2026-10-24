@@ -110,13 +110,24 @@ def make_reqs(p, point, block=1, *, ttft=800.0, tpot=50.0, up=None, long_ttft=25
     return out
 
 
+WARM_RELEASE = -20.0                    # the C warmups' release, seconds from the run's earliest main arrival
+
+
+def warmups_of(x, *, release=WARM_RELEASE):
+    """[[t_sent_s, t_released_s, units], ...] of a run's id-less completion records as log_text writes them and the
+    runner records them (seconds from the run's earliest main arrival): the ready check, then C warmups of row 0
+    (2K: one unit)."""
+    return [[-40.0, -39.0, 1]] + [[round(-30.0 + k * 0.01, 6), release, 1] for k in range(x["C"])]
+
+
 def row_for(p, point, block, *, boot=0, valid=True):
     x = p["points"][point]
     timeout = sva.FORCED_TIMEOUT_S if block in x["forced_timeout_blocks"] else x["timeout_s"]
     return {"phase": "V", "workload": point, "C": x["C"], "N": x["N"], "block": block, "position": None, "boot": boot,
             "tag": sv.run_tag("V", point, x["C"], block=block), "valid": valid,
             "reasons": [] if valid else ["simulated invalid run"], "timeout_s": timeout, "output_throughput": 300.0,
-            "metrics": {"inflight_peak": x["C"], "kv_cache_usage_peak": 0.5, "preemptions": 0, "waiting_peak": 0}}
+            "metrics": {"inflight_peak": x["C"], "kv_cache_usage_peak": 0.5, "preemptions": 0, "waiting_peak": 0},
+            "warmups": warmups_of(x)}
 
 
 def sentinel_reqs(s):
@@ -124,12 +135,13 @@ def sentinel_reqs(s):
              "start_s": float(i)} for i in range(s["N"])]
 
 
-def simulate(p, kw=lambda point, block: {}, *, invalid=(), slow=None):
+def simulate(p, kw=lambda point, block: {}, *, invalid=(), slow=None, drop=None):
     """Play p's session as the runner does (044): the start sentinel; blocks r = 1..n in the plan's block orders, one
-    boot and one V run per active point; once a run is not ok its point's skip group (the unit) leaves the later boots;
+    boot and one V run per active point; once a run is not ok its point (only it: 實作補記六) leaves the later boots;
     before every V boot the hour cap on the recorded elapsed_s (the mini: a forced stop before its last planned V
     boot); the end sentinel. kw(point, block) -> make_reqs keywords; (point, block) in invalid is an invalid run;
-    slow(point, block) -> extra seconds that boot takes. Returns (cap, requests)."""
+    slow(point, block) -> extra seconds that boot takes; drop(point) -> the points a run that is not ok drops (default:
+    the point alone). Returns (cap, requests)."""
     boots, rows, requests, t = [], [], {}, [0.0]
     s = p["sentinel"]
 
@@ -168,7 +180,7 @@ def simulate(p, kw=lambda point, block: {}, *, invalid=(), slow=None):
         row["outcome"] = sva.run_outcome(row, requests.get(row["tag"]), p)
         rows.append(row)
         if row["outcome"] != "ok":
-            dropped |= set(x["skip_group"])
+            dropped |= set(drop(q) if drop else [q])
         t[0] += x["est_s"] + (slow(q, r) if slow else 0)
     sentinel("end")
     session = {"boots": boots, "cap_stop": cap_stop}
@@ -282,18 +294,43 @@ def entry(**kw):
     return {k: v for k, v in base.items() if v is not None}
 
 
-def log_text(p, point, block, reqs, *, warmups=None, change=None, extra=(), t0=5000.0):
-    """The gateway log of one run: uvicorn lines, the ready check and C warmups without an id, GET /metrics around the
-    main run, /readyz polls, one completion line per derived request (its gateway fields) and a print to stderr;
-    change(entries) edits the main entries."""
+def random_client(p, point):
+    """Whether the point's frozen client is `vllm bench serve --dataset-name random` (read off its argv)."""
+    x = p["points"][point]
+    argv = sv.bench_argv(p, PINS, point, block=1, result_dir="r", result_filename="f",
+                         datasets={k: f"{k}.jsonl" for k in (x["datasets"] or {}).values()})
+    return argv[argv.index("--dataset-name") + 1] == "random"
+
+
+def probe_entry(t_arrival_s, **kw):
+    """vLLM 0.30 bench's prompt alignment (serve.py _align_prompts_to_server_tokenizer): one POST /tokenize, no
+    x-request-id; the gateway has no /tokenize route, so 404."""
+    return entry(**{"path": "/tokenize", "route": None, "stream": None, "status": 404, "outcome": None,
+                    "queue_wait_s": None, "ttft_s": None, "upstream_ttft_s": None, "t_sent_s": None,
+                    "t_released_s": None, "t_arrival_s": t_arrival_s, **kw})
+
+
+def log_text(p, point, block, reqs, *, warmups=None, change=None, extra=(), t0=5000.0, probe=None,
+             warm_release=WARM_RELEASE):
+    """The gateway log of one run: uvicorn lines, a /readyz poll, the bench's POST /tokenize probe (probe None: exactly
+    when its client is the random dataset's, as vLLM 0.30's; False: none; True or a dict of changes: one), the ready
+    check and C warmups without an id, GET /metrics around the main run, one completion line per derived request (its
+    gateway fields) and a print to stderr; change(entries) edits the main entries. The id-less records' intervals are
+    warmups_of's (warm_release: when the C warmups leave vLLM); a weighted-v1 point's are row 0's class, 2K."""
     x = p["points"][point]
     tag = sv.run_tag("V", point, x["C"], block=block)
+    if probe is None:
+        probe = random_client(p, point)
+    pol = {"admission_class": "v-uniform-2k", "admission_units": 1} if x["admission"] else {}
     lines = ["INFO:     Started server process [4242]", "INFO:     Waiting for application startup.",
              json.dumps(entry(method="GET", path="/readyz", route=None, stream=None, t_arrival_s=t0 - 50,
-                              t_sent_s=None, t_released_s=None, queue_wait_s=None, ttft_s=None, upstream_ttft_s=None)),
-             json.dumps(entry(t_arrival_s=t0 - 40, t_sent_s=t0 - 40, t_released_s=t0 - 39))]          # ready check
-    for k in range(x["C"] if warmups is None else warmups):
-        lines.append(json.dumps(entry(t_arrival_s=t0 - 30, t_sent_s=t0 - 30 + k * 0.01, t_released_s=t0 - 20)))
+                              t_sent_s=None, t_released_s=None, queue_wait_s=None, ttft_s=None, upstream_ttft_s=None))]
+    if probe is not False:
+        lines.append(json.dumps(probe_entry(**{"t_arrival_s": t0 - 45, **(probe if isinstance(probe, dict) else {})})))
+    lines.append(json.dumps(entry(t_arrival_s=t0 - 40, t_sent_s=t0 - 40, t_released_s=t0 - 39, **pol)))  # ready
+    for k in range(x["C"] if warmups is None else warmups):                                              # check
+        lines.append(json.dumps(entry(t_arrival_s=t0 - 30, t_sent_s=t0 - 30 + k * 0.01, t_released_s=t0 + warm_release,
+                                      **pol)))
     lines.append(json.dumps(entry(method="GET", path="/metrics", route=None, stream=None, status=200,
                                   t_arrival_s=t0 - 1, t_sent_s=None, t_released_s=None, queue_wait_s=None,
                                   ttft_s=None, upstream_ttft_s=None)))
@@ -331,12 +368,17 @@ def client_part(p, point, block, reqs):
     return rd.derived_requests(res, x=base)
 
 
-@pytest.mark.parametrize("point", ["L-U2K", "P-U2K", "F-U2K-var", "W-50", "GW-M8K-T"])
+@pytest.mark.parametrize("point", ["L-U2K", "P-U2K", "F-U2K-var", "W-50", "GW-M8K-T", "GW-U8K-O512", "GW-U32K",
+                                   "F-U2K"])
 def test_a_clean_log_joins_every_request_once_and_rebuilds_the_derived_rows(point):
     p = ADM if point[0] in "PFW" else CLS
     reqs = make_reqs(p, point, 2)
-    problems, joined = sva.join_access_log(log_text(p, point, 2, reqs), plan=p, point=point, block=2)
+    text = log_text(p, point, 2, reqs)
+    assert ('"path": "/tokenize"' in text) is random_client(p, point)        # the random dataset's probe is in it
+    problems, joined, warm = sva.join_access_log(text, plan=p, point=point, block=2)
     assert problems == [] and sorted(joined) == list(range(p["points"][point]["N"]))
+    t0 = min(e["t_arrival_s"] for e in joined.values())                     # the ready check and the C warmups
+    assert sva.warmup_spans(warm, joined, x=p["points"][point]) == warmups_of(p["points"][point]) and t0 == 5000.0
     client = client_part(p, point, 2, reqs)
     assert {q["cls"] for q in client} == ({"short", "long"} if point == "GW-M8K-T" else {"short"})
     got = sva.gateway_requests(client, joined, plan=p, point=point, block=2)
@@ -351,7 +393,7 @@ def test_the_join_reads_only_its_tag_and_ignores_the_exempt_paths():
     reqs = make_reqs(p, point, 4)
     noise = [entry(method="GET", path=path, route=None, status=status, outcome=None, t_arrival_s=5000.5,
                    t_sent_s=None, t_released_s=None) for path in sva.EXEMPT_PATHS for status in (200, 503)]
-    problems, joined = sva.join_access_log(log_text(p, point, 4, reqs, extra=noise), plan=p, point=point, block=4)
+    problems, joined, _ = sva.join_access_log(log_text(p, point, 4, reqs, extra=noise), plan=p, point=point, block=4)
     assert problems == [] and len(joined) == 200
     assert sva.join_access_log(log_text(p, point, 4, reqs), plan=p, point=point, block=3)[0]      # block 3's tag
 
@@ -388,6 +430,10 @@ def test_every_join_failure_is_a_problem():
         "negative wait": (dict(change=lambda es: es[2].update(queue_wait_s=-0.001)), "negative"),
         "GET completions": (dict(extra=[entry(method="GET", status=405, t_arrival_s=4970.0)]), "GET /v1/completions"),
         "warmup without arrival": (dict(extra=[entry(t_arrival_s=None)]), "t_arrival_s"),
+        "warmup without send": (dict(extra=[entry(t_arrival_s=4970.0, t_sent_s=None)]), "t_sent_s"),   # (j) reads
+        "warmup without release": (dict(extra=[entry(t_arrival_s=4970.0, t_released_s=None)]), "t_released_s"),
+        "warmup release order": (dict(extra=[entry(t_arrival_s=4970.0, t_sent_s=4971.0, t_released_s=4970.5)]),
+                                 "t_released_s"),
     }
     assert _joined_problems(p, point, 1, reqs) == []
     assert _joined_problems(p, point, 1, reqs, warmups=8) == []                                 # exactly C + 1
@@ -395,6 +441,51 @@ def test_every_join_failure_is_a_problem():
     for name, (kw, needle) in cases.items():
         got = _joined_problems(p, point, 1, reqs, **kw)
         assert got and any(needle in g for g in got), (name, got)
+
+
+POINTS_ALL = {**ADM["points"], **CLS["points"], **MINI["points"]}
+
+
+def test_the_random_dataset_rule_is_the_frozen_clients():
+    """join_access_log expects the probe exactly from the clients whose frozen argv is --dataset-name random."""
+    for p in (ADM, CLS, MINI):
+        for point, x in p["points"].items():
+            assert sva.random_dataset(x) is random_client(p, point), point
+    assert {q for q, x in POINTS_ALL.items() if sva.random_dataset(x)} == {
+        "GW-U32K", "GW-U2K-O512", "GW-U8K-O512", "P-U2K", "P-U8K", "F-U2K"}
+
+
+
+def test_the_random_dataset_benchs_tokenize_probe_is_accepted_once_before_its_first_completion():
+    """vLLM 0.30's random-dataset bench sends one POST /tokenize before its ready check; the gateway has no /tokenize
+    (404) and the bench skips its alignment. Exactly that record is accepted: never counted as a warmup, never (i)."""
+    p, point, t0 = CLS, "GW-U2K-O512", 5000.0
+    x = p["points"][point]
+    reqs = make_reqs(p, point, 1)
+    tag = sv.run_tag("V", point, x["C"], block=1)
+    assert _joined_problems(p, point, 1, reqs) == []
+    cases = {
+        "no probe": (dict(probe=False), "0 POST /tokenize"),
+        "two probes": (dict(extra=[probe_entry(t0 - 44)]), "2 POST /tokenize"),
+        "status 200": (dict(probe={"status": 200}), "status 200"),
+        "after the ready check": (dict(probe={"t_arrival_s": t0 - 40}), "before every completion"),
+        "between the warmups": (dict(probe={"t_arrival_s": t0 - 25}), "before every completion"),
+        "during the main run": (dict(probe={"t_arrival_s": t0 + 1}), "before every completion"),
+        "no arrival": (dict(probe={"t_arrival_s": None}), "t_arrival_s"),
+        "with an id": (dict(probe={"client_request_id": f"{tag}-0"}), "POST /tokenize is not the completion"),
+        "GET": (dict(probe={"method": "GET", "status": 405}), "GET /tokenize is not the completion"),
+        "detokenize": (dict(extra=[probe_entry(t0 - 44, path="/detokenize")]), "/detokenize"),
+        "probe is no warmup": (dict(warmups=x["C"] - 1), "C + 1"),
+    }
+    for name, (kw, needle) in cases.items():
+        got = _joined_problems(p, point, 1, reqs, **kw)
+        assert got and any(needle in g for g in got), (name, got)
+    for q, block in (("L-U2K", 1), ("GW-M8K-T", 1), ("W-90", 2), ("P-U2K-var", 1), ("F-U2K-var", 1)):
+        pq = ADM if q[0] in "PFW" else CLS
+        r = make_reqs(pq, q, block)
+        assert _joined_problems(pq, q, block, r) == []
+        got = _joined_problems(pq, q, block, r, probe=True)                 # a custom dataset's bench never aligns
+        assert got and any("custom-dataset" in g for g in got), (q, got)
 
 
 def test_an_unreadable_access_line_is_a_problem_and_other_output_is_not():
@@ -484,7 +575,7 @@ def test_a_dataset_must_have_the_points_n_rows():
 def test_a_request_the_log_lacks_leaves_its_gateway_fields_empty():
     p, point = ADM, "W-50"
     reqs = make_reqs(p, point, 3)
-    problems, joined = sva.join_access_log(log_text(p, point, 3, reqs, change=lambda es: es.pop(40)), plan=p,
+    problems, joined, _ = sva.join_access_log(log_text(p, point, 3, reqs, change=lambda es: es.pop(40)), plan=p,
                                            point=point, block=3)
     assert problems and 40 not in joined
     got = sva.gateway_requests(client_part(p, point, 3, reqs), joined, plan=p, point=point, block=3)
@@ -543,6 +634,33 @@ def test_n1_is_requests_in_vllm_against_0_9_c():
     reqs[47]["gw_released_s"] = 1.9
     assert sva.nontrivial(sva.in_vllm(reqs, C=8, N=200), x=x, plan=p)["ok"] is False
     assert sva.nontrivial(sva.in_vllm(reqs, C=8, N=200), x=p["points"]["F-U2K"], plan=p)["condition"] == "N1"
+
+
+def test_j_counts_the_ready_check_and_the_warmups_too():
+    """044 (j) over the whole bench process (實作補記六): the id-less completion records' intervals (row["warmups"])
+    join the main requests' in the peaks; U_W and N1 stay on the main requests over T_W."""
+    p = ADM
+    reqs = make_reqs(p, "P-U8K", 1)
+    row = row_for(p, "P-U8K", 1)
+    assert sva.run_valid(row, reqs, p) == (True, [])
+    late = dict(row, warmups=row["warmups"][:-1] + [[-30.0, 0.5, 1]])       # a warmup still in vLLM at the first wave
+    ok, why = sva.run_valid(late, reqs, p)
+    assert not ok and any("9 requests" in w and "(j)" in w for w in why) and sva.run_outcome(late, reqs, p) == "invalid"
+    for bad, needle in ((dict(row, warmups=None), "warmup"), (dict(row, warmups=row["warmups"][:8]), "warmup"),
+                        (dict(row, warmups=[[1.0, 0.5, 1]] + row["warmups"][1:]), "warmup"),
+                        (dict(row, warmups=[[-40.0, -39.0, 4]] + row["warmups"][1:]), "warmup")):
+        ok, why = sva.run_valid(bad, reqs, p)
+        assert not ok and any(needle in w for w in why), why
+    w = make_reqs(p, "W-90", 1)
+    wrow = row_for(p, "W-90", 1)
+    assert sva.run_valid(wrow, w, p) == (True, [])
+    ok, why = sva.run_valid(dict(wrow, warmups=wrow["warmups"] + [[-0.5, 0.5, 1]]), w, p)
+    assert not ok and any("units" in x and "(j)" in x for x in why)
+    x = p["points"]["W-90"]
+    span = [[-100.0, 1000.0, 1]]                                               # never in U_W / N1
+    assert sva.in_vllm(w, C=32, N=320, warmups=span)["_u_w"] == sva.in_vllm(w, C=32, N=320)["_u_w"]
+    assert sva.in_vllm(w, C=32, N=320, warmups=span)["peak_units"] == sva.in_vllm(w, C=32, N=320)["peak_units"] + 1
+    assert sva.nontrivial(sva.in_vllm(w, C=32, N=320, warmups=span), x=x, plan=p)["ok"] is True
 
 
 def test_j_holds_at_every_instant_on_half_open_intervals():
@@ -741,19 +859,21 @@ def fail_kw(fail):
     return kw
 
 
-def test_a_failing_run_drops_its_unit_from_the_later_boots_in_both_directions():
-    order = CLS["block_orders"]
-    first = [q for q in order["2"] if q in ("L-U2K", "GW-U2K-O512")][0]
+@pytest.mark.parametrize("first", ["L-U2K", "GW-U2K-O512"])
+def test_a_failing_run_skips_only_its_own_point_in_the_later_blocks(first):
+    """044 實作補記六: the inherited 039 / 030 rule, per point: its unit's other point keeps running in every block
+    (its own hypothesis stays answerable), and the unit cannot hold."""
     partner = {"L-U2K": "GW-U2K-O512", "GW-U2K-O512": "L-U2K"}[first]
     cap, requests = simulate(CLS, fail_kw({(first, 2)}))
     booted = [(b["block"], b["workload"]) for b in cap["session"]["boots"] if b["phase"] == "V"]
-    assert (2, first) in booted and (2, partner) not in booted                # the partner later in the same block
-    assert not any(w in (first, partner) for r, w in booted if r > 2)        # and every later block
+    assert (2, first) in booted and not any(w == first for r, w in booted if r > 2)
+    assert [r for r, w in booted if w == partner] == [1, 2, 3, 4, 5]          # same block or later: it still runs
     assert _replay(cap, requests) == []
     analysis = sva.analyze(cap, requests)
-    assert analysis["points"][partner]["class"] == "NT" and analysis["points"][first]["class"] == "FAIL"
-    assert [2, partner] in analysis["schedule"]["skipped"]
-    assert analysis["points"][partner]["skipped"] == [2, 3, 4, 5] and analysis["points"][first]["skipped"] == [3, 4, 5]
+    assert analysis["points"][partner]["class"] == "PASS" and analysis["points"][first]["class"] == "FAIL"
+    assert analysis["schedule"]["skipped"] == [[3, first], [4, first], [5, first]]
+    assert analysis["points"][partner]["skipped"] == [] and analysis["points"][first]["skipped"] == [3, 4, 5]
+    assert analysis["units"]["V1-2K"]["holds"] is False and analysis["units"]["V1-8K"]["holds"] is True
     cap2 = copy.deepcopy(cap)                                                  # a session that kept on booting it
     good, _ = simulate(CLS, ok_kw)
     assert _replay(good, requests) != []                                       # the good rows disagree with ...
@@ -762,6 +882,42 @@ def test_a_failing_run_drops_its_unit_from_the_later_boots_in_both_directions():
     row = next(r for r in rows if r["tag"] == tag)
     row["outcome"] = "ok"
     assert any("recorded outcome" in x for x in _replay(cap2, requests))
+    unit = next(pts for pts in sv.UNITS.values() if first in pts)             # the old unit rule's session: refused
+    dead, dead_requests = simulate(CLS, fail_kw({(first, 2)}), drop=lambda q: unit if q in unit else [q])
+    assert any(partner in x for x in _replay(dead, dead_requests))
+
+
+def test_every_preregistered_hypothesis_stays_answerable_when_its_unit_partner_fails():
+    """Why per point (044 實作補記六): with the predicted W-90 FAIL in its first run W-50 still runs five times (H-W2,
+    H-W0), and a V1 point's failure in block 1 leaves its partner's hypothesis (H-L1, H-GW3) to be answered."""
+    cap, requests = simulate(ADM, fail_kw({("W-90", 1)}))
+    a = sva.analyze(cap, requests)
+    assert a["replay"]["ok"] and a["points"]["W-50"]["n_ok"] == 5 and a["points"]["W-90"]["class"] == "FAIL"
+    assert a["hypotheses"]["H-W2"]["verdict"] == "supported" and a["hypotheses"]["H-W0"]["verdict"] == "supported"
+    assert a["units"]["W1"]["holds"] is False
+    cap, requests = simulate(CLS, fail_kw({("GW-U2K-O512", 1), ("L-U8K", 1)}))
+    a = sva.analyze(cap, requests)
+    assert a["replay"]["ok"] and a["hypotheses"]["H-L1"]["verdict"] == "supported"
+    assert a["hypotheses"]["H-GW3"]["verdict"] == "supported"
+    assert not a["units"]["V1-2K"]["holds"] and not a["units"]["V1-8K"]["holds"]
+
+
+def test_the_044_hour_figures_follow_from_the_plan():
+    """044 Sessions 與時數 and 待決事項第 7 項, from the plans' est_s under the per-point skip rule: V-ADM 2.75 h, 1.60 h
+    as predicted (P-U2K-var, F-U2K-var, W-90 and W-50 each FAIL in their first run); V-CLS 5.26 h, 4.59 h when
+    GW-M8K-T FAILs in its first run; the predicted W cost is one W-90 and one W-50 run, about 0.2 h."""
+    def hours(p, fails=()):
+        cap, _ = simulate(p, fail_kw(set(fails)))
+        b = cap["session"]["boots"]
+        return (b[-1]["elapsed_s"] + p["sentinel"]["est_s"]) / 3600
+
+    first = {q: next(r for r in range(1, 6) if q in ADM["block_orders"][str(r)]) for q in ADM["points"]}
+    assert round(hours(ADM), 2) == 2.75 and round(ADM["estimate_s"] / 3600, 2) == 2.75
+    predicted = [(q, first[q]) for q in ("P-U2K-var", "F-U2K-var", "W-90", "W-50")]
+    assert round(hours(ADM, predicted), 2) == 1.60
+    w = ADM["points"]["W-90"]["est_s"] + ADM["points"]["W-50"]["est_s"]
+    assert round(w / 3600, 2) == 0.19
+    assert round(hours(CLS), 2) == 5.26 and round(hours(CLS, [("GW-M8K-T", 1)]), 2) == 4.59
 
 
 def test_a_trivial_run_and_an_invalid_run_skip_too():
@@ -769,7 +925,8 @@ def test_a_trivial_run_and_an_invalid_run_skip_too():
     r0 = next(r for r, q in order if q == "W-90")
     cap, requests = simulate(ADM, ok_kw, invalid={("W-90", r0)})
     booted = [(b["block"], b["workload"]) for b in cap["session"]["boots"] if b["phase"] == "V"]
-    assert not any(w in ("W-90", "W-50") for r, w in booted if r > r0) and _replay(cap, requests) == []
+    assert not any(w == "W-90" for r, w in booted if r > r0) and _replay(cap, requests) == []
+    assert [r for r, w in booted if w == "W-50"] == [1, 2, 3, 4, 5]          # its unit partner: not skipped
 
     cap, requests = simulate(ADM, ok_kw)
     assert len([b for b in cap["session"]["boots"] if b["workload"] == "F-U2K"]) == 5 and _replay(cap, requests) == []
@@ -841,13 +998,19 @@ def test_a_cap_stop_must_sit_between_its_boots_and_be_reached():
     assert any("not where this replay stops" in x for x in _replay(good, requests))
 
 
-def test_the_minis_forced_timeout_is_its_only_other_timeout():
+def test_the_minis_forced_timeout_is_its_only_other_timeout_and_walks_the_skip_rule():
+    """044 實作補記六: the forced 5 s timeout in GW-U8K-O512's block 1, so the skip rule drops its block 2 on the
+    hardware (n = 2: a block-2 timeout could skip nothing); L-U8K keeps both runs for the output_lens pins."""
     p = mini_plan()
-    assert p["points"]["GW-U8K-O512"]["forced_timeout_blocks"] == [2] and sva.FORCED_TIMEOUT_S == \
+    assert p["points"]["GW-U8K-O512"]["forced_timeout_blocks"] == [1] and sva.FORCED_TIMEOUT_S == \
         rc.MINI_FORCED_TIMEOUT_S
-    cap, requests = simulate(p, ok_kw, invalid={("GW-U8K-O512", 2)})
-    row = next(r for r in cap["rows"] if r.get("block") == 2 and r["workload"] == "GW-U8K-O512")
+    cap, requests = simulate(p, ok_kw, invalid={("GW-U8K-O512", 1)})
+    row = next(r for r in cap["rows"] if r.get("block") == 1 and r["workload"] == "GW-U8K-O512")
     assert row["timeout_s"] == 5 and row["outcome"] == "invalid" and _replay(cap, requests) == []
+    problems, sched = sva.schedule(p, cap["session"]["boots"], cap["rows"], requests,
+                                   cap_stop=cap["session"]["cap_stop"])
+    assert problems == [] and [2, "GW-U8K-O512"] in sched["skipped"]
+    assert [r["block"] for r in cap["rows"] if r["workload"] == "L-U8K"] == [1, 2]
     row["timeout_s"] = p["points"]["GW-U8K-O512"]["timeout_s"]
     assert any("timeout_s" in x for x in _replay(cap, requests))
 
@@ -944,26 +1107,36 @@ def test_the_unit_validation_section_names_what_the_generator_writes():
 
 
 def test_hypotheses_map_classes_to_verdicts_with_044s_predictions():
+    """044's predictions are sets of point classes (實作補記六): supported {PASS}, not supported {FAIL, TRIVIAL},
+    H-GW4 {MARGINAL, FAIL} as 044 writes it; prediction_met is mechanical, None for an NT point."""
     pts = classes(**{"GW-U32K": "PASS", "GW-U2K-O512": "FAIL", "GW-U8K-O512": "TRIVIAL", "GW-M8K-T": "MARGINAL",
                      "L-U2K": "NT", "L-U8K": "PASS"})
     h = sva.hypotheses(pts)
-    assert {k: (v["verdict"], v["prediction"]) for k, v in h.items()} == {
-        "H-GW1": ("supported", "supported"), "H-GW2": ("not supported", "supported"),
-        "H-GW3": ("not supported", "supported"), "H-GW4": ("inconclusive", "not supported"),
-        "H-L1": ("NT", "supported"), "H-L2": ("supported", "supported")}
+    assert {k: (v["verdict"], v["predicted_classes"], v["prediction_met"]) for k, v in h.items()} == {
+        "H-GW1": ("supported", ["PASS"], True), "H-GW2": ("not supported", ["PASS"], False),
+        "H-GW3": ("not supported", ["PASS"], False), "H-GW4": ("inconclusive", ["FAIL", "MARGINAL"], True),
+        "H-L1": ("NT", ["PASS"], None), "H-L2": ("supported", ["PASS"], True)}
+    for klass, met in (("FAIL", True), ("PASS", False), ("TRIVIAL", False), ("NT", None)):
+        assert sva.hypotheses({**pts, "GW-M8K-T": {"class": klass}})["H-GW4"]["prediction_met"] is met, klass
     adm = {**classes(**{"P-U2K": "PASS", "P-U8K": "MARGINAL", "P-U2K-var": "FAIL", "F-U2K-var": "FAIL",
                         "F-U2K": "PASS", "W-90": "FAIL", "W-50": "TRIVIAL"})}
     adm["W-90"]["runs"] = [{"valid": True, "nontrivial": {"ok": True}}, {"valid": False, "nontrivial": {"ok": False}}]
     adm["W-50"]["runs"] = [{"valid": True, "nontrivial": {"ok": False}}]
     h = sva.hypotheses(adm)
-    assert {k: (v["verdict"], v["prediction"]) for k, v in h.items()} == {
-        "H-P1": ("supported", "supported"), "H-P2": ("inconclusive", "supported"),
-        "H-P3": ("not supported", "not supported"), "H-W0": ("not supported", "supported"),
-        "H-W1": ("not supported", "not supported"), "H-W2": ("not supported", "not supported")}
+    assert {k: (v["verdict"], v.get("predicted_classes", v.get("prediction")), v["prediction_met"])
+            for k, v in h.items()} == {
+        "H-P1": ("supported", ["PASS"], True), "H-P2": ("inconclusive", ["PASS"], False),
+        "H-P3": ("not supported", ["FAIL", "TRIVIAL"], True), "H-W0": ("not supported", "supported", False),
+        "H-W1": ("not supported", ["FAIL", "TRIVIAL"], True), "H-W2": ("not supported", ["FAIL", "TRIVIAL"], True)}
     adm["W-50"]["runs"] = [{"valid": True, "nontrivial": {"ok": True}}]
-    assert sva.hypotheses(adm)["H-W0"]["verdict"] == "supported"                 # an invalid run never counts
+    h = sva.hypotheses(adm)["H-W0"]                                            # an invalid run never counts
+    assert (h["verdict"], h["prediction_met"]) == ("supported", True)
     adm["W-50"]["runs"] = [{"valid": False}]
-    assert sva.hypotheses(adm)["H-W0"]["verdict"] == "NT"
+    h = sva.hypotheses(adm)["H-W0"]
+    assert (h["verdict"], h["prediction_met"]) == ("NT", None)
+    assert {h: set(c) for h, (_, c) in sva.HYPOTHESES.items()} == {
+        **{h: {"PASS"} for h in ("H-GW1", "H-GW2", "H-GW3", "H-L1", "H-L2", "H-P1", "H-P2")},
+        "H-GW4": {"MARGINAL", "FAIL"}, **{h: {"FAIL", "TRIVIAL"} for h in ("H-P3", "H-W1", "H-W2")}}
 
 
 # ------------------------------------------------------------------ the analysis --
