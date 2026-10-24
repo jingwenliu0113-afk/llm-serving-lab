@@ -526,10 +526,10 @@ def test_formal_sessions_are_at_least_2_hours_apart(tmp_path):
     write(None)
     with pytest.raises(rv.RunError, match="formal-t-prev"):
         session(tmp_path / "again", "V-ADM", repo=(root, paths, sha))
-    (prev / "session.json").write_text(json.dumps({"started_at": "2026-11-02T05:00:00",          # no time zone: its
-                                                   "finished_at": "2026-11-02T06:00:00"}))      # hours count, its gap
-    with pytest.raises(rv.RunError, match="formal-t-prev: cannot tell when it finished"):        # cannot be told
-        session(tmp_path / "naive", "V-ADM", repo=(root, paths, sha))
+    (prev / "session.json").write_text(json.dumps({"started_at": "2026-11-02T05:00:00",          # no time zone:
+                                                   "finished_at": "2026-11-02T06:00:00"}))      # neither its hours
+    with pytest.raises(rv.RunError, match="formal-t-prev: .*time zone offset"):                  # nor its gap can
+        session(tmp_path / "naive", "V-ADM", repo=(root, paths, sha))                           # be told
     mini_root = make_repo(tmp_path / "m")                                     # the mini needs no gap
     gap = mini_root[0].joinpath(*sv.RESULTS, "formal-t-prev")
     gap.mkdir(parents=True)
@@ -576,6 +576,35 @@ def test_a_session_directory_without_a_finished_session_json_is_refused(tmp_path
     assert "smoke-v-crashed" in rv.hours_used(root)[1][0] and rv.gap_problems(root, T0.isoformat()) == (None, [])
     with pytest.raises(rv.RunError, match="smoke-v-crashed"):
         session(tmp_path / "m", "mini", mode="mini", repo=(root, paths, sha))
+
+
+def test_a_session_record_with_times_nobody_can_trust_is_refused(tmp_path):
+    """044 實作補記八: a hand-written finished_at (實作補記六第 8 項) in the wrong time zone could make a session's hours
+    negative and its end early, so the 12 h cap and the 2 h gap would pass in silence. Both times must carry an offset,
+    and finished_at must not come before started_at; otherwise the directory is a problem, as an unfinished one is."""
+    root, paths, sha = make_repo(tmp_path)
+    d = root.joinpath(*sv.RESULTS, "formal-t-hand")
+    d.mkdir(parents=True)
+
+    def write(started, finished):
+        (d / "session.json").write_text(json.dumps({"session": "V-ADM", "formal": True, "in_progress": False,
+                                                    "started_at": started, "finished_at": finished}))
+
+    write("2026-11-02T00:00:00+00:00", "2026-11-02T07:00:00+00:00")
+    assert rv.hours_used(root) == (7, []) and rv.gap_problems(root, T0.isoformat())[1] == []
+    for started, finished, needle in (
+            ("2026-11-02T00:00:00+00:00", "2026-11-02T07:00:00+08:00", "before it started"),    # 23:00Z the day before
+            ("2026-11-02T00:00:00+00:00", "2026-11-02T07:00:00", "time zone"),
+            ("2026-11-02T00:00:00", "2026-11-02T07:00:00+00:00", "time zone"),
+            ("2026-11-02T00:00:00", "2026-11-02T07:00:00", "time zone")):
+        write(started, finished)
+        for got in (rv.hours_used(root)[1], rv.gap_problems(root, T0.isoformat())[1]):
+            assert len(got) == 1 and "formal-t-hand" in got[0] and needle in got[0], (started, finished, got)
+        with pytest.raises(rv.RunError, match="formal-t-hand"):
+            session(tmp_path / f"s{len(started)}{len(finished)}{finished[-3:]}", "V-CLS", repo=(root, paths, sha))
+    write("2026-11-02T08:00:00+08:00", "2026-11-02T00:00:00+00:00")          # the same instant: 0 h, allowed
+    start, end, _ = rv._times(d)                                             # (the refused sessions above left
+    assert start == end and rv.hours_used(root)[1] == []                    # their own finished records)
 
 
 def test_session_json_is_written_right_after_the_directory_and_on_every_exit(tmp_path):

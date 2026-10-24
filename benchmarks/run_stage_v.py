@@ -248,7 +248,8 @@ def _started_after(d: Path, when: dt.datetime) -> bool:
 
 def _times(d: Path) -> tuple:
     """(started_at, finished_at, session) of a session directory; Unfinished (a ValueError) without a finished
-    session.json."""
+    session.json, or with times nobody can trust: one without an offset, or finished_at before started_at (a
+    hand-written finished_at in the wrong zone would hide hours and gaps, 044 實作補記八)."""
     path = d / "session.json"
     if not path.is_file():
         raise Unfinished(f"no session.json: a session that started and never finished (killed hard?); {RECORD_IT}")
@@ -258,7 +259,14 @@ def _times(d: Path) -> tuple:
     if s.get("in_progress") is True or s.get("finished_at") is None:
         raise Unfinished(f"its session.json says it never finished (in_progress {s.get('in_progress')!r}, "
                          f"finished_at {s.get('finished_at')!r}: killed hard?); {RECORD_IT}")
-    return dt.datetime.fromisoformat(s["started_at"]), dt.datetime.fromisoformat(s["finished_at"]), s
+    start, end = dt.datetime.fromisoformat(s["started_at"]), dt.datetime.fromisoformat(s["finished_at"])
+    if start.utcoffset() is None or end.utcoffset() is None:
+        raise Unfinished(f"started_at {s['started_at']!r} and finished_at {s['finished_at']!r} must both carry a "
+                         f"time zone offset; {RECORD_IT}")
+    if end < start:
+        raise Unfinished(f"its finished_at {s['finished_at']!r} is before it started ({s['started_at']!r}): a wrong "
+                         f"time zone?; {RECORD_IT}")
+    return start, end, s
 
 
 def hours_used(repo_root, *, not_after: str | None = None) -> tuple:
