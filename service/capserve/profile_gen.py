@@ -94,9 +94,13 @@ base_profiles, besides §9's). It refuses (exit 2) and writes nothing unless:
 - every boot's recorded server is its point's server_base's (server_groups, B0 the product fingerprint);
 - no other results/stage_v/formal-* session of its plan session (V-ADM / V-CLS) that started before it under the same
   freeze (the same recorded stage_v_sha256, harness_sha256 and gateway_path_sha256) is valid, i.e. accepted by
-  stage_v_report (044 停止規則: 不重跑有效的 session 來換 PASS; rerun_problems). A formal-* directory of its plan, or of
-  a plan that cannot be read, without a readable session.json and started_at, or such an earlier session the report
-  cannot load, refuses too (fail closed). The 2-attempt cap stays with the operator (044 實作補記四第 4 項, 實作補記十);
+  stage_v_report (044 停止規則: 不重跑有效的 session 來換 PASS; rerun_problems), checked fail closed (044 實作補記十第
+  10 項): such an earlier session lets the rerun through only when its session.json records it aborted or env_valid
+  false, or stage_v_report.refusal_problems is empty and report() raises ReportError; a directory that is not its
+  session_id, files that are not what its session.json records, refusal problems or any other error refuse, as do a
+  formal-* directory of its plan, or of a plan that cannot be read, without a readable session.json and started_at,
+  and a formal session of its previous_formal chain that is not here (fetch every formal Stage V session first). The
+  2-attempt cap stays with the operator (044 實作補記四第 4 項, 實作補記十);
 - the generator commit is HEAD of a clean tree, --out-dir an existing directory outside results/, the target does not
   exist, and the document passes the loader before anything is written.
 """
@@ -168,8 +172,8 @@ _FREEZES = {"capacity": {"stage": "Stage C", "rule": "030 凍結", "data": "C1 d
             "stage_d": {"stage": "Stage D", "rule": "039 凍結", "data": "Stage D data", "change": "039 凍結, 030 8.9",
                         "refreeze": ""},
             "stage_v": {"stage": "Stage V", "rule": "044 凍結", "data": "Stage V data", "change": "044 凍結, 030 8.9",
-                        "refreeze": "; 044 實作補記十第 2 項: a session under the stop rule's new freeze gives a profile "
-                                    "only once that freeze's decision amends this first-freeze rule"}}
+                        "refreeze": "; if this is the stop rule's new freeze, a session under it gives a profile only "
+                                    "once that freeze's decision amends this first-freeze rule (044 實作補記十第 2 項)"}}
 _HEX40 = re.compile(r"[0-9a-f]{40}")
 NOT_FROZEN = ("[freeze] capacity is not true in {path} (a missing file or key is false). PREREGISTRATION §8 is not "
               "frozen, so no verified capacity exists yet (027 §4, 029); develop against a provisional profile with "
@@ -1117,22 +1121,88 @@ def _started_at(session) -> dt.datetime:
     return when
 
 
+def _closed(why: str) -> str:
+    return f"{why}; {RERUN_RULE}, checked fail closed"
+
+
+def previous_formal_problems(d: Path, s: dict, *, root: Path, dirs: list) -> list:
+    """044 停止規則 reads only the directories here, so every earlier formal session must be here (044 實作補記十第 10
+    項): walk the session's previous_formal (run_stage_v records, at the start, the formal session of either plan that
+    finished last among those that started at or before it: gap_problems) back to the first one (null). A session it
+    names with no results/stage_v/formal-* directory whose session.json records that session_id, a chain that cannot
+    be followed or that returns to a session, is a problem (fail closed). A session aborted in its preflight records no
+    previous_formal (the runner records it after the preflight): the walk goes on from the session the runner's own
+    rule finds among the directories here; one that records none and was not aborted is a problem."""
+    named, by_id = {}, {}
+    for e in dirs:
+        try:
+            rec = json.loads((e / "session.json").read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(rec, dict):
+            continue
+        named[e.name] = (e, rec)
+        if isinstance(rec.get("session_id"), str) and (rec["session_id"] == e.name or rec["session_id"] not in by_id):
+            by_id[rec["session_id"]] = (e, rec)
+    e, rec, seen = d, s, {d.resolve()}
+    while True:
+        who = rec.get("session_id")
+        if "previous_formal" in rec:
+            prev = rec["previous_formal"]
+            if prev is None:
+                return []
+            pid = prev.get("session_id") if isinstance(prev, dict) else None
+            if not isinstance(pid, str):
+                return [_closed(f"{who}'s previous_formal {prev!r} names no session: the formal sessions before it "
+                                "cannot be told")]
+            if pid not in by_id:
+                here = root.joinpath(*STAGE_V_RESULTS, pid).is_dir()
+                return [_closed(f"cannot follow the previous_formal chain past {pid} ({who}'s previous_formal): "
+                                f"results/stage_v/{pid} has no readable session.json" if here else
+                                f"the formal Stage V session {pid} ({who}'s previous_formal) has no directory here (no "
+                                "results/stage_v/formal-* whose session.json records that session_id), so whether it "
+                                "is an earlier valid session of this plan under this freeze is unknown: fetch every "
+                                "formal Stage V session before generating")]
+            e, rec = by_id[pid]
+        elif rec.get("aborted"):
+            try:                                          # its own 2 h gap problems are the report's (044 實作補記七)
+                prev, _ = rv.gap_problems(root, rec["started_at"], session_id=e.name)
+            except (KeyError, TypeError, ValueError) as exc:
+                return [_closed(f"{who} (aborted in its preflight) records no previous_formal and no usable start "
+                                f"({type(exc).__name__}: {exc}): the formal sessions before it cannot be told")]
+            if prev is None:
+                return []
+            e, rec = named[prev["session_id"]]
+        else:
+            return [_closed(f"{who} records no previous_formal and was not aborted (a session past its preflight "
+                            "records one): the formal sessions before it cannot be told")]
+        if e.resolve() in seen:
+            return [_closed(f"the previous_formal chain returns to {e.name}: the formal sessions before it cannot be "
+                            "told")]
+        seen.add(e.resolve())
+
+
 def rerun_problems(d: Path, cap: dict, *, root: Path, evaluate: Callable) -> list:
     """044 停止規則 (不重跑有效的 session 來換 PASS), mechanized here, outside the request path and the harness: no
     results/stage_v/formal-* session other than this one, of its plan session (V-ADM / V-CLS), that started before it
-    under the same freeze (the same recorded STAGE_V_FREEZE_SHAS) is valid. evaluate(earlier cap) is stage_v_report's
-    verdict (True: refusal_problems empty and report() does not raise: not aborted, env-valid, the sentinel gate
-    passed, ...). Fail closed: a formal-* directory of this plan, or of a plan that cannot be read, without a readable
-    session.json and started_at, or a selected one that cannot be loaded or evaluated, is a problem too. The
+    under the same freeze (the same recorded STAGE_V_FREEZE_SHAS) is valid. Such an earlier session releases the rerun
+    only on positive evidence that it was invalid (044 實作補記十第 10 項): its session.json records it aborted or
+    env_valid false, or, with stage_v_report.refusal_problems empty, report() raises ReportError (the report's own
+    verdict: the sentinel gate, the replay). evaluate(earlier cap) is (refusal_problems, whether report() accepts it).
+    Everything else fails closed: a directory that is not its session_id (renamed), files that are not what its
+    session.json records (stage_v_report's sha256 checks against its own records), refusal problems, any other error;
+    a formal-* directory of this plan, or of a plan that cannot be read, without a readable session.json and
+    started_at; a formal session of the previous_formal chain that is not here (previous_formal_problems). The
     2-attempt cap stays with the operator (044 實作補記四第 4 項, 實作補記十)."""
     s, plan = cap["session"], cap["plan"].get("session")
+    dirs = sorted(p for p in root.joinpath(*STAGE_V_RESULTS).glob("formal-*") if p.is_dir())
+    problems = previous_formal_problems(d, s, root=root, dirs=dirs)
     try:
         start = _started_at(s)
     except (KeyError, TypeError, ValueError) as exc:
-        return [f"the session records no readable started_at ({exc}): cannot tell which {plan} sessions came before "
-                f"it ({RERUN_RULE}, checked fail closed)"]
-    problems = []
-    for e in sorted(p for p in root.joinpath(*STAGE_V_RESULTS).glob("formal-*") if p.is_dir()):
+        return problems + [f"the session records no readable started_at ({exc}): cannot tell which {plan} sessions "
+                           f"came before it ({RERUN_RULE}, checked fail closed)"]
+    for e in dirs:
         if e.resolve() == d.resolve():
             continue
         try:
@@ -1151,13 +1221,36 @@ def rerun_problems(d: Path, cap: dict, *, root: Path, evaluate: Callable) -> lis
             continue
         if began >= start or any(rec.get(k) != s.get(k) for k in STAGE_V_FREEZE_SHAS):
             continue
-        try:
-            valid = evaluate(cr.load_session(e))
-        except (AttributeError, IndexError, KeyError, OSError, TypeError, ValueError) as exc:
-            problems.append(f"cannot tell whether the earlier {plan} session {e.name} under this freeze is valid "
-                            f"({type(exc).__name__}: {exc}): {RERUN_RULE}, checked fail closed")
+        if rec.get("session_id") != e.name:
+            problems.append(_closed(f"{e.name} records session_id {rec.get('session_id')!r}: a renamed directory "
+                                    f"(results/stage_v/<session_id>) is not read as an earlier {plan} session under "
+                                    "this freeze"))
             continue
-        if valid:
+        try:
+            earlier = cr.load_session(e)
+            files = svr._sha_problems(earlier, **{k: rec.get(k) for k in ("stage_v_sha256", "stage_d_sha256",
+                                                                          "pins_sha256")})
+        except (AttributeError, IndexError, KeyError, OSError, TypeError, ValueError) as exc:
+            problems.append(_closed(f"cannot tell whether the earlier {plan} session {e.name} under this freeze is "
+                                    f"valid ({type(exc).__name__}: {exc})"))
+            continue
+        if files:
+            problems.append(_closed(f"the files of the earlier {plan} session {e.name} under this freeze are not what "
+                                    f"its session.json records ({'; '.join(files)}), so whether it is valid is "
+                                    "unknown"))
+            continue
+        if rec.get("aborted") or rec.get("env_valid") is False:
+            continue                                     # positive evidence: invalid, rerun under a new id (013)
+        try:
+            refusals, valid = evaluate(earlier)
+        except (AttributeError, IndexError, KeyError, OSError, TypeError, ValueError) as exc:
+            problems.append(_closed(f"cannot tell whether the earlier {plan} session {e.name} under this freeze is "
+                                    f"valid ({type(exc).__name__}: {exc})"))
+            continue
+        if refusals:
+            problems.append(_closed(f"stage_v_report refuses to evaluate the earlier {plan} session {e.name} under "
+                                    f"this freeze ({'; '.join(refusals)}), so whether it is valid is unknown"))
+        elif valid:
             problems.append(f"{s.get('session_id')} reruns the earlier {plan} session {e.name} (started "
                             f"{rec['started_at']}), which ran under the same freeze and is valid (stage_v_report "
                             f"accepts it): its units are the result, {RERUN_RULE} (044 實作補記十)")
@@ -1237,14 +1330,19 @@ def _generate_stage_v(d: Path, *, freeze_commit: str, generator_commit: str, roo
                  "stage_d_sha256": sd_sha, "pins_sha256": pins_sha, "repo_root": root}
     problems += [f"stage_v_report: {p}" for p in svr.refusal_problems(cap, **report_kw)]
 
-    def valid(earlier: dict) -> bool:                     # report() raises unless refusal_problems is empty too
+    def evaluate(earlier: dict) -> tuple:
+        """(stage_v_report.refusal_problems, whether report() accepts it) of an earlier session: with no refusal
+        problem, report() raising ReportError is the report's own verdict that it is invalid (rerun_problems)."""
+        refusals = svr.refusal_problems(earlier, **report_kw)
+        if refusals:
+            return refusals, False
         try:
             svr.report(earlier, uniform=uniform, advanced_runs=advanced, **report_kw)
         except svr.ReportError:
-            return False
-        return True
+            return [], False
+        return [], True
 
-    problems += rerun_problems(d, cap, root=root, evaluate=valid)
+    problems += rerun_problems(d, cap, root=root, evaluate=evaluate)
     if analysis is not None and analysis.get("slo") != sv_cfg.get("slo"):
         problems.append(f"the analysis SLO {(analysis.get('slo') or {}).get('id')!r} is not stage_v.toml's SLO "
                         f"{(sv_cfg.get('slo') or {}).get('id')!r} (044)")

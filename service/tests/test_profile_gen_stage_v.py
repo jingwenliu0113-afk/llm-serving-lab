@@ -20,10 +20,12 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
 import capacity_report as cr
+import run_stage_v as rv
 import stage_v_plan as sv
 import stage_v_report as svr
 from capserve import config as cfg
@@ -147,10 +149,54 @@ def make_session(tmp: Path, name: str, fails=(), *, mode: str = "formal") -> dic
             "dataset_sha256": repo[2]}
 
 
+class BadStartSentinel(t.World):
+    """The start sentinel's bench result loses a TTFT: the runner aborts the session after its first boot."""
+
+    def run_bench(self, argv, log_path, env, timeout_s):
+        out = super().run_bench(argv, log_path, env, timeout_s)
+        a = dict(zip(argv, argv[1:]))
+        if a["--result-filename"].startswith("sentinel-start"):
+            path = Path(a["--result-dir"], a["--result-filename"])
+            res = json.loads(path.read_text())
+            res["ttfts"][3] = None
+            path.write_text(json.dumps(res))
+        return out
+
+
+class WrongVllm(t.td.Env):
+    """The preflight records another vLLM: the runner aborts in its preflight, before it records the freeze sha256
+    and previous_formal."""
+
+    def __call__(self, out_path, gpu_lock_held):
+        rec = super().__call__(out_path, gpu_lock_held)
+        rec["runtime"]["vllm"]["vllm"] = "0.31.0"
+        return rec
+
+
+def port_taken() -> Callable:
+    """The gateway port is free for the first V boot's check and taken at the next one."""
+    calls = []
+
+    def port_free(port):
+        calls.append(port)
+        return len(calls) != 2
+    return port_free
+
+
+# The runner's own aborts (run_stage_v.RunError): test_run_stage_v.session keywords, given the session's tmp dir.
+ABORTS = {
+    "port busy": lambda d: {"port_free": lambda port: port != rv.GATEWAY_PORT},     # before the first V boot
+    "start sentinel": lambda d: {"world": lambda plan: BadStartSentinel(d, plan)},
+    "vLLM": lambda d: {"capture_env": WrongVllm()},                                 # in the preflight
+    "port taken": lambda d: {"port_free": port_taken()},                            # at a later V boot
+}
+
+
 def make_sessions(tmp: Path, *specs) -> dict:
     """Formal Stage V sessions in one repo root, in order, each written by the real runner and reported by the real
-    stage_v_report CLI: a spec is (plan session, session id, the runs that FAIL, its start in hours after
-    test_run_stage_v.T0). {session id: what make_session returns}."""
+    stage_v_report CLI: a spec is (plan session, session id, the runs that FAIL or an ABORTS key, its start in hours
+    after test_run_stage_v.T0). An aborted session is left as the runner leaves it, never reported. {session id: what
+    make_session returns} of the reported ones."""
     got = {}
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(t, "SV_SHA", SV_SHA)
@@ -160,6 +206,11 @@ def make_sessions(tmp: Path, *specs) -> dict:
         for name, sid, fails, hours in specs:
             mp.setattr(t, "T0", T0 + dt.timedelta(hours=hours))
             (tmp / sid).mkdir()
+            if isinstance(fails, str):
+                with pytest.raises(rv.RunError):
+                    t.session(tmp / sid, name, repo=repo, out=repo[0].joinpath(*sv.RESULTS, sid),
+                              **ABORTS[fails](tmp / sid))
+                continue
             out, s, _ = t.session(tmp / sid, name, repo=repo, kw=tva.fail_kw(set(fails)),
                                   out=repo[0].joinpath(*sv.RESULTS, sid))
             configs = (*t.configs(repo[0], repo[2], formal=True), SV_SHA, t.SD_SHA, PINS_SHA)
@@ -632,7 +683,7 @@ def test_a_session_under_the_stop_rules_new_freeze_is_refused_until_its_decision
     git = real_git(root, tpg.commit_files(root, {"x.txt": b"deployed\n"}))
     for commit, why in ((new, "already frozen"), (first, "changed after the freeze")):
         (msg,) = problems(sessions("adm"), freeze_commit=commit, git=git)
-        assert why in msg and "044 實作補記十" in msg
+        assert why in msg and "if this is the stop rule's new freeze, " in msg and "044 實作補記十" in msg
 
 
 @pytest.mark.parametrize("freeze", [{"gateway_path_sha256": "1" * 64}, {"mini": "smoke-v-new"},
@@ -887,13 +938,200 @@ def test_a_session_without_a_readable_start_fails_the_stop_rule_closed(reruns, t
     assert "cannot tell which V-ADM sessions came before it" in msg and "fail closed" in msg
 
 
-def test_an_unreadable_session_of_the_other_plan_is_not_this_rules(reruns, tmp_path):
-    """The V-CLS without a session.json still refuses the rerun (the report's 2 h gap, 044 實作補記七), but it is no
-    earlier V-ADM: the stop rule does not read it."""
+def test_an_unreadable_session_of_the_other_plan_is_no_earlier_session_of_this_one(reruns, tmp_path):
+    """The V-CLS without a session.json still refuses the rerun (the report's 2 h gap, 044 實作補記七), and it is no
+    earlier V-ADM: the stop rule never asks whether it is valid. It is the rerun's previous_formal, though, so the walk
+    to the earlier formal sessions stops there (fail closed, 044 實作補記十第 10 項; the first V-ADM aborted, so that
+    only the walk refuses)."""
     rerun = clone(reruns[RERUN], tmp_path)
     (rerun["root"].joinpath(*sv.RESULTS, BETWEEN) / "session.json").unlink()
+    edit_session(earlier(rerun), aborted="RunError: x")
     got = problems(rerun)
-    assert any(BETWEEN in p for p in got) and stop_rule(got) == []
+    assert any(BETWEEN in p and "044 停止規則" not in p for p in got)
+    (msg,) = stop_rule(got)
+    assert f"past {BETWEEN}" in msg and "no readable session.json" in msg and "fail closed" in msg
+    assert "is an earlier valid" not in msg
+
+
+def test_the_runner_records_each_formal_sessions_previous_formal(reruns):
+    """What the walk reads (run_stage_v.gap_problems at the start): the formal session that finished last among those
+    that started before, of either plan; null for the first."""
+    def previous(sid):
+        return json.loads((reruns[RERUN]["root"].joinpath(*sv.RESULTS, sid) / "session.json").read_text())[
+            "previous_formal"]
+    assert previous(FIRST) is None
+    assert previous(BETWEEN)["session_id"] == FIRST and previous(RERUN)["session_id"] == BETWEEN
+
+
+@pytest.mark.parametrize("how, why", [
+    ("derived file deleted", "derived file"),
+    ("rows.jsonl edited", "rows.jsonl"),
+    ("plan.json edited", "plan.json is not the plan the session ran"),
+    ("pins_sha256 edited", "pins.toml sha256"),
+    ("stage_d_sha256 edited", "stage_d.toml sha256"),
+    ("aborted, derived file deleted", "derived file"),
+])
+def test_an_earlier_session_whose_files_are_not_its_records_fails_closed(reruns, tmp_path, how, why):
+    """044 實作補記十第 10 項: only positive evidence that an earlier session was invalid lets the rerun through. A file
+    of the earlier valid session that is not what its session.json records (stage_v_report's sha256 checks, against
+    the session's own records) is no such evidence: the review's probes (a derived file deleted, a newline appended to
+    rows.jsonl, an edited sha256) gave a profile before. The files are checked before aborted / env_valid are read."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    d = earlier(rerun)
+    if how.startswith("aborted"):
+        edit_session(d, aborted="RunError: x")
+    if how.endswith("derived file deleted"):
+        next(iter(sorted((d / "derived").glob("*-requests.jsonl")))).unlink()
+    elif how == "rows.jsonl edited":
+        (d / "rows.jsonl").write_text((d / "rows.jsonl").read_text() + "\n")
+    elif how == "plan.json edited":
+        plan = json.loads((d / "plan.json").read_text())
+        (d / "plan.json").write_text(json.dumps({**plan, "hour_cap_h": 99}))
+    else:
+        edit_session(d, **{how.split()[0]: "0" * 64})                    # as if pins.toml / stage_d.toml changed
+    got = stop_rule(problems(rerun))
+    assert got and all(FIRST in p and "fail closed" in p for p in got)
+    assert any("are not what its session.json records" in p and why in p for p in got)
+    assert not any("which ran under the same freeze and is valid" in p for p in got)
+
+
+def test_a_renamed_earlier_session_fails_closed(reruns, tmp_path):
+    """The review's probe: the earlier valid V-ADM copied back under another name (its session_id unchanged) gave a
+    profile (the report then counts it as its own previous session). A directory that is not its session_id is
+    refused (fail closed)."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    renamed = earlier(rerun).with_name(f"{FIRST}-from-wsl")
+    earlier(rerun).rename(renamed)
+    got = stop_rule(problems(rerun))
+    assert got and all("fail closed" in p for p in got)
+    assert any(renamed.name in p and f"records session_id {FIRST!r}" in p for p in got)
+
+
+@pytest.mark.parametrize("missing", [FIRST, BETWEEN])
+def test_a_formal_session_that_is_not_here_fails_closed(reruns, tmp_path, missing):
+    """The review's probe: without the earlier valid V-ADM's directory on the Mac the rerun gave a profile. Every
+    formal session the previous_formal chain names must be here, of either plan (the missing V-CLS could hide an
+    earlier V-ADM behind it; the first V-ADM aborted then, so that only the walk refuses)."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    shutil.rmtree(rerun["root"].joinpath(*sv.RESULTS, missing))
+    if missing == BETWEEN:
+        edit_session(earlier(rerun), aborted="RunError: x")
+    got = stop_rule(problems(rerun))
+    assert got and all(missing in p and "fail closed" in p for p in got)
+    assert any("fetch every formal Stage V session before generating" in p for p in got)
+
+
+@pytest.mark.parametrize("prev, why", [({"session_id": RERUN}, f"returns to {RERUN}"), (FIRST, "names no session")])
+def test_a_previous_formal_chain_that_cannot_be_followed_fails_closed(reruns, tmp_path, prev, why):
+    """A chain that returns to a session, or a previous_formal that is no record (hand-edited records): refused."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    edit_session(rerun["root"].joinpath(*sv.RESULTS, BETWEEN), previous_formal=prev)
+    edit_session(earlier(rerun), aborted="RunError: x")                  # only the walk refuses
+    (msg,) = stop_rule(problems(rerun))
+    assert why in msg and "fail closed" in msg
+
+
+@pytest.mark.parametrize("how, why", [
+    ("not under the GPU lock", "did not run under the held GPU lock"),
+    ("no env_valid", "env-invalid"),
+])
+def test_an_earlier_session_the_report_cannot_evaluate_cleanly_fails_closed(reruns, tmp_path, how, why):
+    """stage_v_report.refusal_problems of the earlier session (besides its files) is no evidence that it was invalid:
+    the rerun is refused, the problems named. Only aborted or env_valid false are (a missing env_valid is not)."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    d = earlier(rerun)
+    if how == "not under the GPU lock":
+        edit_session(d, gpu_lock_held=False)
+    else:
+        rec = json.loads((d / "session.json").read_text())
+        rec.pop("env_valid")
+        (d / "session.json").write_text(json.dumps(rec))
+    got = stop_rule(problems(rerun))
+    assert got and all(FIRST in p and "fail closed" in p for p in got)
+    assert any("stage_v_report refuses to evaluate" in p and why in p for p in got)
+
+
+def test_an_earlier_session_whose_report_crashes_fails_closed(reruns, tmp_path, monkeypatch):
+    """Only stage_v_report's own ReportError (with no refusal problem) says the earlier session is invalid; anything
+    else it raises (a record nobody foresaw) is refused, never read as invalid."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    report = svr.report
+
+    def crashes(cap, **kw):
+        if cap["dir"] == earlier(rerun):
+            raise TypeError("an unforeseen record")
+        return report(cap, **kw)
+    monkeypatch.setattr(svr, "report", crashes)
+    got = stop_rule(problems(rerun))
+    assert got and all(FIRST in p and "fail closed" in p and "TypeError: an unforeseen record" in p for p in got)
+
+
+def test_an_earlier_session_whose_refusal_check_crashes_fails_closed(reruns, tmp_path):
+    """An earlier same-plan session whose plan.json lost its points (its plan_sha256 rerecorded, so its files are its
+    records): stage_v_report.refusal_problems itself raises. Refused (fail closed), never a crash."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    d = earlier(rerun)
+    plan = json.loads((d / "plan.json").read_text())
+    plan.pop("points")
+    (d / "plan.json").write_text(json.dumps(plan))
+    edit_session(d, plan_sha256=svr.sha256_json(plan))
+    got = stop_rule(problems(rerun))
+    assert got and all(FIRST in p and "fail closed" in p for p in got)
+    assert any("KeyError" in p for p in got)
+
+
+def test_a_committed_directory_that_is_no_session_never_blocks(sessions, tmp_path):
+    """results/stage_v/prereg-sim (committed, no session.json) is no formal session: the first valid V-ADM still writes
+    its profile."""
+    s = clone(sessions("adm"), tmp_path)
+    sim = s["root"].joinpath(*sv.RESULTS, "prereg-sim")
+    sim.mkdir()
+    (sim / "sim.json").write_text("{}")
+    docs, holds = gen(s)
+    assert holds == ["PACE-2K", "PACE-8K", "W1"] and list(docs) == ["verified-formal-t-v-adm-b0"]
+
+
+# The runner's own aborted attempts before the first valid V-ADM (044 實作補記十第 10 項).
+ATTEMPTS = (("V-ADM", "formal-t-v-a1", "port busy", 0), ("V-ADM", "formal-t-v-a2", "start sentinel", 3),
+            ("V-ADM", "formal-t-v-a3", "vLLM", 6), ("V-ADM", "formal-t-v-a4", "port taken", 9),
+            ("V-CLS", "formal-t-v-c1", "port busy", 12), ("V-ADM", "formal-t-v-b", (), 15))
+
+
+@pytest.fixture(scope="module")
+def attempts(tmp_path_factory):
+    return make_sessions(tmp_path_factory.mktemp("attempts"), *ATTEMPTS)["formal-t-v-b"]
+
+
+def test_the_runners_aborted_attempts_do_not_block_the_first_valid_session(attempts):
+    """Aborted before the first V boot (port busy), at the start sentinel, in the preflight (it records no
+    previous_formal: the walk goes on from the session the runner's own rule finds here) and at a later boot: none is
+    valid, so the V-ADM after them writes its profile."""
+    rec = {sid: json.loads((attempts["root"].joinpath(*sv.RESULTS, sid) / "session.json").read_text())
+           for _, sid, _, _ in ATTEMPTS}
+    assert all(rec[sid]["aborted"] for _, sid, how, _ in ATTEMPTS if isinstance(how, str))
+    assert "previous_formal" not in rec["formal-t-v-a3"] and "stage_v_sha256" not in rec["formal-t-v-a3"]
+    assert rec["formal-t-v-a4"]["previous_formal"]["session_id"] == "formal-t-v-a3"
+    docs, holds = gen(attempts)
+    assert holds == ["PACE-2K", "PACE-8K", "W1"] and list(docs) == ["verified-formal-t-v-b-b0"]
+
+
+@pytest.mark.parametrize("how", ["behind the preflight abort", "the preflight abort not aborted"])
+def test_the_walk_goes_past_a_preflight_abort_fail_closed(attempts, tmp_path, how):
+    """A session aborted in its preflight records no previous_formal; the walk goes on from the formal session that
+    finished last among those here that started before it (run_stage_v.gap_problems), so a missing session behind it
+    is still found. A session that records no previous_formal and was not aborted is refused (fail closed)."""
+    s = clone(attempts, tmp_path)
+    results = s["root"].joinpath(*sv.RESULTS)
+    if how == "behind the preflight abort":
+        shutil.rmtree(results / "formal-t-v-a1")
+        missing = "formal-t-v-a1"
+    else:
+        rec = json.loads((results / "formal-t-v-a3" / "session.json").read_text())
+        rec.pop("aborted")
+        (results / "formal-t-v-a3" / "session.json").write_text(json.dumps(rec))
+        missing = "formal-t-v-a3"
+    got = stop_rule(problems(s))
+    assert got and all(missing in p and "fail closed" in p for p in got)
 
 
 # ------------------------------------------------------------------ the CLI --
