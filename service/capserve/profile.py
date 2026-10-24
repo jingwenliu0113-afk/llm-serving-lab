@@ -43,20 +43,22 @@
   (descriptive c_full / c_late, at_c_prod, hypotheses) is never a limit. A §8 profile has none of these §9 fields
   (all null or absent: c1b loads, hashes and regenerates unchanged).
 - verified from Stage V (decision 044; prereg_section §12): one profile per Stage V session, B0 only, written by the
-  generator for the units whose every point PASSed. Checked against this checkout: configs/stage_v.toml (read only
-  when present; no checkout has one before Stage V's freeze, so until then every §12 profile is refused: fail closed)
-  has [freeze] stage_v = true, and stage_d.toml / capacity.toml their freezes; provenance.stage_v_sha256 /
-  stage_d_sha256 / capacity_sha256 / pins_sha256 are this checkout's files and provenance.gateway_path_sha256 is
-  stage_v.toml's [freeze] gateway_path_sha256 (the frozen request path the units were measured on; capserve_sha256
-  and base_profiles [{id, content_sha256}] are provenance only); the slo is stage_v.toml's [slo] verbatim; profile_id
-  is verified-<source_session>-b0 and analysis_path results/stage_v/<source_session>/analysis.json. Its classes:
+  generator for the units whose every point PASSed. Checked against this checkout: configs/stage_v.toml (committed
+  with the harness before the freeze with [freeze] stage_v = false; until it is true, or without the file, every §12
+  profile is refused: fail closed) has [freeze] stage_v = true, and stage_d.toml / capacity.toml their freezes;
+  provenance.stage_v_sha256 / stage_d_sha256 / capacity_sha256 / pins_sha256 are this checkout's files and
+  provenance.gateway_path_sha256 is stage_v.toml's [freeze] gateway_path_sha256 (the frozen request path the units
+  were measured on; capserve_sha256 and base_profiles [{id, content_sha256}] are provenance only); the slo is
+  stage_v.toml's [slo] verbatim; profile_id is verified-<source_session>-b0 and analysis_path
+  results/stage_v/<source_session>/analysis.json. Its classes:
   - a copy of c1b's uniform-2k / uniform-8k (§8's class rules, its §8 evidence only), with the `pacing` PACE-2K /
     PACE-8K validated ({burst_tokens >= max_prompt_tokens, rate_tokens_per_s, queue}) and that `validation`, or plain
     (no pacing, no validation) as a member of the admission section;
   - V1's validated class of a D-A O512 workload (V1_CLASS_NAMES): that workload's name-mapped token limits, bound
-    "validated" (a fixed point V1 validated, not a C_PROD: max_concurrency = max_queue = the point's C; source
-    stage_v:<unit>), its evidence (server B0, output_tokens 512) with not_covered = v1_not_covered(workload, flags),
-    output_distribution "uniform[1,512]", the five datasets' sha256 and via_gateway true, and V1's validation;
+    "validated" (a fixed point V1 validated, not a C_PROD: max_concurrency = max_queue = V1_C, the C of L-U2K / L-U8K,
+    32 / 8, never the O512 C_PROD; source stage_v:<unit>), its evidence (server B0, output_tokens 512) with
+    not_covered = v1_not_covered(workload, flags), output_distribution "uniform[1,512]", the five datasets' sha256 and
+    via_gateway true, and V1's validation over exactly the unit's points (V1_POINTS);
   - at most one class per workload. The profile's `admission` section (W1, V4) names copies by name with weighted-v1's
     parameters (admission_problems), the queue settings it was validated with, measured_mixes in (0, 1), the same
     gateway_path_sha256 and V4's validation. Every number (limits, pacing, the section's parameters) is trusted as for
@@ -129,6 +131,10 @@ STAGE_D_EVIDENCE = ("server", "output_tokens", "descriptive", "at_c_prod", "hypo
 # 044 (§12): V1 validates a D-A O512 workload's class at a fixed point; its unit and its reserved name
 V1_CLASS_NAMES = {"U2K-O512": "uniform-2k-o1-512", "U8K-O512": "uniform-8k-o1-512"}
 V1_UNITS = {"U2K-O512": "V1-2K", "U8K-O512": "V1-8K"}
+# 044 V1 (實作補記六): the fixed C of L-U2K / L-U8K, the class's max_concurrency = max_queue (GW-U8K-O512 @ 12 is the
+# all-512 worst case and covers 8; never the O512 C_PROD), and the unit's points in configs/stage_v.toml's order
+V1_C = {"U2K-O512": 32, "U8K-O512": 8}
+V1_POINTS = {"U2K-O512": ("L-U2K", "GW-U2K-O512"), "U8K-O512": ("L-U8K", "GW-U8K-O512")}
 V1_DISTRIBUTION = "uniform[1,512]"
 V1_DATASETS = 5                                       # 044 V1: five pinned sequences per point
 COPY_UNITS = {"U2K": "PACE-2K", "U8K": "PACE-8K"}     # 044 V2 / V4: the copies are c1b's uniform-2k / uniform-8k
@@ -175,7 +181,7 @@ def frozen_configs(root=cplan.ROOT) -> FrozenConfigs:
         pins_raw = (configs / "pins.toml").read_bytes()
         capacity, capacity_sha256 = _read_toml(configs / "capacity.toml")
         stage_d, stage_d_sha256 = _read_toml(configs / "stage_d.toml")
-        stage_v, stage_v_sha256 = _read_toml(configs / "stage_v.toml")   # 044: only from Stage V's freeze
+        stage_v, stage_v_sha256 = _read_toml(configs / "stage_v.toml")   # 044: [freeze] stage_v false until frozen
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise ProfileError(f"cannot read {configs}/capacity.toml, stage_d.toml, stage_v.toml or pins.toml: "
                            f"{exc}") from exc
@@ -626,8 +632,9 @@ def _status_problems(c: WorkloadClass, section: str | None = PREREG_SECTION) -> 
 
 
 def _validated_problems(c: WorkloadClass) -> list:
-    """044: a V1 class is verified at the fixed point V1 validated (max_concurrency = max_queue = its C), from the unit
-    of its D-A workload; never a C_PROD, so no 030 8.7 status rule."""
+    """044: a V1 class is verified at the fixed point V1 validated, max_concurrency = max_queue = V1_C of its D-A
+    workload (32 / 8: the C of L-U2K / L-U8K, never the O512 C_PROD; 實作補記六), from that workload's unit; never a
+    C_PROD, so no 030 8.7 status rule."""
     where = f"class {c.name}"
     problems = []
     if c.status != "verified" or c.unavailable_reason is not None:
@@ -638,7 +645,11 @@ def _validated_problems(c: WorkloadClass) -> list:
                         "validated, as 030 8.7's max_queue = C_PROD)")
     if c.evidence is None:
         return problems + [f"{where}: a validated class states its D-A workload's evidence (044)"]
-    unit = V1_UNITS.get(c.evidence.workload)
+    w = c.evidence.workload
+    if w in V1_C and not c.max_concurrency == c.max_queue == V1_C[w]:
+        problems.append(f"{where}: max_concurrency {c.max_concurrency!r} / max_queue {c.max_queue!r} != {V1_C[w]} for "
+                        f"{w} (044 V1: the point's C, never the O512 C_PROD)")
+    unit = V1_UNITS.get(w)
     if unit is None or c.source != stage_v_source(unit):
         problems.append(f"{where}: source {c.source!r} != {stage_v_source(unit) if unit else 'stage_v:<V1 unit>'!r} "
                         "(044: the unit that validated it)")
@@ -881,7 +892,8 @@ def _validation_problems(v: Validation | None, where: str, *, study: str, unit: 
 
 def _v1_class_problems(c: WorkloadClass) -> list:
     """044: a V1 class is its D-A O512 workload's class under V1's name, B0, 512 output tokens, not_covered by
-    v1_not_covered, V1's output distribution and five datasets, measured via the gateway; no pacing."""
+    v1_not_covered, V1's output distribution and five datasets, measured via the gateway; no pacing; its validation is
+    its unit's, over exactly the unit's points (V1_POINTS; its C: _validated_problems)."""
     ev, where = c.evidence, f"class {c.name}"
     w = ev.workload
     if w not in V1_CLASS_NAMES:
@@ -905,7 +917,11 @@ def _v1_class_problems(c: WorkloadClass) -> list:
         problems.append(f"{where}: evidence.via_gateway {ev.via_gateway!r}: V1 measured through the gateway (044)")
     if c.pacing is not None:
         problems.append(f"{where}: a V1 class has no pacing (044: V1 ran with pacing off)")
-    return problems + _validation_problems(c.validation, where, study="V1", unit=V1_UNITS[w])
+    problems += _validation_problems(c.validation, where, study="V1", unit=V1_UNITS[w])
+    if c.validation is not None and c.validation.points != list(V1_POINTS[w]):
+        problems.append(f"{where}: validation.points {c.validation.points} != {list(V1_POINTS[w])}, the points of "
+                        f"{V1_UNITS[w]} (044 產品對應)")
+    return problems
 
 
 def _copy_class_problems(c: WorkloadClass, member: bool) -> list:
@@ -937,9 +953,10 @@ def _copy_class_problems(c: WorkloadClass, member: bool) -> list:
 
 
 def _stage_v_provenance_problems(doc: dict, prof: CapacityProfile, frozen: FrozenConfigs) -> list:
-    """§12 (044) against this checkout: the three freezes (stage_v.toml only from Stage V's freeze: fail closed), its
-    stage_v.toml / stage_d.toml / capacity.toml / pins.toml, stage_v.toml's SLO and frozen gateway_path_sha256, the
-    session's ids, B0, and the §12 classes and admission section."""
+    """§12 (044) against this checkout: the three freezes (configs/stage_v.toml exists before Stage V's freeze with
+    [freeze] stage_v = false; until it is true every §12 profile is refused: fail closed), its stage_v.toml /
+    stage_d.toml / capacity.toml / pins.toml, stage_v.toml's SLO and frozen gateway_path_sha256, the session's ids, B0,
+    and the §12 classes and admission section."""
     problems = []
     stage_v = frozen.stage_v or {}
     freeze = stage_v.get("freeze") or {}

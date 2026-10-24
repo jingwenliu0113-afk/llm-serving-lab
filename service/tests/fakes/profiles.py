@@ -15,11 +15,13 @@ stating its server, output length, descriptive estimands, the C_PROD point's fac
 covered (043 §5: six items, plus in_vllm_wait_beyond_c_kv for ABOVE_CKV).
 
 A Stage V profile (decision 044, PREREGISTRATION §12) is built here by hand too: B0, checked against a frozen
-configs/stage_v.toml (frozen_stage_v: [freeze] stage_v and gateway_path_sha256, stage_d.toml's [slo]; no such file is
-committed before Stage V's freeze, so FROZEN has none and FROZEN_V adds it). Its classes are copies of c1b's
-uniform-2k / uniform-8k (with the pacing V2 validated, or plain members of the weighted-v1 admission section V4
-validated) and V1's validated classes (uniform-2k-o1-512 / uniform-8k-o1-512: the D-A O512 class's limits and evidence,
-not_covered recomputed, the output distribution and its five datasets)."""
+configs/stage_v.toml (frozen_stage_v: [freeze] stage_v and gateway_path_sha256, stage_d.toml's [slo]). The repo's file
+exists before Stage V's freeze with [freeze] stage_v = false (cp.frozen_configs() is that repo state, and refuses
+every §12 profile); FROZEN models a checkout without the file and FROZEN_V adds a frozen one. Its classes are copies
+of c1b's uniform-2k / uniform-8k (with the pacing V2 validated, or plain members of the weighted-v1 admission section
+V4 validated) and V1's validated classes (uniform-2k-o1-512 / uniform-8k-o1-512: the D-A O512 class's limits and
+evidence, not_covered recomputed, the output distribution and its five datasets, at V1's C 32 / 8 over the unit's
+points)."""
 
 from __future__ import annotations
 

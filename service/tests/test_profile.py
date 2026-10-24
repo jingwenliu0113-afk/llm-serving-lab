@@ -4,8 +4,9 @@ verified with a number and its bound, verified 0 = refuse the class, unavailable
 Stage D profiles of decision 043 (§9: their classes, servers, fingerprints and evidence; the serving_class refusals:
 an output limit above 128 tokens, on a T profile anything but an M8K-T class with H-D2a supported, and on a B0 profile
 a T workload's class), and the Stage V profiles of decision 044 (§12: checked against a frozen configs/stage_v.toml,
-which no checkout has before Stage V's freeze, so every §12 profile fails closed until then; the pacing copies, V1's
-validated classes, the weighted-v1 admission section, and the §12 fields nowhere else)."""
+committed before Stage V's freeze with [freeze] stage_v = false, so every §12 profile fails closed until then; the
+pacing copies, V1's validated classes at V1's pinned C and points, the weighted-v1 admission section, and the §12
+fields nowhere else)."""
 
 import copy
 import hashlib
@@ -908,6 +909,18 @@ def _v1(fn, needle):
     _v1(_v_cls(0)(lambda c: c.update(pacing={**PACING["U2K"], "queue": dict(SLOW_QUEUE)})), "pacing"),
     _v1(_v_cls(0)(lambda c: c.update(validation=None)), "validation"),
     _v1(_v_cls(0)(lambda c: c["validation"].update(unit="V1-8K")), "V1-2K"),
+    # 044 實作補記六: the C is V1's fixed point (V1_C), never the O512 C_PROD, nor a neighbour of the point
+    _v1(_v_cls(1)(lambda c: c.update(max_concurrency=12, max_queue=12)), "044 V1: the point's C"),   # the O512 C_PROD
+    _v1(_v_cls(1)(lambda c: c.update(max_concurrency=9, max_queue=9)), "044 V1: the point's C"),
+    _v1(_v_cls(0)(lambda c: c.update(max_concurrency=64, max_queue=64)), "044 V1: the point's C"),
+    _v1(_v_cls(0)(lambda c: c.update(max_concurrency=31, max_queue=31)), "044 V1: the point's C"),
+    # ... and validation.points are the unit's points, in [stage_v.units] order
+    _v1(_v_cls(0)(lambda c: c["validation"].update(points=["GW-U2K-O512", "L-U2K"])), "the points of V1-2K"),
+    _v1(_v_cls(1)(lambda c: c.update(validation=validation("V1", "V1-8K", ["L-U8K"], ["v-uniform-8k-o512-c8"]))),
+        "the points of V1-8K"),
+    _v1(_v_cls(1)(lambda c: c.update(validation=validation("V1", "V1-8K", ["L-U2K", "GW-U2K-O512"],
+                                                           ["v-uniform-8k-o512-c8", "v-uniform-8k-o512"]))),
+        "the points of V1-8K"),
 ])
 def test_a_stage_v_profile_must_match_its_session_its_freeze_and_the_044_mapping(tmp_path, pins, kind, edit, needle):
     if kind == "V1":
@@ -918,6 +931,21 @@ def test_a_stage_v_profile_must_match_its_session_its_freeze_and_the_044_mapping
     edit(doc)
     msg = refusal(tmp_path, rehash(doc), allow_provisional=False, pins=pins, frozen=FROZEN_V)
     assert needle in msg, msg
+
+
+def test_v1s_pinned_c_and_points_are_the_stage_v_configs():
+    """044 實作補記六: the loader pins a V1 class's max_concurrency = max_queue to V1_C (the C of the unit's L point,
+    which the GW-O512 point covers at a C >= it) and its validation.points to V1_POINTS, both the harness's
+    configs/stage_v.toml values (the loader itself reads only [freeze] and [slo] of that file)."""
+    cfg = tomllib.loads((SERVICE.parent / "configs" / "stage_v.toml").read_text())["stage_v"]
+    assert cp.V1_C == {"U2K-O512": 32, "U8K-O512": 8}
+    for w, unit in cp.V1_UNITS.items():
+        assert list(cp.V1_POINTS[w]) == cfg["units"][unit], w
+        pts = {p: cfg["points"][p] for p in cp.V1_POINTS[w]}
+        assert all(x["unit"] == unit and x["server_base"] == w for x in pts.values()), w
+        (l_point,) = [x for x in pts.values() if x["study"] == "V1"]
+        assert l_point["C"] == cp.V1_C[w] and l_point["limits"]["max_concurrency"] == cp.V1_C[w], w
+        assert all(x["C"] >= cp.V1_C[w] for x in pts.values()), w   # the all-512 GW point covers the C (044 差異 9)
 
 
 @pytest.mark.parametrize("doc_of, edit, needle", [

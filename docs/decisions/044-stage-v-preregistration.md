@@ -94,6 +94,7 @@
 **兩種 TTFT**：每個 request 都記錄，由 access log 以 `client_request_id` 對應。
 - **client**：bench 的 TTFT，從送出起算，包含 gateway 的 body 處理、tokenize、排隊與 pacing。
 - **upstream**：access log 的 `upstream_ttft_s`，從 gateway 送往 vLLM 起算，和 C_PROD 是同一個定義（029）。
+  - 「第一個 token」的時間點和 vLLM 0.30 bench 相同：第一個 JSON 帶非空 `choices` 的 `data:` event，text 可以是空字串；gateway 的 `ttft_s` 也記在這一刻（實作補記六第 1 項）。
   - upstream view 的換算：ttft := upstream_ttft，latency := upstream_ttft + (latency − ttft)；所以 TPOT 不變。
 
 **每個研究的判定 view**：
@@ -906,8 +907,8 @@
 9. **§12 profile 的 schema**（loader 依此檢查，第 8 步的產生器必須照此寫出）：
    - **provenance**：沿用既有欄位，`source_session` 就是本文的 validation_session，analysis 的 path 與 sha 也是既有欄位；新增 `stage_v_sha256`、`gateway_path_sha256`、`capserve_sha256`、`base_profiles` [{id, content_sha256}]；`stage_d_sha256` 必填。
    - **複本**：c1b 的 uniform-2k / uniform-8k，§8 的 class 與 evidence 原樣。可帶 `pacing` {burst_tokens, rate_tokens_per_s, queue}，此時必須帶 PACE-2K / PACE-8K 的 `validation`；沒有 pacing 的複本只能作為 admission 段的成員，不帶 validation。
-   - **V1 class**：名稱 uniform-2k-o1-512 / uniform-8k-o1-512，token 上限取 D-A 的 U2K-O512 / U8K-O512，bound `validated`，max_concurrency = max_queue（V1 的點的 C），source `stage_v:V1-2K` / `stage_v:V1-8K`。evidence 是 O512 class 的 evidence（server B0、output_tokens 512），not_covered 為 `v1_not_covered`，另加 `output_distribution` "uniform[1,512]"、`datasets_sha256`（5 個不同的 sha）、`via_gateway` true。`serving_class` 的 043 §4 拒絕不適用於 §12 的 validated class；同一個 bound 出現在 §8 / §9 時，loader 拒絕，只讀 model 時 043 §4 仍拒絕。
-   - **validation** = {study, unit, points, measured_classes, worst_r {point: {client, upstream}}, n}。本文寫的「class」改名為 `measured_classes`：`class` 是 Python 的保留字，而且 V1-8K 的兩點服務不同的 class。本文放在 V1 evidence 的「兩點的 worst_R」也放在 validation 的 worst_r。
+   - **V1 class**：名稱 uniform-2k-o1-512 / uniform-8k-o1-512，token 上限取 D-A 的 U2K-O512 / U8K-O512，bound `validated`，max_concurrency = max_queue = V1 的點的 C，2K 為 32、8K 為 8（`V1_C`，loader 逐值檢查，不是 O512 的 C_PROD；實作補記六第 2 項），source `stage_v:V1-2K` / `stage_v:V1-8K`。evidence 是 O512 class 的 evidence（server B0、output_tokens 512），not_covered 為 `v1_not_covered`，另加 `output_distribution` "uniform[1,512]"、`datasets_sha256`（5 個不同的 sha）、`via_gateway` true。`serving_class` 的 043 §4 拒絕不適用於 §12 的 validated class；同一個 bound 出現在 §8 / §9 時，loader 拒絕，只讀 model 時 043 §4 仍拒絕。
+   - **validation** = {study, unit, points, measured_classes, worst_r {point: {client, upstream}}, n}。V1 class 的 points 必須等於該單位的點，依 `[stage_v.units]` 的順序（`V1_POINTS`；實作補記六第 2 項）。本文寫的「class」改名為 `measured_classes`：`class` 是 Python 的保留字，而且 V1-8K 的兩點服務不同的 class。本文放在 V1 evidence 的「兩點的 worst_R」也放在 validation 的 worst_r。
    - **admission 段**：weighted-v1 的參數、queue、measured_mixes（每個都在 (0, 1) 內）、gateway_path_sha256（必須等於 provenance 的值）與 V4 的 validation。
    - **只讀 stage_v.toml 的三個鍵**：`[freeze] stage_v`、`[freeze] gateway_path_sha256`、`[slo]`，另比對整個檔案的 sha256。pacing 與 admission 的數值，和 §8 / §9 的上限一樣，信任來源是「committed 的檔案加上 Mac 上的重新產生測試」，loader 不和 `[stage_v.pacing]` / `[stage_v.weighted_v1]` 比對，避免和還沒寫的 harness 鍵名耦合。重新產生的測試在產生器那一步加入。
    - 這些欄位在 §8、§9 與 provisional profile 中一律為 null，所以候選政策不能手動加到 c1b 或 Stage D 的 profile 上。
@@ -1126,3 +1127,30 @@
    - 輸出不記錄 stage_v.toml 的 sha256，只記錄用到的 plan 值（C、N、預算、class、序列）與每個輸入檔的 sha256。所以 datasets 的 sha256 pin 進設定檔、`freeze.stage_v` 改為 true 之後，輸出仍逐位元相同：序列只由 seed 決定。
    - 腳本不在 `HARNESS_FILES` 中：它不是 harness，runner 與 report 都不讀它。
    - `test_stage_v_frozen` 是否鎖它的 sha256，由凍結那一步決定。重新產生的測試已確保 committed 的輸出就是這份腳本在 committed 檔上的結果。
+
+## 實作補記六（2026-10-24，第一輪凍結前審查）
+
+第一輪凍結前審查確認的問題，依 TDD 修正：先寫會失敗的測試，再改程式，並以 in-process 的突變（只在記憶體中改模組原始碼）確認每條新規則都有測試抓得到。凍結模組一個位元組都沒有改，研究程式仍不 import capserve；c1b、三份 Stage D profile 與 `rtx-verified.toml` 的位元組不變，仍逐位元重新產生；新的規則不需要旗標，也沒有任何覆寫選項。沒有任何 Stage V 數據。
+
+1. **gateway 的「第一個 token」改為 vLLM 0.30 bench 的定義**（`proxy.is_token_event`）：
+   - 舊規則：`ttft_s`、`upstream_ttft_s` 記在第一個 text（chat 為 delta.content）非空的 event（`has_content`）。
+   - vLLM 0.30 bench（`endpoint_request_func.async_request_openai_completions`，chat 的函式也一樣）在第一個 JSON 帶非空 `choices` 的 chunk 記 TTFT，不管 text 是否為空；原始碼註解寫明特殊 token 的 text 可能是空的。`--ignore-eos` 加上亂碼或自訂 prompt 時，第一個生成的 token 可能是不完整的 UTF-8 byte-BPE token 或被略過的特殊 token，串流中的 text 為 ""。
+   - 所以在舊規則下：gateway 的時間點至少比 client 晚一個 decode step；out = 1 而且唯一的 token 解碼為 "" 時，`ttft_s` 根本不會記錄，而 (h) 要求每筆都帶 `ttft_s`，run 會無效。「共通的定義」中「upstream 和 C_PROD 是同一個定義」、029 metrics 表的「和研究的 TTFT 定義相同」與 (h) 的 50 ms 比對，都不成立。
+   - 新規則：一個 event 的第一個 `data:` 行是 JSON 物件，而且 `choices` 是非空的 list，就是 token event。`[DONE]`、只帶 usage 的 chunk（`"choices": []`）、in-band 的 error event、SSE 註解與無法解析的行都不是。`ttft_s`、`upstream_ttft_s` 記在第一個 token event。上述三處從此成立，(h) 的 50 ms 比對的是同一個事件。「共通的定義」已補上這個時間點。
+   - `has_content` 不變，仍用於 itest 的內容檢查與 loadtest，這些檢查不因此變寬。loadtest 的 client 端 ttft 仍是第一個有內容的 event，只作營運描述，不是研究數據。
+   - 營運 metrics：`capserve_ttft_seconds`、`capserve_upstream_ttft_seconds` 的觀測點隨之改變，說明文字改為「到第一個 token event」。completions 每個 decode step 一個 chunk，所以只有第一個 token 的 text 為空時才不同，差一個 decode step；以前沒有觀測值的「out = 1、text 為空」的 request 現在有觀測值。chat route 的第一個 chunk 是只帶 role 的 delta，現在由它記錄，和 vLLM bench 的 chat 規則相同；chat 不在 Stage V 的量測範圍（揭露）。
+   - 測試（`test_proxy`）：述詞對各種 event 的判斷；第一個 chunk 為空 text、之後有 text 時記在第一個 chunk；out = 1 唯一的 chunk 為空 text 時兩者都有值；每個 chunk 都是空 text、再接 usage 與 [DONE] 時兩者都有值；usage-only chunk 不記錄。
+   - `proxy.py` 與 `metrics.py` 在請求路徑閉包內，所以 `gateway_path_sha256` 改變。目前沒有凍結值（`[freeze] gateway_path_sha256 = ""`）；凍結值在本輪修正與第二輪凍結前審查之後才計算。
+2. **V1 class 的 C 由 loader 釘死**（`profile.V1_C`、`profile.V1_POINTS`）：
+   - 舊規則：loader 只檢查 max_queue = max_concurrency、值在 1..128，沒有檢查值本身。V1 class 帶的是 D-A O512 的 evidence，8K 的 c_prod 是 12 而不是 8，所以沒有任何證據值可以比對。寫錯的 C（例如 8K 寫成 O512 的 C_PROD 12）會通過 loader，`serving_class` 又對 validated class 解除 043 §4 的 128 token 規則。實作補記一第 9 項的「loader 依此檢查」因此不成立。
+   - 新規則：`V1_C = {"U2K-O512": 32, "U8K-O512": 8}`，就是 L-U2K / L-U8K 的 C。V1 class 必須 max_concurrency = max_queue = V1_C[workload]，否則拒絕。GW-U8K-O512 在 12 是「全部 512」的最壞情況，涵蓋 8（「和 043 字面的差異」第 9 項），12 本身仍永遠不能服務。
+   - 另外，V1 class 的 `validation.points` 必須等於該單位的點，依 `[stage_v.units]` 的順序（V1-2K：L-U2K、GW-U2K-O512；V1-8K：L-U8K、GW-U8K-O512），也就是 `stage_v_analysis` 的 `units` 段寫出的值。
+   - loader 仍只讀 stage_v.toml 的三個鍵（實作補記一第 9 項）。兩個常數改由產品測試比對 committed 的 `configs/stage_v.toml`：單位的點等於 V1_POINTS；L 點的 C 與 limits 的 max_concurrency 等於 V1_C；GW 點的 C ≥ V1_C。
+   - 拒絕的測試：8K 在 12（O512 的 C_PROD）與 9、2K 在 64 與 31；points 順序顛倒、少一點、換成另一個單位的點。
+   - `profile.py` 在閉包內，同第 1 項。實作補記一第 9 項已依此改寫。
+3. **說明文字的更正**（行為不變）：`profile.py` 的模組說明、`frozen_configs` 的註解、`_stage_v_provenance_problems` 的說明，以及 `service/tests/fakes/profiles.py`、`test_profile.py` 的說明，原本寫「凍結前沒有任何 checkout 有 `configs/stage_v.toml`」。實作補記二第 1 項之後這不成立：檔案在凍結前就 commit，`[freeze] stage_v = false`。fail closed 仍成立，理由是 `stage_v = false`，不是檔案不存在。fakes 的 `FROZEN` 模擬沒有這個檔案的 checkout，`cp.frozen_configs()` 是 repo 的現況。
+4. **`/readyz` 的 tuple 和真的 gateway 交叉比對**（`service/tests/test_stage_v_settings.py`）：
+   - 實作補記四第 12 項的 tuple 原本只和 `test_run_stage_v` 中手寫的假 `/readyz` 比對過。
+   - 新測試對 mini、V-ADM、V-CLS 的每一個點（共 19 個），用該點渲染出的 settings 與 profile 建立真的 `create_app`，注入 local tokenizer 的替身（Mac 上沒有 snapshot），斷言 `run_stage_v.readyz_tuple(gateway.readiness())` 等於 `run_stage_v.readyz_want(...)`。gateway_path_sha256 用研究端算出的值，並先斷言它等於產品端的值。
+   - service 的測試可以 import 研究 harness，研究程式仍不 import capserve。
+   - 目前 19 個點全部一致，所以這是回歸保護，不是錯誤修正。

@@ -10,8 +10,9 @@ are never research evidence: research TTFT comes from the research client, never
 - finish(record) is the only place a finished request becomes counters / histograms (called by the guard):
   requests_total{route, stream, outcome} for the completion routes (stream "unknown" when the request ended before
   its body was parsed), rejections / client errors / upstream errors / disconnects by their label, queue wait for
-  admitted requests, ttft (arrival -> first content, queue included) and upstream_ttft (upstream send -> first
-  content, the research TTFT definition) for streams, e2e for successful requests.
+  admitted requests, ttft (arrival -> the first token event, queue included) and upstream_ttft (upstream send -> the
+  first token event, the research TTFT definition: vLLM bench's first chunk with a choice, proxy.is_token_event; 044
+  實作補記六) for streams, e2e for successful requests.
 - 044: prefill_wait (prefill pacing's wait for prompt tokens, observed only when pacing is on; 043 7.3 B: read it with
   capserve_ttft_seconds, from arrival). Under weighted-v1 there is no active class: the info's active_class is the
   policy's label (weighted-v1:<class>+<class>, flags ""), the limit gauges its largest cap and its max_queue.
@@ -48,10 +49,10 @@ class Metrics:
         self.queue_wait = Histogram("capserve_queue_wait_seconds", "Admission wait", buckets=BUCKETS, registry=r)
         self.prefill_wait = Histogram("capserve_prefill_wait_seconds", "Prefill pacing: wait for prompt tokens (044)",
                                       buckets=BUCKETS, registry=r)
-        self.ttft = Histogram("capserve_ttft_seconds", "Arrival to first content (queue included)", ["route"],
+        self.ttft = Histogram("capserve_ttft_seconds", "Arrival to the first token event (queue included)", ["route"],
                               buckets=BUCKETS, registry=r)
-        self.upstream_ttft = Histogram("capserve_upstream_ttft_seconds", "Upstream send to first content", ["route"],
-                                       buckets=BUCKETS, registry=r)
+        self.upstream_ttft = Histogram("capserve_upstream_ttft_seconds", "Upstream send to the first token event",
+                                       ["route"], buckets=BUCKETS, registry=r)
         self.e2e = Histogram("capserve_e2e_seconds", "Arrival to response end (successful requests)",
                              ["route", "stream"], buckets=E2E_BUCKETS, registry=r)
         for name, doc, fn in (("capserve_in_flight", "Admitted requests", in_flight),

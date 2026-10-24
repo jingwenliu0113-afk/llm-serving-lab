@@ -549,7 +549,7 @@ async def test_tokenize_waits_for_the_permit():
 
 
 async def test_upstream_ttft_starts_at_the_upstream_send_after_tokenize():
-    # upstream_ttft is the research TTFT definition (upstream send -> first content); ttft counts from arrival
+    # upstream_ttft is the research TTFT definition (upstream send -> the first token event); ttft counts from arrival
     prof = make_profile(max_prompt_tokens=60)
     async with stack(FakeConfig(tokenize_delay_s=0.3), prof) as st, st.client() as c:
         r = await c.post("/v1/completions", json={"model": MODEL, "prompt": "w " * 50, "stream": True})
