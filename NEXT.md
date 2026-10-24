@@ -51,8 +51,13 @@
   - [x] **使用者決定**（2026-10-24，043 待決事項 8、9）：V4、V-GW、V1、V2 都做，V3 延後；排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後，session 之間留空檔。合計約 10–11 GPU h。
   - [x] **044**（DRAFT）：Stage V 的事先登記設計（三份設計經三位評審比較），PREREGISTRATION §12（DRAFT）。待決事項 1–8 依建議定案。
         共用一套 harness、一次 mini、兩個正式 session（V-ADM 約 2.75 h：V2 + V4 + F-U2K 對照；V-CLS 約 5.25 h：V-GW + V1），之間 ≥ 2 h；全期上限 12 h。
-  - [ ] 044 的實作（043 合併之後）：產品程式（access log 欄位、weighted-v1、pacing、§12 loader、`provisional-stage-v.json`、AST 閉包雜湊）→
-        harness 五個模組與 `configs/stage_v.toml` → U_W 的桌面模擬 → 兩輪審查 → WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT-0–6、mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。
+  - [x] 044 的實作（0 GPU，TDD；合併 `f12255f`）：產品程式（access log 欄位、weighted-v1、pacing、§12 loader、`provisional-stage-v.json`、AST 閉包雜湊）、
+        harness 五個模組與 `configs/stage_v.toml`、U_W 的桌面模擬（W-90 31.55、W-50 30.80，門檻 28.8 可達）。正式路徑的渲染與 `/readyz` 舊欄位不變。
+  - [x] 044 凍結前審查兩輪與修正後的獨立檢查（實作補記六、七、八）。第二輪的 must-fix：vLLM 0.30 bench 預設不送 ready check（`--ready-check-timeout-sec` 0），
+        沒有 id 的 completion 紀錄改為剛好 C 筆（原本要求 ≥ C + 1，會讓每個 V run 無效）；另有：bench 之前 gateway 結束記為 fault、report 只看在本 session 之前開始的目錄、
+        session 時間必須帶 offset 且不倒退。由我決定、凍結前使用者仍可改：跳過規則改為逐點（實作補記六第 6 項）。
+  - [ ] 044 之後（**等 GPU 空閒**）：generator 的 `--validation-session` 路徑（TDD，第一個正式 V session 之前）→ WSL 唯讀複核（CustomDataset output_tokens、/tokenize、x-request-id、aiohttp、ready check 預設略過）→
+        WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT-0–6、mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。順序排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後。
 - **Stage Q**（decision 040，DRAFT；PREREGISTRATION §10）：
   - [x] Q1 / Q2 harness 與凍結檢查（`f65c081`、`49b88af`）：`configs/stage_q.toml`，三個 pilot 是凍結的證據，分析只接受凍結後的正式 session。
   - [x] Q3 harness（`quality/stage_q3.py`、`configs/stage_q3.toml`，獨立的凍結）。
