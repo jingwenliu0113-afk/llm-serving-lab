@@ -956,3 +956,56 @@
 13. **`--request-id-prefix <tag>-` 加在 argv 的最後**；diff 測試確認凍結函式的輸出只有三處差異。
 14. **巢狀 TOML writer 自行跳脫字串**（`"`、`\`、控制字元與 U+007F）：JSON 的字串跳脫不處理 U+007F，而 `ensure_ascii` 會產生 TOML 不接受的 surrogate 跳脫。非有限的浮點數、None 與其他型別一律拒絕。
 15. **計畫帶 `kind = "verify"`**：每個 session 都是 D-C 的形式（固定點、n 個 run、每個 run 一次 boot），`run_stage_d` 的 harness 會讀這個鍵。
+
+## 實作補記三（2026-10-24，harness：`stage_v_datasets` 與 `stage_v_analysis`；沒有任何 Stage V 數據）
+
+`benchmarks/stage_v_datasets.py`、`benchmarks/stage_v_analysis.py` 與 `tests/test_stage_v_datasets.py`、`tests/test_stage_v_analysis.py` 已依本文以 TDD 實作。凍結模組只 import（`capacity_analysis`、`capacity_plan`、`core_b_analysis`、`core_b_plan`、`stage_d_analysis`、`stage_d_datasets`、`stage_d_plan`），一個位元組都沒有改，也不 import capserve。dataset 的測試用假的 sampler，vLLM 只在 WSL 的 CLI 載入（`stage_d_datasets.vllm_sampler`）。analysis 的測試以封閉迴路、嚴格 FIFO 的假 gateway 產生逐 request 的資料，並以和 runner 相同的規則模擬整個 session，再由 replay 檢查。下列是本文沒有寫死、實作時決定的細節，以及和本文字面不同、依程式處理的地方。
+
+1. **vLLM 0.30 原始碼的唯讀核對**（scratch 中的副本）：`CustomDataset.sample` 只有在 output_len 為 None 或 −1 時才讀每列的 `output_tokens`；`prompt_len` 是 `len(tokenizer(prompt).input_ids)`，和 `stage_d_datasets.vllm_sampler` 的計數相同；request_id 為 `request_id_prefix + str(列號)`，列數等於 N 時不會 oversample；ready check 與 warmup 都送 row 0 的 `test_input`，不帶 request_id，也就不帶 `x-request-id`。和本文一致。
+2. **mini dataset 的 seed**：本文沒有寫。用 `"<seed>:stage_v:<key>"`（`v1-mini-8192`、`v4-mini`）。`v1-mini-8192` 先依 V1 的規則抽 row 1–19，再把 row 5 / 6 / 7 換成 1 / 2 / 512。
+3. **W 中 8K 的個數不寫進 plan**（本文 V4 寫「寫進 plan」）：
+   - 這個個數只由 seed 決定，不需要 tokenizer。`stage_v_datasets.window_counts` 計算，測試把 10 條序列的值 pin 住（90/10 為 24–27，50/50 為 126–129），analysis 在每個 W 點的 descriptive 中逐 block 報告。
+   - 不寫進 plan 的原因：`stage_v_datasets` import `stage_v_plan`，反方向會循環 import；plan 的形狀也已由前一步的測試鎖定。
+4. **import 比本文的表多**：`stage_v_datasets` 另 import `stage_d_plan`（V1 / V4 的 prompt 長度取自 base workload）。`stage_v_analysis` 另 import：
+   - `stage_v_datasets`：在 Mac 上從 seed 重算 L 點每列的 pin 值與 W 點每列的 class，不信任 runner；
+   - `stage_d_datasets`：E 的 b，取 var-2048 的長度；
+   - `stage_d_plan`、`core_b_plan`。
+   全部都是只 import 的研究模組，測試以 AST 鎖住 import 清單。
+5. **(h) 的細節**（`join_access_log`）：
+   - 只讀 JSON 物件的行。uvicorn、capserve 的 stderr、traceback 都不是紀錄；以 `{` 開頭卻不是 guard 紀錄的行算問題。
+   - 「沒有 id 的 ≥ C + 1」用 `core_b_plan.num_warmups(C) + 1`。另外要求這些紀錄都在第一個主要 request 到達之前，因為只有 ready check 與 warmup 不帶 id。
+   - completion route 指 `POST /v1/completions`。除了 `/healthz`、`/readyz`、`/metrics`，其他 route 或 method 的紀錄都算問題（本文只寫「沒有其他 prefix」）。
+   - id 的後綴必須是 0..N−1 的標準十進位寫法（`07` 不算）。
+   - 50 ms 的容差在 derived 檢查（`gw_ttft_ms ≤ ttft_ms + 50`），因為 log 本身看不到 client 的 TTFT。
+   - 主要紀錄另外檢查 t_arrival_s ≤ t_sent_s ≤ t_released_s，以及等待時間不為負。
+6. **(i) 也套用到沒有 id 的紀錄**：log 中無法分辨 warmup 和 ready check 的重試，所以任何非 200 或 outcome 不是 ok 的 completion 紀錄都讓 run 無效。「ready check 可能重試」只影響個數的下限。
+7. **(j) 由 access log 的區間判定**：
+   - [t_sent, t_released) 為半開區間，同一時刻先釋放再送出，以 Fraction 精確計算整個 run 的峰值：request 數 ≤ C；weighted-v1 的單位數 ≤ 預算，各 class ≤ 上限。
+   - 1 Hz sampler 的峰值和 030 8.6 一樣只作描述（`inflight_le_c`），不是有效條件；它可能取樣到 vLLM 收尾的瞬間。
+8. **T_W 為空**（只可能出現在 mini，W 只有 2–4 個 request）：U_W 或 N1 無法計算，視為非平凡條件不成立，也就是 trivial，不是 invalid。V-GW 與 V1 沒有非平凡條件，不受影響。
+9. **E**：pacing 開的點，b 由第一波的 prompt 長度計算，和到達順序無關（uniform 用 prompt，var 用 `stage_d_datasets.lengths(2048, C)`，就是 var-2048 的前 C 列）。門檻 2K 為 26、8K 為 3、var 為 12（b 19）、mini 的 P-U2K（C 8）為 2。pacing 關的點，derived 與 log 中任何 completion 紀錄（含 warmup）的 prefill_wait 都不能 > 0。
+10. **derived 的欄位**（`gateway_requests`）：
+    - `run_stage_d.derived_requests` 的欄位，加上 `out_planned`、`units`、`gw_queue_wait_ms`、`gw_prefill_wait_ms`、`gw_ttft_ms`、`gw_upstream_ttft_ms`、`gw_arrival_s`、`gw_sent_s`、`gw_released_s`。
+    - 時間以 run 中最早的主要到達為 0，四捨五入到 µs（單調，不會產生新的重疊）。
+    - W 點的 cls 由 dataset 決定（8,064 為 long），因為 client base U2K-var 會把每個 request 標成 short。units 取 log 的 `admission_units`，其他點為 1。
+    - derived 不帶 prompt 長度（本文的欄位表也沒有），所以 (l) 的「input_lens 逐一等於 dataset」仍由 runner 以 bench 的 input_lens 檢查；Mac 上檢查的是每列的 units 與 cls。
+    - 固定輸出的點照 D-C 用 `stage_d_analysis.derived_problems`。L / W 點另寫檢查：(k) out 等於 pin 值，`out_planned` 等於 dataset，cls 等於 dataset 的 class。W 中一定有 short 與 8K，由 dataset 保證（第 3 項）。
+11. **run_eval_v1 的第二個差異**：本文說「唯一的差別是 TPOT 只取 out ≥ 2」。逐 request 的聯合達成率（只作描述）也必須跳過 out = 1 的 TPOT，否則會除以 0。這不影響任何判定，測試確認 out 全部 ≥ 2 時兩者完全相同。
+12. **點的類別**：除了判定 view 的 `ca.classify` 為 FAIL，任何 run 的 outcome 為 fail 也是 FAIL（本文「任一有效 run 為 fail」的字面）。W′ 與 full 的類別、WINDOW_SENSITIVE（任一判定 view 的 W′ 類別和 W 不同）只作描述。
+13. **replay 與時數上限的紀錄格式**（runner 必須照此寫，report 照此重算）：
+    - 每個 boot 記錄 `elapsed_s`，也就是時數上限檢查當下距 session 開始的秒數，必須單調不減。
+    - 停止時，`session["cap_stop"] = {block, point, elapsed_s, forced}`。被停止的 run 不寫成 row，analysis 從 replay 算出 `schedule.not_run_cap`。
+    - mini 的強制停止發生在「當下仍計畫中的最後一個 V boot」之前，也就是依已有的跳過計算，`forced = true`。真正的上限停止 `forced = false`。
+    - mini 的強制逾時 row 的 `timeout_s` 為 5 s（`run_capacity.MINI_FORCED_TIMEOUT_S`，由測試鎖定）。
+    - boot 與 row 沿用 `run_capacity` 的形狀：V boot 的 `workload` 就是點的 id，sentinel 為 U2K。
+14. **units 段**（產生器唯一讀取的段）：
+    - `holds` 要求 session 有效：replay 乾淨、sentinel 閘門通過、不是 mini。env、凍結與 sha 的拒絕由 report 負責。
+    - `validation` = {study（單位第一個點的研究）、unit、points、measured_classes、worst_r {點: {client, upstream}}（各項 worst_R 的最大值）、n、queue、pacing、admission，有逐 block dataset 的點另加 datasets 與 datasets_sha256，W1 另加 measured_mixes [0.9, 0.5]}。
+    - `vetoed` 只有 PACE-2K 有值，其他單位為 null。
+15. **V2 的兩張 2×2 表**寫成 `readings`：
+    - var 那一對：co_occur、var_passes_without_pacing、not_fixed、veto、uninterpretable；
+    - P-U2K / F-U2K：formal_class_holds、attributed_to_pacing、formal_class_lost、unattributable。
+16. **hypothesis 的判定**：
+    - H-W0：任一有效 W run 的 U_W < 28.8 為 not supported；兩個 mix 都至少有一個有效 run 而且全部 ≥ 28.8 為 supported；其他為 NT。
+    - H-GW4 的預測寫成 not supported。依對應規則，MARGINAL 的判定是 inconclusive，FAIL 才是 not supported。
+17. **另加的描述**：W 點的 vLLM 內 request 數是否 ≥ 0.9 × 043 的有效並發（24.6 / 12.8），以及 sampler 的 KV、preemption 與 waiting 峰值。
