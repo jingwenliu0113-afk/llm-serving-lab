@@ -1009,3 +1009,73 @@
     - H-W0：任一有效 W run 的 U_W < 28.8 為 not supported；兩個 mix 都至少有一個有效 run 而且全部 ≥ 28.8 為 supported；其他為 NT。
     - H-GW4 的預測寫成 not supported。依對應規則，MARGINAL 的判定是 inconclusive，FAIL 才是 not supported。
 17. **另加的描述**：W 點的 vLLM 內 request 數是否 ≥ 0.9 × 043 的有效並發（24.6 / 12.8），以及 sampler 的 KV、preemption 與 waiting 峰值。
+
+## 實作補記四（2026-10-24，harness：`run_stage_v` 與 `stage_v_report`；沒有任何 Stage V 數據）
+
+`benchmarks/run_stage_v.py`、`benchmarks/stage_v_report.py` 與 `tests/test_run_stage_v.py`、`tests/test_stage_v_report.py` 已依本文以 TDD 實作。凍結模組只 import，一個位元組都沒有改，也不 import capserve（AST 測試鎖住 import 清單）。runner 的測試在假的 WSL 上跑完整的 session：vLLM 沿用 `test_run_stage_d` 的假 server；假的 `capserve serve` 在 provisional profile 沒有 `--allow-provisional` 時以 exit 2 結束，`/readyz` 由它收到的 settings 與 profile 算出；每個 bench 的 request 與 access log 由 `test_stage_v_analysis` 的封閉迴路嚴格 FIFO gateway 產生，主要 request 的 access log 行要等 gateway 停止、log reader 讀到 EOF 才寫進檔案，所以在 `gateway_down` 之前解析 log 的實作會失敗。每個 session 都再由 `stage_v_analysis` replay。report 的測試由這些 session 產生 analysis.json，並逐項觸發拒絕條件。下列是本文沒有寫死、實作時決定的細節，以及和本文字面不同、依程式處理的地方。
+
+1. **gateway log 的時間戳**：`run_adv.start_server` 的 log reader 在每一行前面加上 wall clock（ms）與一個空格（`run_adv.pump_log`），所以 `raw/<boot tag>.gateway.log` 中的 access log 行不是以 `{` 開頭。runner 先移除每行開頭的這個戳記（`access_log_text`），再交給 `stage_v_analysis.join_access_log`。raw 檔原樣保留，sha256 記在 raw_manifest。
+2. **derived 的檢查、(j) 與 E 併入 runner 的判定**：`stage_v_analysis.run_valid` 在 runner 的判定（bench、spill、gateway 與 access log 的對應）之外，另查 derived 的檢查、(j) 與 E。runner 在 decide 時先執行它；不成立時，把原因寫進 row 並把 row 設為無效，再以 `run_outcome` 決定 outcome。所以 row 的 `valid` 和 replay 重算的結果一致。V run 的 derived 檢查因此只在這一處（sentinel 仍在 run_point 用 `capacity_analysis.derived_problems`）。
+3. **log reader 沒有 join 時 run 無效**：(h) 的前提是「`gateway_down` 之後 log reader 已經 join，log 是完整的」。reader 沒有 join 時，access log 可能不完整，該 run 記為無效，並列為 gateway 造成的無效 run。
+4. **`session["gateway_faults"]`**：停止規則要求「gateway 造成的無效 run 之後，不開始下一個 V session，先寫 decision log」。runner 把下列情況逐一記下 boot、run 與原因：
+   - boot 時 gateway 未就緒、`/readyz` 不符、就緒後立刻結束；
+   - bench 之前或期間 gateway 結束；
+   - log reader 沒有 join；
+   - access log 的對應有問題；
+   - (j) 被違反。
+   runner 本身不據此拒絕下一個 session，「每個 session 最多 2 次嘗試」也沒有機械化：兩者都要判斷哪些 session 屬於同一次凍結、哪些中止的 session 算嘗試，仍由操作者依本文先寫 decision log。
+5. **輸出目錄的名稱**：formal 必須是 `results/stage_v/formal-<id>`，mini 必須是 `results/stage_v/smoke-v-<id>`，而且直接位於 `results/stage_v` 之下（本文只寫「輸出不在 `results/stage_v/<sid>`」）。原因：2 h 空檔讀的是 `formal-*`，凍結證據要求 `smoke-v-*`（`stage_v_plan` 的規則）。這個規則也排除了 `runs/` 之下的路徑，所以不另做 `runs/` 檢查。
+6. **mode 與 plan**：
+   - `--mini` 只執行 session "mini" 的 plan；`--formal` 只執行 V-ADM / V-CLS（`build_plan` 本來就拒絕 formal 的 mini）。
+   - mini 的 session plan 是 `stage_v_plan` 的 mini plan，SLO 換成 `run_capacity.MINI_SLO`，stage 為 "V-mini"。N = 20 由 `run_stage_d.mini_num_prompts` 在 session 期間 patch。
+7. **mini 也比對 dataset 的 sha256**：`run_stage_d` 只在 formal 比對。依本文的時序，datasets 在 mini 之前就 pin，所以 mini 讀到的每個 dataset 也必須等於 pin 值；還是 "" 時一律拒絕。
+8. **全期 12 h**：開始任何 V session（含 mini）之前，runner 加總 `results/stage_v/*/session.json` 的 finished_at − started_at（精確到 µs，以 Fraction 比較）。加上本 session 的上限超過 12 h 就拒絕，訊息要求先問使用者。
+   - 任何 session.json 缺少其中一個時間就拒絕（fail closed）。
+   - 在建立目錄之前就被拒絕的 session 不算。
+   - runner 只能看到該 checkout 的 `results/stage_v`。
+   - session.json 記錄 `hours_used_h`。
+9. **2 h 空檔**（只對 formal）：在 `formal-*` 之中，取 started_at 不晚於本 session 開始時間、finished_at 最晚的一個，它必須比本 session 的 started_at 早至少 2 h；任何 `formal-*` 缺少時間就拒絕。
+   - session.json 記錄 `previous_formal`。
+   - report 用同一個函式（`run_stage_v.gap_problems`）在 Mac 上檢查已 commit 的 `formal-*`，排除自己。
+10. **elapsed_s 與時數上限**：session 開始時（取 started_at 的同一刻）記下 monotonic 的 t0。每個 boot 的 `elapsed_s` = round(now − t0, 3)，時數上限的判定與記錄用同一個值，所以 report 的 replay 由記錄值重算，結果必然相同。sentinel 的 boot 也記錄 `elapsed_s`，因為 replay 要求每個 boot 都有。
+11. **渲染出的 gateway settings**：plan 的 `gateway_toml_sha256` 由 `build_plan` 以同一個 writer 算出，runner 又驗證 plan 等於 `build_plan` 的結果，所以 session 開始時再比對一次是同義的，不另寫檢查。每個 boot 寫出 `toml_dumps(x["gateway"])`，並記錄其 sha256（`toml_sha256`），report 比對它等於 plan 的值。
+12. **`/readyz` 的 tuple**（`READYZ_KEYS`）：
+    - 比對的欄位：
+      - profile {id, status}、serving_status；
+      - active_class（weighted-v1 為 null）；
+      - limits：max_concurrency、max_queue、max_prompt_tokens、max_output_tokens，weighted-v1 為產品補記第 6 項的包絡；
+      - queue；
+      - admission：policy、budget、max_queue，以及各 class 的 name、units、max_concurrency；
+      - prefill_pacing；
+      - gateway_path_sha256：等於 session 開始時算出的值，formal 時就是凍結值。
+    - 不比對的欄位：
+      - admission 中各 class 的 token 上限，由 profile 的 sha256 鎖住；
+      - `gateway_validated`：study profile 與 Stage D profile 一律為 null（產品補記第 7 項）。
+    - profile id 讀自 checkout 中、sha256 已經比對過的 profile 檔。
+13. **gateway 的 argv**：和 D-C 相同，為 `python -m capserve serve --config raw/<boot tag>.gateway.toml --profile <checkout>/<profile>`，只有 provisional 的點加上 `--allow-provisional`。session 記錄 `root`（checkout 的絕對路徑）與 gateway_python，report 以它們重建 argv 並逐字比對。
+14. **bench 結果的檢查**：
+    - 固定輸出的 client（uniform、007 的 mix、var）沿用 `run_stage_d.summarize`。
+    - L / W 點要求 input_lens、output_lens 逐列等於該 block 的 dataset（`stage_v_analysis.planned`，由 seed 重算），也就是 (k)、(l) 在 runner 這一側的檢查。實作補記三第 10 項留給 runner 的「input_lens 逐一等於 dataset」在這裡完成。
+    - sentinel 的 derived 檢查用 `capacity_analysis.derived_problems`，和 analysis 判定 sentinel 的函式相同。
+15. **import 比本文的表多或少**：
+    - `run_stage_v` 另外 import：
+      - `capacity_analysis`：sentinel 的 derived 檢查；
+      - `capacity_plan`：CLI 讀 pins；
+      - `run_core_a`：env 與 provenance 的檢查、raw manifest，和 `run_stage_d` 相同。
+    - `run_stage_v` 不 import `stage_d_analysis`。
+    - `stage_v_report` import `run_stage_v`：輸出位置、gateway argv、`/readyz` tuple、2 h 空檔的規則和 runner 共用。它另 import `run_core_a.sha256_json`，不直接 import `run_stage_d`。
+    - 全部都是只 import 的研究模組，測試以 AST 鎖住清單。
+16. **report 的拒絕條件**：除了比照 `stage_d_report` 的部分，還有下列各項，都是本文的規則，只是 report 一列沒有逐項寫出：
+    - session 的 `harness_sha256` 等於目前（凍結）的 harness；
+    - `gateway_path_sha256` 等於凍結值；
+    - `profile_sha256` 等於 plan 的 pin；
+    - pacing 由 committed 的 D5 重算（`pacing_problems`）；
+    - committed 的 profile 等於 pin 住的位元組（`profile_problems`）；
+    - 有效的 V run 的 access log 對應沒有問題，而且剛好 N 筆；
+    - plan 的 session 是 V-ADM 或 V-CLS。
+    - analysis.json 已經存在、而且和重跑的位元組不同時，report 拒絕，不覆寫（021 R3）。
+17. **boot 的 tag**：V boot 的 tag 為 `b<NNN>-V-<point>-r<block>`。`run_capacity.boot_tag` 會把 V phase 寫成 `fs-<w>`，D-C 沿用了這個標籤，本文沒有規定。sentinel 的 tag 不變。
+18. **mini 的通過條件**（`mini_checks`）：
+    - 「E 有作用，至少一個 queue_wait > 0」寫成兩項：某個有效的 pacing run 中有 request 的 prefill_wait > 0；某個有效的 weighted-v1 run 中有 request 的 queue_wait > 0。
+    - 「U_W 與 N1 算得出來」：至少一個有效 run 有非平凡條件，而且每個有非平凡條件的有效 run，T_W 都不是空的。
+    - 其他各項照本文：replay 乾淨；除了刻意的逾時，所有 run 有效；刻意的逾時發生；derived 的欄位；每個 boot 都通過檢查；gateway 回報 tuple 並乾淨停止；強制的上限停止；session.json 記錄兩個 sha；teardown 乾淨。
