@@ -392,7 +392,7 @@
   - 修正 capserve 之後，要新的凍結與新的 mini；
   - 兩個 session 都在新的凍結下重跑。舊結果只對舊的 sha 有效，依服務規則不能上線（由 §12 loader 機械式保證；新凍結下的 session 要等新的 decision 修改產生器的第一次凍結規則，實作補記十第 2 項）。
 - **看到數據之後不改**：指標、view、門檻、時間窗、0.9、序列、政策參數、佇列設定、跳過規則。
-  - 不重跑有效的 session 來換 PASS；新的參數就是新的研究（產生器機械式檢查，fail closed，實作補記十第 1、10 項）。
+  - 不重跑有效的 session 來換 PASS；新的參數就是新的研究（產生器機械式檢查，fail closed，實作補記十第 1、10、11 項；防的是誠實的錯誤，不防蓄意竄改，第 11 項）。
 - **GPU**：
   - 拿不到 lock 就等，標記 blocked，繼續 Mac 上的工作，不搶占，不刪別人的 lock；
   - 每個 session 一個前景 ssh；
@@ -726,7 +726,7 @@
   - 只讀 analysis.json 的 `units`（寫什麼只由 units 決定；provenance / platform 與 session.json 的讀取見實作補記九第 3 項）；
   - 以 `stage_v_report.report()` 唯讀重跑，結果必須逐位元相同；
   - 每個 session 最多一份 `verified-<sid>-b0.json`，只含成立的單位；
-  - 下列情況拒絕：凍結檢查不符、部署 commit 的 `gateway_path_sha256` 和凍結值不同、base profile 不是 committed 的位元組、工作樹不乾淨；另有同一次凍結下有效 session 的重跑（實作補記十第 1、10 項：只有正面證據證明較早的 session 無效時才放行）。
+  - 下列情況拒絕：凍結檢查不符、部署 commit 的 `gateway_path_sha256` 和凍結值不同、base profile 不是 committed 的位元組、工作樹不乾淨；另有同一次凍結下有效 session 的重跑（實作補記十第 1、10、11 項：較早的 session 有 analysis.json 就拒絕；否則只有正面證據證明它無效時才放行；Mac 上的 Stage V 目錄加總必須等於 session 開始時記錄的時數）。
 - **§12 的 provenance**：
   - validation_session（程式的 source_session，實作補記一第 9 項）、analysis 的 path 與 sha；
   - stage_v_sha256、gateway_path_sha256、capserve_sha256；
@@ -1275,24 +1275,24 @@
 
 ## 實作補記十（2026-10-24，產生器審查；沒有任何 Stage V 數據）
 
-產生器的 validation-session 路徑（實作補記九）經過三個獨立審查（規格對應、拒絕與 fail closed、以真的 git 端到端），每項再由第二個 agent 嘗試反駁。下列 9 項依 TDD 處理（第 10 項是之後獨立檢查的追加，同樣依 TDD）：先寫會失敗的測試，再改程式，並以 in-process 的突變確認新規則有測試抓得到。只改產生器、它的測試、`configs/stage_v.toml` 的一處註解與文件。產生器在請求路徑閉包之外，`gateway_path_sha256` 仍為 `679a7c66…`；harness 一個位元組都沒有改，`harness_sha256` 仍為 `a1e4a564…`；不需要新的 mini。沒有任何 Stage V 數據。
+產生器的 validation-session 路徑（實作補記九）經過三個獨立審查（規格對應、拒絕與 fail closed、以真的 git 端到端），每項再由第二個 agent 嘗試反駁。下列 9 項依 TDD 處理（第 10、11 項是之後獨立檢查的追加，同樣依 TDD）：先寫會失敗的測試，再改程式，並以 in-process 的突變確認新規則有測試抓得到。只改產生器、它的測試、`configs/stage_v.toml` 的一處註解與文件。產生器在請求路徑閉包之外，`gateway_path_sha256` 仍為 `679a7c66…`；harness 一個位元組都沒有改，`harness_sha256` 仍為 `a1e4a564…`；不需要新的 mini。沒有任何 Stage V 數據。
 
 1. **「不重跑有效的 session 來換 PASS」由產生器機械式檢查**（`rerun_problems`）：
    - 問題：runner、report 與產生器都沒有檢查這條停止規則。審查以真的 runner 與 report 重現：第一次 V-ADM 有效、沒有單位成立；6 h 後在同一次凍結下再跑一次 V-ADM、全部 PASS，產生器照樣寫出 PACE 與 W1。2 h 間隔與 12 h 上限都允許這樣的重跑。
    - 新規則：在 `results/stage_v/formal-*` 中（本 session 以外），選出 session.json 的 started_at 早於本 session、plan 的 session（V-ADM / V-CLS）和本 session 相同、記錄的 `stage_v_sha256`、`harness_sha256`、`gateway_path_sha256` 都和本 session 相同（同一次凍結）的目錄。只要其中一個有效，就拒絕（exit 2、不寫檔），訊息指出較早的 session 並引用這條規則。有效 = `stage_v_report.report()` 唯讀重跑不拒絕（refusal_problems 為空，所以沒有中止、env 有效；sentinel 閘門通過；replay 一致）。
-   - fail closed：同一個 plan、或 plan.json 讀不到的 `formal-*` 目錄，沒有可讀的 session.json 或帶 offset 的 started_at（實作補記八）時拒絕；本 session 沒有可讀的 started_at 時也拒絕。選出的 session 只有在有正面證據證明它無效時才不擋（第 10 項改正，原本任何 ReportError 都放行）：session.json 記錄它中止（`aborted` 非空）或 `env_valid` 為 false，或 `stage_v_report.refusal_problems` 為空而 `report()` 丟出 ReportError（report 自己的有效性判定：sentinel 閘門、replay）。其餘一律拒絕：目錄名稱不是它的 session_id（改過名）、檔案和它的 session.json 記錄不符（rows.jsonl、derived、plan.json 的 sha256）、refusal_problems 不為空（列出）、其他例外；`previous_formal` 鏈上任何一個正式 session 不在 Mac 上也拒絕。
+   - fail closed：同一個 plan、或 plan.json 讀不到（第 11 項起：或無法以 session.json 的 `plan_sha256` 確認）的 `formal-*` 目錄，沒有可讀的 session.json 或帶 offset 的 started_at（實作補記八）時拒絕；本 session 沒有可讀的 started_at 時也拒絕。選出的 session 只有在有正面證據證明它無效時才不擋（第 10 項改正，原本任何 ReportError 都放行）：session.json 記錄它中止（`aborted` 非空）或 `env_valid` 為 false，或 `stage_v_report.refusal_problems` 為空而 `report()` 丟出 ReportError（report 自己的有效性判定：sentinel 閘門、replay；第 11 項起只限這兩種，「the analysis failed」不算）。有 analysis.json 的較早 session 直接拒絕（第 11 項）。其餘一律拒絕：目錄名稱不是它的 session_id（改過名）、檔案和它的 session.json 記錄不符（rows.jsonl、derived、plan.json 的 sha256）、refusal_problems 不為空（列出）、其他例外；`previous_formal` 鏈上任何一個正式 session 不在 Mac 上也拒絕。
    - 不受影響的情況：
      - 較早的 session 本身：規則只往前看，之後的重跑不改變它的結果；
      - 另一個 plan 的 session；
      - 在 preflight 就中止、沒有記錄三個 sha 的 session：不讀它（不算嘗試，030 8.4）；
      - 另一次凍結下的 session：停止規則要求新的凍結下兩個 session 都重跑。
-   - 不機械化「每個 session 最多 2 次嘗試」：哪些中止的 session 算嘗試、第 3 次要先寫 decision log 由使用者決定，仍由操作者負責（實作補記四第 4 項）。產生器保證的是：同一次凍結下，有效 session 之後的重跑寫不出 profile，前提是 session.json 的記錄本身（aborted、env_valid、started_at、三個 sha、previous_formal；session.json 沒有自己的 sha256）沒有被改過，而且緊鄰在一個只在 preflight 中止的 session 之前的正式 session 也在 Mac 上（鏈無法發現它，第 10 項）。
+   - 不機械化「每個 session 最多 2 次嘗試」：哪些中止的 session 算嘗試、第 3 次要先寫 decision log 由使用者決定，仍由操作者負責（實作補記四第 4 項）。產生器保證的是：同一次凍結下，有效 session 之後的重跑寫不出 profile，前提是 session.json 的任何欄位都沒有被蓄意改過（session.json 沒有自己的 sha256；第 11 項的威脅模型把蓄意竄改排除在範圍之外）。緊鄰在一個只在 preflight 中止的 session 之前的正式 session 不在 Mac 上時，鏈無法發現它（第 10 項），第 11 項的時數加總會發現。
    - 測試（同一個 repo root 中，以真的 runner 與 report CLI 跑三個 session：V-ADM 沒有單位成立、6 h 後 V-CLS、再 6 h 後 V-ADM 全部 PASS）：
      - 重跑被拒絕，CLI exit 2、不寫檔；
      - 較早的 V-ADM 照常產生（沒有單位成立的結果），中間的 V-CLS 照常寫出 V1；
      - 較早的 session 中止、env 無效或 sentinel 閘門失敗時不擋；三個 sha 任一不同、或在 preflight 中止時不擋；
      - 同一個 plan 的目錄沒有 session.json、不是 JSON、沒有 started_at、沒有 offset、沒有 plan.json，或空的 `formal-*` 目錄，以及本 session 沒有 started_at，都拒絕；
-     - 另一個 plan 的目錄讀不到時不屬於這條規則（report 的 2 h 間隔仍然拒絕）。第 10 項之後：它不被當成較早的同 plan session 評估，但它若在 `previous_formal` 鏈上，鏈在那裡無法往前，停止規則也拒絕。
+     - 另一個 plan 的目錄讀不到時不屬於這條規則（report 的 2 h 間隔仍然拒絕）。第 10 項之後：它不被當成較早的同 plan session 評估，但它若在 `previous_formal` 鏈上，鏈在那裡無法往前，停止規則也拒絕。第 11 項之後：它的 plan.json 無法以 session.json 確認，被當成可能同 plan 檢查（fail closed），它的時數也無法計算。
 2. **停止規則的新凍結**（選項 B：最小、fail closed）：
    - 產生器仍只接受第一次凍結（實作補記九第 5 項）。停止規則要求：gateway 造成的無效 run 之後修正 capserve、做新的凍結與新的 mini、兩個 session 都重跑。在新的凍結下，產生器一律拒絕：
      - 傳新的凍結 commit：stage_v.toml 已經凍結過（解凍再凍結），或上一個 commit 已凍結（一直凍結、只更新 mini 與 `gateway_path_sha256`）；
@@ -1336,11 +1336,11 @@
    - Mac 上缺的目錄（`previous_formal_problems`）：runner 在開始時記錄 `previous_formal`，即開始時間不晚於本 session 的正式 session（兩個 plan 都算）中最後結束的那個（`run_stage_v.gap_problems`），第一個是 null。產生器從本 session 沿 `previous_formal` 往前走到 null（以 session.json 的 session_id 找 `formal-*` 目錄，防止循環）。鏈上任何一個 id 在 Mac 上沒有目錄就拒絕，訊息要求先取回每個正式 Stage V session。目錄在但 session.json 讀不到、`previous_formal` 不是紀錄、鏈回到走過的 session，也拒絕。
    - 只在 preflight 中止的 session 不記錄 `previous_formal`（也不記錄三個 sha；runner 在 preflight 之後才寫）。鏈改用 runner 自己的規則（`gap_problems`）在 Mac 上的目錄中找它的前一個，繼續往前走。沒有記錄、又沒有中止的 session 拒絕。
    - 限制（只記錄）：
-     - 緊鄰在這樣一個 preflight 中止的 session 之前的正式 session 若不在 Mac 上，鏈無法發現：沒有任何紀錄指向它。
-     - session.json 本身沒有 sha256，手改它的 aborted、env_valid、started_at、三個 sha 或 previous_formal 仍然無法察覺。
-   - 第 1 項中改變的行為：另一個 plan 的 session 讀不到 session.json 時，仍不被當成較早的同 plan session 評估；但它若在鏈上，鏈在那裡無法往前，停止規則也拒絕。
+     - 緊鄰在這樣一個 preflight 中止的 session 之前的正式 session 若不在 Mac 上，鏈無法發現：沒有任何紀錄指向它。（已補：第 11 項的時數加總。）
+     - session.json 本身沒有 sha256，蓄意改它的任何欄位（不只 aborted、env_valid、started_at、三個 sha、previous_formal，也包括 hours_used_h、plan_sha256、session 等）仍然無法察覺；第 11 項的威脅模型把這排除在範圍之外。
+   - 第 1 項中改變的行為：另一個 plan 的 session 讀不到 session.json 時，仍不被當成較早的同 plan session 評估；但它若在鏈上，鏈在那裡無法往前，停止規則也拒絕。（第 11 項再改：它的 plan.json 無法確認，被當成可能同 plan，fail closed。）
    - 測試（`service/tests/test_profile_gen_stage_v.py`；真的 runner 與 report，`make_sessions` 另能留下 runner 自己中止的 session）：
-     - 獨立檢查的四個探針全部拒絕：derived 刪除、rows.jsonl 改動、改名、不在 Mac 上（第一個 V-ADM，或中間的 V-CLS）。改寫 pins / stage_d sha256、改 plan.json 也拒絕；中止的 session 檔案不符也拒絕；
+     - 獨立檢查的四個探針全部拒絕：derived 刪除、rows.jsonl 改動、改名、不在 Mac 上（第一個 V-ADM，或中間的 V-CLS）。改寫 pins / stage_d sha256、改 plan.json 也拒絕（第 10 項時這句只對 session 以外的欄位成立：把 plan.json 的 session 改成另一個 plan，該目錄被當成另一個 plan 而略過，重跑照樣寫出；第 11 項第 1 點改正後，plan.json 的任何修改都拒絕）；中止的 session 檔案不符也拒絕；
      - 以下都拒絕：refusal_problems 不為空（不在 GPU lock 下、沒有 env_valid）、`refusal_problems` 本身丟出 KeyError（plan.json 沒有 points、plan_sha256 重記）、`report()` 丟出非 ReportError 的例外；
      - 以下仍然不擋：較早的 session 中止、env 無效、sentinel 閘門失敗；
      - runner 自己的四種中止（gateway port 在第一個 V boot 前被占用、start sentinel 無效、preflight 的 vLLM 版本、之後的 boot port 被占用）之後，第一個有效的 V-ADM 照常寫出，鏈走過 preflight 中止的 session；
@@ -1357,3 +1357,23 @@
      - 評估：refusal_problems 不為空也放行（兩處）、任何例外都當成無效、ReportError 當成有效、有效的 session 不擋、評估或載入的例外略過；
      - 鏈：整個拿掉、缺目錄不報、在 preflight 中止的 session 停下、沒有記錄也繼續走、previous_formal 不是紀錄時不報、不防循環（測試卡住，以逾時判定抓到）、只走同 plan 的 session；
      - 其他：glob 改成 `*`（prereg-sim 的測試抓到）、只比對 stage_v_sha256（第 1 項中存活的突變，現在由 harness_sha256 不同的測試抓到：refusal_problems 不為空即拒絕）、不看先後、讀不到的 plan 當成別的 plan、refreeze 字尾拿掉新的開頭。
+
+11. **重跑檢查的威脅模型與審查後續二**（第 10 項之後的獨立檢查；`rerun_problems`、`hours_problems`、`_other_plan`、`report_verdict`）：
+   - **威脅模型**（主 session 決定）：重跑檢查防的是誠實的錯誤：從 WSL 取回得不完整、目錄改名或搬走、誤改一個資料檔、忘了較早的一次嘗試。它不試圖抵擋蓄意竄改：session.json 本身沒有 sha，所以蓄意修改它（或捏造一個誘餌目錄）不在範圍內；每個 commit 過的 `results/stage_v` 檔案都在 git 歷史中，產生器要求工作樹乾淨，使用者可以稽核這段歷史。審查發現只有在下列情況才算 must-fix / should-fix：一個誠實的錯誤讓重跑寫出 profile、一個合法的流程被拒絕，或文件的陳述不實。
+   - 獨立檢查以真的 runner 與 report 探測（腳本與突變留在本機 scratchpad，未納入 repo），找到下列問題，依 TDD 處理（先寫會失敗的測試，再改程式）：
+     1. **plan.json 的篩選只信 plan.json**：plan.json 寫著另一個 plan 的目錄一律略過。把較早有效 V-ADM 的 plan.json 的 session 改成 `V-CLS`、整份換成 `{"session": "V-CLS"}`，或改成 `V-OLD`，重跑都寫出 profile；第 10 項的「改 plan.json 也拒絕」因此不實。改正：只有在 `sha256_json(plan.json)` 等於該目錄 session.json 的 `plan_sha256`、而且 session.json 的 `session` 等於 plan 的 `session` 時，才把它當成另一個 plan 而略過；讀不到或不符時當成可能是同一個 plan 檢查（`_other_plan`）。runner 自己留下的目錄不受影響：preflight 中止的 session 沒有 `plan_sha256`，因此被檢查，但它沒有三個 sha，仍以「另一次凍結」略過。測試：上面三種改法、換成 V-CLS 的 plan.json 並重記 `plan_sha256`（session.json 的 session 仍是 V-ADM），以及在 plan.json 與 session.json 中把 `"V-ADM"` 全部取代成 `"V-CLS"`（兩者的 session 一致，plan_sha256 不符），全部拒絕。
+     2. **鏈找不到的目錄以時數加總發現**：第 10 項記為限制的情況（緊鄰在 preflight 中止的 session 之前的正式 session 不在 Mac 上）重跑會寫出 profile；重跑的 `previous_formal` 被改成 null 而較早的 session 被刪、較早 session 的 started_at 被移到重跑之後、以及誘餌目錄（原本的目錄搬到 `formal-*` 以外的名稱但仍在 `results/stage_v` 下，原名放一個只有時間與 previous_formal 的 session.json）也一樣。改正：runner 在開始時把 `run_stage_v.hours_used`（當時 `results/stage_v` 下每個 session 目錄：mini、正式、重跑、中止的都算）以 `float` 記為 session.json 的 `hours_used_h`。產生器以 `hours_used(root, not_after=本 session 的 started_at)`（和 report 相同的目錄選法）減去本 session 自己的時數（`run_stage_v._times`，同一種計法；兩者都是精確的分數），轉成 float 後必須完全等於 `hours_used_h`，而且計算時沒有任何問題；否則拒絕（fail closed），訊息為 `fetch every Stage V session before generating; the directories on the Mac do not add up to the hours this session counted at its start`，並列出記錄值、Mac 上的值與問題。`previous_formal` 的鏈保留：它指出缺的是哪一個 session。測試：上面四種探針全部拒絕；合法的流程照常寫出（runner 中止之後的第一個 V-ADM、第一個正式 session 在 preflight 中止之後的 V-ADM、V-ADM 之後的 V-CLS、較早的 session 中止 / env 無效 / sentinel 閘門失敗 / replay 不一致之後的重跑；每個測試的 repo root 都有 mini `smoke-v-test`，計入時數）。
+     3. **analysis.json 是有效的正面證據**：stage_v_report 只有在接受一個 session 時才寫 analysis.json。所以同 plan、同凍結、較早開始的目錄有 analysis.json，就直接拒絕重跑（訊息指出該目錄），在改名、檔案與任何放行規則之前；之後它的 session.json 或檔案被改成中止、`env_valid` false、sentinel 閘門失敗或 replay 不一致，仍然拒絕。以「修改有效的 session」建立無效較早 session 的測試，先刪掉它的 analysis.json（代表 report 從未接受的 session）。沒有回報過的有效 session（沒有 analysis.json，例如忘了跑 report 的一次嘗試）仍由 report 的唯讀重跑判定有效而拒絕。
+     4. **分析失敗不是無效的證據**：`report()` 的 ReportError 只有在它是 report 自己的有效性判定時才放行，也就是訊息以 `replay mismatch: ` 或 `the sentinel gate failed (drift, 030 8.6): ` 開頭（`REPORT_VERDICTS`，report 在分析之後才丟出）。`the analysis failed: …`（`AnalysisError`、`PlanError`、`KeyError` 被包起來）無法判定，拒絕並列出原因。`stage_v_report.py` 在 `stage_v_plan.HARNESS_FILES` 內，所以不加子類別、不改 `benchmarks/`；以訊息前綴判別，另有測試把這兩個前綴與 `the analysis failed` 釘在凍結的 `stage_v_report.report` 原始碼上。
+     5. **測試缺口**（獨立檢查中存活的四個突變，現在都被抓到）：鏈以 session_id 找到改名的目錄（中間的 V-CLS 改名，鏈照走，重跑寫出）；第一個正式 session 在 preflight 中止（之後第一個有效的 V-ADM 照常寫出）；`env_valid` 不是 bool（None、0、""、"false"、1）都不放行；replay 不一致的放行。
+     6. **活性**（只記錄，不改程式）：derived 檔已寫出、但它的 sha256 因 I/O 錯誤沒有記錄進 session.json 的 session，檔案和記錄不符，在同一次凍結下之後的每個重跑都被擋（fail closed），直到 decision log 記錄它為止。
+   - 另一個 plan 的目錄讀不到 session.json 時，現在也被當成可能同 plan 檢查（第 1 點），它的時數也無法計算；不在 Mac 上的正式 session 另有時數的訊息。這兩種原本就被拒絕，只是多了訊息。
+   - 仍然只記錄的限制：蓄意修改 session.json 的任何欄位（例如三個 sha 改掉，該 session 被當成另一次凍結而略過；`hours_used_h` 或 `plan_sha256` 改成相符的值），或與原目錄時數完全相同的誘餌，在威脅模型之外。
+   - 只改產生器、它的測試與文件；`harness_sha256`（`a1e4a564…`）與 `gateway_path_sha256`（`679a7c66…`）不變，`benchmarks/` 與 `configs/` 沒有改，不需要新的 mini。沒有任何 Stage V 數據。
+   - 突變檢查（方法同上，只在記憶體中改 `capserve.profile_gen`；腳本留在本機 scratchpad，未納入 repo）：27 個突變全部被抓到，未突變的基準全部通過（143 個測試）：
+     - 第 1 點（3 個）：改回只信 plan.json、不比對 `plan_sha256`（只由兩個檔案都取代的測試抓到：單一檔案的修改，session 的比對就已不符）、不比對 session；
+     - 第 2 點（4 個）：整個拿掉、計算時有問題仍放行、不扣掉本 session 自己、不限於本 session 開始前的目錄（V-ADM 之後的 V-CLS 被拒，合法流程的測試抓到）；
+     - 第 3 點（2 個）：拿掉 analysis.json 的檢查、把它移到放行規則之後（訊息相同，由「report 接受過的 session 之後被改成中止」的測試抓到）；
+     - 第 4 點（5 個）：任何 ReportError 都放行、都不放行、只認 sentinel 閘門、只認 replay、改用子字串比對；
+     - 第 5 點：獨立檢查中存活的 4 個（以 session_id 找改名的目錄、第一個 preflight 中止就拒絕、`env_valid` 改成「不是 true 就放行」、只有 sentinel 閘門的 ReportError 當成無效）；
+     - 測試改動之後，第 10 項的突變仍被抓到（9 個）：鏈整個拿掉、gap_problems 不排除自己、不防循環的起點、previous_formal 不是字串時不報、缺目錄與讀不到的訊息對調、讀不到的鏈成員略過、三個 sha 改成全部不同才略過、改名只在 env 有效時檢查、只算 rows 的檔案問題。

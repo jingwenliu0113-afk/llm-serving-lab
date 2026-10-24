@@ -117,6 +117,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from fractions import Fraction
 from pathlib import Path
 from typing import Callable
 
@@ -187,6 +188,9 @@ NO_PROFILE = ("no profile: no unit that writes one holds (044 產品對應: VG-3
 # 044 停止規則: what makes an earlier session "the same freeze" (rerun_problems)
 STAGE_V_FREEZE_SHAS = ("stage_v_sha256", "harness_sha256", "gateway_path_sha256")
 RERUN_RULE = "044 停止規則: 不重跑有效的 session 來換 PASS"
+# How the frozen stage_v_report.report begins the ReportError of its own validity verdict (after the analysis: a replay
+# mismatch, a failed sentinel gate); its other one, "the analysis failed: ...", is no verdict (044 實作補記十第 11 項).
+REPORT_VERDICTS = ("replay mismatch: ", "the sentinel gate failed (drift, 030 8.6): ")
 NOT_D_A = ("039 / 042: D-B and D-C produce no profile (their facts are service/README.md's scope, 043 §5); the {what} "
            "kind is {kind!r}, not D-A's {want!r}")
 
@@ -1132,7 +1136,8 @@ def previous_formal_problems(d: Path, s: dict, *, root: Path, dirs: list) -> lis
     names with no results/stage_v/formal-* directory whose session.json records that session_id, a chain that cannot
     be followed or that returns to a session, is a problem (fail closed). A session aborted in its preflight records no
     previous_formal (the runner records it after the preflight): the walk goes on from the session the runner's own
-    rule finds among the directories here; one that records none and was not aborted is a problem."""
+    rule finds among the directories here; one that records none and was not aborted is a problem. A session no record
+    leads to (one just before a preflight abort) is hours_problems' to find (044 實作補記十第 11 項)."""
     named, by_id = {}, {}
     for e in dirs:
         try:
@@ -1182,18 +1187,64 @@ def previous_formal_problems(d: Path, s: dict, *, root: Path, dirs: list) -> lis
         seen.add(e.resolve())
 
 
+def hours_problems(d: Path, s: dict, *, root: Path) -> list:
+    """044 停止規則 reads only the directories here, and the previous_formal walk finds only the sessions a record leads
+    to, so every Stage V directory the runner counted must be here (044 實作補記十第 11 項): run_stage_v records in
+    session.json hours_used_h, float(run_stage_v.hours_used) over every results/stage_v session directory at its start
+    (the mini, formal ones, reruns and aborted ones alike). The directories here that started by its start (hours_used
+    with not_after, as stage_v_report counts them), without its own hours, must add up to exactly that with no problem
+    counting them; a session missing, moved out of results/stage_v, its start moved past this one's or one directory
+    too many (a copy, a decoy) does not (fail closed)."""
+    problems, before = [], None
+    try:
+        here, problems = rv.hours_used(root, not_after=s["started_at"])
+        began, ended, _ = rv._times(d)                  # its own hours, as hours_used counts them
+        before = float(here - Fraction((ended - began) // dt.timedelta(microseconds=1), 3600 * 10 ** 6))
+    except (KeyError, OSError, TypeError, ValueError) as exc:
+        problems = [*problems, f"{d.name}: {type(exc).__name__}: {exc}"]
+    if problems or before != s.get("hours_used_h"):
+        return [_closed(f"fetch every Stage V session before generating; the directories on the Mac do not add up to "
+                        f"the hours this session counted at its start ({s.get('session_id')}'s hours_used_h "
+                        f"{s.get('hours_used_h')!r}; the results/stage_v sessions here that started by its start, "
+                        f"without it: {before!r} h" + "".join(f"; {p}" for p in problems) + ")")]
+    return []
+
+
+def _other_plan(e: Path):
+    """The plan session (V-ADM / V-CLS) of the formal-* directory e when its plan.json is the plan its session.json
+    records it ran (plan_sha256) and of the session.json's plan session; else None: maybe this plan (044 實作補記十第
+    11 項)."""
+    try:
+        plan, rec = json.loads((e / "plan.json").read_text()), json.loads((e / "session.json").read_text())
+        if svr.sha256_json(plan) == rec.get("plan_sha256") and rec.get("session") == plan.get("session"):
+            return plan.get("session")
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
+    return None
+
+
+def report_verdict(exc: Exception) -> bool:
+    """Whether stage_v_report.report's ReportError is its own verdict that the session is invalid (REPORT_VERDICTS)."""
+    return str(exc).startswith(REPORT_VERDICTS)
+
+
 def rerun_problems(d: Path, cap: dict, *, root: Path, evaluate: Callable) -> list:
     """044 停止規則 (不重跑有效的 session 來換 PASS), mechanized here, outside the request path and the harness: no
     results/stage_v/formal-* session other than this one, of its plan session (V-ADM / V-CLS), that started before it
-    under the same freeze (the same recorded STAGE_V_FREEZE_SHAS) is valid. Such an earlier session releases the rerun
-    only on positive evidence that it was invalid (044 實作補記十第 10 項): its session.json records it aborted or
-    env_valid false, or, with stage_v_report.refusal_problems empty, report() raises ReportError (the report's own
-    verdict: the sentinel gate, the replay). evaluate(earlier cap) is (refusal_problems, whether report() accepts it).
+    under the same freeze (the same recorded STAGE_V_FREEZE_SHAS) is valid. A directory is another plan's only when its
+    plan.json is the plan its session.json records it ran (_other_plan). Such an earlier session that has an
+    analysis.json blocks the rerun outright: stage_v_report writes one only for a session it accepts (044 實作補記十第
+    11 項). Otherwise it releases the rerun only on positive evidence that it was invalid (第 10 項): its session.json
+    records it aborted or env_valid false, or, with stage_v_report.refusal_problems empty, report() raises its own
+    validity verdict (REPORT_VERDICTS: the replay, the sentinel gate; 第 11 項). evaluate(earlier cap) is (what keeps
+    stage_v_report from judging it: refusal_problems, or the analysis failing; whether report() accepts it).
     Everything else fails closed: a directory that is not its session_id (renamed), files that are not what its
-    session.json records (stage_v_report's sha256 checks against its own records), refusal problems, any other error;
-    a formal-* directory of this plan, or of a plan that cannot be read, without a readable session.json and
-    started_at; a formal session of the previous_formal chain that is not here (previous_formal_problems). The
-    2-attempt cap stays with the operator (044 實作補記四第 4 項, 實作補記十)."""
+    session.json records (stage_v_report's sha256 checks against its own records), refusal problems, the analysis
+    failing, any other error; a formal-* directory of this plan, or of a plan that cannot be confirmed, without a
+    readable session.json and started_at; a formal session of the previous_formal chain that is not here
+    (previous_formal_problems); directories here that do not add up to the hours the session counted at its start
+    (hours_problems). The 2-attempt cap stays with the operator (044 實作補記四第 4 項, 實作補記十). It guards against
+    honest mistakes, not deliberate edits of a session.json (it has no sha256 of its own; 實作補記十第 11 項)."""
     s, plan = cap["session"], cap["plan"].get("session")
     dirs = sorted(p for p in root.joinpath(*STAGE_V_RESULTS).glob("formal-*") if p.is_dir())
     problems = previous_formal_problems(d, s, root=root, dirs=dirs)
@@ -1202,13 +1253,11 @@ def rerun_problems(d: Path, cap: dict, *, root: Path, evaluate: Callable) -> lis
     except (KeyError, TypeError, ValueError) as exc:
         return problems + [f"the session records no readable started_at ({exc}): cannot tell which {plan} sessions "
                            f"came before it ({RERUN_RULE}, checked fail closed)"]
+    problems += hours_problems(d, s, root=root)
     for e in dirs:
         if e.resolve() == d.resolve():
             continue
-        try:
-            other = json.loads((e / "plan.json").read_text()).get("session")
-        except (OSError, ValueError, AttributeError):
-            other = None                                 # a plan that cannot be read: maybe this one
+        other = _other_plan(e)
         if other is not None and other != plan:
             continue
         try:
@@ -1220,6 +1269,12 @@ def rerun_problems(d: Path, cap: dict, *, root: Path, evaluate: Callable) -> lis
                             "fail closed")
             continue
         if began >= start or any(rec.get(k) != s.get(k) for k in STAGE_V_FREEZE_SHAS):
+            continue
+        if (e / svr.ANALYSIS_NAME).exists():
+            problems.append(f"{s.get('session_id')} reruns the earlier {plan} session {e.name} (started "
+                            f"{rec['started_at']}), which ran under the same freeze and has an analysis.json "
+                            "(stage_v_report writes one only for a session it accepts): its units are the result, "
+                            f"{RERUN_RULE} (044 實作補記十第 11 項)")
             continue
         if rec.get("session_id") != e.name:
             problems.append(_closed(f"{e.name} records session_id {rec.get('session_id')!r}: a renamed directory "
@@ -1331,15 +1386,16 @@ def _generate_stage_v(d: Path, *, freeze_commit: str, generator_commit: str, roo
     problems += [f"stage_v_report: {p}" for p in svr.refusal_problems(cap, **report_kw)]
 
     def evaluate(earlier: dict) -> tuple:
-        """(stage_v_report.refusal_problems, whether report() accepts it) of an earlier session: with no refusal
-        problem, report() raising ReportError is the report's own verdict that it is invalid (rerun_problems)."""
+        """(what keeps stage_v_report from judging an earlier session, whether report() accepts it): its
+        refusal_problems; else report() raising its own verdict (report_verdict: the replay, the sentinel gate) is
+        ([], False), any other ReportError (the analysis failed) is no verdict ([its message], False), rerun_problems."""
         refusals = svr.refusal_problems(earlier, **report_kw)
         if refusals:
             return refusals, False
         try:
             svr.report(earlier, uniform=uniform, advanced_runs=advanced, **report_kw)
-        except svr.ReportError:
-            return [], False
+        except svr.ReportError as exc:
+            return ([] if report_verdict(exc) else [str(exc)]), False
         return [], True
 
     problems += rerun_problems(d, cap, root=root, evaluate=evaluate)

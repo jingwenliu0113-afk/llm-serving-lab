@@ -14,6 +14,7 @@ repository."""
 import copy
 import datetime as dt
 import hashlib
+import inspect
 import json
 import os
 import shutil
@@ -24,7 +25,9 @@ from typing import Callable
 
 import pytest
 
+import capacity_analysis as ca
 import capacity_report as cr
+import core_b_plan as bp
 import run_stage_v as rv
 import stage_v_plan as sv
 import stage_v_report as svr
@@ -814,6 +817,16 @@ def edit_session(d: Path, **fields) -> None:
     path.write_text(json.dumps(rec))
 
 
+def never_reported(d: Path) -> None:
+    """stage_v_report writes analysis.json only for a session it accepts: without one the earlier session is one the
+    report never accepted (or that nobody reported), which the stop rule then reads (044 實作補記十第 11 項)."""
+    (d / "analysis.json").unlink()
+
+
+HOURS = ("fetch every Stage V session before generating; the directories on the Mac do not add up to the hours this "
+         "session counted at its start")
+
+
 def slow_end_sentinel(d: Path) -> None:
     """The end sentinel 5 % slower than the start, on disk, its derived files' sha256 rerecorded in session.json:
     stage_v_report's sentinel gate fails (drift, 030 8.6), nothing else does."""
@@ -844,15 +857,21 @@ def stop_rule(got: list) -> list:
     return [p for p in got if "044 停止規則" in p]
 
 
-def test_a_rerun_of_a_valid_session_of_its_plan_is_refused(reruns, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("reported", [True, False], ids=["its analysis.json", "never reported"])
+def test_a_rerun_of_a_valid_session_of_its_plan_is_refused(reruns, tmp_path, monkeypatch, capsys, reported):
     """044 停止規則: 不重跑有效的 session 來換 PASS. The review's case: the first V-ADM is valid and no unit holds; the
-    rerun under the same freeze, where every unit holds, gives no profile (refused, nothing written)."""
-    rerun = reruns[RERUN]
+    rerun under the same freeze, where every unit holds, gives no profile (refused, nothing written). Its analysis.json
+    blocks the rerun outright (stage_v_report writes one only for a session it accepts, 044 實作補記十第 11 項); a valid
+    session nobody reported is found valid by the report's read-only re-run."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    if not reported:
+        never_reported(earlier(rerun))
     assert report_refusal(rerun, earlier(rerun)) == ""
     assert all(x["holds"] for x in analysis(rerun)["units"].values())
     (msg,) = problems(rerun)
     assert f"the earlier V-ADM session {FIRST} (started " in msg and f"{RERUN} " in msg
     assert "044 停止規則" in msg and "不重跑有效的 session 來換 PASS" in msg
+    assert ("has an analysis.json" in msg) is reported and ("stage_v_report accepts it" in msg) is not reported
     out = tmp_path / "profiles"
     out.mkdir()
     assert cli(rerun, monkeypatch, out) == 2
@@ -867,20 +886,66 @@ def test_the_earlier_session_and_the_other_plan_still_give_their_results(reruns)
     assert holds == ["VG-32K", "VG-M8K-T", "V1-2K", "V1-8K"] and list(docs) == [f"verified-{BETWEEN}-b0"]
 
 
-@pytest.mark.parametrize("how, why", [
-    ("aborted", "aborted"),
-    ("env", "env-invalid"),
-    ("gate", "sentinel gate failed"),
-])
-def test_an_earlier_session_that_is_not_valid_does_not_block_the_rerun(reruns, tmp_path, how, why):
-    """044 停止規則: an aborted or env-invalid session, or one whose sentinel gate failed, unlocks nothing and is rerun
-    under a new id; the rerun's units are the result."""
+# An earlier session made invalid, and why stage_v_report refuses it: aborted or env_valid false (session.json), or the
+# report's own verdict after the analysis, a failed sentinel gate or a replay mismatch (a cap stop no replay reaches).
+NOT_VALID = {
+    "aborted": (lambda d: edit_session(d, aborted="RunError: x"), "aborted"),
+    "env": (lambda d: edit_session(d, env_valid=False), "env-invalid"),
+    "gate": (slow_end_sentinel, "the sentinel gate failed"),
+    "replay": (lambda d: edit_session(d, cap_stop={"block": 99, "point": "nowhere", "elapsed_s": 1.0, "forced": False}),
+               "replay mismatch: "),
+}
+
+
+@pytest.mark.parametrize("how", NOT_VALID)
+def test_an_earlier_session_that_is_not_valid_does_not_block_the_rerun(reruns, tmp_path, how):
+    """044 停止規則: an aborted or env-invalid session, or one whose sentinel gate failed or whose replay does not match,
+    unlocks nothing and is rerun under a new id; the rerun's units are the result. The report never accepted it, so it
+    has no analysis.json."""
     rerun = clone(reruns[RERUN], tmp_path)
-    {"aborted": lambda d: edit_session(d, aborted="RunError: x"), "env": lambda d: edit_session(d, env_valid=False),
-     "gate": slow_end_sentinel}[how](earlier(rerun))
-    assert why in report_refusal(rerun, earlier(rerun))
+    edit, why = NOT_VALID[how]
+    never_reported(earlier(rerun))
+    edit(earlier(rerun))
+    refusal = report_refusal(rerun, earlier(rerun))
+    assert refusal.startswith(why) if how in ("gate", "replay") else why in refusal
     docs, holds = gen(rerun)
     assert holds == ["PACE-2K", "PACE-8K", "W1"] and list(docs) == [f"verified-{RERUN}-b0"]
+
+
+@pytest.mark.parametrize("how", NOT_VALID)
+def test_an_earlier_session_the_report_accepted_blocks_the_rerun_outright(reruns, tmp_path, how):
+    """stage_v_report writes analysis.json only when it accepts a session: an earlier same-plan, same-freeze session
+    that has one blocks the rerun before any release rule (044 實作補記十第 11 項), whatever its session.json or files
+    say now (the edits of the test above, made after the report)."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    NOT_VALID[how][0](earlier(rerun))
+    (msg,) = stop_rule(problems(rerun))
+    assert f"the earlier V-ADM session {FIRST} (started " in msg and "has an analysis.json" in msg
+
+
+@pytest.mark.parametrize("how", ["its session V-CLS", "only a session V-CLS", "its session V-OLD",
+                                 "the V-CLS plan, its sha256 rerecorded", "V-ADM replaced by V-CLS in both files"])
+def test_a_plan_json_names_another_plan_only_as_the_plan_the_session_ran(reruns, tmp_path, how):
+    """An earlier session is another plan's only when its plan.json is the plan its session.json records it ran
+    (plan_sha256) and its session.json's plan session is that plan's (044 實作補記十第 11 項). A stray edit of the first
+    V-ADM's plan.json, another plan's plan.json copied over it, or a search and replace across its plan.json and
+    session.json no longer skips it: the rerun is refused."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    d = earlier(rerun)
+    plan = json.loads((d / "plan.json").read_text())
+    if how == "the V-CLS plan, its sha256 rerecorded":
+        plan = json.loads((rerun["root"].joinpath(*sv.RESULTS, BETWEEN) / "plan.json").read_text())
+        edit_session(d, plan_sha256=svr.sha256_json(plan))
+    elif how.endswith("in both files"):
+        for name in ("plan.json", "session.json"):
+            (d / name).write_text((d / name).read_text().replace('"V-ADM"', '"V-CLS"'))
+        plan = json.loads((d / "plan.json").read_text())
+        assert plan["session"] == json.loads((d / "session.json").read_text())["session"] == "V-CLS"
+    else:
+        plan = {"session": "V-CLS"} if how.startswith("only") else {**plan, "session": how.split()[-1]}
+    (d / "plan.json").write_text(json.dumps(plan))
+    got = stop_rule(problems(rerun))
+    assert got and all(FIRST in p for p in got)
 
 
 @pytest.mark.parametrize("key", ["stage_v_sha256", "harness_sha256", "gateway_path_sha256", "preflight"])
@@ -910,6 +975,7 @@ def test_an_earlier_session_of_the_plan_that_cannot_be_read_fails_closed(reruns,
     session is unknown, so the rerun is refused (besides the report's own fail-closed 2 h gap)."""
     rerun = clone(reruns[RERUN], tmp_path)
     d, name = earlier(rerun), FIRST
+    never_reported(d)
     if how == "no session.json":
         (d / "session.json").unlink()
     elif how == "not JSON":
@@ -927,6 +993,8 @@ def test_an_earlier_session_of_the_plan_that_cannot_be_read_fails_closed(reruns,
         rerun["root"].joinpath(*sv.RESULTS, name).mkdir()
     got = stop_rule(problems(rerun))
     assert got and all(name in p and "fail closed" in p for p in got)
+    if how != "no plan.json":                       # its hours cannot be counted (044 實作補記十第 11 項)
+        assert any(HOURS in p and f"{name}: cannot count its hours" in p for p in got)
 
 
 def test_a_session_without_a_readable_start_fails_the_stop_rule_closed(reruns, tmp_path):
@@ -938,19 +1006,21 @@ def test_a_session_without_a_readable_start_fails_the_stop_rule_closed(reruns, t
     assert "cannot tell which V-ADM sessions came before it" in msg and "fail closed" in msg
 
 
-def test_an_unreadable_session_of_the_other_plan_is_no_earlier_session_of_this_one(reruns, tmp_path):
-    """The V-CLS without a session.json still refuses the rerun (the report's 2 h gap, 044 實作補記七), and it is no
-    earlier V-ADM: the stop rule never asks whether it is valid. It is the rerun's previous_formal, though, so the walk
-    to the earlier formal sessions stops there (fail closed, 044 實作補記十第 10 項; the first V-ADM aborted, so that
-    only the walk refuses)."""
+def test_a_session_of_the_other_plan_without_a_session_json_fails_closed(reruns, tmp_path):
+    """The V-CLS without a session.json still refuses the rerun (the report's 2 h gap, 044 實作補記七). Its plan.json
+    is trusted only as the plan its session.json records, so whether it is an earlier V-ADM cannot be told (044
+    實作補記十第 11 項); it is the rerun's previous_formal, so the walk stops there (第 10 項); its hours cannot be
+    counted. Each fails closed (the first V-ADM aborted and never reported, so that it releases)."""
     rerun = clone(reruns[RERUN], tmp_path)
     (rerun["root"].joinpath(*sv.RESULTS, BETWEEN) / "session.json").unlink()
     edit_session(earlier(rerun), aborted="RunError: x")
+    never_reported(earlier(rerun))
     got = problems(rerun)
     assert any(BETWEEN in p and "044 停止規則" not in p for p in got)
-    (msg,) = stop_rule(got)
-    assert f"past {BETWEEN}" in msg and "no readable session.json" in msg and "fail closed" in msg
-    assert "is an earlier valid" not in msg
+    walk, hours, plan = stop_rule(got)
+    assert f"past {BETWEEN}" in walk and "no readable session.json" in walk and "fail closed" in walk
+    assert f"whether {BETWEEN} is an earlier valid V-ADM session" in plan and "fail closed" in plan
+    assert HOURS in hours and f"{BETWEEN}: cannot count its hours" in hours
 
 
 def test_the_runner_records_each_formal_sessions_previous_formal(reruns):
@@ -978,6 +1048,7 @@ def test_an_earlier_session_whose_files_are_not_its_records_fails_closed(reruns,
     rows.jsonl, an edited sha256) gave a profile before. The files are checked before aborted / env_valid are read."""
     rerun = clone(reruns[RERUN], tmp_path)
     d = earlier(rerun)
+    never_reported(d)                               # nobody reported it: its files are read (044 實作補記十第 11 項)
     if how.startswith("aborted"):
         edit_session(d, aborted="RunError: x")
     if how.endswith("derived file deleted"):
@@ -1000,6 +1071,7 @@ def test_a_renamed_earlier_session_fails_closed(reruns, tmp_path):
     profile (the report then counts it as its own previous session). A directory that is not its session_id is
     refused (fail closed)."""
     rerun = clone(reruns[RERUN], tmp_path)
+    never_reported(earlier(rerun))                  # reported, its analysis.json blocks first (044 實作補記十第 11 項)
     renamed = earlier(rerun).with_name(f"{FIRST}-from-wsl")
     earlier(rerun).rename(renamed)
     got = stop_rule(problems(rerun))
@@ -1016,9 +1088,10 @@ def test_a_formal_session_that_is_not_here_fails_closed(reruns, tmp_path, missin
     shutil.rmtree(rerun["root"].joinpath(*sv.RESULTS, missing))
     if missing == BETWEEN:
         edit_session(earlier(rerun), aborted="RunError: x")
-    got = stop_rule(problems(rerun))
-    assert got and all(missing in p and "fail closed" in p for p in got)
-    assert any("fetch every formal Stage V session before generating" in p for p in got)
+        never_reported(earlier(rerun))
+    walk, hours = stop_rule(problems(rerun))
+    assert missing in walk and "fail closed" in walk and "fetch every formal Stage V session before generating" in walk
+    assert HOURS in hours and "fail closed" in hours                # 044 實作補記十第 11 項
 
 
 @pytest.mark.parametrize("prev, why", [({"session_id": RERUN}, f"returns to {RERUN}"), (FIRST, "names no session")])
@@ -1027,25 +1100,29 @@ def test_a_previous_formal_chain_that_cannot_be_followed_fails_closed(reruns, tm
     rerun = clone(reruns[RERUN], tmp_path)
     edit_session(rerun["root"].joinpath(*sv.RESULTS, BETWEEN), previous_formal=prev)
     edit_session(earlier(rerun), aborted="RunError: x")                  # only the walk refuses
+    never_reported(earlier(rerun))
     (msg,) = stop_rule(problems(rerun))
     assert why in msg and "fail closed" in msg
 
 
-@pytest.mark.parametrize("how, why", [
-    ("not under the GPU lock", "did not run under the held GPU lock"),
-    ("no env_valid", "env-invalid"),
-])
-def test_an_earlier_session_the_report_cannot_evaluate_cleanly_fails_closed(reruns, tmp_path, how, why):
+@pytest.mark.parametrize("fields, why", [
+    ({"gpu_lock_held": False}, "did not run under the held GPU lock"),
+    (None, "env-invalid"),
+    *(({"env_valid": v}, "env-invalid") for v in (None, 0, "", "false", 1)),
+], ids=["not under the GPU lock", "no env_valid", *(f"env_valid {v!r}" for v in (None, 0, "", "false", 1))])
+def test_an_earlier_session_the_report_cannot_evaluate_cleanly_fails_closed(reruns, tmp_path, fields, why):
     """stage_v_report.refusal_problems of the earlier session (besides its files) is no evidence that it was invalid:
-    the rerun is refused, the problems named. Only aborted or env_valid false are (a missing env_valid is not)."""
+    the rerun is refused, the problems named. Only aborted or env_valid false are (a missing env_valid, or one that is
+    not a bool, is not; the runner always writes a bool)."""
     rerun = clone(reruns[RERUN], tmp_path)
     d = earlier(rerun)
-    if how == "not under the GPU lock":
-        edit_session(d, gpu_lock_held=False)
-    else:
+    never_reported(d)
+    if fields is None:
         rec = json.loads((d / "session.json").read_text())
         rec.pop("env_valid")
         (d / "session.json").write_text(json.dumps(rec))
+    else:
+        edit_session(d, **fields)
     got = stop_rule(problems(rerun))
     assert got and all(FIRST in p and "fail closed" in p for p in got)
     assert any("stage_v_report refuses to evaluate" in p and why in p for p in got)
@@ -1055,6 +1132,7 @@ def test_an_earlier_session_whose_report_crashes_fails_closed(reruns, tmp_path, 
     """Only stage_v_report's own ReportError (with no refusal problem) says the earlier session is invalid; anything
     else it raises (a record nobody foresaw) is refused, never read as invalid."""
     rerun = clone(reruns[RERUN], tmp_path)
+    never_reported(earlier(rerun))
     report = svr.report
 
     def crashes(cap, **kw):
@@ -1066,11 +1144,41 @@ def test_an_earlier_session_whose_report_crashes_fails_closed(reruns, tmp_path, 
     assert got and all(FIRST in p and "fail closed" in p and "TypeError: an unforeseen record" in p for p in got)
 
 
+@pytest.mark.parametrize("error", [ca.AnalysisError("a structural mismatch"), bp.PlanError("no such point"),
+                                   KeyError("block")], ids=["AnalysisError", "PlanError", "KeyError"])
+def test_an_earlier_session_whose_analysis_fails_is_no_evidence_that_it_was_invalid(reruns, tmp_path, monkeypatch,
+                                                                                     error):
+    """report() raises ReportError("the analysis failed: …") when stage_v_analysis.analyze itself fails: no verdict on
+    the session (only a replay mismatch or a failed sentinel gate is, 044 實作補記十第 11 項). The rerun is refused,
+    the failure named."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    never_reported(earlier(rerun))
+    analyze = svr.sva.analyze
+
+    def fails(cap, *args, **kw):
+        if cap["session"]["session_id"] == FIRST:
+            raise error
+        return analyze(cap, *args, **kw)
+    monkeypatch.setattr(svr.sva, "analyze", fails)
+    got = stop_rule(problems(rerun))
+    assert got and all(FIRST in p and "fail closed" in p and "the analysis failed" in p for p in got)
+
+
+def test_the_report_verdicts_that_release_a_rerun_are_stage_v_reports_own():
+    """pg.REPORT_VERDICTS are how the frozen stage_v_report.report begins the ReportError of its validity verdict;
+    its other ReportError, the analysis failing, begins otherwise."""
+    src = inspect.getsource(svr.report)
+    assert all(f'after.append("{v}' in src for v in pg.REPORT_VERDICTS) and len(pg.REPORT_VERDICTS) == 2
+    assert 'raise ReportError(f"the analysis failed: {exc}") from exc' in src
+    assert not "the analysis failed: ".startswith(pg.REPORT_VERDICTS)
+
+
 def test_an_earlier_session_whose_refusal_check_crashes_fails_closed(reruns, tmp_path):
     """An earlier same-plan session whose plan.json lost its points (its plan_sha256 rerecorded, so its files are its
     records): stage_v_report.refusal_problems itself raises. Refused (fail closed), never a crash."""
     rerun = clone(reruns[RERUN], tmp_path)
     d = earlier(rerun)
+    never_reported(d)
     plan = json.loads((d / "plan.json").read_text())
     plan.pop("points")
     (d / "plan.json").write_text(json.dumps(plan))
@@ -1078,6 +1186,44 @@ def test_an_earlier_session_whose_refusal_check_crashes_fails_closed(reruns, tmp
     got = stop_rule(problems(rerun))
     assert got and all(FIRST in p and "fail closed" in p for p in got)
     assert any("KeyError" in p for p in got)
+
+
+@pytest.mark.parametrize("how", ["previous_formal nulled, the first V-ADM deleted",
+                                 "the first V-ADM's start moved past the rerun's", "a decoy"])
+def test_the_sessions_here_must_add_up_to_the_hours_the_session_counted(reruns, tmp_path, how):
+    """The independent check's probes: the walk follows records, so a session no record leads to is not found. The
+    runner records hours_used_h, its total over every Stage V directory at its start; the directories here that started
+    by the session's start, without it, must add up to exactly that (044 實作補記十第 11 項), else the rerun is refused
+    (fail closed). A decoy formal-t-v-adm beside the real one moved out of the formal-* names counts twice."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    d = earlier(rerun)
+    rec = json.loads((d / "session.json").read_text())
+    if how.startswith("previous_formal"):
+        shutil.rmtree(d)
+        edit_session(rerun["out"], previous_formal=None)
+    elif how.startswith("the first"):
+        edit_session(d, **{k: (dt.datetime.fromisoformat(rec[k]) + dt.timedelta(hours=40)).isoformat()
+                           for k in ("started_at", "finished_at")})
+    else:
+        d.rename(d.with_name(f"archive-{FIRST}"))
+        d.mkdir()
+        keep = ("session_id", "started_at", "finished_at", "previous_formal", "in_progress")
+        (d / "session.json").write_text(json.dumps({k: rec[k] for k in keep}))
+    (msg,) = stop_rule(problems(rerun))
+    assert HOURS in msg and "fail closed" in msg and f"{RERUN}'s hours_used_h" in msg
+
+
+def test_a_renamed_session_of_the_other_plan_is_found_by_its_session_id(reruns, tmp_path):
+    """The walk finds a formal session by the session_id its session.json records: the V-CLS copied back under another
+    formal-* name is still the rerun's previous_formal, and the walk goes on to the first V-ADM (aborted, never
+    reported). Nothing blocks: the rerun writes."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    results = rerun["root"].joinpath(*sv.RESULTS)
+    (results / BETWEEN).rename(results / f"{BETWEEN}-from-wsl")
+    edit_session(earlier(rerun), aborted="RunError: x")
+    never_reported(earlier(rerun))
+    docs, holds = gen(rerun)
+    assert holds == ["PACE-2K", "PACE-8K", "W1"] and list(docs) == [f"verified-{RERUN}-b0"]
 
 
 def test_a_committed_directory_that_is_no_session_never_blocks(sessions, tmp_path):
@@ -1131,7 +1277,45 @@ def test_the_walk_goes_past_a_preflight_abort_fail_closed(attempts, tmp_path, ho
         (results / "formal-t-v-a3" / "session.json").write_text(json.dumps(rec))
         missing = "formal-t-v-a3"
     got = stop_rule(problems(s))
-    assert got and all(missing in p and "fail closed" in p for p in got)
+    assert got and all("fail closed" in p for p in got) and any(missing in p for p in got)
+    assert all(missing in p for p in got if HOURS not in p)
+    assert any(HOURS in p for p in got) is (how == "behind the preflight abort")   # 044 實作補記十第 11 項
+
+
+# The first formal session ever aborted in its preflight, a valid V-ADM, another preflight abort, a rerun (044
+# 實作補記十第 11 項).
+PREFLIGHTS = (("V-ADM", "formal-t-v-p0", "vLLM", 0), ("V-ADM", "formal-t-v-p1", (), 3),
+              ("V-ADM", "formal-t-v-p2", "vLLM", 6), ("V-ADM", "formal-t-v-p3", (), 9))
+
+
+@pytest.fixture(scope="module")
+def preflights(tmp_path_factory):
+    return make_sessions(tmp_path_factory.mktemp("preflights"), *PREFLIGHTS)
+
+
+def test_the_first_formal_session_aborted_in_its_preflight_blocks_nothing(preflights):
+    """The walk from the first valid V-ADM reaches the very first formal session, aborted in its preflight: the
+    runner's own rule finds no formal session before it, so the chain ends there. The mini (results/stage_v/smoke-v-
+    test) is here and counts toward the hours."""
+    s = preflights["formal-t-v-p1"]
+    results = s["root"].joinpath(*sv.RESULTS)
+    first = json.loads((results / "formal-t-v-p0" / "session.json").read_text())
+    assert first["aborted"] and "previous_formal" not in first and (results / t.MINI_ID / "session.json").is_file()
+    assert json.loads((s["out"] / "session.json").read_text())["previous_formal"]["session_id"] == "formal-t-v-p0"
+    docs, holds = gen(s)
+    assert holds == ["PACE-2K", "PACE-8K", "W1"] and list(docs) == ["verified-formal-t-v-p1-b0"]
+
+
+@pytest.mark.parametrize("deleted", [False, True], ids=["here", "not on the Mac"])
+def test_a_session_just_before_a_preflight_abort_is_found_by_the_hours(preflights, tmp_path, deleted):
+    """The independent check's probe: without the valid V-ADM just before a session aborted in its preflight the
+    rerun gave a profile (no record names it, so the walk cannot find it, 044 實作補記十第 10 項). The directories here
+    no longer add up to the hours the rerun counted at its start: refused (第 11 項). Here, its analysis.json blocks."""
+    s = clone(preflights["formal-t-v-p3"], tmp_path)
+    if deleted:
+        shutil.rmtree(s["root"].joinpath(*sv.RESULTS, "formal-t-v-p1"))
+    (msg,) = stop_rule(problems(s))
+    assert (HOURS in msg and "fail closed" in msg) if deleted else ("formal-t-v-p1" in msg and "analysis.json" in msg)
 
 
 # ------------------------------------------------------------------ the CLI --

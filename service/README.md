@@ -257,9 +257,12 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
     DEPLOYED_COMMIT 上請求路徑的 `gateway_path_sha256` 不是凍結值；c1b 或 d-a2-b0 不是凍結 commit 上的位元組；session 不是 `results/stage_v/formal-…`（mini 一律拒絕）；
     `stage_v_report` 會拒絕它，或唯讀重跑無法逐位元組重現 `analysis.json`；boot 的 server 不是該點的產品 server；
     同一個 plan（V-ADM / V-CLS）在同一次凍結下（記錄的 `stage_v_sha256`、`harness_sha256`、`gateway_path_sha256` 相同）已有一個較早開始、`stage_v_report` 接受的 session
-    （044 停止規則「不重跑有效的 session 來換 PASS」，fail closed：較早的 session 只有在 session.json 記錄它中止或 `env_valid` 為 false，或 `refusal_problems` 為空而 report 自己判定無效（sentinel 閘門、replay）時才不擋；
-    目錄改過名、檔案和它的 session.json 記錄不符、`refusal_problems` 不為空、其他錯誤、這樣的 `formal-*` 目錄讀不到 session.json 或 started_at、`previous_formal` 鏈上的正式 session 不在 Mac 上（先取回每個正式 Stage V session），都拒絕；
-    每個 session 最多 2 次嘗試仍由操作者負責，044 實作補記十第 1、10 項）；
+    （044 停止規則「不重跑有效的 session 來換 PASS」，fail closed：較早的 session 有 analysis.json（report 只為它接受的 session 寫）就直接拒絕；
+    否則只有在 session.json 記錄它中止或 `env_valid` 為 false，或 `refusal_problems` 為空而 report 自己判定無效（replay 不一致、sentinel 閘門失敗；分析本身失敗不算）時才不擋；
+    一個目錄只有在 plan.json 等於它 session.json 記錄的 `plan_sha256`、兩者的 session 也相同時才算另一個 plan；
+    目錄改過名、檔案和它的 session.json 記錄不符、`refusal_problems` 不為空、分析失敗、其他錯誤、這樣的 `formal-*` 目錄讀不到 session.json 或 started_at、`previous_formal` 鏈上的正式 session 不在 Mac 上、
+    Mac 上不晚於本 session 開始的 Stage V 目錄扣掉它自己之後的時數加總不等於它開始時記錄的 `hours_used_h`（先取回每個 Stage V session），都拒絕；
+    防的是誠實的錯誤，不防蓄意修改 session.json；每個 session 最多 2 次嘗試仍由操作者負責，044 實作補記十第 1、10、11 項）；
     停止規則的新凍結（解凍再凍結，或一直凍結、只更新 mini 與 `gateway_path_sha256`）之下的 session 一律拒絕，要等該凍結的 decision 一併修改產生器的「第一次凍結」規則（044 實作補記十第 2 項）。
   - 產生器不在 gateway 的請求路徑閉包內，修改它不會改變 `gateway_path_sha256`。
 - 輸出是決定性的（沒有時間戳記）；每個 commit 過的 verified profile 都由 Mac 測試重新產生並比對（忽略 generator_commit）。
