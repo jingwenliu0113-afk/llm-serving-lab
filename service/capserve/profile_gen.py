@@ -90,6 +90,11 @@ base_profiles, besides §9's). It refuses (exit 2) and writes nothing unless:
   empty, and stage_v_report.report, re-run read-only (stage_d.toml's Core B uniform session, the Advanced references
   when analysis.json used them), reproduces analysis.json byte for byte, whose SLO is stage_v.toml's;
 - every boot's recorded server is its point's server_base's (server_groups, B0 the product fingerprint);
+- no other results/stage_v/formal-* session of its plan session (V-ADM / V-CLS) that started before it under the same
+  freeze (the same recorded stage_v_sha256, harness_sha256 and gateway_path_sha256) is valid, i.e. accepted by
+  stage_v_report (044 停止規則: 不重跑有效的 session 來換 PASS; rerun_problems). A formal-* directory of its plan, or of
+  a plan that cannot be read, without a readable session.json and started_at, or such an earlier session the report
+  cannot load, refuses too (fail closed). The 2-attempt cap stays with the operator (044 實作補記四第 4 項);
 - the generator commit is HEAD of a clean tree, --out-dir an existing directory outside results/, the target does not
   exist, and the document passes the loader before anything is written.
 """
@@ -98,6 +103,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import datetime as dt
 import hashlib
 import json
 import re
@@ -168,6 +174,9 @@ NOT_FROZEN_V = ("[freeze] stage_v is not true in {path} (a missing file or key i
                 "frozen, so no Stage V unit is validated (044).")
 NO_PROFILE = ("no profile: no unit that writes one holds (044 產品對應: VG-32K / VG-M8K-T only make candidates for the "
               "pinned profile; every other unit needs each of its points PASS)")
+# 044 停止規則: what makes an earlier session "the same freeze" (rerun_problems)
+STAGE_V_FREEZE_SHAS = ("stage_v_sha256", "harness_sha256", "gateway_path_sha256")
+RERUN_RULE = "044 停止規則: 不重跑有效的 session 來換 PASS"
 NOT_D_A = ("039 / 042: D-B and D-C produce no profile (their facts are service/README.md's scope, 043 §5); the {what} "
            "kind is {kind!r}, not D-A's {want!r}")
 
@@ -1085,6 +1094,62 @@ def _stage_v_session_problems(d: Path, cap: dict, root: Path) -> list:
     return problems
 
 
+def _started_at(session) -> dt.datetime:
+    """A session record's started_at, a time with a zone offset (044 實作補記八); KeyError / TypeError / ValueError
+    when it records none."""
+    when = dt.datetime.fromisoformat(session["started_at"])
+    if when.utcoffset() is None:
+        raise ValueError(f"started_at {session['started_at']!r} has no time zone offset")
+    return when
+
+
+def rerun_problems(d: Path, cap: dict, *, root: Path, evaluate: Callable) -> list:
+    """044 停止規則 (不重跑有效的 session 來換 PASS), mechanized here, outside the request path and the harness: no
+    results/stage_v/formal-* session other than this one, of its plan session (V-ADM / V-CLS), that started before it
+    under the same freeze (the same recorded STAGE_V_FREEZE_SHAS) is valid. evaluate(earlier cap) is stage_v_report's
+    verdict (True: refusal_problems empty and report() does not raise: not aborted, env-valid, the sentinel gate
+    passed, ...). Fail closed: a formal-* directory of this plan, or of a plan that cannot be read, without a readable
+    session.json and started_at, or a selected one that cannot be loaded or evaluated, is a problem too. The
+    2-attempt cap stays with the operator (044 實作補記四第 4 項, 實作補記十)."""
+    s, plan = cap["session"], cap["plan"].get("session")
+    try:
+        start = _started_at(s)
+    except (KeyError, TypeError, ValueError) as exc:
+        return [f"the session records no readable started_at ({exc}): cannot tell which {plan} sessions came before "
+                f"it ({RERUN_RULE}, checked fail closed)"]
+    problems = []
+    for e in sorted(p for p in root.joinpath(*STAGE_V_RESULTS).glob("formal-*") if p.is_dir()):
+        if e.resolve() == d.resolve():
+            continue
+        try:
+            other = json.loads((e / "plan.json").read_text()).get("session")
+        except (OSError, ValueError, AttributeError):
+            other = None                                 # a plan that cannot be read: maybe this one
+        if other is not None and other != plan:
+            continue
+        try:
+            rec = json.loads((e / "session.json").read_text())
+            began = _started_at(rec)
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            problems.append(f"cannot tell whether {e.name} is an earlier valid {plan} session under this freeze (no "
+                            f"readable session.json / started_at: {type(exc).__name__}: {exc}): {RERUN_RULE}, checked "
+                            "fail closed")
+            continue
+        if began >= start or any(rec.get(k) != s.get(k) for k in STAGE_V_FREEZE_SHAS):
+            continue
+        try:
+            valid = evaluate(cr.load_session(e))
+        except (AttributeError, IndexError, KeyError, OSError, TypeError, ValueError) as exc:
+            problems.append(f"cannot tell whether the earlier {plan} session {e.name} under this freeze is valid "
+                            f"({type(exc).__name__}: {exc}): {RERUN_RULE}, checked fail closed")
+            continue
+        if valid:
+            problems.append(f"{s.get('session_id')} reruns the earlier {plan} session {e.name} (started "
+                            f"{rec['started_at']}), which ran under the same freeze and is valid (stage_v_report "
+                            f"accepts it): its units are the result, {RERUN_RULE} (044 實作補記十)")
+    return problems
+
+
 def generate_stage_v(session_dir, *, freeze_commit: str, generator_commit: str, root=ROOT, configs: tuple | None = None,
                      stage_v_configs: tuple | None = None, git: Git | None = None) -> tuple:
     """({profile_id: §12 profile}, the units that hold) of a formal Stage V session (044 產品對應): at most one profile,
@@ -1154,9 +1219,18 @@ def _generate_stage_v(d: Path, *, freeze_commit: str, generator_commit: str, roo
             advanced = cr.load_advanced_references(root / "results" / "advanced" / ADVANCED_SESSION)
         except (OSError, ValueError) as exc:
             problems.append(f"analysis.json used the Advanced references, which cannot be read ({exc})")
-    problems += [f"stage_v_report: {p}" for p in
-                 svr.refusal_problems(cap, cfg=sv_cfg, stage_d_cfg=sd_cfg, pins=pins, stage_v_sha256=sv_sha,
-                                      stage_d_sha256=sd_sha, pins_sha256=pins_sha, repo_root=root)]
+    report_kw = {"cfg": sv_cfg, "stage_d_cfg": sd_cfg, "pins": pins, "stage_v_sha256": sv_sha,
+                 "stage_d_sha256": sd_sha, "pins_sha256": pins_sha, "repo_root": root}
+    problems += [f"stage_v_report: {p}" for p in svr.refusal_problems(cap, **report_kw)]
+
+    def valid(earlier: dict) -> bool:                     # report() raises unless refusal_problems is empty too
+        try:
+            svr.report(earlier, uniform=uniform, advanced_runs=advanced, **report_kw)
+        except svr.ReportError:
+            return False
+        return True
+
+    problems += rerun_problems(d, cap, root=root, evaluate=valid)
     if analysis is not None and analysis.get("slo") != sv_cfg.get("slo"):
         problems.append(f"the analysis SLO {(analysis.get('slo') or {}).get('id')!r} is not stage_v.toml's SLO "
                         f"{(sv_cfg.get('slo') or {}).get('id')!r} (044)")
@@ -1167,8 +1241,7 @@ def _generate_stage_v(d: Path, *, freeze_commit: str, generator_commit: str, roo
     if problems:
         raise GenerationError(problems)
     try:
-        rep = svr.report(cap, cfg=sv_cfg, stage_d_cfg=sd_cfg, pins=pins, stage_v_sha256=sv_sha, stage_d_sha256=sd_sha,
-                         pins_sha256=pins_sha, uniform=uniform, advanced_runs=advanced, repo_root=root)
+        rep = svr.report(cap, uniform=uniform, advanced_runs=advanced, **report_kw)
     except svr.ReportError as exc:
         raise GenerationError([f"stage_v_report refuses the session: {exc}"]) from exc
     if _analysis_bytes(rep) != raw:

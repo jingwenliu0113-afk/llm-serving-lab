@@ -12,6 +12,7 @@ freeze commit are this checkout's bytes unless a test says otherwise; the git he
 repository."""
 
 import copy
+import datetime as dt
 import hashlib
 import json
 import os
@@ -22,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+import capacity_report as cr
 import stage_v_plan as sv
 import stage_v_report as svr
 from capserve import config as cfg
@@ -41,6 +43,7 @@ FREEZE_V = "f5" * 20          # set configs/stage_v.toml [freeze] stage_v = true
 BEFORE_V = "b5" * 20          # the commit before it that last touched stage_v.toml (unfrozen)
 GEN, CLEAN_HEAD = "9a" * 20, "7b" * 20
 DEPLOYED = t.td.COMMIT        # the synthetic sessions' DEPLOYED_COMMIT
+T0 = t.T0                     # their start (test_run_stage_v's; make_sessions moves it)
 STAGE_V_TOML = "configs/stage_v.toml"
 # stage_v.toml at the freeze commit. The configs are injected as dicts, so these bytes stand in for the frozen file:
 # the test sessions record their sha256, as a real session records the sha256 of the bytes it ran.
@@ -142,6 +145,32 @@ def make_session(tmp: Path, name: str, fails=(), *, mode: str = "formal") -> dic
                              str(ADVANCED), "--out", str(out / "analysis.json")]) == 0
     return {"root": repo[0], "out": out, "session": s, "configs": CAPACITY_CONFIGS, "stage_v_configs": configs,
             "dataset_sha256": repo[2]}
+
+
+def make_sessions(tmp: Path, *specs) -> dict:
+    """Formal Stage V sessions in one repo root, in order, each written by the real runner and reported by the real
+    stage_v_report CLI: a spec is (plan session, session id, the runs that FAIL, its start in hours after
+    test_run_stage_v.T0). {session id: what make_session returns}."""
+    got = {}
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(t, "SV_SHA", SV_SHA)
+        mp.setattr(t, "PINS_SHA", PINS_SHA)
+        repo = t.make_repo(tmp)
+        link_references(repo[0])
+        for name, sid, fails, hours in specs:
+            mp.setattr(t, "T0", T0 + dt.timedelta(hours=hours))
+            (tmp / sid).mkdir()
+            out, s, _ = t.session(tmp / sid, name, repo=repo, kw=tva.fail_kw(set(fails)),
+                                  out=repo[0].joinpath(*sv.RESULTS, sid))
+            configs = (*t.configs(repo[0], repo[2], formal=True), SV_SHA, t.SD_SHA, PINS_SHA)
+            mp.setattr(svr, "ROOT", repo[0])
+            mp.setattr(svr, "load_configs", lambda: configs)
+            assert svr.main(["--session", str(out), "--uniform-session", str(UNIFORM), "--advanced-session",
+                             str(ADVANCED), "--out", str(out / "analysis.json")]) == 0
+            got[sid] = {"root": repo[0], "out": out, "session": s, "configs": CAPACITY_CONFIGS,
+                        "stage_v_configs": configs, "dataset_sha256": repo[2]}
+    return got
+
 
 
 # The synthetic sessions: (session, the runs that FAIL). Every point runs in every block, so a FAIL in block 1 makes
@@ -627,6 +656,164 @@ def test_a_malformed_session_is_refused_not_a_crash(sessions, tmp_path):
     s = clone(sessions("adm"), tmp_path)
     (s["out"] / "session.json").write_text("[]")
     assert "malformed" in refused(s) or "cannot read" in refused(s)
+
+
+# ------------------------------------------------------------------ 044 停止規則: no rerun of a valid session --
+
+FIRST, BETWEEN, RERUN = "formal-t-v-adm", "formal-t-v-cls", "formal-t-v-adm-rerun"
+
+
+@pytest.fixture(scope="module")
+def reruns(tmp_path_factory):
+    """The review's case (044 實作補記十): a valid V-ADM where no unit holds, a V-CLS 6 h later, then a second V-ADM
+    under the same freeze 6 h after that where every unit holds."""
+    return make_sessions(tmp_path_factory.mktemp("reruns"), ("V-ADM", FIRST, SCENARIOS["adm-none"][1], 0),
+                         ("V-CLS", BETWEEN, (), 6), ("V-ADM", RERUN, (), 12))
+
+
+def earlier(s: dict) -> Path:
+    """The first V-ADM in a (cloned) reruns root."""
+    return s["root"].joinpath(*sv.RESULTS, FIRST)
+
+
+def edit_session(d: Path, **fields) -> None:
+    path = d / "session.json"
+    rec = json.loads(path.read_text())
+    rec.update(fields)
+    path.write_text(json.dumps(rec))
+
+
+def slow_end_sentinel(d: Path) -> None:
+    """The end sentinel 5 % slower than the start, on disk, its derived files' sha256 rerecorded in session.json:
+    stage_v_report's sentinel gate fails (drift, 030 8.6), nothing else does."""
+    rec = json.loads((d / "session.json").read_text())
+    for row in map(json.loads, (d / "rows.jsonl").read_text().splitlines()):
+        if row.get("position") == "end" and row.get("derived"):
+            path = d / row["derived"]
+            reqs = [dict(q, ttft_ms=q["ttft_ms"] * 1.05) for q in map(json.loads, path.read_text().splitlines())]
+            path.write_text("".join(json.dumps(q) + "\n" for q in reqs))
+            rec["derived_sha256"][row["tag"]] = sha(path.read_bytes())
+    (d / "session.json").write_text(json.dumps(rec))
+
+
+def report_refusal(s: dict, d: Path) -> str:
+    """Why stage_v_report refuses the session at d ("" when it accepts it), with s's configs and references."""
+    c, sd_cfg, pins, sv_sha, sd_sha, pins_sha = s["stage_v_configs"]
+    cap = cr.load_session(d)
+    kw = {"cfg": c, "stage_d_cfg": sd_cfg, "pins": pins, "stage_v_sha256": sv_sha, "stage_d_sha256": sd_sha,
+          "pins_sha256": pins_sha, "repo_root": s["root"]}
+    try:
+        svr.report(cap, uniform=cr.load_uniform(UNIFORM), advanced_runs=None, **kw)
+    except svr.ReportError as exc:
+        return str(exc)
+    return ""
+
+
+def stop_rule(got: list) -> list:
+    return [p for p in got if "044 停止規則" in p]
+
+
+def test_a_rerun_of_a_valid_session_of_its_plan_is_refused(reruns, tmp_path, monkeypatch, capsys):
+    """044 停止規則: 不重跑有效的 session 來換 PASS. The review's case: the first V-ADM is valid and no unit holds; the
+    rerun under the same freeze, where every unit holds, gives no profile (refused, nothing written)."""
+    rerun = reruns[RERUN]
+    assert report_refusal(rerun, earlier(rerun)) == ""
+    assert all(x["holds"] for x in analysis(rerun)["units"].values())
+    (msg,) = problems(rerun)
+    assert f"the earlier V-ADM session {FIRST} (started " in msg and f"{RERUN} " in msg
+    assert "044 停止規則" in msg and "不重跑有效的 session 來換 PASS" in msg
+    out = tmp_path / "profiles"
+    out.mkdir()
+    assert cli(rerun, monkeypatch, out) == 2
+    assert list(out.iterdir()) == [] and "不重跑有效的 session 來換 PASS" in capsys.readouterr().err
+
+
+def test_the_earlier_session_and_the_other_plan_still_give_their_results(reruns):
+    """The rule looks back only, and only at the session's own plan: the first V-ADM is still a result (no unit
+    holds) although a later rerun exists, and the V-CLS between the two V-ADM sessions writes V1's classes."""
+    assert gen(reruns[FIRST]) == ({}, [])
+    docs, holds = gen(reruns[BETWEEN])
+    assert holds == ["VG-32K", "VG-M8K-T", "V1-2K", "V1-8K"] and list(docs) == [f"verified-{BETWEEN}-b0"]
+
+
+@pytest.mark.parametrize("how, why", [
+    ("aborted", "aborted"),
+    ("env", "env-invalid"),
+    ("gate", "sentinel gate failed"),
+])
+def test_an_earlier_session_that_is_not_valid_does_not_block_the_rerun(reruns, tmp_path, how, why):
+    """044 停止規則: an aborted or env-invalid session, or one whose sentinel gate failed, unlocks nothing and is rerun
+    under a new id; the rerun's units are the result."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    {"aborted": lambda d: edit_session(d, aborted="RunError: x"), "env": lambda d: edit_session(d, env_valid=False),
+     "gate": slow_end_sentinel}[how](earlier(rerun))
+    assert why in report_refusal(rerun, earlier(rerun))
+    docs, holds = gen(rerun)
+    assert holds == ["PACE-2K", "PACE-8K", "W1"] and list(docs) == [f"verified-{RERUN}-b0"]
+
+
+@pytest.mark.parametrize("key", ["stage_v_sha256", "harness_sha256", "gateway_path_sha256", "preflight"])
+def test_an_earlier_session_under_another_freeze_does_not_block_the_rerun(reruns, tmp_path, key):
+    """Only the same freeze counts (the recorded stage_v_sha256, harness_sha256 and gateway_path_sha256): after the
+    stop rule's new freeze both sessions rerun. preflight: a session aborted in its preflight records none of them and
+    has no rows.jsonl (never read)."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    d = earlier(rerun)
+    if key == "preflight":
+        rec = json.loads((d / "session.json").read_text())
+        for k in ("stage_v_sha256", "harness_sha256", "gateway_path_sha256"):
+            rec.pop(k)
+        (d / "session.json").write_text(json.dumps({**rec, "aborted": "RunError: preflight"}))
+        (d / "rows.jsonl").unlink()
+    else:
+        edit_session(d, **{key: "0" * 64})
+    docs, holds = gen(rerun)
+    assert holds == ["PACE-2K", "PACE-8K", "W1"] and list(docs) == [f"verified-{RERUN}-b0"]
+
+
+@pytest.mark.parametrize("how", ["no session.json", "not JSON", "no started_at", "no offset", "no plan.json",
+                                 "empty directory"])
+def test_an_earlier_session_of_the_plan_that_cannot_be_read_fails_closed(reruns, tmp_path, how):
+    """A formal-* directory of the session's plan, or of a plan that cannot be read, without a readable session.json
+    and started_at (with an offset, 044 實作補記八), or one stage_v_report cannot load: whether it is an earlier valid
+    session is unknown, so the rerun is refused (besides the report's own fail-closed 2 h gap)."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    d, name = earlier(rerun), FIRST
+    if how == "no session.json":
+        (d / "session.json").unlink()
+    elif how == "not JSON":
+        (d / "session.json").write_text("{")
+    elif how == "no started_at":
+        rec = json.loads((d / "session.json").read_text())
+        rec.pop("started_at")
+        (d / "session.json").write_text(json.dumps(rec))
+    elif how == "no offset":
+        edit_session(d, started_at="2026-11-02T09:00:00")
+    elif how == "no plan.json":
+        (d / "plan.json").unlink()
+    else:
+        name = "formal-t-v-x"
+        rerun["root"].joinpath(*sv.RESULTS, name).mkdir()
+    got = stop_rule(problems(rerun))
+    assert got and all(name in p and "fail closed" in p for p in got)
+
+
+def test_a_session_without_a_readable_start_fails_the_stop_rule_closed(reruns, tmp_path):
+    rerun = clone(reruns[RERUN], tmp_path)
+    rec = json.loads((rerun["out"] / "session.json").read_text())
+    rec.pop("started_at")
+    (rerun["out"] / "session.json").write_text(json.dumps(rec))
+    (msg,) = stop_rule(problems(rerun))
+    assert "cannot tell which V-ADM sessions came before it" in msg and "fail closed" in msg
+
+
+def test_an_unreadable_session_of_the_other_plan_is_not_this_rules(reruns, tmp_path):
+    """The V-CLS without a session.json still refuses the rerun (the report's 2 h gap, 044 實作補記七), but it is no
+    earlier V-ADM: the stop rule does not read it."""
+    rerun = clone(reruns[RERUN], tmp_path)
+    (rerun["root"].joinpath(*sv.RESULTS, BETWEEN) / "session.json").unlink()
+    got = problems(rerun)
+    assert any(BETWEEN in p for p in got) and stop_rule(got) == []
 
 
 # ------------------------------------------------------------------ the CLI --
