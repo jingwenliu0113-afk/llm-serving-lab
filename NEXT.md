@@ -46,7 +46,8 @@
   - [x] 產品設計 **043**（DRAFT，`76115eb`）：三份設計經三位評審比較。待決事項 1–7 依建議定案：3 份不釘選的 verified profile、
         輸出上限 > 128 的 class 不能作為 active class、T 只服務 mixed-8k-t 而且現在不部署、正式釘選與 active class 不變、開場湧入維持現況。
   - [ ] 043 實作（0 GPU，TDD）：在 worktree `feat/043-stage-d-profiles` 依序進行（loader → 產生器 → 三份 profile → 揭露、gateway keep-alive、README），完成後獨立審查，再合併到 main。
-  - [ ] **等使用者決定**（043 待決事項 8、9）：驗證研究 V-GW、V1、V2、V4 是否執行與先後；多 class 准入（`weighted-v1`）與 prefill pacing 在驗證前不上線。
+  - [x] **使用者決定**（2026-10-24，043 待決事項 8、9）：V4、V-GW、V1、V2 都做，V3 延後；排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後，session 之間留空檔。合計約 10–11 GPU h。
+  - [ ] decision 044（驗證研究的事先登記）與 PREREGISTRATION 新的一節、harness、mini smoke、凍結；`weighted-v1` 與 pacing 的產品程式在凍結前以 TDD 完成。驗證通過前不上線。
 - **Stage Q**（decision 040，DRAFT；PREREGISTRATION §10）：
   - [x] Q1 / Q2 harness 與凍結檢查（`f65c081`、`49b88af`）：`configs/stage_q.toml`，三個 pilot 是凍結的證據，分析只接受凍結後的正式 session。
   - [x] Q3 harness（`quality/stage_q3.py`、`configs/stage_q3.toml`，獨立的凍結）。

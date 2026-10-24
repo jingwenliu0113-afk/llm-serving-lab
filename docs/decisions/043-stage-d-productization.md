@@ -603,3 +603,10 @@ python -m capserve.profile_gen --session results/stage_d/<sid> --freeze-commit <
     - 包絡規則或 V1；
     - V2 / V4 的事先登記（PREREGISTRATION 新的一節與 decision 044）：先寫失敗的測試與 harness，mini smoke，凍結之後才收正式數據；
     - `weighted-v1` 與 pacing 的程式，在它們各自的事先登記凍結之前以 TDD 完成，不提前寫。
+## 使用者決定（2026-10-24）
+
+- **待決事項第 8 項**：V4（`weighted-v1` 多 class 准入）、V-GW（Stage D class 經 gateway 的固定點驗證）、V1（輸出長度在 [1, 512] 不一）、V2（開場湧入的 prefill pacing）**都做**。V3 依建議延後。
+- **待決事項第 9 項**：排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後；session 之間留出空檔，不再連續占用 GPU。
+- **估計的 GPU 時數**（7.4 的估算，不含重跑）：V4 約 1.1–1.6 h、V-GW 全做約 4.2 h、V1 約 1.1–1.5 h、V2 約 1.5 h，各加 mini smoke 約 0.5 h，合計約 10–11 h。
+- **下一步**：另寫 decision 044 與 PREREGISTRATION 新的一節（事先登記、harness、mini smoke、凍結）；
+  `weighted-v1` 與 pacing 的產品程式在 044 凍結之前以 TDD 完成。驗證通過之前，這些功能都不上線，正式釘選也不變。
