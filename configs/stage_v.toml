@@ -408,8 +408,9 @@ var-2048 = "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1"
 mixed-8192 = "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2"
 
 [stage_v.units]
-# 044 產品對應: a unit holds only when each of its points PASSes; once a run of one is not ok, all of them leave the
-# later boots. The V2 controls and the var pair are in none (PACE-2K's var veto: stage_v_plan.VETOES).
+# 044 產品對應: a unit holds only when each of its points PASSes; a point whose run is not ok leaves only its own
+# later boots, its unit partners still run (044 實作補記六 item 6). The V2 controls and the var pair are in none
+# (PACE-2K's var veto: stage_v_plan.VETOES).
 VG-32K = ["GW-U32K"]
 VG-M8K-T = ["GW-M8K-T"]
 V1-2K = ["L-U2K", "GW-U2K-O512"]
