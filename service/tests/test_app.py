@@ -3,31 +3,35 @@ test's event loop (decision 029 "整合測試（假後端）"): non-stream and s
 upstream request and free the slot, overload never exceeds the limit, readiness, auth, /tokenize only under a permit,
 OpenAI-shaped errors everywhere, and the class statuses of a verified profile (decision 030 8.7: a verified 0 answers
 503 class_not_serviceable, an unavailable class is never served; decision 043: neither is a verified class with more
-than 128 output tokens, nor on a T profile anything but M8K-T with H-D2a supported)."""
+than 128 output tokens, nor on a T profile anything but M8K-T with H-D2a supported; /readyz discloses the active class's
+flags and what it never covered, and the server variant)."""
 
 import asyncio
 import contextlib
 import json
 import socket
 import urllib.parse
+from pathlib import Path
 
 import httpx
 import pytest
 
+from capserve import deploy
 from capserve.app import create_app
-from capserve.profile import CapacityProfile, ProfileError
+from capserve.profile import CapacityProfile, ProfileError, load_profile
 from capserve.proxy import ClientDisconnected
 from capserve.keys import load_keyring
 from capserve.tokens import LocalTokenizer
 from fakes.fake_tokenizer import WordsHF
 from fakes.fake_vllm import MODEL, FakeConfig
-from fakes.profiles import stage_d_class, stage_d_doc, verified_class, verified_doc
+from fakes.profiles import ABOVE_CKV_NOT_COVERED, NOT_COVERED, stage_d_class, stage_d_doc, verified_class, verified_doc
 from fakes.servers import gateway_settings, make_profile, stack
 
 pytestmark = pytest.mark.anyio
 CHAT = {"model": MODEL, "messages": [{"role": "user", "content": "hello there"}]}
 COMP = {"model": MODEL, "prompt": "hello there"}
 OLD_BACKSTOP_SLOTS = 16   # uvicorn limit_concurrency was 2 x max_pending + 16 open connections
+PROFILES = Path(__file__).resolve().parents[1] / "profiles"
 
 
 def address(st):
@@ -318,6 +322,7 @@ async def test_ready_body_reports_profile_backend_and_limits():
         assert r.status_code == 200 and body["ready"] is True
         assert body["profile"] == {"id": "provisional-test", "status": "provisional", "provisional": True}
         assert (body["serviceable"], body["class_status"], body["bound"]) == (True, None, None)
+        assert (body["flags"], body["not_covered"], body["server_variant"]) == (None, None, "B0")   # no evidence
         assert body["limits"]["max_concurrency"] == 4 and body["limits"]["max_pending"] == 4 + 4 + 16
         assert (await c.get("/healthz")).json() == {"status": "ok"}
 
@@ -393,6 +398,30 @@ async def test_mixed_8k_t_with_h_d2a_supported_is_served():
         body = (await c.get("/readyz")).json()
         assert body["ready"] is True and body["active_class"] == "mixed-8k-t"
         assert body["limits"]["max_concurrency"] == 4 and body["limits"]["max_prompt_tokens"] == 32640
+
+
+def committed(name: str) -> CapacityProfile:
+    return load_profile(PROFILES / f"{name}.json", allow_provisional=False)
+
+
+@pytest.mark.parametrize("prof, active, flags, not_covered, variant", [
+    (committed("verified-formal-20261017-c1b"), "uniform-2k", ["STRICT_COARSE"], None, "B0"),   # c1b: see README
+    (committed("verified-formal-20261023-d-a1b-b0"), "uniform-32k", [], NOT_COVERED, "B0"),
+    (committed("verified-formal-20261023-d-a1b-t"), "mixed-8k-t", ["WINDOW_SENSITIVE"], NOT_COVERED, "T"),
+    (CapacityProfile.model_validate(stage_d_doc(classes=[stage_d_class("U32K", flags=("ABOVE_CKV",))])),
+     "uniform-32k", ["ABOVE_CKV"], NOT_COVERED + [ABOVE_CKV_NOT_COVERED], "B0"),
+])
+async def test_readyz_discloses_the_flags_what_was_never_covered_and_the_server_variant(prof, active, flags,
+                                                                                      not_covered, variant):
+    """043 §5: /readyz shows the active class's flags and not_covered (null for c1b, whose conditions are the README's)
+    and the profile's server variant; deploy's check of what the gateway serves (served_profile_problems) still
+    passes on that body."""
+    async with stack(profile=prof, active_class=active) as st, st.client() as c:
+        r = await c.get("/readyz")
+        body = r.json()
+        assert r.status_code == 200 and body["active_class"] == active
+        assert (body["flags"], body["not_covered"], body["server_variant"]) == (flags, not_covered, variant)
+        assert deploy.served_profile_problems(r.text, prof, active) == []
 
 
 async def test_backend_down_is_503_with_retry_after():

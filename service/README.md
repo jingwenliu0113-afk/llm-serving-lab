@@ -14,7 +14,7 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 
 ## 正式成果與適用條件（decision 035 / 036）
 
-- 只有由 Stage C 正式、有效、凍結的分析經產生器產生的 `verified` profile，才能成為產品限制（027 §4）。
+- 只有由 Stage C（或 Stage D 的 D-A，043）正式、有效、凍結的分析經產生器產生的 `verified` profile，才能成為產品限制（027 §4）。
 - 正式 profile：`profiles/verified-formal-20261017-c1b.json`（decision 035），四個 class 都是 verified、exact：
 
   | class | prompt 上限 | 輸出上限 | max_concurrency = max_queue |
@@ -38,6 +38,96 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
   - 經過 capserve gateway 的流量：容量是直接對 vLLM 的 `/v1/completions` 量的，不含 gateway 的開銷、chat template 與 `/tokenize` 呼叫；
   - 准入前的排隊；
   - 開場湧入：C 個 request 同時到達時，uniform 第一波的 TTFT 最高 10.4 s（2K）與 11.0 s（8K），遠高於 SLO。
+- Stage D（042）之後，uniform 兩類在長度不一、經過 gateway 時各有一個固定點的結果，開放迴路也有直連 vLLM 的數字，見下一節。
+  c1b profile 的位元組與上表都不變。
+
+## Stage D 之後的適用條件（decision 042 / 043）
+
+**長度不一與經過 gateway**（D-C；只涉及 c1b 的 uniform class，每點 n = 5，在 C_PROD 的固定點）
+
+| class | 長度不一（直連 vLLM） | 經過 gateway |
+|---|---|---|
+| uniform-8k（8） | PASS：一條 pin 住的長度序列，86–8,015 token | PASS：固定 8,064 token |
+| uniform-2k（32） | **FAIL**：4 個 run 中 1 個超過 2 s（2,042 ms），r3 的 R 0.989 已在 guard band 內；超標集中在第二波，但 W′ 的 P95 仍比 uniform 高約 70% | PASS，但最差 R_TPOT 0.923，離 guard band 只剩 0.027 |
+
+- 正式的 active class 仍是 uniform-2k（32）。它在 prompt 長度不一時已經量到 FAIL；profile 的位元組不能改，只在這裡揭露（043「待決事項的處理」第 2 項）。
+- uniform-8k 的兩種條件是分開驗證的。「長度不一加上 gateway」與雙峰的 2K / 8K 流量都沒有量過。
+- gateway 讓 W′ 的短類 P95 增加：U2K 約 +390 ms（一格），U8K 約 +710 ms（約兩格）。無法拆成 gateway 排隊與上游兩部分。
+- D-C 量的是 `capserve_sha256` `53488c6d…` 那一版的 gateway。之後 gateway 的變更（包括下面的 keep-alive 修正）對延遲的影響沒有量過。
+- mixed-2k / mixed-8k 仍只到 c1b 的封閉迴路、直連、固定長度：長度不一、經過 gateway、開放迴路都沒有量過。
+
+**開放迴路**（D-B；Poisson 到達、直連 vLLM、不靠准入控制）
+- uniform-8k 的上限是 0.2519 req/s（0.4 λ_ref，EXACT）。這剛好是格點的最低點，差一格就是 INFEASIBLE。
+- uniform-2k 為 NT：沒有任何驗證過的開放迴路到達率。
+- 產品部署中 vLLM 只綁 127.0.0.1:8100，不會在沒有准入的情況下直接對外。
+- 產品實際的情況，也就是「gateway 的並發上限加上 Poisson 到達」，從未量過。
+
+**連線的 keep-alive**（043 對 042 說法的改正）
+- gateway → vLLM：httpx 的 `keepalive_expiry` 2 s 低於 vLLM 的 5 s，所以 gateway 不會重用 vLLM 正要關閉的連線。
+- client → gateway：之前 uvicorn 用預設的 5 s。aiohttp（閒置保留 60 s、FIFO 重用）或 httpx（預設 5 s）的 client 連到 gateway 時，可能遇到 D-B 推論的同一類競態：重用一條 gateway 正要關閉的連線，request 在第一個 token 之前就失敗。
+- **修正**：gateway 設定 `keep_alive_s`（預設 75 s）交給 uvicorn 的 `timeout_keep_alive`。75 s 高於 aiohttp 的 60 s 與 httpx 的 5 s，所以 client 端的連線池會先讓閒置的連線過期。
+  - 代價是閒置的 socket 保留得比較久。Guard 數的是 request，不是連線，所以不影響准入。
+  - 這是產品修正，不宣稱任何容量。它會改變 `capserve_sha256`，所以 D-C 的 H-D7 只對應舊的那一版。
+  - 下一次 GPU 空閒、取得 lock 時，以 `rtx-verified.toml` 跑 IT-0 至 IT-6（不是容量量測）。
+
+**開場湧入**（D5 與 D-A；只作描述）
+- 第一波（C 個 request 同時到達）的最大 TTFT：
+
+  | class | 第一波最大 TTFT |
+  |---|---|
+  | uniform-2k（32） | 10.35 s（經過 gateway 10.37–10.42 s） |
+  | uniform-8k（8） | 11.04 s（經過 gateway 11.00–11.10 s） |
+  | uniform-32k（2，Stage D） | 12.8 s |
+  | uniform-8k-o512（12，Stage D） | 16.95 s |
+
+- 第二波已回到門檻內。產品不對第一波宣稱 SLO。
+- vLLM 大致依序 prefill：同時到達的第 j 個 request 的首 token 時間約為 j × 單一 prompt 的 prefill 時間（2K 約 324 ms、8K 約 1,389 ms），不論它在 gateway 還是在 vLLM 中等待。
+- 營運上以既有的 `capserve_queue_wait_seconds`、`capserve_ttft_seconds`（從到達起算）與 `capserve_upstream_ttft_seconds` 觀察湧入。
+  容量以「准入之後」的 TTFT 定義，對外文件兩者並列。
+
+## Stage D 的 verified profile（decision 043；都不是正式設定）
+
+- 三份 profile，由產生器從 Stage D 的 D-A session 寫出（每個 session 與 server 一份），只 commit，**不釘選**。
+  - 正式設定仍是 c1b，`rtx-verified.toml` 不變。
+  - 任何 Stage D 的 class 都要先通過經過 gateway 的驗證（V-GW），才可能進入正式釘選，由使用者決定。
+
+  | profile | server | class | prompt 上限 / 輸出 | 上限（exact） | 能否作為 active class（`serving_class`） |
+  |---|---|---|---|---|---|
+  | `verified-formal-20261023-d-a1b-b0` | B0 | `uniform-32k` | 32,640 / 128 | 2 | 可以（輸出 128、B0） |
+  | `verified-formal-20261023-d-a1b-t` | T | `uniform-8k-t` | 8,064 / 128 | 4 | **不能**：030 8.8，只作報告 |
+  | 同上 | T | `mixed-8k-t` | 32,640 / 128 | 4 | profile 允許（H-D2a supported），但 deploy 不啟動 T |
+  | `verified-formal-20261023-d-a2-b0` | B0 | `uniform-2k-o512` | 1,920 / 512 | 32 | **不能**：輸出上限 > 128 |
+  | 同上 | B0 | `uniform-8k-o512` | 8,064 / 512 | 12 | **不能**：輸出上限 > 128 |
+
+  （T = `--long-prefill-token-threshold 512`，fingerprint 和 B0 不同；B0 是 Core B 的 server，和 c1b 相同。）
+- **適用範圍**：封閉迴路、准入之後的延遲、量測時的輸出長度（剛好 128 或 512 個 token，ignore-eos）、各自的 server。
+- **沒有量過的條件**：每個 class 的 `evidence.not_covered` 是一組封閉的 enum，profile 中不放任何 D-B 或 D-C 的數字。
+  - 每個 class 都有：`prompt_length_variation`（prompt 長度不一）、`via_gateway`（經過 gateway）、`open_loop`（開放迴路）、
+    `output_length_other_than_measured`（其他輸出長度）、`start_up_wave`（開場湧入）、`concurrent_classes`（同一台 server 上多個 class 同時並發）。
+  - ABOVE_CKV 的 class（uniform-2k-o512）另外有 `in_vllm_wait_beyond_c_kv`。
+- **uniform-2k-o512 的 C 32 超過 C_KV 30**（停頓只寫在文件中，引用 042）：
+  - 每個 run 剛好 8 / 256 個 request（3.125%）停頓 4.2–5.2 s，是 SLO 的 2.1–2.6 倍，位置在 idx 63 + 31k；
+  - 這些 request 在 vLLM 內等待，gateway 無法讓它們逾時；
+  - 32 → 33 是斷崖（R_short 0.708 → 1.031），guard band 沒有提供預警。
+- **WINDOW_SENSITIVE**：mixed-8k-t 的 c_late 為 5，所以 W 的 4 比較保守；uniform-2k-o512 的 c_full 為 UNSTABLE，只要包含開場湧入，就沒有任何驗證過的上限。
+- **輸出長度**：較短的輸出不一定更安全。U8K 在輸出 512 時 C_PROD 為 12，在輸出 128（c1b）時 C 9 就已經 FAIL。
+  gateway 只能強制輸出的上限（沒有給 `max_tokens` 時補上、超過回 400），EOS、stop 與預設關閉的 thinking 都會讓實際輸出更短。
+- **跨 session 的敏感度**：在約 1.5% 的漂移內，U8K-T 的 C_PROD 可能是 3–4（只會往下），M8K-T 可能是 4–5（只會往上）。
+- **服務規則**（`serving_class`；`create_app` 拋出 ProfileError、`capserve serve` exit 2、`deploy up` 在 preflight 拒絕，任何旗標都不能覆寫）：
+  - 輸出上限大於 128 的 verified class 不能作為 active class（043 §4）。
+  - T profile 只服務 `mixed-8k-t`，而且要 H-D2a 為 supported（030 8.8：T 只用於明確宣告為 M8K 的部署）；`uniform-8k-t` 只作報告。
+  - `capserve.deploy` 只啟動 B0：profile 的 `server.long_prefill_token_threshold` 不是 null 時，preflight 拒絕。T 的部署要使用者決定（043 §6）。
+  - `capserve serve` 是開發用的入口，不知道後端的 argv，無法擋住「profile 接到錯的 vLLM」（c1b 也一樣）。只有 `deploy up` 以 fingerprint 保證 server 正確。
+- **揭露**：
+  - `/readyz` 另外列出 `server_variant`（B0 / T），以及 active class 的 `flags` 與 `not_covered`。
+    c1b 的 class 沒有 `not_covered`（null），它的適用條件以本 README 為準；provisional profile 的兩者都是 null。
+  - `capserve_profile_info` 多兩個 label：`flags`（以逗號連接，沒有時為空字串）與 `server_variant`。
+- **明確仍然不可用**（043 §7.5）：
+  - 多 class 准入、token 加權准入、prefill pacing：只有候選設計，要先通過驗證研究（V4、V2），驗證之前不上線；
+  - O512 class 的服務；
+  - T 的部署，以及服務 `uniform-8k-t`；
+  - 經過 gateway 的開放迴路宣稱；
+  - uniform-2k 在 prompt 長度不一時的 SLO 宣稱。
 
 ## 正式部署與保護
 
@@ -52,8 +142,10 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 - `rtx-verified.toml` 以 `[deploy] production_profile` 釘住這份 verified profile（036）。`capserve.deploy up`（包括 `--loadtest`）與 `capserve.itest` 會在啟動任何東西之前拒絕：
   - 其他任何 `--profile`，包括另一份 verified profile；
   - 任何允許 provisional 的執行：`--allow-provisional`，或 shell 中留著的 `CAPSERVE_ALLOW_PROVISIONAL=1`。
-- provisional profile 不得使用 Stage C 的 class 名稱（uniform-2k、uniform-8k、mixed-2k、mixed-8k），id 也不得以 `verified-` 開頭。
-- unavailable 或 verified 0 的 class 不能作為 active class。
+- provisional profile 不得使用 Stage C 的 class 名稱（uniform-2k、uniform-8k、mixed-2k、mixed-8k）或 Stage D 的 class 名稱（uniform-32k、
+  uniform-8k-t、mixed-8k-t、uniform-2k-o512、uniform-8k-o512；043），id 也不得以 `verified-` 開頭。
+- unavailable 或 verified 0 的 class 不能作為 active class；輸出上限大於 128 的 verified class、T profile 中 `mixed-8k-t` 以外的 class 也不能（043）。
+- `deploy up` 只啟動 B0：遇到 T 的 profile（`server.long_prefill_token_threshold` 不是 null）時，在 preflight 拒絕（043 §6）。
 - `python -m capserve serve` 是 gateway 的低階進入點，供開發使用，不讀部署設定；正式部署不直接用它。
 - `rtx.toml` 是整合測試設定，使用 provisional-rtx，沒有釘選。
 
@@ -109,6 +201,11 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
 PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
     --session results/capacity/formal-YYYYMMDD-c1 --freeze-commit <設定 freeze.capacity 的 commit，40 hex> \
     --out service/profiles/verified-formal-YYYYMMDD-c1.json
+
+# Stage D 的 D-A session（043）：一次寫出這個 session 每個 server 的 profile
+PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
+    --session results/stage_d/formal-YYYYMMDD-d-a1b --freeze-commit <設定 freeze.stage_d 的 commit，40 hex> \
+    --out-dir service/profiles
 ```
 
 - 沒有任何覆寫參數。`--freeze-commit` 會以 git 驗證：
@@ -120,12 +217,26 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
 - 拒絕（exit 2、不寫任何檔案）的情況：沒有凍結或凍結證據不全；session 不是 `results/capacity/formal-…`、不是 formal / env 有效 / C1，或 `capacity_report` 會拒絕它；
   以凍結的 Stage C 模組重跑 `capacity_report` 無法逐位元組重現 `analysis.json`；SLO 不是 `capacity.toml` 的；session 的 server 不是產品的 server；
   工作目錄有未 commit 的變更（generator_commit 必須是產生它的程式）；`--out` 已存在或位於 `results/` 之下。
+- **Stage D**（043，PREREGISTRATION §9）：依 `--session` 的路徑分派。`results/stage_d/` 用 `--out-dir`，其他用 `--out`；兩者互斥，給錯的那一個時 exit 2。
+  - 檔名固定為 `<out-dir>/<profile_id>.json`，profile_id 為 `verified-<session>-b0` 或 `-t`；沒有 `--server` 之類的選擇器。
+  - 全部寫出或全部不寫：每份文件都先通過 loader、每個目標檔都不存在才開始寫；寫到一半失敗時，刪掉已寫出的檔案。
+  - `--freeze-commit` 是第一次設定 `configs/stage_d.toml` `[freeze] stage_d = true` 的 commit（規則同上，對象是 `stage_d.toml`）；
+    `stage_d_plan.HARNESS_FILES` 與上面 5 個 Stage C 模組在凍結 commit、DEPLOYED_COMMIT 與產生器實際執行的檔案三者相同；`capacity.toml` 也必須已凍結。
+  - 只接受 D-A 的封閉迴路 session（plan 與 analysis 的 kind 都是 `closed`）。D-B、D-C 與中止的 `formal-20261023-d-a1` 一律拒絕。
+  - 以凍結的模組唯讀重跑 `stage_d_report`，必須逐位元組重現 `analysis.json`。
+  - 每次 boot 依它的 workload 分成 B0 與 T 兩組，各自以記錄的 argv 與 env 計算 fingerprint；每一組只能有一個值，而且必須是產品的 B0 或 T server。
+  - `--out-dir` 必須是已存在、位於 `results/` 之外的目錄。
 - 輸出是決定性的（沒有時間戳記）；每個 commit 過的 verified profile 都由 Mac 測試重新產生並比對（忽略 generator_commit）。
   這個測試掃描所有 tracked 檔案（`results/` 之外），任何路徑、任何副檔名中 `status` 為 `verified` 的 JSON 都要能重新產生。
 - **載入時的檢查**（`capserve serve` 與 `deploy up` 都一樣）：`configs/capacity.toml` 必須已凍結；provenance 的
   `capacity_sha256`、`pins_sha256` 必須等於這個 checkout（release）的 `configs/capacity.toml`、`configs/pins.toml`；
   `slo` 必須逐字等於 `capacity.toml` 的 `[slo]`；`profile_id` 必須是 `verified-<source_session>`，`analysis_path` 必須是
   `results/capacity/<source_session>/analysis.json`；每個 class 的名稱與 token 上限必須是它的 Stage C workload 的（下表），每個 workload 至多一個 class。
+  - §9（Stage D）的 profile 另外要求：`configs/stage_d.toml` 與 `capacity.toml` 都已凍結；`stage_d_sha256`、`capacity_sha256`、`pins_sha256` 等於這個 checkout 的檔案；
+    `slo` 逐字等於 `stage_d.toml` 的 `[slo]`；`profile_id` 為 `verified-<source_session>-<b0|t>`（依 `server.long_prefill_token_threshold`），
+    `analysis_path` 為 `results/stage_d/<source_session>/analysis.json`；每個 class 是 D-A workload 的（下表），server、輸出長度與 `not_covered` 都要相符；
+    `fingerprint_sha256` 是該 server（B0 或 T）的值。
+  - §8 的 profile（例如 c1b）沒有任何 §9 的欄位，所以它的位元組、content_sha256 與載入結果都不變。
 - **只服務 `service/profiles/<name>.json`**：`deploy up` 只接受 release 中 `service/profiles/` 最上層、小寫 `.json`、列在 `DEPLOY_MANIFEST.json` 的檔案；
   `capserve serve` 只接受位元組等於這個 checkout 的某個 `service/profiles/*.json` 的 verified profile（deploy 傳給它的 `runs/<id>/profile.json` 是這種複本）。
   數字本身不在執行期重算，而是由上面的 Mac 重新產生測試保證。
@@ -138,6 +249,18 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
   | `mixed-2k` | M2K | 32,640（007 的 mix：90% 1,920、10% 32,640） |
   | `mixed-8k` | M8K | 32,640（007 的 mix：90% 8,064、10% 32,640） |
 
+- 每個 D-A workload 對應一個 class（043 §2；sentinel、D-B、D-C 的 workload 不成為 class）：
+
+  | class | workload | server | max_prompt_tokens | max_output_tokens |
+  |---|---|---|---|---|
+  | `uniform-32k` | U32K | B0 | 32,640 | 128 |
+  | `uniform-8k-t` | U8K-T | T | 8,064 | 128 |
+  | `mixed-8k-t` | M8K-T | T | 32,640（007 的 mix 的長 request） | 128 |
+  | `uniform-2k-o512` | U2K-O512 | B0 | 1,920 | 512 |
+  | `uniform-8k-o512` | U8K-O512 | B0 | 8,064 | 512 |
+
+  - 名稱刻意和 c1b 的 class 不同，所以寫給 `uniform-8k` 的設定不會拿到 T 的 4 或 O512 的 12。
+
 - class 的狀態依 C_PROD（030 8.7）：
 
   | C_PROD | class | gateway |
@@ -147,7 +270,9 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve.profile_gen \
   | UNSTABLE / NT | `unavailable`，附原因，沒有任何數字 | 拒絕啟動（exit 2），任何旗標都不能覆寫；也不退回其他數字 |
 
 - 每個 class 另附 Stage C 的證據（只作描述，不是上限）：適用範圍、C_PROD、C_SLO、C_KV、C_cap、旗標（例如 ABOVE_CKV）、先失守的項目、C_PROD 的餘裕與開場湧入。
-  `/readyz` 另外列出 `class_status`、`bound`、`serviceable`。
+  - Stage D 的 class 另外附上：server、量測時的輸出長度、其他時間窗的 C_PROD（c_full、c_late）、C_PROD 的有效 run 中最低的 attainment、
+    最多的 preemption 與最高的 KV 峰值（後兩者是整個 bench process 的值）、hypothesis 的判定，以及 `not_covered`。全部取自 analysis.json，產品程式不另外計算。
+  - `/readyz` 另外列出 `class_status`、`bound`、`serviceable`、`server_variant`、`flags` 與 `not_covered`（043）。
 
 ## 與 vLLM 預設不同之處
 
@@ -215,6 +340,7 @@ PYTHONPATH=service:benchmarks .venv/bin/python -m capserve serve --config /tmp/g
   - 開機自動啟動要在 Windows 工作排程器註冊。這屬於系統設定，由使用者自己做；腳本開頭有指令範例。
   - 研究需要 GPU 時，要先明確執行 `capserve.deploy stop`。研究的 runner 不會自動停掉服務。
 - 單一 process，uvicorn 固定 `http="h11"`、`loop="asyncio"`；SIGTERM 時先 drain，exit −15 為正常結束。
+- client 連線的 keep-alive 為 `keep_alive_s`（預設 75 s，043），不是 uvicorn 的 5 s；原因見「Stage D 之後的適用條件」。
 - 部署管理與整合測試（M1，decision 029 的 M1 實作補記）：
   - `python -m capserve.deploy render|up|status|stop`：在 RTX 上以 GPU lock 啟動 vLLM 與 gateway（前景 supervisor），teardown 一定執行。
   - `python -m capserve.loadtest`：產品負載測試（smoke / steady / burst / overload），輸出到 `runs/`，**不是容量量測**。

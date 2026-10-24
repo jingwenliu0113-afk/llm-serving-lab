@@ -240,11 +240,18 @@ class Gateway:
         return JSONResponse({"status": "ok"})
 
     def readiness(self) -> dict:
+        """The /readyz body. Besides the limits it discloses (043 §5) the server variant (B0 / T) and, from the
+        active class's evidence, its flags and what its limit was never measured under (not_covered: null for a §8
+        class such as c1b's, whose conditions are the README's; both null for a provisional class)."""
         p, c = self.profile, self.cls
+        ev = c.evidence
         return {"ready": c.serviceable and self.monitor.ready and not self.draining,
                 "not_ready_reason": self._unavailable(),
                 "profile": {"id": p.profile_id, "status": p.status, "provisional": not p.verified},
                 "active_class": c.name, "class_status": c.status, "bound": c.bound, "serviceable": c.serviceable,
+                "server_variant": p.server_variant,
+                "flags": list(ev.flags) if ev is not None else None,
+                "not_covered": list(ev.not_covered) if ev is not None and ev.not_covered is not None else None,
                 "backend": {"ready": self.monitor.ready, "reason": self.monitor.reason},
                 "draining": self.draining, "in_flight": self.ctrl.in_flight, "queued": self.ctrl.queued,
                 "pending": self.guard.pending,

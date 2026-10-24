@@ -1,5 +1,9 @@
-"""Tests for capserve/metrics.py: an own registry, no _created series, the 029 metric names, and one place that
-turns a finished request record into counters and histograms."""
+"""Tests for capserve/metrics.py: an own registry, no _created series, the 029 metric names, the profile info (with
+the active class's flags and the server variant, decision 043 §5), and one place that turns a finished request record
+into counters and histograms."""
+
+import json
+from pathlib import Path
 
 import prometheus_client
 import pytest
@@ -8,6 +12,8 @@ from prometheus_client.parser import text_string_to_metric_families
 from capserve.guard import RequestRecord
 from capserve.metrics import Metrics
 from capserve.profile import CapacityProfile
+
+PROFILES = Path(__file__).resolve().parents[1] / "profiles"
 
 PROFILE = CapacityProfile.model_validate({
     "schema_version": 1, "profile_id": "provisional-x", "status": "provisional", "provisional_reason": "test",
@@ -62,7 +68,27 @@ def test_gauges_read_live_state_and_limits():
 
 def test_profile_info_labels():
     assert value(metrics(), "capserve_profile_info", profile_id="provisional-x", status="provisional", slo_id="",
-                 source_session="", analysis_sha256="", active_class="2k") == 1
+                 source_session="", analysis_sha256="", active_class="2k", flags="", server_variant="B0") == 1
+
+
+def committed(name: str) -> CapacityProfile:
+    return CapacityProfile.model_validate(json.loads((PROFILES / f"{name}.json").read_text()))
+
+
+@pytest.mark.parametrize("prof, active, flags, variant", [
+    (committed("verified-formal-20261017-c1b"), "uniform-2k", "STRICT_COARSE", "B0"),
+    (committed("verified-formal-20261017-c1b"), "uniform-8k", "", "B0"),
+    (committed("verified-formal-20261023-d-a1b-t"), "mixed-8k-t", "WINDOW_SENSITIVE", "T"),
+    (committed("verified-formal-20261023-d-a2-b0"), "uniform-2k-o512", "WINDOW_SENSITIVE,ABOVE_CKV", "B0"),
+])
+def test_profile_info_names_the_active_class_flags_and_the_server_variant(prof, active, flags, variant):
+    """043 §5: the active class's evidence flags (comma-joined, in the profile's order) and B0 / T as labels."""
+    cls = prof.workload_class(active)
+    m = Metrics(prof, cls, in_flight=lambda: 0, queued=lambda: 0, pending=lambda: 0, backend_ready=lambda: True)
+    p = prof.provenance
+    assert value(m, "capserve_profile_info", profile_id=prof.profile_id, status="verified", slo_id="S2",
+                 source_session=p.source_session, analysis_sha256=p.analysis_sha256, active_class=active,
+                 flags=flags, server_variant=variant) == 1
 
 
 def rec(**kw):

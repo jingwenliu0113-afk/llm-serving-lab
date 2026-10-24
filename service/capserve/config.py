@@ -100,6 +100,11 @@ class Settings(_Strict):
     max_body_bytes: int = Field(1 << 20, ge=1)
     body_read_timeout_s: float = Field(10.0, gt=0)
     drain_timeout_s: int = Field(60, ge=0)
+    # 043 §7.2: how long uvicorn keeps an idle client connection open (its own default, 5 s, is raced by aiohttp's
+    # FIFO pool of 60 s and httpx's of 5 s: D-B's failures before the first token, 042); above both, so a client pool
+    # lets an idle connection expire before the gateway closes it. Idle sockets cost no request slot (the guard counts
+    # requests).
+    keep_alive_s: int = Field(75, ge=1)
     disconnect_poll_s: float = Field(0.25, gt=0)
     monitor_interval_s: float = Field(2.0, gt=0)
     monitor_timeout_s: float = Field(2.0, gt=0)
