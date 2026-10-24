@@ -235,6 +235,66 @@ async def test_one_json_access_log_line_without_request_text(caplog):
     assert "SECRET" not in lines[0] and "COMPLETION" not in lines[0] and entry["duration_s"] >= 0
 
 
+def access_entries(caplog) -> list:
+    return [json.loads(r.getMessage()) for r in caplog.records if r.name == "capserve.access"]
+
+
+async def test_the_access_log_has_the_044_fields_on_the_injected_monotonic_clock(caplog):
+    """044 item 1: t_arrival_s / t_sent_s / t_released_s on the gateway's monotonic clock (arrival, upstream send, the
+    permit's release), prefill_wait_s, admission_class and admission_units; each only once it is set."""
+    clock = iter([10.0, 13.5])   # the guard reads its clock at arrival and at the end (duration_s)
+
+    async def app(scope, receive, send):
+        rec = scope["capserve.record"]
+        rec.upstream_sent, rec.t_released_s, rec.prefill_wait_s = 11.25, 12.75, 0.5
+        rec.admission_class, rec.admission_units, rec.outcome = "v-uniform-8k", 4, "ok"
+        await ok_app(scope, receive, send)
+
+    caplog.set_level(logging.INFO, logger="capserve.access")
+    g = gd.Guard(app, max_pending=2, profile_header=HEADER, retry_after_s=lambda reason: 2, metrics=Finished(),
+                 clock=lambda: next(clock))
+    await g(scope(), Client().receive, Client().send)
+    (entry,) = access_entries(caplog)
+    assert (entry["t_arrival_s"], entry["t_sent_s"], entry["t_released_s"], entry["duration_s"]) == (
+        10.0, 11.25, 12.75, 3.5)
+    assert (entry["prefill_wait_s"], entry["admission_class"], entry["admission_units"]) == (0.5, "v-uniform-8k", 4)
+    assert "arrival" not in entry and "upstream_sent" not in entry
+    caplog.clear()
+    await make_guard(ok_app)(scope("/readyz", "GET"), Client().receive, Client().send)
+    (entry,) = access_entries(caplog)
+    assert "t_arrival_s" in entry and not {"t_sent_s", "t_released_s", "prefill_wait_s", "admission_class",
+                                            "admission_units", "client_request_id"} & set(entry)
+
+
+@pytest.mark.parametrize("headers, want", [
+    ([(b"x-request-id", b"V-P-U2K-c32-r1-17")], "V-P-U2K-c32-r1-17"),
+    ([(b"x-request-id", b"bench-1a2b3c4d-0")], "bench-1a2b3c4d-0"),
+    ([(b"x-request-id", b"a.b_c:d-E9")], "a.b_c:d-E9"),
+    ([(b"x-request-id", b"x" * 128)], "x" * 128),
+    ([(b"x-request-id", b"x" * 129)], None),
+    ([(b"x-request-id", b"")], None),
+    ([(b"x-request-id", b"has space")], None),
+    ([(b"x-request-id", b"tag\n")], None),
+    ([(b"x-request-id", b"q\"uote")], None),
+    ([(b"x-request-id", "é".encode())], None),
+    ([(b"x-request-id", b"a"), (b"x-request-id", b"b")], None),
+    ([], None),
+])
+async def test_the_client_request_id_is_sanitised_and_never_echoed(caplog, headers, want):
+    """044 item 1: the client's x-request-id, only as one [A-Za-z0-9._:-]{1,128} value (else null); the response keeps
+    the gateway's own x-request-id."""
+    caplog.set_level(logging.INFO, logger="capserve.access")
+    fin = Finished()
+    c = Client()
+    await make_guard(ok_app, metrics=fin)({**scope(), "headers": headers}, c.receive, c.send)
+    assert fin.records[-1].client_request_id == want
+    (entry,) = access_entries(caplog)
+    assert entry.get("client_request_id") == want
+    rid = c.headers["x-request-id"]
+    assert len(rid) == 32 and rid == entry["request_id"] and rid != want
+    assert [v for k, v in c.sent[0]["headers"] if k == b"x-request-id"] == [rid.encode()]
+
+
 async def test_non_http_scopes_pass_through():
     seen = []
 

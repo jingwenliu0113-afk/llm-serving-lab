@@ -28,6 +28,15 @@ A completion request, after the guard (request id, pending cap):
 10. cleanup: the guard's shielded scope cleanups (LIFO: the upstream response is closed, then the permit released),
     metrics and the access log.
 A disconnected client gets no response (499 is recorded), and its upstream request is cancelled.
+
+Decision 044 (off unless the settings set a candidate policy; capserve.config.served_classes decides where one may
+serve): [admission] weighted-v1 has no active class: every prompt is counted with the local tokenizer (no byte fast
+path), admitted as the first named class it fits (too long for the largest: 400 context_length_exceeded) and queued on
+one strict FIFO under the budget and each class's cap (admission.PolicyController), its class and units recorded;
+[prefill_pacing] counts every prompt too, and the active class's FIFO also waits for the prompt's tokens in the bucket
+(prefill_wait_s recorded). /readyz also discloses the serving status, the queue settings, the policies and their live
+units, this gateway's gateway_path_sha256 (the request path's files, capserve.gateway_path) and, for a §12 profile,
+whether it is the request path its units were validated on (gateway_validated; null otherwise).
 """
 
 from __future__ import annotations
@@ -46,13 +55,15 @@ from starlette.requests import ClientDisconnect, Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from capserve.admission import NOT_SERVICEABLE, STATUS, AdmissionController, Rejection
-from capserve.config import ConfigError, Settings
+from capserve import gateway_path
+from capserve.admission import (NOT_SERVICEABLE, STATUS, AdmissionController, Demand, PolicyController, Rejection,
+                                TokenBucket)
+from capserve.config import ConfigError, Settings, admission_view, candidate_policies, served_classes, served_limits
 from capserve.guard import RECORD_KEY, Guard, on_cleanup
 from capserve.keys import KeyRing, QuotaDenied
 from capserve.metrics import Metrics
 from capserve.openai_api import ApiError, openai_error, parse_request
-from capserve.profile import CapacityProfile
+from capserve.profile import STAGE_V_SECTION, CapacityProfile
 from capserve.proxy import ClientDisconnected, ProxyStream, cancel_on_disconnect, passthrough, read_capped
 from capserve.retry import RetryAfterPolicy
 from capserve.tokens import LocalTokenizer, PromptBudget, TemplateRejected, TokenizeError, TokenizerLoadError
@@ -84,22 +95,48 @@ class Gateway:
 
     def __init__(self, settings: Settings, profile: CapacityProfile, *, api_key: bytes | None = None,
                  clock: Callable[[], float] = time.monotonic, local_tokenizer: LocalTokenizer | None = None,
-                 keyring: KeyRing | None = None):
+                 keyring: KeyRing | None = None, gateway_path_sha256: str | None = None):
         self.settings = settings
         self.profile = profile
-        self.cls = profile.serving_class(settings.active_class)   # ProfileError: 030 8.7, 043
+        # 044: this gateway's request path (injectable for tests), and whether a §12 profile was validated on it
+        self.gateway_path_sha256 = gateway_path_sha256 or gateway_path.gateway_path_sha256()
+        prov = profile.provenance
+        self.gateway_validated = (prov.gateway_path_sha256 == self.gateway_path_sha256
+                                  if profile.section == STAGE_V_SECTION else None)
+        # ProfileError: 030 8.7, 043, 044 (a candidate policy only where it may serve); ConfigError: 044 parameters
+        self.classes = served_classes(settings, profile, gateway_path_sha256=self.gateway_path_sha256)
+        self.admission, self.pacing = settings.admission, settings.prefill_pacing
+        self.policy = bool(candidate_policies(settings))
+        self.cls = self.classes[0] if self.admission is None else None   # weighted-v1 has no active class
+        self.serviceable = all(c.serviceable for c in self.classes)
+        self.limits = served_limits(settings, self.classes)
         self.served_model = profile.server.model_repo
         self.api_key = api_key
         self.keyring = keyring
         self.clock = clock
         self.draining = False
         self.loop: asyncio.AbstractEventLoop | None = None
-        self.ctrl = AdmissionController(max_concurrency=self.cls.max_concurrency, max_queue=self.cls.max_queue,
-                                        max_queue_wait_s=settings.max_queue_wait_s,
-                                        retry_after_s=settings.retry_after_s.fixed_values(), clock=clock)
-        self.retry = RetryAfterPolicy(settings.retry_after_s, max_concurrency=self.cls.max_concurrency,
+        retry_after = settings.retry_after_s.fixed_values()
+        if not self.policy:
+            self.ctrl = AdmissionController(max_concurrency=self.cls.max_concurrency, max_queue=self.cls.max_queue,
+                                            max_queue_wait_s=settings.max_queue_wait_s, retry_after_s=retry_after,
+                                            clock=clock)
+        elif self.admission is not None:
+            self.ctrl = PolicyController(caps={a.name: a.max_concurrency for a in self.admission.classes},
+                                         budget=self.admission.budget, max_queue=self.admission.max_queue,
+                                         max_queue_wait_s=settings.max_queue_wait_s, retry_after_s=retry_after,
+                                         clock=clock)
+        else:   # prefill pacing on the active class: one unit per request, its max_concurrency the budget
+            self.ctrl = PolicyController(caps={self.cls.name: self.cls.max_concurrency},
+                                         budget=self.cls.max_concurrency, max_queue=self.cls.max_queue,
+                                         max_queue_wait_s=settings.max_queue_wait_s, retry_after_s=retry_after,
+                                         bucket=TokenBucket(self.pacing.burst_tokens, self.pacing.rate_tokens_per_s,
+                                                            now=clock()), clock=clock)
+        self.retry = RetryAfterPolicy(settings.retry_after_s, max_concurrency=self.limits["max_concurrency"],
                                       queued=lambda: self.ctrl.queued)
-        self.client = data_client(settings.backend_url, max_concurrency=self.cls.max_concurrency)
+        # 044: the pool covers weighted-v1's budget (its most requests in flight), + 4 as for one class
+        self.client = data_client(settings.backend_url, max_concurrency=self.admission.budget if self.admission
+                                  else self.cls.max_concurrency)
         self.monitor = BackendMonitor(settings.backend_url, self.served_model, interval_s=settings.monitor_interval_s,
                                       timeout_s=settings.monitor_timeout_s,
                                       fail_threshold=settings.monitor_fail_threshold, on_down=self._backend_down)
@@ -112,7 +149,7 @@ class Gateway:
         self.budget = PromptBudget(self.client, **settings.tokens.model_dump(), local=local)
         self.metrics = Metrics(profile, self.cls, in_flight=lambda: self.ctrl.in_flight,
                                queued=lambda: self.ctrl.queued, pending=lambda: self.guard.pending,
-                               backend_ready=lambda: self.monitor.ready)
+                               backend_ready=lambda: self.monitor.ready, admission=self.admission)
         routes = [Route("/v1/chat/completions", self.chat, methods=["POST"]),
                   Route("/v1/completions", self.completions, methods=["POST"]),
                   Route("/v1/models", self.models, methods=["GET"]),
@@ -121,7 +158,7 @@ class Gateway:
                   Route("/metrics", self.metrics_endpoint, methods=["GET"])]
         handlers = {404: self._not_found, 405: self._method_not_allowed, 500: self._server_error}
         self.starlette = Starlette(routes=routes, exception_handlers=handlers, lifespan=self._lifespan)
-        self.guard = Guard(self.starlette, max_pending=settings.max_pending(self.cls),
+        self.guard = Guard(self.starlette, max_pending=self.limits["max_pending"],
                            profile_header=f"{profile.profile_id}; status={profile.status}",
                            retry_after_s=self.retry.seconds, metrics=self.metrics, on_finish=self.retry.observe,
                            clock=clock)
@@ -154,7 +191,7 @@ class Gateway:
         """The 503 reason, if any. Checked at the gate and again right before admission: the backend can go down
         (and on_down reject the queue) while a body is still arriving, and nothing awaits between this check and
         acquire, so a request is never queued or sent upstream after the backend was declared down."""
-        if not self.cls.serviceable:
+        if not self.serviceable:
             return "class_not_serviceable"
         if self.draining:
             return "draining"
@@ -180,7 +217,8 @@ class Gateway:
 
     def _too_long(self, rec, route: str, n: int) -> Response:
         return self._client_error(rec, 400, "context_length_exceeded",
-                                  f"the prompt has {n} tokens; this server accepts at most {self.cls.max_prompt_tokens}",
+                                  f"the prompt has {n} tokens; this server accepts at most "
+                                  f"{self.limits['max_prompt_tokens']}",
                                   param="messages" if route == "chat" else "prompt")
 
     def _upstream_error(self, rec, status: int, kind: str, code: str, message: str,
@@ -242,22 +280,32 @@ class Gateway:
     def readiness(self) -> dict:
         """The /readyz body. Besides the limits it discloses (043 §5) the server variant (B0 / T) and, from the
         active class's evidence, its flags and what its limit was never measured under (not_covered: null for a §8
-        class such as c1b's, whose conditions are the README's; both null for a provisional class)."""
-        p, c = self.profile, self.cls
-        ev = c.evidence
-        return {"ready": c.serviceable and self.monitor.ready and not self.draining,
+        class such as c1b's, whose conditions are the README's; both null for a provisional class). 044: the serving
+        status, the queue settings, the candidate policies (null when off; weighted-v1 has no active class, so its
+        class fields are null, its classes and live units under admission / admission_state), gateway_path_sha256 and
+        gateway_validated."""
+        p, c, s = self.profile, self.cls, self.settings
+        ev = c.evidence if c is not None else None
+        adm = admission_view(s, self.classes)
+        return {"ready": self.serviceable and self.monitor.ready and not self.draining,
                 "not_ready_reason": self._unavailable(),
                 "profile": {"id": p.profile_id, "status": p.status, "provisional": not p.verified},
-                "active_class": c.name, "class_status": c.status, "bound": c.bound, "serviceable": c.serviceable,
+                "serving_status": p.status,
+                "active_class": c.name if c else None, "class_status": c.status if c else None,
+                "bound": c.bound if c else None, "serviceable": self.serviceable,
                 "server_variant": p.server_variant,
                 "flags": list(ev.flags) if ev is not None else None,
                 "not_covered": list(ev.not_covered) if ev is not None and ev.not_covered is not None else None,
                 "backend": {"ready": self.monitor.ready, "reason": self.monitor.reason},
                 "draining": self.draining, "in_flight": self.ctrl.in_flight, "queued": self.ctrl.queued,
                 "pending": self.guard.pending,
-                "limits": {"max_concurrency": c.max_concurrency, "max_queue": c.max_queue,
-                           "max_pending": self.settings.max_pending(c), "max_prompt_tokens": c.max_prompt_tokens,
-                           "max_output_tokens": c.max_output_tokens}}
+                "limits": dict(self.limits),
+                "queue": {"max_queue_wait_s": s.max_queue_wait_s, "request_deadline_s": s.request_deadline_s},
+                "admission": adm,
+                "admission_state": None if adm is None else {"units_in_flight": self.ctrl.units_in_flight,
+                                                             "in_flight": self.ctrl.class_in_flight},
+                "prefill_pacing": self.pacing.model_dump() if self.pacing is not None else None,
+                "gateway_path_sha256": self.gateway_path_sha256, "gateway_validated": self.gateway_validated}
 
     async def readyz(self, request: Request) -> Response:
         body = self.readiness()
@@ -296,10 +344,20 @@ class Gateway:
     def _watch(self, request: Request):
         return cancel_on_disconnect(request.is_disconnected, self.settings.disconnect_poll_s)
 
+    def _demand(self, n: int) -> Demand:
+        """044: what a counted prompt of n tokens asks of the PolicyController: weighted-v1's first class it fits (n is
+        within the largest, already checked) with its units; pacing: the active class, one unit; n tokens either way."""
+        if self.admission is None:
+            return Demand(self.cls.name, 1, n)
+        for a, c in zip(self.admission.classes, self.classes):
+            if n <= c.max_prompt_tokens:
+                return Demand(a.name, a.units, n)
+        raise AssertionError(f"a prompt of {n} tokens is above every class")
+
     async def _complete(self, request: Request, route: str) -> Response:
         scope = request.scope
         rec = scope[RECORD_KEY]
-        cls = self.cls
+        limits = self.limits
         key = self._identify(scope)
         if key is None:
             return self._unauthorized(rec)
@@ -321,41 +379,48 @@ class Gateway:
         except ClientDisconnect:
             return self._gone(rec, None)
         try:
-            fwd = parse_request(route, raw, served_model=self.served_model, max_output_tokens=cls.max_output_tokens)
+            fwd = parse_request(route, raw, served_model=self.served_model,
+                                max_output_tokens=limits["max_output_tokens"])
         except ApiError as exc:
             rec.outcome, rec.error_code = "client_error", exc.code
             return exc.response()
         rec.stream = fwd.stream
-        needs_count = not self.budget.fast_fits(route, fwd.body, cls.max_prompt_tokens)
+        # 044: a candidate policy counts every prompt (config: the local tokenizer), never the byte fast path
+        needs_count = self.policy or not self.budget.fast_fits(route, fwd.body, limits["max_prompt_tokens"])
         deadline = rec.arrival + self.settings.request_deadline_s
+        acquire_kw = {"on_release": lambda t: setattr(rec, "t_released_s", t)}   # 044: before the slot moves on
         if needs_count and self.budget.local is not None:   # 038 §4: no vLLM call, so no permit
             try:
                 n = await self.budget.count(route, fwd.body)
             except TemplateRejected:
                 return self._client_error(rec, 400, "invalid_value", "the chat template rejected these messages",
                                           param="messages")
-            if n > cls.max_prompt_tokens:
+            if n > limits["max_prompt_tokens"]:
                 return self._too_long(rec, route, n)
             needs_count = False
+            if self.policy:
+                acquire_kw["demand"] = demand = self._demand(n)
+                if self.admission is not None:
+                    rec.admission_class, rec.admission_units = demand.cls, demand.units
 
         if reason := self._unavailable():   # again: the backend may have gone down while the body arrived
             return self._reject(rec, reason)
         try:
             async with self._watch(request):
-                permit = await self.ctrl.acquire(deadline=deadline)
+                permit = await self.ctrl.acquire(deadline=deadline, **acquire_kw)
                 on_cleanup(scope, permit.release)   # registered before anything else can interrupt
         except Rejection as exc:
             return self._reject(rec, exc.reason)
         except ClientDisconnected:
             return self._gone(rec, "queued")
-        rec.queue_wait_s = permit.queued_s
+        rec.queue_wait_s, rec.prefill_wait_s = permit.queued_s, permit.prefill_wait_s
 
         try:
             with anyio.fail_after(max(deadline - self.clock(), 0.0)):
                 async with self._watch(request):
                     if needs_count:
                         n = await self.budget.count(route, fwd.body)
-                        if n > cls.max_prompt_tokens:
+                        if n > limits["max_prompt_tokens"]:
                             raise _TooLong(n)
                     rec.upstream_sent = self.clock()
                     req = self.client.build_request("POST", UPSTREAM_PATHS[route], json=fwd.body)
@@ -407,5 +472,6 @@ class Gateway:
 
 def create_app(settings: Settings, profile: CapacityProfile, *, api_key: bytes | None = None,
                clock: Callable[[], float] = time.monotonic, local_tokenizer: LocalTokenizer | None = None,
-               keyring: KeyRing | None = None) -> Gateway:
-    return Gateway(settings, profile, api_key=api_key, clock=clock, local_tokenizer=local_tokenizer, keyring=keyring)
+               keyring: KeyRing | None = None, gateway_path_sha256: str | None = None) -> Gateway:
+    return Gateway(settings, profile, api_key=api_key, clock=clock, local_tokenizer=local_tokenizer, keyring=keyring,
+                   gateway_path_sha256=gateway_path_sha256)

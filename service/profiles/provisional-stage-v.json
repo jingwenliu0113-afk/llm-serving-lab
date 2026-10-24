@@ -1,0 +1,59 @@
+{
+ "schema_version": 1,
+ "profile_id": "provisional-stage-v",
+ "status": "provisional",
+ "provisional_reason": "Stage V studies (decision 044: V-GW, V1, V2, V4) only, served by the research runner with `capserve serve --allow-provisional`. Not a capacity and never a product limit (027 §4): each v- class copies, field by field, the limits of a committed verified class (c1b's uniform-2k / uniform-8k, d-a2-b0's uniform-2k-o512 / uniform-8k-o512) or, for v-uniform-8k-o512-c8, the limit V1-8K would unlock; only the label and the verified status differ, so the admission path and limits are the measured ones. A candidate policy (weighted-v1, prefill pacing) is allowed here for research only.",
+ "slo": null,
+ "server": {
+  "vllm_version": "0.30.0",
+  "model_repo": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+  "model_revision": "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "fingerprint_sha256": "98b9f41be7b75b6bf431e6c090124156360edfc929ccd6164001468da05b6d4f",
+  "num_gpu_blocks": 248,
+  "block_size": 528
+ },
+ "classes": [
+  {
+   "name": "v-uniform-2k",
+   "max_prompt_tokens": 1920,
+   "max_output_tokens": 128,
+   "max_concurrency": 32,
+   "max_queue": 32,
+   "source": "provisional:stage-v (limits field by field verified-formal-20261017-c1b class uniform-2k; decision 044 study only)"
+  },
+  {
+   "name": "v-uniform-8k",
+   "max_prompt_tokens": 8064,
+   "max_output_tokens": 128,
+   "max_concurrency": 8,
+   "max_queue": 8,
+   "source": "provisional:stage-v (limits field by field verified-formal-20261017-c1b class uniform-8k; decision 044 study only)"
+  },
+  {
+   "name": "v-uniform-2k-o512",
+   "max_prompt_tokens": 1920,
+   "max_output_tokens": 512,
+   "max_concurrency": 32,
+   "max_queue": 32,
+   "source": "provisional:stage-v (limits field by field verified-formal-20261023-d-a2-b0 class uniform-2k-o512; decision 044 study only)"
+  },
+  {
+   "name": "v-uniform-8k-o512",
+   "max_prompt_tokens": 8064,
+   "max_output_tokens": 512,
+   "max_concurrency": 12,
+   "max_queue": 12,
+   "source": "provisional:stage-v (limits field by field verified-formal-20261023-d-a2-b0 class uniform-8k-o512; decision 044 study only)"
+  },
+  {
+   "name": "v-uniform-8k-o512-c8",
+   "max_prompt_tokens": 8064,
+   "max_output_tokens": 512,
+   "max_concurrency": 8,
+   "max_queue": 8,
+   "source": "provisional:stage-v (tokens field by field verified-formal-20261023-d-a2-b0 class uniform-8k-o512, concurrency and queue verified-formal-20261017-c1b class uniform-8k: the 8 V1-8K would unlock; decision 044 study only)"
+  }
+ ],
+ "provenance": null,
+ "content_sha256": "4cb7b29f4f6b28993ff05127bcc7623f9490eb2d16aa391772da633ac485226d"
+}

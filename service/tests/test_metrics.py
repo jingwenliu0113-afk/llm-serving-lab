@@ -1,6 +1,6 @@
 """Tests for capserve/metrics.py: an own registry, no _created series, the 029 metric names, the profile info (with
 the active class's flags and the server variant, decision 043 §5), and one place that turns a finished request record
-into counters and histograms."""
+into counters and histograms; decision 044: capserve_prefill_wait_seconds, and weighted-v1 labelled by its policy."""
 
 import json
 from pathlib import Path
@@ -25,7 +25,7 @@ PROFILE = CapacityProfile.model_validate({
 NAMES = {
     "capserve_requests_total", "capserve_rejections_total", "capserve_client_errors_total",
     "capserve_upstream_errors_total", "capserve_client_disconnects_total", "capserve_key_requests_total",
-    "capserve_queue_wait_seconds",
+    "capserve_queue_wait_seconds", "capserve_prefill_wait_seconds",
     "capserve_ttft_seconds", "capserve_upstream_ttft_seconds", "capserve_e2e_seconds", "capserve_in_flight",
     "capserve_queued", "capserve_pending", "capserve_concurrency_limit", "capserve_queue_limit",
     "capserve_backend_ready", "capserve_profile_verified", "capserve_profile_info"}
@@ -132,3 +132,27 @@ def test_unknown_stream_and_non_completion_routes():
                            reason="queue_full"))
     assert value(m, "capserve_rejections_total", reason="queue_full") == 2
     assert value(m, "capserve_requests_total", route="completions", stream="unknown", outcome="rejected") == 1
+
+
+def test_prefill_wait_is_observed_only_under_pacing():
+    """044 item 1: capserve_prefill_wait_seconds, to be read with capserve_ttft_seconds (043 7.3 B)."""
+    m = metrics()
+    m.finish(rec(stream=False, outcome="ok", queue_wait_s=0.1, duration_s=1.0))
+    assert value(m, "capserve_prefill_wait_seconds_count") == 0
+    m.finish(rec(stream=False, outcome="ok", queue_wait_s=0.1, prefill_wait_s=0.0, duration_s=1.0))
+    m.finish(rec(stream=False, outcome="ok", queue_wait_s=0.1, prefill_wait_s=0.3, duration_s=1.0))
+    assert (value(m, "capserve_prefill_wait_seconds_count"), value(m, "capserve_prefill_wait_seconds_sum")) == (2, 0.3)
+
+
+def test_weighted_v1_is_labelled_by_its_policy():
+    """044 item 2: no active class; the label names the policy and its classes, the limits are its envelope."""
+    from capserve.profile import AdmissionParams
+    adm = AdmissionParams.model_validate({"policy": "weighted-v1", "budget": 32, "max_queue": 30, "classes": [
+        {"name": "v-uniform-2k", "units": 1, "max_concurrency": 32},
+        {"name": "v-uniform-8k", "units": 4, "max_concurrency": 8}]})
+    m = Metrics(PROFILE, None, in_flight=lambda: 0, queued=lambda: 0, pending=lambda: 0, backend_ready=lambda: True,
+                admission=adm)
+    assert value(m, "capserve_profile_info", profile_id="provisional-x", status="provisional", slo_id="",
+                 source_session="", analysis_sha256="", active_class="weighted-v1:v-uniform-2k+v-uniform-8k",
+                 flags="", server_variant="B0") == 1
+    assert (value(m, "capserve_concurrency_limit"), value(m, "capserve_queue_limit")) == (32, 30)

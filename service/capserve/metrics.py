@@ -12,6 +12,9 @@ are never research evidence: research TTFT comes from the research client, never
   its body was parsed), rejections / client errors / upstream errors / disconnects by their label, queue wait for
   admitted requests, ttft (arrival -> first content, queue included) and upstream_ttft (upstream send -> first
   content, the research TTFT definition) for streams, e2e for successful requests.
+- 044: prefill_wait (prefill pacing's wait for prompt tokens, observed only when pacing is on; 043 7.3 B: read it with
+  capserve_ttft_seconds, from arrival). Under weighted-v1 there is no active class: the info's active_class is the
+  policy's label (weighted-v1:<class>+<class>, flags ""), the limit gauges its largest cap and its max_queue.
 """
 
 from __future__ import annotations
@@ -21,15 +24,16 @@ from typing import Callable
 import prometheus_client
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, Info
 
-from capserve.profile import CapacityProfile, WorkloadClass
+from capserve.profile import AdmissionParams, CapacityProfile, WorkloadClass
 
 BUCKETS = (0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 15, 30, 60, 120)
 E2E_BUCKETS = BUCKETS + (300,)
 
 
 class Metrics:
-    def __init__(self, profile: CapacityProfile, cls: WorkloadClass, *, in_flight: Callable[[], float],
-                 queued: Callable[[], float], pending: Callable[[], float], backend_ready: Callable[[], bool]):
+    def __init__(self, profile: CapacityProfile, cls: WorkloadClass | None, *, in_flight: Callable[[], float],
+                 queued: Callable[[], float], pending: Callable[[], float], backend_ready: Callable[[], bool],
+                 admission: AdmissionParams | None = None):
         prometheus_client.disable_created_metrics()
         self.registry = r = CollectorRegistry()
         self.requests = Counter("capserve_requests", "Finished requests on the completion routes",
@@ -42,6 +46,8 @@ class Metrics:
         self.key_requests = Counter("capserve_key_requests", "Finished requests per API key name (038 §5)",
                                     ["key", "outcome"], registry=r)
         self.queue_wait = Histogram("capserve_queue_wait_seconds", "Admission wait", buckets=BUCKETS, registry=r)
+        self.prefill_wait = Histogram("capserve_prefill_wait_seconds", "Prefill pacing: wait for prompt tokens (044)",
+                                      buckets=BUCKETS, registry=r)
         self.ttft = Histogram("capserve_ttft_seconds", "Arrival to first content (queue included)", ["route"],
                               buckets=BUCKETS, registry=r)
         self.upstream_ttft = Histogram("capserve_upstream_ttft_seconds", "Upstream send to first content", ["route"],
@@ -53,8 +59,10 @@ class Metrics:
                               ("capserve_pending", "Requests inside the gateway", pending),
                               ("capserve_backend_ready", "BackendMonitor state", lambda: float(bool(backend_ready())))):
             Gauge(name, doc, registry=r).set_function(fn)
-        Gauge("capserve_concurrency_limit", "Active class max_concurrency", registry=r).set(cls.max_concurrency)
-        Gauge("capserve_queue_limit", "Active class max_queue", registry=r).set(cls.max_queue)
+        limit, queue = ((max(a.max_concurrency for a in admission.classes), admission.max_queue) if admission
+                        else (cls.max_concurrency, cls.max_queue))
+        Gauge("capserve_concurrency_limit", "Active class max_concurrency", registry=r).set(limit)
+        Gauge("capserve_queue_limit", "Active class max_queue", registry=r).set(queue)
         Gauge("capserve_profile_verified", "1 = verified profile, 0 = provisional", registry=r).set(
             1 if profile.verified else 0)
         prov = profile.provenance
@@ -63,8 +71,8 @@ class Metrics:
             "slo_id": profile.slo.id if profile.slo else "",
             "source_session": prov.source_session if prov else "",
             "analysis_sha256": prov.analysis_sha256 if prov else "",
-            "active_class": cls.name,
-            "flags": ",".join(cls.evidence.flags) if cls.evidence else "",   # 043 §5
+            "active_class": admission.label if admission else cls.name,   # 044: weighted-v1 has no active class
+            "flags": ",".join(cls.evidence.flags) if cls is not None and cls.evidence else "",   # 043 §5
             "server_variant": profile.server_variant})
 
     def finish(self, rec) -> None:
@@ -84,6 +92,8 @@ class Metrics:
         self.requests.labels(rec.route, stream, rec.outcome or "cancelled").inc()
         if rec.queue_wait_s is not None:
             self.queue_wait.observe(rec.queue_wait_s)
+        if rec.prefill_wait_s is not None:
+            self.prefill_wait.observe(rec.prefill_wait_s)
         if rec.ttft_s is not None:
             self.ttft.labels(rec.route).observe(rec.ttft_s)
         if rec.upstream_ttft_s is not None:

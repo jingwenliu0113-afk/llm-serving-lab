@@ -11,7 +11,11 @@ verified profile (decision 030 8.7: Stage C verified no number for it) exits 2 w
 verified class of more than 128 output tokens or, on a T profile, any class but M8K-T with H-D2a supported (decision
 043; serve cannot see which vLLM it fronts, so only `deploy up` checks the server); a verified 0 class (refuse it)
 starts, says so, and answers every completion request 503 class_not_serviceable. Without an API key only a loopback
-host is accepted. Configuration errors exit 2.
+host is accepted. Configuration errors exit 2. Decision 044: a candidate policy ([admission] weighted-v1, which names
+its classes instead of an active class, or [prefill_pacing]) serves only on a provisional profile (so only with
+--allow-provisional: research) or a verified §12 profile carrying the identical section, validated on this gateway's
+request path (capserve.config.served_classes; exit 2 otherwise, whatever flag is given), and only with parameters that
+fit its classes.
 """
 
 from __future__ import annotations
@@ -24,7 +28,8 @@ import sys
 from pathlib import Path
 
 from capserve.config import (ConfigError, allow_provisional, api_key_from_env, check_bind, keys_file_from_env,
-                             load_settings)
+                             load_settings, served_classes)
+from capserve.gateway_path import gateway_path_sha256
 from capserve.keys import KeyFileError, load_keyring
 from capserve.profile import ProfileError, parse_profile
 from capserve.tokens import LocalTokenizer, TokenizerLoadError
@@ -92,16 +97,19 @@ def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_
                                 allow_provisional=allow_provisional(args.allow_provisional, env))
         if profile.verified and (problems := committed_profile_problems(data, profiles_dir)):
             raise ProfileError(f"{args.profile}: " + "; ".join(problems))
-        cls = profile.serving_class(settings.active_class)   # 030 8.7 / 043 refusals: no flag overrides them
+        # 030 8.7 / 043 / 044 refusals: no flag overrides them
+        classes = served_classes(settings, profile, gateway_path_sha256=gateway_path_sha256())
         # 038 §4: a local tokenizer is loaded before serving; one that cannot load is a configuration error
         local = LocalTokenizer.load(settings.tokenizer_path) if settings.tokenizer == "local" else None
     except (ConfigError, ProfileError, TokenizerLoadError, KeyFileError) as exc:
         print(f"capserve: {exc}", file=sys.stderr)
         return 2
+    cls = classes[0]
+    what = f"admission {settings.admission.label}" if settings.admission is not None else f"class {cls.name}"
     if not profile.verified:
-        print(f"capserve: serving PROVISIONAL profile {profile.profile_id} (class {cls.name}): its limits are not a "
+        print(f"capserve: serving PROVISIONAL profile {profile.profile_id} ({what}): its limits are not a "
               f"verified capacity ({profile.provisional_reason})", file=sys.stderr)
-    if not cls.serviceable:
+    if settings.admission is None and not cls.serviceable:
         print(f"capserve: class {cls.name} of verified profile {profile.profile_id} has a verified capacity of 0 "
               "(Stage C INFEASIBLE, 030 8.7): every completion request is answered 503 class_not_serviceable and "
               "/readyz is never ready", file=sys.stderr)

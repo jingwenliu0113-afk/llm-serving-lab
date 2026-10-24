@@ -2,7 +2,9 @@
 provisional profile unless the flag or CAPSERVE_ALLOW_PROVISIONAL=1 allows it (027 §4; decision 029), refuses an
 unavailable active class of a verified profile whatever flag is given, and serves a verified 0 class as not
 serviceable (decision 030 8.7); decision 043's refusals (more than 128 output tokens; on a T profile anything but M8K-T
-with H-D2a supported) exit 2 the same way."""
+with H-D2a supported) exit 2 the same way, as do decision 044's: a candidate policy ([admission], [prefill_pacing])
+serves only on a provisional profile with --allow-provisional or a verified §12 profile carrying the identical
+section, and only with parameters that fit its classes."""
 
 import json
 import os
@@ -293,3 +295,63 @@ def test_tls_does_not_replace_the_key_on_a_public_bind(tmp_path):
     assert main(["serve", "--config", path, "--profile", DEV, "--allow-provisional"], env={}, run=Runner()) == 2
     assert main(["serve", "--config", path, "--profile", DEV, "--allow-provisional"],
                 env={"CAPSERVE_API_KEY": "k"}, run=Runner()) == 0
+
+
+# ------------------------------------------------------------------ 044: candidate policies --
+
+STUDY = str(SERVICE / "profiles" / "provisional-stage-v.json")
+WEIGHTED = ('[admission]\npolicy = "weighted-v1"\nbudget = 32\nmax_queue = 32\n'
+            '[[admission.classes]]\nname = "v-uniform-2k"\nunits = 1\nmax_concurrency = 32\n'
+            '[[admission.classes]]\nname = "v-uniform-8k"\nunits = 4\nmax_concurrency = 8\n')
+PACING = 'active_class = "v-uniform-2k"\n[prefill_pacing]\nburst_tokens = 9600\nrate_tokens_per_s = 5920\n'
+
+
+@pytest.fixture
+def no_tokenizer(monkeypatch):
+    """A candidate policy counts with the local tokenizer; its loading is 038 §4's own test."""
+    from capserve import tokens
+    monkeypatch.setattr(tokens.LocalTokenizer, "load", classmethod(lambda cls, p: object()))
+
+
+def policy_cfg(tmp_path, text: str) -> str:
+    path = tmp_path / "policy.toml"
+    path.write_text('tokenizer = "local"\ntokenizer_path = "/snap"\nmax_queue_wait_s = 120.0\n'
+                    'request_deadline_s = 600.0\n' + text)
+    return str(path)
+
+
+@pytest.mark.parametrize("text, says", [(WEIGHTED, "admission weighted-v1:v-uniform-2k+v-uniform-8k"),
+                                        (PACING, "class v-uniform-2k")])
+def test_a_candidate_policy_serves_the_study_profile_only_with_allow_provisional(tmp_path, capsys, no_tokenizer,
+                                                                                  text, says):
+    """044 item 5: research use, `capserve serve --allow-provisional` on the provisional study profile."""
+    run = Runner()
+    assert main(["serve", "--config", policy_cfg(tmp_path, text), "--profile", STUDY, "--allow-provisional"], env={},
+                run=run) == 0
+    err = capsys.readouterr().err
+    assert "PROVISIONAL" in err and says in err and run.calls[0][1].profile_id == "provisional-stage-v"
+    assert main(["serve", "--config", policy_cfg(tmp_path, text), "--profile", STUDY], env={}, run=run) == 2
+    assert len(run.calls) == 1
+
+
+@pytest.mark.parametrize("text", [PACING.replace("v-uniform-2k", "uniform-2k"),
+                                  WEIGHTED.replace("v-uniform", "uniform")])
+@pytest.mark.parametrize("argv_extra, env", [([], {}), (["--allow-provisional"], {"CAPSERVE_ALLOW_PROVISIONAL": "1"})])
+def test_a_candidate_policy_on_a_verified_profile_without_section_12_exits_2_whatever_flag(tmp_path, profiles, capsys,
+                                                                                           no_tokenizer, text,
+                                                                                           argv_extra, env):
+    c1b = profiles / "verified-formal-20261017-c1b.json"
+    c1b.write_bytes((SERVICE / "profiles" / c1b.name).read_bytes())
+    run = Runner()
+    assert serve(policy_cfg(tmp_path, text), str(c1b), profiles, *argv_extra, env=env, run=run,
+                 frozen=None) == 2
+    err = capsys.readouterr().err
+    assert run.calls == [] and "044" in err and "§12" in err
+
+
+def test_a_pacing_burst_below_the_class_prompt_exits_2(tmp_path, capsys, no_tokenizer):
+    run = Runner()
+    text = PACING.replace("9600", "1919")
+    assert main(["serve", "--config", policy_cfg(tmp_path, text), "--profile", STUDY, "--allow-provisional"], env={},
+                run=run) == 2
+    assert run.calls == [] and "burst_tokens" in capsys.readouterr().err

@@ -3,7 +3,9 @@
 verified with a number and its bound, verified 0 = refuse the class, unavailable with a reason and no number), and the
 Stage D profiles of decision 043 (§9: their classes, servers, fingerprints and evidence; the serving_class refusals:
 an output limit above 128 tokens, on a T profile anything but an M8K-T class with H-D2a supported, and on a B0 profile
-a T workload's class)."""
+a T workload's class), and the Stage V profiles of decision 044 (§12: checked against a frozen configs/stage_v.toml,
+which no checkout has before Stage V's freeze, so every §12 profile fails closed until then; the pacing copies, V1's
+validated classes, the weighted-v1 admission section, and the §12 fields nowhere else)."""
 
 import copy
 import hashlib
@@ -18,6 +20,8 @@ import stage_d_plan as sdplan
 from capserve import profile as cp
 from fakes.profiles import FROZEN, HEX, frozen_capacity, frozen_configs, frozen_stage_d, rehash, verified_class
 from fakes.profiles import ABOVE_CKV_NOT_COVERED, NOT_COVERED, STAGE_D_CLASSES, stage_d_class, stage_d_doc
+from fakes.profiles import FROZEN_V, GATEWAY_PATH_SHA256, PACING, SLOW_QUEUE, V1_NOT_COVERED, admission_section
+from fakes.profiles import frozen_stage_v, stage_v_copy, stage_v_doc, v1_class, validation
 from fakes.profiles import t_fingerprint as hand_t_fingerprint
 from fakes.profiles import verified_doc as _verified_doc
 
@@ -413,15 +417,16 @@ def test_the_frozen_configs_default_to_the_repo_files():
     root = Path(bp.__file__).resolve().parent.parent
     cap, pins = (root / "configs" / "capacity.toml").read_bytes(), (root / "configs" / "pins.toml").read_bytes()
     stage_d = (root / "configs" / "stage_d.toml").read_bytes()   # 043: read too (a release's git archive has it)
+    assert not (root / "configs" / "stage_v.toml").exists()   # 044: only at Stage V's freeze
     assert cp.frozen_configs() == (tomllib.loads(cap.decode()), hashlib.sha256(cap).hexdigest(),
                                    hashlib.sha256(pins).hexdigest(), tomllib.loads(stage_d.decode()),
-                                   hashlib.sha256(stage_d).hexdigest())
+                                   hashlib.sha256(stage_d).hexdigest(), None, None)
 
 
 def test_a_missing_capacity_toml_is_not_frozen(tmp_path):
     (tmp_path / "configs").mkdir()
     (tmp_path / "configs" / "pins.toml").write_bytes(b"x = 1\n")
-    assert cp.frozen_configs(tmp_path) == ({}, None, hashlib.sha256(b"x = 1\n").hexdigest(), None, None)
+    assert cp.frozen_configs(tmp_path) == ({}, None, hashlib.sha256(b"x = 1\n").hexdigest(), None, None, None, None)
     (tmp_path / "configs" / "capacity.toml").write_text("[freeze\n")
     with pytest.raises(cp.ProfileError):
         cp.frozen_configs(tmp_path)
@@ -444,6 +449,21 @@ def test_frozen_configs_built_from_three_positional_values_have_no_stage_d():
     """043: the new fields have defaults, so FrozenConfigs(cfg, CAP_SHA, PINS_SHA) (the generator, its tests) works."""
     got = cp.FrozenConfigs({"freeze": {"capacity": True}}, "cd" * 32, "ef" * 32)
     assert (got.stage_d, got.stage_d_sha256) == (None, None) and got.capacity_sha256 == "cd" * 32
+    assert (got.stage_v, got.stage_v_sha256) == (None, None)
+
+
+def test_a_stage_v_toml_is_read_only_when_present(tmp_path):
+    """044 item 6: the §12 loader reads configs/stage_v.toml (never a Stage V module) when it exists."""
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs" / "pins.toml").write_bytes(b"x = 1\n")
+    assert cp.frozen_configs(tmp_path)[5:] == (None, None)
+    raw = b'[freeze]\nstage_v = true\ngateway_path_sha256 = "' + b"c3" * 32 + b'"\n'
+    (tmp_path / "configs" / "stage_v.toml").write_bytes(raw)
+    got = cp.frozen_configs(tmp_path)
+    assert (got.stage_v, got.stage_v_sha256) == (tomllib.loads(raw.decode()), hashlib.sha256(raw).hexdigest())
+    (tmp_path / "configs" / "stage_v.toml").write_text("[freeze\n")
+    with pytest.raises(cp.ProfileError, match="stage_v.toml"):
+        cp.frozen_configs(tmp_path)
 
 
 def test_the_stage_c_classes_are_the_generators():
@@ -554,8 +574,9 @@ def test_the_stage_d_classes_are_the_d_a_workloads():
 
 
 def test_not_covered_is_a_closed_enum_set_by_the_flags():
-    """043 §5: every D-A class has the six items; ABOVE_CKV adds in_vllm_wait_beyond_c_kv; no other flag adds any."""
-    assert list(cp.NOT_COVERED) == NOT_COVERED + [ABOVE_CKV_NOT_COVERED]
+    """043 §5: every D-A class has the six items; ABOVE_CKV adds in_vllm_wait_beyond_c_kv; no other flag adds any.
+    044 adds output_length_distribution to the enum, for V1's classes only."""
+    assert list(cp.NOT_COVERED) == NOT_COVERED + [ABOVE_CKV_NOT_COVERED, "output_length_distribution"]
     for w in cp.STAGE_D_CLASS_NAMES:
         assert cp.not_covered_for(w, []) == NOT_COVERED
         assert cp.not_covered_for(w, ["WINDOW_SENSITIVE", "STRICT_COARSE"]) == NOT_COVERED
@@ -694,8 +715,9 @@ def test_a_stage_c_profile_carries_none_of_the_stage_d_fields(tmp_path, pins, ed
     assert needle in refusal(tmp_path, rehash(doc), allow_provisional=False, pins=pins)
 
 
-def test_prereg_sections_are_stage_c_and_stage_d():
-    assert cp.PREREG_SECTIONS == ("§8", "§9") and cp.PREREG_SECTION == "§8"
+def test_prereg_sections_are_stage_c_d_and_v():
+    assert cp.PREREG_SECTIONS == ("§8", "§9", "§12") and cp.PREREG_SECTION == "§8"
+    assert (cp.STAGE_D_SECTION, cp.STAGE_V_SECTION) == ("§9", "§12")
 
 
 # ------------------------------------------------------------------ serving_class: the 043 refusals --
@@ -750,3 +772,227 @@ def test_a_t_profile_class_without_evidence_is_never_served(pins):
     doc["classes"][1]["evidence"] = None
     with pytest.raises(cp.ProfileError, match="030 8.8"):
         cp.CapacityProfile.model_validate(rehash(doc)).serving_class("mixed-8k-t")
+
+
+# ------------------------------------------------------------------ Stage V profiles (044, §12) --
+
+def v_load(tmp_path, doc, pins, frozen=FROZEN_V):
+    return load(write(tmp_path, doc), allow_provisional=False, pins=pins, frozen=frozen)
+
+
+def test_v1_not_covered_drops_what_v1_measured_and_adds_the_distribution():
+    """044 "§12 的 class": V1 measured through the gateway and other output lengths, but only one distribution."""
+    assert cp.v1_not_covered("U8K-O512", []) == V1_NOT_COVERED + ["output_length_distribution"]
+    assert cp.v1_not_covered("U2K-O512", ["WINDOW_SENSITIVE", "ABOVE_CKV"]) == V1_NOT_COVERED + [
+        ABOVE_CKV_NOT_COVERED, "output_length_distribution"]
+    for w in cp.STAGE_D_CLASS_NAMES:
+        assert "output_length_distribution" not in cp.not_covered_for(w, ["ABOVE_CKV"])   # 043's lists unchanged
+    assert cp.V1_CLASS_NAMES == {"U2K-O512": "uniform-2k-o1-512", "U8K-O512": "uniform-8k-o1-512"}
+
+
+def test_a_stage_v_profile_loads_after_stage_vs_freeze(tmp_path, pins):
+    prof = v_load(tmp_path, stage_v_doc(pins), pins)
+    assert prof.profile_id == "verified-formal-20261101-v-adm-b0" and prof.provenance.prereg_section == "§12"
+    u2k = prof.serving_class("uniform-2k")
+    assert (u2k.max_concurrency, u2k.pacing.burst_tokens, u2k.pacing.rate_tokens_per_s) == (32, 9600, 5920)
+    assert u2k.pacing.queue.model_dump() == SLOW_QUEUE and u2k.validation.unit == "PACE-2K"
+    assert prof.admission.budget == 32 and [c.name for c in prof.admission.classes] == ["uniform-2k", "uniform-8k"]
+    assert prof.provenance.gateway_path_sha256 == GATEWAY_PATH_SHA256
+    cls = v_load(tmp_path, stage_v_doc(pins, classes=[v1_class("U2K-O512"), v1_class("U8K-O512")], admission=None,
+                                       session="formal-20261102-v-cls"), pins)
+    o1 = cls.serving_class("uniform-8k-o1-512")   # 044: 512 output tokens validated, so served (043 §4 lifted)
+    assert (o1.max_concurrency, o1.max_output_tokens, o1.bound, o1.evidence.c_prod.value) == (8, 512, "validated", 12)
+    assert o1.evidence.via_gateway is True and o1.evidence.output_distribution == "uniform[1,512]"
+    plain = stage_v_doc(pins, classes=[stage_v_copy("U2K", pacing=False), stage_v_copy("U8K", pacing=False)])
+    assert v_load(tmp_path, plain, pins).workload_class("uniform-8k").pacing is None   # W1 alone
+
+
+def test_no_stage_v_profile_loads_before_stage_vs_freeze(tmp_path, pins):
+    """044 item 6: configs/stage_v.toml exists only from Stage V's freeze; without it (this checkout), or not frozen,
+    every §12 profile is refused: fail closed."""
+    doc = stage_v_doc(pins)
+    for frozen in (FROZEN, cp.frozen_configs(), frozen_configs(stage_v=frozen_stage_v(stage_v=False)),
+                   frozen_configs(stage_v={"slo": frozen_stage_v()["slo"]})):
+        msg = refusal(tmp_path, doc, allow_provisional=True, pins=pins, frozen=frozen)
+        assert "[freeze] stage_v" in msg
+    for frozen, needle in ((frozen_configs(frozen_capacity(capacity=False), stage_v=frozen_stage_v()),
+                            "[freeze] capacity"),
+                           (frozen_configs(stage_d=frozen_stage_d(stage_d=False), stage_v=frozen_stage_v()),
+                            "[freeze] stage_d"),
+                           (frozen_configs(stage_v=frozen_stage_v(gateway_path_sha256="00" * 32)),
+                            "gateway_path_sha256")):
+        assert needle in refusal(tmp_path, doc, allow_provisional=False, pins=pins, frozen=frozen)
+    s3 = frozen_stage_v()
+    s3["slo"]["tpot_p95_ms"] = 150
+    assert "stage_v.toml [slo]" in refusal(tmp_path, doc, allow_provisional=False, pins=pins,
+                                           frozen=frozen_configs(stage_v=s3))
+
+
+def _v_cls(i):
+    def edit(fn):
+        return lambda d: fn(d["classes"][i])
+    return edit
+
+
+def _v1(fn, needle):
+    """An edit of a V-CLS profile (V1's two classes, no admission section)."""
+    return ("V1", fn, needle)
+
+
+@pytest.mark.parametrize("kind, edit, needle", [
+    ("ADM", lambda d: d["provenance"].update(stage_v_sha256="00" * 32), "stage_v_sha256"),
+    ("ADM", lambda d: d["provenance"].update(stage_v_sha256=None), "stage_v_sha256"),
+    ("ADM", lambda d: d["provenance"].update(stage_d_sha256="00" * 32), "stage_d_sha256"),
+    ("ADM", lambda d: d["provenance"].update(capacity_sha256="00" * 32), "capacity_sha256"),
+    ("ADM", lambda d: d["provenance"].update(gateway_path_sha256="00" * 32), "gateway_path_sha256"),
+    ("ADM", lambda d: d["provenance"].update(gateway_path_sha256=None), "gateway_path_sha256"),
+    ("ADM", lambda d: d["provenance"].update(capserve_sha256="nope"), "capserve_sha256"),
+    ("ADM", lambda d: d["provenance"].update(base_profiles=[]), "base_profiles"),
+    ("ADM", lambda d: d["provenance"].update(base_profiles=None), "base_profiles"),
+    ("ADM", lambda d: d["provenance"]["base_profiles"].append({"id": "verified-x", "content_sha256": "X"}),
+     "base_profiles"),
+    ("ADM", lambda d: d["slo"].update(id="S3"), "slo"),
+    ("ADM", lambda d: d.update(profile_id="verified-formal-20261101-v-adm"), "profile_id"),
+    ("ADM", lambda d: d["provenance"].update(analysis_path="results/stage_d/formal-20261101-v-adm/analysis.json"),
+     "analysis_path"),
+    ("ADM", lambda d: d["server"].update(long_prefill_token_threshold=512), "B0"),
+    # the copies
+    ("ADM", _v_cls(0)(lambda c: c.update(name="uniform-2k-paced")), "uniform-2k"),
+    ("ADM", _v_cls(0)(lambda c: c.update(max_prompt_tokens=8064)), "max_prompt_tokens"),
+    ("ADM", _v_cls(0)(lambda c: c["evidence"].update(workload="M2K")), "uniform-2k or uniform-8k"),
+    ("ADM", _v_cls(0)(lambda c: c["evidence"].update(server="B0")), "§8 class"),
+    ("ADM", _v_cls(0)(lambda c: c["evidence"].update(via_gateway=True)), "§8 class"),
+    ("ADM", _v_cls(0)(lambda c: c["pacing"].update(burst_tokens=1919)), "burst"),
+    ("ADM", _v_cls(0)(lambda c: c.update(validation=None)), "validation"),
+    ("ADM", _v_cls(0)(lambda c: c["validation"].update(unit="PACE-8K")), "PACE-2K"),
+    ("ADM", _v_cls(0)(lambda c: c["validation"].update(study="V4")), "V2"),
+    ("ADM", _v_cls(0)(lambda c: c["validation"].update(points=[])), "points"),
+    ("ADM", _v_cls(0)(lambda c: c["validation"]["worst_r"].update({"P-X": {"client": 0.5}})), "worst_r"),
+    ("ADM", _v_cls(0)(lambda c: c.update(pacing=None)), "validation"),                # validation without pacing
+    ("ADM", _v_cls(0)(lambda c: c.update(bound="validated", source="stage_v:PACE-2K")), "V1"),
+    ("ADM", lambda d: d["classes"].append(stage_v_copy("U2K")), "more than one class"),
+    ("ADM", lambda d: d.update(admission=None, classes=[stage_v_copy("U2K"), stage_v_copy("U8K", pacing=False)]),
+     "admission"),                                                          # a plain copy no section names
+    # the admission section
+    ("ADM", lambda d: d["admission"]["classes"][1].update(name="uniform-8k-o1-512"), "uniform-8k-o1-512"),
+    ("ADM", lambda d: d["admission"]["classes"][1].update(max_concurrency=9, units=4), "max_concurrency"),
+    ("ADM", lambda d: d["admission"]["classes"][1].update(max_concurrency=16, units=2), "caps are the profile's"),
+    ("ADM", lambda d: d["admission"]["classes"][1].update(units=3), "budget"),
+    ("ADM", lambda d: d["admission"].update(budget=64), "budget"),
+    ("ADM", lambda d: d["admission"]["classes"].reverse(), "increasing"),
+    ("ADM", lambda d: d["admission"]["classes"].append(dict(d["admission"]["classes"][0])), "twice"),
+    ("ADM", lambda d: d["admission"].update(gateway_path_sha256="00" * 32), "gateway_path_sha256"),
+    ("ADM", lambda d: d["admission"].update(measured_mixes=[]), "measured_mixes"),
+    ("ADM", lambda d: d["admission"].update(measured_mixes=[0.9, 1.0]), "measured_mixes"),
+    ("ADM", lambda d: d["admission"]["validation"].update(unit="W2"), "W1"),
+    # V1's classes
+    _v1(_v_cls(0)(lambda c: c.update(name="uniform-2k-o512")), "uniform-2k-o1-512"),
+    _v1(_v_cls(0)(lambda c: c.update(max_output_tokens=128)), "max_output_tokens"),
+    _v1(_v_cls(1)(lambda c: c.update(max_queue=12)), "max_queue"),
+    _v1(_v_cls(1)(lambda c: c.update(source="stage_v:V1-2K")), "source"),
+    _v1(_v_cls(1)(lambda c: c.update(bound="exact")), "source"),
+    _v1(_v_cls(1)(lambda c: c.update(status="unavailable", unavailable_reason="x", max_concurrency=None,
+                                     max_queue=None)), "verified"),
+    _v1(_v_cls(0)(lambda c: c["evidence"].update(workload="U32K")), "workload"),
+    _v1(_v_cls(0)(lambda c: c["evidence"].update(output_tokens=128)), "output_tokens"),
+    _v1(_v_cls(0)(lambda c: c["evidence"].update(server="T")), "server"),
+    _v1(_v_cls(0)(lambda c: c["evidence"]["not_covered"].insert(1, "via_gateway")), "not_covered"),
+    _v1(_v_cls(1)(lambda c: c["evidence"].update(not_covered=NOT_COVERED)), "not_covered"),
+    _v1(_v_cls(0)(lambda c: c["evidence"].update(output_distribution="uniform[1,128]")), "output_distribution"),
+    _v1(_v_cls(0)(lambda c: c["evidence"]["datasets_sha256"].pop()), "datasets_sha256"),
+    _v1(_v_cls(0)(lambda c: c["evidence"].update(datasets_sha256=["ab" * 32] * 5)), "datasets_sha256"),
+    _v1(_v_cls(0)(lambda c: c["evidence"].update(via_gateway=False)), "via_gateway"),
+    _v1(_v_cls(0)(lambda c: c["evidence"].update(via_gateway=None)), "via_gateway"),
+    _v1(_v_cls(0)(lambda c: c.update(pacing={**PACING["U2K"], "queue": dict(SLOW_QUEUE)})), "pacing"),
+    _v1(_v_cls(0)(lambda c: c.update(validation=None)), "validation"),
+    _v1(_v_cls(0)(lambda c: c["validation"].update(unit="V1-8K")), "V1-2K"),
+])
+def test_a_stage_v_profile_must_match_its_session_its_freeze_and_the_044_mapping(tmp_path, pins, kind, edit, needle):
+    if kind == "V1":
+        doc = stage_v_doc(pins, classes=[v1_class("U2K-O512"), v1_class("U8K-O512")], admission=None,
+                          session="formal-20261102-v-cls")
+    else:
+        doc = stage_v_doc(pins)
+    edit(doc)
+    msg = refusal(tmp_path, rehash(doc), allow_provisional=False, pins=pins, frozen=FROZEN_V)
+    assert needle in msg, msg
+
+
+@pytest.mark.parametrize("doc_of, edit, needle", [
+    (lambda p: verified_doc(p), lambda d: d["classes"][0].update(pacing={**PACING["U2K"], "queue": SLOW_QUEUE}),
+     "pacing"),
+    (lambda p: verified_doc(p), lambda d: d["classes"][0].update(validation=validation("V2", "PACE-2K", ["P"], ["v"])),
+     "validation"),
+    (lambda p: verified_doc(p), lambda d: d.update(admission=admission_section()), "admission"),
+    (lambda p: verified_doc(p), lambda d: d["provenance"].update(gateway_path_sha256="c3" * 32), "gateway_path"),
+    (lambda p: verified_doc(p), lambda d: d["classes"][0]["evidence"].update(via_gateway=True), "via_gateway"),
+    (lambda p: stage_d_doc(p), lambda d: d.update(admission=admission_section()), "admission"),
+    (lambda p: stage_d_doc(p), lambda d: d["provenance"].update(stage_v_sha256="b2" * 32), "stage_v_sha256"),
+    (lambda p: stage_d_doc(p), lambda d: d["classes"][0]["evidence"].update(datasets_sha256=["ab" * 32]),
+     "datasets_sha256"),
+    (lambda p: provisional_doc(p), lambda d: d.update(admission=admission_section()), "admission"),
+    (lambda p: provisional_doc(p), lambda d: d["classes"][0].update(pacing={**PACING["U2K"], "queue": SLOW_QUEUE}),
+     "pacing"),
+])
+def test_the_stage_v_fields_never_appear_outside_section_12(tmp_path, pins, doc_of, edit, needle):
+    """044: a pacing, an admission section, V1's evidence and the Stage V provenance exist only in a §12 profile, so
+    no candidate policy can be attached to c1b's, a Stage D or a provisional profile by hand."""
+    doc = doc_of(pins)
+    edit(doc)
+    assert needle in refusal(tmp_path, rehash(doc), allow_provisional=True, pins=pins, frozen=FROZEN_V)
+
+
+@pytest.mark.parametrize("name", ["uniform-2k-o1-512", "uniform-8k-o1-512"])
+def test_a_provisional_profile_never_uses_v1s_class_names(tmp_path, pins, name):
+    doc = provisional_doc(pins)
+    doc["classes"][0]["name"] = name
+    assert "reserved" in refusal(tmp_path, rehash(doc), pins=pins)
+
+
+def test_bound_validated_is_only_v1s(tmp_path, pins):
+    """044: "validated" (a fixed point V1 validated) is no 030 8.7 bound: a §8 / §9 class with it never loads, and a
+    model that never went through the loader still gets 043 §4's refusal for its 512 output tokens."""
+    doc = verified_doc(pins)
+    doc["classes"][0]["bound"] = "validated"
+    assert "bound" in refusal(tmp_path, rehash(doc), allow_provisional=False, pins=pins, frozen=FROZEN_V)
+    doc = stage_d_doc(pins, classes=[stage_d_class("U2K-O512", value=32)])
+    doc["classes"][0]["bound"] = "validated"
+    assert "bound" in refusal(tmp_path, rehash(doc), allow_provisional=False, pins=pins, frozen=FROZEN_V)
+    with pytest.raises(cp.ProfileError, match="043 §4"):
+        cp.CapacityProfile.model_validate(rehash(doc)).serving_class("uniform-2k-o512")
+
+
+# ------------------------------------------------------------------ the Stage V study profile (044 item 9) --
+
+STUDY_BASES = {"v-uniform-2k": ("verified-formal-20261017-c1b", "uniform-2k"),
+               "v-uniform-8k": ("verified-formal-20261017-c1b", "uniform-8k"),
+               "v-uniform-2k-o512": ("verified-formal-20261023-d-a2-b0", "uniform-2k-o512"),
+               "v-uniform-8k-o512": ("verified-formal-20261023-d-a2-b0", "uniform-8k-o512")}
+LIMITS = ("max_prompt_tokens", "max_output_tokens", "max_concurrency", "max_queue")
+
+
+def test_the_stage_v_study_profile_copies_its_base_classes_limits_field_by_field(pins):
+    """044 item 9 / "和 043 字面的差異" 3: the v- classes the study serves with --allow-provisional have, field by field,
+    the limits of the committed verified class they stand for (only the label and the status differ), on B0;
+    v-uniform-8k-o512-c8 is uniform-8k-o512's tokens at the 8 V1-8K would unlock (c1b's uniform-8k)."""
+    path = SERVICE / "profiles" / "provisional-stage-v.json"
+    with pytest.raises(cp.ProfileError, match="allow-provisional"):
+        cp.load_profile(path, allow_provisional=False, pins=pins)
+    prof = cp.load_profile(path, allow_provisional=True, pins=pins)
+    assert prof.profile_id == "provisional-stage-v" and "not a capacity" in prof.provisional_reason.lower()
+    assert prof.server.fingerprint_sha256 == cp.stage_b_fingerprint(pins) and prof.server_variant == "B0"
+    assert (prof.server.num_gpu_blocks, prof.server.block_size) == (pins["stage_b"]["num_gpu_blocks"],
+                                                                    pins["stage_b"]["block_size"])
+    assert [c.name for c in prof.classes] == list(STUDY_BASES) + ["v-uniform-8k-o512-c8"]
+    for name, (pid, base) in STUDY_BASES.items():
+        b = cp.load_profile(SERVICE / "profiles" / f"{pid}.json", allow_provisional=False, pins=pins)
+        assert {k: getattr(prof.serving_class(name), k) for k in LIMITS} == \
+            {k: getattr(b.workload_class(base), k) for k in LIMITS}, name
+    o512 = cp.load_profile(SERVICE / "profiles" / "verified-formal-20261023-d-a2-b0.json", allow_provisional=False,
+                           pins=pins).workload_class("uniform-8k-o512")
+    u8k = cp.load_profile(SERVICE / "profiles" / "verified-formal-20261017-c1b.json", allow_provisional=False,
+                          pins=pins).workload_class("uniform-8k")
+    c8 = prof.serving_class("v-uniform-8k-o512-c8")
+    assert (c8.max_prompt_tokens, c8.max_output_tokens) == (o512.max_prompt_tokens, o512.max_output_tokens)
+    assert (c8.max_concurrency, c8.max_queue) == (u8k.max_concurrency, u8k.max_queue) == (8, 8)
+    assert c8.max_concurrency == v1_class("U8K-O512")["max_concurrency"]   # the value V1-8K would unlock

@@ -878,3 +878,43 @@
   - 正式釘選不會自動改變（037 §2）。
 - **輸出**：`results/stage_v/<session>/analysis.json`。
 ```
+
+## 實作補記（2026-10-24，產品程式第 1–9 項；沒有任何 Stage V 數據）
+
+產品程式第 1–9 項已在 `feat/044-stage-v` 以 TDD 實作（`service/capserve/`、`service/tests/`）。下列是本文沒有寫死、實作時決定的細節，以及本文和程式不一致、依程式處理的地方（依 CLAUDE.md 先記錄）。候選政策在設定沒有 `[admission]` / `[prefill_pacing]` 時完全不啟用：准入仍是原本的 `AdmissionController`，正式部署的行為不變；c1b、三份 Stage D profile、`rtx-verified.toml` 的位元組都不變，c1b 與 Stage D 的 profile 仍逐位元重新產生。
+
+1. **access log 的欄位名**：`RequestRecord` 既有的 `arrival`、`upstream_sent` 就是 monotonic 的到達與送出時間，access log 以 `t_arrival_s`、`t_sent_s` 寫出；記錄內的名稱不變，以免改動 proxy 與既有測試。`client_request_id`、`t_released_s`、`prefill_wait_s`、`admission_class`、`admission_units` 是新欄位，未設定時不寫出：預設設定下只多 `client_request_id`（client 有送時）與三個時間；`prefill_wait_s` 只在 pacing 開啟時、`admission_*` 只在 weighted-v1 時出現。`capserve_prefill_wait_seconds` 一律註冊，只有 pacing 開啟時才有觀測值。`ttft_s`、`upstream_ttft_s` 仍只在串流的 request 記錄（既有行為），(h) 依此讀取。
+2. **`t_released_s` 的記錄點**：`Permit.release` 先讀 controller 的時鐘、呼叫 `on_release`，再把 slot 交給下一個 waiter；測試在回呼中確認 waiter 當時仍在排隊。
+3. **queue_wait_s 與 prefill_wait_s 互斥**：pacing 開啟時 `queue_wait_s` = 總等待 − `prefill_wait_s`，所以「逐 request 的分解」中 gw ttft_s − upstream_ttft_s − queue_wait_s − prefill_wait_s 不會重複扣除。`prefill_wait_s` 是在隊首、有空的並發位置、只缺 token 的時間（0.0 代表沒有等 token）；token 在准入時扣除，之後即使取消也不退還（保守的方向）。
+4. **pacing 也一律計數**（本文只對 weighted-v1 寫「一律計數，不走 `fast_fits`」）：bucket 以 prompt 的 token 數扣除，byte 上界會多算，2K 的 RandomDataset prompt 的上界可能超過 burst 9,600 而永遠進不去，所以 pacing 也一律以 local tokenizer 計數。任一候選政策都要求 `tokenizer = "local"`，否則 ConfigError。
+5. **設定的格式**：
+   - `[admission]` = {policy "weighted-v1", budget, max_queue, classes [{name, units, max_concurrency}]}。設定時不設 `active_class`；兩者必須恰好設一個。
+   - `[prefill_pacing]` = {burst_tokens, rate_tokens_per_s}，都是整數（本文的 rate 取到 10 tok/s）。
+   - 參數必須符合所命名的 class，否則 ConfigError：cap 等於 class 的 max_concurrency；units × cap = budget（043 7.3 A：單一 class 恰好在它的 C_PROD 填滿預算）；max_prompt_tokens 嚴格遞增（prompt 分到第一個容得下的 class）；max_output_tokens 相同；burst ≥ class 的 max_prompt_tokens。
+   - 本文 `[stage_v.weighted_v1]` 的「order fifo」與「上限 1,920 / 8,064」不是設定值：順序固定是嚴格 FIFO，上限取自 profile 的 class。
+6. **weighted-v1 的揭露**：沒有 active class，所以 `/readyz` 的 active_class、class_status、bound、flags、not_covered 為 null。
+   - `limits` 是政策的包絡：max_concurrency 為最大的 cap（units × cap = budget 時，在途的 request 數不會超過它）、max_queue 為政策的 max_queue、max_prompt_tokens 為最大的 class、max_output_tokens 為共同值；max_pending = budget + max_queue + pre_admission_slots，上游連線池 = budget + 4。
+   - `admission` 列出參數與各 class 的 token 上限，`admission_state` 是即時的單位數與各 class 的在途數。
+   - `capserve_profile_info` 的 active_class label 為 `weighted-v1:<class>+<class>`，flags 為空字串；concurrency / queue limit 的 gauge 為包絡值；Retry-After 的估計也用包絡的 max_concurrency。
+7. **`/readyz` 的新欄位**：`serving_status`（profile 的 verified / provisional）、`queue` {max_queue_wait_s, request_deadline_s}、`admission`、`admission_state`、`prefill_pacing`、`gateway_path_sha256`、`gateway_validated`。
+   - `gateway_validated` 只對 §12 profile 有值（執行中的 gateway_path_sha256 是否等於 provenance 的值），其他 profile 為 null。
+   - 和待決事項第 4 項的差異：V-GW 通過的 class 不產生新檔（`…-d-a1b-b0` 的位元組不變），profile 中沒有可比對的 sha，所以「V-GW 的候選資格揭露 `gateway_validated: false`」目前無法由 `/readyz` 表示。使用者決定改釘選時另行處理（README 或新的 decision）。
+8. **服務規則只有一個入口**：`capserve.config.served_classes`，由 `capserve serve`（exit 2）、`create_app`（ProfileError / ConfigError）與 `deploy up`（preflight 拒絕）共用。
+   - provisional profile 只有在 `--allow-provisional`（或 `CAPSERVE_ALLOW_PROVISIONAL=1`）下才會載入，所以「provisional 加上旗標」在這裡就是「provisional」。deploy 以 `study=False` 呼叫，provisional 一律拒絕。
+   - §12 profile：pacing 時，active class 的 `pacing`（參數與 queue）必須完全相同；weighted-v1 時，profile 的 `admission` 段（policy、budget、max_queue、classes 與 queue）必須完全相同；兩者都要求執行中的 gateway_path_sha256 等於 provenance 的值（weighted-v1 另比對段內的值）。
+   - deploy 遇到相同的 §12 段時照常啟動：`gateway.toml` 寫出這些表（`toml_dumps` 支援 inline table 的陣列），`/readyz` 必須回報相同的政策、參數與 queue 設定。deploy 以 gateway 實際執行的 release 計算 gateway_path_sha256。
+9. **§12 profile 的 schema**（loader 依此檢查，第 8 步的產生器必須照此寫出）：
+   - **provenance**：沿用既有欄位，`source_session` 就是本文的 validation_session，analysis 的 path 與 sha 也是既有欄位；新增 `stage_v_sha256`、`gateway_path_sha256`、`capserve_sha256`、`base_profiles` [{id, content_sha256}]；`stage_d_sha256` 必填。
+   - **複本**：c1b 的 uniform-2k / uniform-8k，§8 的 class 與 evidence 原樣。可帶 `pacing` {burst_tokens, rate_tokens_per_s, queue}，此時必須帶 PACE-2K / PACE-8K 的 `validation`；沒有 pacing 的複本只能作為 admission 段的成員，不帶 validation。
+   - **V1 class**：名稱 uniform-2k-o1-512 / uniform-8k-o1-512，token 上限取 D-A 的 U2K-O512 / U8K-O512，bound `validated`，max_concurrency = max_queue（V1 的點的 C），source `stage_v:V1-2K` / `stage_v:V1-8K`。evidence 是 O512 class 的 evidence（server B0、output_tokens 512），not_covered 為 `v1_not_covered`，另加 `output_distribution` "uniform[1,512]"、`datasets_sha256`（5 個不同的 sha）、`via_gateway` true。`serving_class` 的 043 §4 拒絕不適用於 §12 的 validated class；同一個 bound 出現在 §8 / §9 時，loader 拒絕，只讀 model 時 043 §4 仍拒絕。
+   - **validation** = {study, unit, points, measured_classes, worst_r {point: {client, upstream}}, n}。本文寫的「class」改名為 `measured_classes`：`class` 是 Python 的保留字，而且 V1-8K 的兩點服務不同的 class。本文放在 V1 evidence 的「兩點的 worst_R」也放在 validation 的 worst_r。
+   - **admission 段**：weighted-v1 的參數、queue、measured_mixes（每個都在 (0, 1) 內）、gateway_path_sha256（必須等於 provenance 的值）與 V4 的 validation。
+   - **只讀 stage_v.toml 的三個鍵**：`[freeze] stage_v`、`[freeze] gateway_path_sha256`、`[slo]`，另比對整個檔案的 sha256。pacing 與 admission 的數值，和 §8 / §9 的上限一樣，信任來源是「committed 的檔案加上 Mac 上的重新產生測試」，loader 不和 `[stage_v.pacing]` / `[stage_v.weighted_v1]` 比對，避免和還沒寫的 harness 鍵名耦合。重新產生的測試在產生器那一步加入。
+   - 這些欄位在 §8、§9 與 provisional profile 中一律為 null，所以候選政策不能手動加到 c1b 或 Stage D 的 profile 上。
+   - 沒有 `configs/stage_v.toml`（目前的 checkout）時，每一份 §12 profile 都被拒絕（fail closed）。
+10. **P-U8K 的 max_queue**：V2 寫「max_queue 32，所有點相同」，但 max_queue 是 profile 的 class 上限，`v-uniform-8k` 依第 9 項是 8 / 8。依程式，P-U8K 的佇列上限是 8；封閉迴路 C 8 時，在途加上排隊的 request 不會超過 8，不影響量測。harness 的 `stage_v.toml` 應記錄 8。
+11. **gateway_path_sha256**：新模組 `service/capserve/gateway_path.py` 本身也在閉包內，所以閉包現在是 16 個檔案（本文列的 15 個加上 gateway_path）。
+    - 雜湊的算法同 `run_stage_d.capserve_sha256`：依路徑排序，每個檔案依序為 path、NUL、bytes、NUL。
+    - 研究端（`stage_v_plan`）必須以同一算法自行實作，不 import capserve。`service/tests/test_gateway_path.py` 中比對兩端的測試，在 `stage_v_plan` 存在之前會 skip。
+    - 另有測試鎖定 capserve 是平坦的 package（沒有子 package，閉包只追一層）。
+12. **study profile**：`service/profiles/provisional-stage-v.json`，B0 的 fingerprint 與 KV 幾何。五個 v- class 的 limits 由已 commit 的 c1b / `-d-a2-b0` class 逐欄複製；c8 為 uniform-8k-o512 的 token 上限，加上 c1b uniform-8k 的 8 / 8。測試從 committed 的檔案逐欄比對。
