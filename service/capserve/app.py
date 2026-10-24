@@ -5,7 +5,8 @@ Routes: POST /v1/chat/completions, POST /v1/completions, GET /v1/models (the ser
 /metrics. There is no catch-all passthrough, so vLLM's /tokenize and admin endpoints are never exposed.
 
 The active class must be servable (profile.serving_class): an unavailable class of a verified profile (Stage C
-C_PROD UNSTABLE / NT, decision 030 8.7) never builds a gateway (ProfileError), whatever flag is given. A verified 0
+C_PROD UNSTABLE / NT, decision 030 8.7), a verified class of more than 128 output tokens, and on a T profile any class
+but M8K-T with H-D2a supported (decision 043) never build a gateway (ProfileError), whatever flag is given. A verified 0
 (C_PROD INFEASIBLE: refuse the class) builds one with a closed admission controller: every completion request gets
 503 class_not_serviceable right after auth (no Retry-After, x-should-retry false: retrying cannot help), /readyz is
 503 with not_ready_reason class_not_serviceable, and /v1/models, /healthz and /metrics work as usual.
@@ -86,7 +87,7 @@ class Gateway:
                  keyring: KeyRing | None = None):
         self.settings = settings
         self.profile = profile
-        self.cls = profile.serving_class(settings.active_class)   # ProfileError for an unavailable class (030 8.7)
+        self.cls = profile.serving_class(settings.active_class)   # ProfileError: 030 8.7, 043
         self.served_model = profile.server.model_repo
         self.api_key = api_key
         self.keyring = keyring

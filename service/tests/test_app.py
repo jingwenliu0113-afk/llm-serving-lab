@@ -2,7 +2,8 @@
 test's event loop (decision 029 "整合測試（假後端）"): non-stream and stream pass-through, disconnects cancel the
 upstream request and free the slot, overload never exceeds the limit, readiness, auth, /tokenize only under a permit,
 OpenAI-shaped errors everywhere, and the class statuses of a verified profile (decision 030 8.7: a verified 0 answers
-503 class_not_serviceable, an unavailable class is never served)."""
+503 class_not_serviceable, an unavailable class is never served; decision 043: neither is a verified class with more
+than 128 output tokens, nor on a T profile anything but M8K-T with H-D2a supported)."""
 
 import asyncio
 import contextlib
@@ -20,7 +21,7 @@ from capserve.keys import load_keyring
 from capserve.tokens import LocalTokenizer
 from fakes.fake_tokenizer import WordsHF
 from fakes.fake_vllm import MODEL, FakeConfig
-from fakes.profiles import verified_class, verified_doc
+from fakes.profiles import stage_d_class, stage_d_doc, verified_class, verified_doc
 from fakes.servers import gateway_settings, make_profile, stack
 
 pytestmark = pytest.mark.anyio
@@ -371,6 +372,27 @@ def test_an_unavailable_active_class_never_builds_a_gateway(status):
     prof = verified_profile(workload="U8K", status=status, max_prompt_tokens=8064)
     with pytest.raises(ProfileError, match="unavailable"):
         create_app(gateway_settings("http://127.0.0.1:9"), prof)
+
+
+@pytest.mark.parametrize("server, cls, match", [
+    ("B0", stage_d_class("U2K-O512", value=32), "043"),
+    ("B0", stage_d_class("U8K-O512", value=12), "043"),
+    ("T", stage_d_class("U8K-T", value=4), "030 8.8"),
+    ("T", stage_d_class("M8K-T", value=4, hypotheses={"H-D2a": "not supported"}), "H-D2a"),
+])
+def test_a_stage_d_class_043_refuses_never_builds_a_gateway(server, cls, match):
+    """043 §3: the two refusals take the unavailable class's path: create_app raises ProfileError (not ConfigError)."""
+    prof = CapacityProfile.model_validate(stage_d_doc(server=server, classes=[cls]))
+    with pytest.raises(ProfileError, match=match):
+        create_app(gateway_settings("http://127.0.0.1:9", active_class=cls["name"]), prof)
+
+
+async def test_mixed_8k_t_with_h_d2a_supported_is_served():
+    prof = CapacityProfile.model_validate(stage_d_doc(server="T"))
+    async with stack(profile=prof, active_class="mixed-8k-t") as st, st.client() as c:
+        body = (await c.get("/readyz")).json()
+        assert body["ready"] is True and body["active_class"] == "mixed-8k-t"
+        assert body["limits"]["max_concurrency"] == 4 and body["limits"]["max_prompt_tokens"] == 32640
 
 
 async def test_backend_down_is_503_with_retry_after():

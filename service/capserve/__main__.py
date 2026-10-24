@@ -7,9 +7,11 @@ header say provisional. A verified profile needs no flag; the loader checks its 
 frozen configs (capserve.profile), and it is served only with the bytes of one of this checkout's
 service/profiles/<name>.json files (the committed profiles the Mac test regenerates from the frozen analysis; deploy
 passes a copy of one, runs/<id>/profile.json), never a hand-written file elsewhere. An unavailable active class of a
-verified profile (decision 030 8.7: Stage C verified no number for it) exits 2 whatever flag is given; a verified 0
-class (refuse it) starts, says so, and answers every completion request 503 class_not_serviceable. Without an API key
-only a loopback host is accepted. Configuration errors exit 2.
+verified profile (decision 030 8.7: Stage C verified no number for it) exits 2 whatever flag is given, and so does a
+verified class of more than 128 output tokens or, on a T profile, any class but M8K-T with H-D2a supported (decision
+043; serve cannot see which vLLM it fronts, so only `deploy up` checks the server); a verified 0 class (refuse it)
+starts, says so, and answers every completion request 503 class_not_serviceable. Without an API key only a loopback
+host is accepted. Configuration errors exit 2.
 """
 
 from __future__ import annotations
@@ -90,7 +92,7 @@ def main(argv: list | None = None, *, env=None, run=None, frozen=None, profiles_
                                 allow_provisional=allow_provisional(args.allow_provisional, env))
         if profile.verified and (problems := committed_profile_problems(data, profiles_dir)):
             raise ProfileError(f"{args.profile}: " + "; ".join(problems))
-        cls = profile.serving_class(settings.active_class)   # an unavailable class: refused, no flag overrides it
+        cls = profile.serving_class(settings.active_class)   # 030 8.7 / 043 refusals: no flag overrides them
         # 038 §4: a local tokenizer is loaded before serving; one that cannot load is a configuration error
         local = LocalTokenizer.load(settings.tokenizer_path) if settings.tokenizer == "local" else None
     except (ConfigError, ProfileError, TokenizerLoadError, KeyFileError) as exc:

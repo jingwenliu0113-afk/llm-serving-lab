@@ -24,9 +24,12 @@ up: a foreground supervisor (WSL kills detached jobs), run from a release direct
     the headroom bound (pins [stage_b].v_total_mib - F_peak 15157 - margin 128 = 1018 MiB) is only a warning in
     meta.json and on stderr: product tests check function, not latency (031 「產品的最終規格」);
     core_b_plan.toolchain_problems empty; ports 8100 and 8080 free; the run dir allowed by runs.py; the profile's
-    fingerprint and KV geometry (if it states them; a verified profile always does) equal to this server's; the
-    active class in the profile, servable and serviceable (030 8.7: never an unavailable class, nor a verified 0,
-    whose gateway would answer every request 503 class_not_serviceable and never be ready);
+    fingerprint and KV geometry (if it states them; a verified profile always does) equal to this server's, and no
+    long_prefill_token_threshold (043: this deploy starts only B0; serving Stage D's T is the user's decision); the
+    active class in the profile, servable (profile.serving_class: never an unavailable class (030 8.7), a verified
+    class of more than 128 output tokens, or on a T profile anything but M8K-T with H-D2a supported (043)) and
+    serviceable (never a verified 0, whose gateway would answer every request 503 class_not_serviceable and never be
+    ready);
  3. the pre-boot shared usage (below); runs/pt-<UTC>[-<scenario>]/meta.json (purpose product-test, formal false,
     research_valid false, the preflight's idle window and baseline, its warnings), the profile bytes preflight
     checked as runs/<id>/profile.json (the gateway serves that copy, never the mutable path) and
@@ -465,9 +468,15 @@ class Running:
 # ---------------------------------------------------------------- checks
 
 def profile_server_problems(prof, *, pins: dict, fingerprint: str) -> list:
-    """029: a profile is refused for a server other than the one it states (a verified profile always states it)."""
+    """029: a profile is refused for a server other than the one it states (a verified profile always states it).
+    043: this deploy starts only B0, so a profile for the T server (long_prefill_token_threshold set) is refused with
+    that reason, whatever its fingerprint (a T profile's already differs from B0's)."""
     sb, server = pins["stage_b"], prof.server
     problems = []
+    if server.long_prefill_token_threshold is not None:
+        problems.append(f"profile {prof.profile_id} is for the T server (long_prefill_token_threshold "
+                        f"{server.long_prefill_token_threshold}): this deploy starts only B0; serving T needs the "
+                        "user's decision (043)")
     if server.fingerprint_sha256 is not None and server.fingerprint_sha256 != fingerprint:
         problems.append(f"profile {prof.profile_id} fingerprint {server.fingerprint_sha256} != this server's "
                         f"{fingerprint} (029: refused)")
@@ -530,7 +539,7 @@ def preflight(cfg: DeployConfig, prof, *, pins: dict, env: dict, fingerprint: st
     if prof is not None:
         problems += profile_server_problems(prof, pins=pins, fingerprint=fingerprint)
         try:
-            cls = prof.serving_class(cfg.gateway.get("active_class", ""))   # an unavailable class: refused (030 8.7)
+            cls = prof.serving_class(cfg.gateway.get("active_class", ""))   # refused: 030 8.7, 043
             if not cls.serviceable:
                 problems.append(f"active class {cls.name} of profile {prof.profile_id} is a verified 0 (refuse this "
                                 "class, 030 8.7): its gateway answers every request 503 class_not_serviceable and "

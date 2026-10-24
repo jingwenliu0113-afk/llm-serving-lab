@@ -3,7 +3,8 @@ every OS / HTTP / process effect faked (fake start_group / processes / clock / n
 lock descriptor): release manifest, preflight refusals (nothing started, no run dir), the 031 idle window and its
 baseline (a headroom shortfall only warns), vLLM with the lock fd, server checks, gateway, state.json, hold /
 workload, the descriptive shared-usage readings, and the teardown order and checks (GPU memory back to the pre-boot
-baseline + 64 MiB) in every exit path; status and stop."""
+baseline + 64 MiB) in every exit path; status and stop. Decision 043: preflight refuses an active class with more than
+128 output tokens, and any profile for the T server (this deploy starts only B0)."""
 
 import datetime as dt
 import hashlib
@@ -24,9 +25,9 @@ import run_adv
 import run_core_b
 from capserve import deploy, procs, runs
 from capserve.config import Settings
-from capserve.profile import content_sha256, stage_b_fingerprint
+from capserve.profile import CapacityProfile, content_sha256, load_profile, stage_b_fingerprint, t_fingerprint
 from fakes import profiles as fake_profiles
-from fakes.profiles import FROZEN, frozen_capacity, frozen_configs, verified_class
+from fakes.profiles import FROZEN, frozen_capacity, frozen_configs, rehash, stage_d_class, stage_d_doc, verified_class
 
 PINS = bp.load_pins()
 SB = PINS["stage_b"]
@@ -623,6 +624,58 @@ def test_an_active_class_without_a_verified_limit_is_refused_before_any_boot(wor
     assert up(world, path, allow_provisional=True, cfg=world.cfg(gateway={"active_class": cls["name"]})) == 2
     assert world.started == [] and not (world.svc / "runs").exists()
     assert match in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("cls", [stage_d_class("U2K-O512", value=32, flags=["WINDOW_SENSITIVE", "ABOVE_CKV"]),
+                                 stage_d_class("U8K-O512", value=12)])
+def test_an_active_class_with_more_than_128_output_tokens_is_refused_before_any_boot(world, capsys, cls):
+    """043 §4: a verified class measured at 512 output tokens is never the active class (shorter outputs are not
+    covered), whatever flag is given."""
+    path = add_to_release(world.release, "service/profiles/v.json",
+                          json.dumps(stage_d_doc(PINS, classes=[cls])).encode())
+    assert up(world, path, allow_provisional=True, cfg=world.cfg(gateway={"active_class": cls["name"]})) == 2
+    err = capsys.readouterr().err
+    assert world.started == [] and not (world.svc / "runs").exists()
+    assert "043" in err and "max_output_tokens 512" in err
+
+
+def test_a_b0_stage_d_class_043_allows_boots(world):
+    path = add_to_release(world.release, "service/profiles/v.json", json.dumps(stage_d_doc(PINS)).encode())
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(gateway={"active_class": "uniform-32k"})) == 0
+    assert [s["name"] for s in world.started] == ["vllm", "gateway"]
+
+
+def test_a_t_profile_is_refused_before_any_boot_with_043s_reason(world, capsys):
+    """043 §6: this deploy starts only B0; serving T needs the user's decision (its fingerprint differs too, but the
+    reason is stated on its own)."""
+    path = add_to_release(world.release, "service/profiles/v.json",
+                          json.dumps(stage_d_doc(PINS, server="T")).encode())
+    assert up(world, path, allow_provisional=False, cfg=world.cfg(gateway={"active_class": "mixed-8k-t"})) == 2
+    err = capsys.readouterr().err
+    assert world.started == [] and not (world.svc / "runs").exists()
+    assert "only B0" in err and "043" in err
+
+
+def test_profile_server_problems_refuses_any_threshold_even_at_a_matching_fingerprint():
+    t = CapacityProfile.model_validate(stage_d_doc(PINS, server="T"))
+    (msg,) = deploy.profile_server_problems(t, pins=PINS, fingerprint=t_fingerprint(PINS))
+    assert "long_prefill_token_threshold 512" in msg and "only B0" in msg and "043" in msg
+    doc = profile_doc()
+    doc["server"]["long_prefill_token_threshold"] = 512
+    dev = CapacityProfile.model_validate(rehash(doc))
+    assert any("only B0" in p for p in deploy.profile_server_problems(dev, pins=PINS, fingerprint="x" * 64))
+    b0 = CapacityProfile.model_validate(stage_d_doc(PINS))
+    assert deploy.profile_server_problems(b0, pins=PINS, fingerprint=stage_b_fingerprint(PINS)) == []
+
+
+def test_the_production_profile_passes_the_043_rules():
+    """043: the pinned c1b profile stays the production one, for B0, and its active class stays servable."""
+    cfg = deploy.load_config(ROOT / "service" / "deploy" / "rtx-verified.toml")
+    prof = load_profile(ROOT / cfg.production_profile, allow_provisional=False)
+    argv, env = deploy.render_vllm(PINS, cfg, {"PATH": "/usr/bin"})
+    assert deploy.profile_server_problems(prof, pins=PINS, fingerprint=deploy.fingerprint(argv, env)) == []
+    cls = prof.serving_class(cfg.gateway["active_class"])
+    assert cls.serviceable and cls.max_output_tokens == 128 and prof.server.long_prefill_token_threshold is None
 
 
 def test_profile_server_geometry_must_equal_the_pins(world, tmp_path, capsys):
