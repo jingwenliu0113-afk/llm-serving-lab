@@ -45,7 +45,9 @@
         並查 WSL venv 的 aiohttp 版本，確認 042 推論的 keep-alive 競態；只更新 042 的說明，判定不變（U2K-P 仍為 NT）。
   - [x] 產品設計 **043**（DRAFT，`76115eb`）：三份設計經三位評審比較。待決事項 1–7 依建議定案：3 份不釘選的 verified profile、
         輸出上限 > 128 的 class 不能作為 active class、T 只服務 mixed-8k-t 而且現在不部署、正式釘選與 active class 不變、開場湧入維持現況。
-  - [ ] 043 實作（0 GPU，TDD）：在 worktree `feat/043-stage-d-profiles` 依序進行（loader → 產生器 → 三份 profile → 揭露、gateway keep-alive、README），完成後獨立審查，再合併到 main。
+  - [x] 043 實作（0 GPU，TDD）：loader 與 §9、產生器接受 D-A session、三份不釘選的 verified profile（`-d-a1b-b0`、`-d-a1b-t`、`-d-a2-b0`）、
+        輸出 > 128 與 T 的拒絕、B0 拒絕 T workload、`/readyz` 揭露、gateway keep-alive 75 s、README；獨立審查後合併（`abca173`）。
+  - [ ] RTX 產品測試（**等 GPU 空閒**，GPU lock 下）：`rtx-verified.toml` 的 IT-0 至 IT-6（keep-alive 改變了 `capserve_sha256`；輸出只進 `runs/`）。
   - [x] **使用者決定**（2026-10-24，043 待決事項 8、9）：V4、V-GW、V1、V2 都做，V3 延後；排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後，session 之間留空檔。合計約 10–11 GPU h。
   - [x] **044**（DRAFT）：Stage V 的事先登記設計（三份設計經三位評審比較），PREREGISTRATION §12（DRAFT）。待決事項 1–8 依建議定案。
         共用一套 harness、一次 mini、兩個正式 session（V-ADM 約 2.75 h：V2 + V4 + F-U2K 對照；V-CLS 約 5.25 h：V-GW + V1），之間 ≥ 2 h；全期上限 12 h。
