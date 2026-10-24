@@ -1079,3 +1079,50 @@
     - 「E 有作用，至少一個 queue_wait > 0」寫成兩項：某個有效的 pacing run 中有 request 的 prefill_wait > 0；某個有效的 weighted-v1 run 中有 request 的 queue_wait > 0。
     - 「U_W 與 N1 算得出來」：至少一個有效 run 有非平凡條件，而且每個有非平凡條件的有效 run，T_W 都不是空的。
     - 其他各項照本文：replay 乾淨；除了刻意的逾時，所有 run 有效；刻意的逾時發生；derived 的欄位；每個 boot 都通過檢查；gateway 回報 tuple 並乾淨停止；強制的上限停止；session.json 記錄兩個 sha；teardown 乾淨。
+
+## 實作補記五（2026-10-24，V4 凍結前的設計檢查：U_W 的桌面模擬；沒有任何 Stage V 數據）
+
+`benchmarks/stage_v_prereg_sim.py` 與 `tests/test_stage_v_prereg_sim.py` 依本文 V4「凍結前的設計檢查」以 TDD 實作，輸出 `results/stage_v/prereg-sim/sim.json`（`descriptive_only: true`）。腳本只讀已 commit 的 c1b 與 D-C 檔，不 import capserve；凍結模組只 import（`capacity_analysis`、`capacity_plan`、`stage_d_plan`，以及 `stage_v_analysis`、`stage_v_datasets`、`stage_v_plan`），AST 測試鎖住 import 清單。U_W、N_W、(j) 與非平凡條件直接用 `stage_v_analysis` 的 `in_vllm`、`inflight_problems`、`nontrivial`，也就是 V4 判定時用的同一個估計量。測試要求 committed 的輸出由 committed 的檔案逐位元重現。下列是本文沒有寫死、實作時決定的細節，以及結果。
+
+1. **模擬的範圍**：V-ADM plan（`stage_v_plan.build_plan`，非 formal）的 W-90、W-50：C 32、N 320、weighted-v1 的預算 32、單位 1 / 4、上限 32 / 8。block r 用該 block pin 住的序列（`stage_v_analysis.planned`，只由 seed 決定）；每條序列模擬 20 個 run，每個 mix 共 100 個。
+   - 主要 run 從空的狀態開始，因為 bench 會等 warmup 完成。idx 0..C−1 在時間 0 依 idx 順序到達；idx k ≥ C 在第 k − C + 1 個釋放之後、再隔一個 client 往返時間到達（vLLM bench 的 semaphore 依 idx 順序喚醒等待者）。
+   - gateway：單一嚴格 FIFO，每個事件之後重新 pump，和 capserve 的 `PolicyController` 相同（研究端不 import）。隊首的單位放得進剩餘預算、而且它的 class 未達上限才送出；隊首放不進時，後面的都不能插隊（HOL）。
+   - gateway 自己的 parse 與 tokenize 時間不在任何 committed 檔中，不模擬。
+2. **vLLM 內的時間**：2K 取 c1b U2K @ C_PROD 32、8K 取 c1b U8K @ C_PROD 8 的 e2e latency，只用有效的 Phase C run（`run_valid`，和 `stage_d_plan.lambda_ref` 相同）。c1b 是直連，所以 latency 就是在 vLLM 內的時間。
+   - 在時間 0 送出的 request（開場湧入）從 idx < C 抽，其他從 W = [C, N − C) 抽。W 的 pool 正是 λ_ref 平均的那些 request：U2K 768 個、U8K 920 個，測試對 stage_d.toml 的 pin 比對。
+   - 本文寫「c1b 與 D 的逐 request 時間」。D 的檔案只用在第 3 項的往返時間：D-C 經過 gateway 的 latency 含 gateway 的開銷，不是 vLLM 內的時間；c1b 則沒有 start_s。
+   - 主要假設：每個 request 在 vLLM 內的時間和混合的組成無關。這是 043 7.3 A 的前提：每個 class 單獨在它的 C_PROD 填滿預算是量過的狀態，混合的 batch 從未量過。
+3. **client 往返時間**：取自 D-C 的 U2K-gw，也就是經過 gateway、C 32（W 點的 client 並發數）的 5 個有效 run。
+   - 計算方式：idx k ≥ C 的 start_s，減去第 k − C + 1 早的 client 完成時間（start_s + latency）。
+   - 共 1,440 個，平均 1.79 ms（0.28–4.22 ms）。
+   - 任何一個為負，就不是 C 個 client 的封閉迴路，腳本拒絕。往返 run 的 C 必須等於 W 點的 C。
+4. **變體**（只作描述）：
+   - `committed`：上述模型，設計檢查用這個；
+   - `steady_only`：每個 request 都從 W 抽；
+   - `8k_x0.8`、`8k_x1.25`：8K 在 vLLM 內的時間乘上 0.8 / 1.25。這是對第 2 項主要假設的假設情境，committed 的檔案無法涵蓋。
+   - 每個（變體、點、block）有自己的 seed：`sha256("20261008:stage_v:prereg-sim:<變體>:<點>:<block>")`。
+5. **設計檢查的規則**：每個 mix 的 `committed` 模擬 run，U_W 平均（以 Fraction 精確計算）≥ 0.93 × 32 = 29.76。
+   - 模擬的 run 違反 (j) 是程式錯誤（`SimError`），不是結果。
+   - 腳本只報告檢查結果，不修改任何門檻或設計。
+6. **結果**（descriptive_only；不是 Stage V 數據，不預測 SLO）：
+   - **兩個 mix 都 ≥ 29.76，不需要在凍結前修改門檻或設計。**
+     - W-90：U_W 平均 31.55（各 run 31.38–31.80）。
+     - W-50：U_W 平均 30.80（30.50–31.15）。
+   - 四個變體的平均在 30.80–31.59 之間。單一 run 的最小值為 30.45（W-50、steady_only）。兩個 mix、四個變體共 800 個 run，沒有任何一個 < 28.8（trivial）。
+   - H-W0 的預測（兩個 mix 每個有效 run 的 U_W ≥ 28.8）在模擬中成立。
+     - HOL 加上往返時間浪費的單位：90/10 約 0.45，50/50 約 1.2。
+     - 和本文「約 1–1.5 單位」的估計同一量級。
+   - 描述：
+     - vLLM 內的平均 request 數 N_W 為 24.55 / 12.29，043 的有效並發為 24.6 / 12.8。
+     - gateway 佇列的峰值為 17 / 24，低於 max_queue 32，所以封閉迴路下不會出現 429。
+     - 模擬的 bench 時間平均為 178 s / 339 s，本文的估計為 170 s / 330 s；W-50 的 `8k_x1.25` 為 406 s。
+       本文的估計沒有修改：兩點各 5 個 run，合計多約 86 s（0.024 h），V-ADM 的上限 3.5 h 仍有餘裕。
+7. **限制**：
+   - 每個 request 的時間和混合的組成無關（第 2 項）；
+   - gateway 的 parse 與 tokenize 不計；
+   - 模擬只是對同一份 c1b 的重抽樣。
+   - 這些只影響「門檻是否達得到」的估計，不涉及任何判定。
+8. **輸出與凍結**：
+   - 輸出不記錄 stage_v.toml 的 sha256，只記錄用到的 plan 值（C、N、預算、class、序列）與每個輸入檔的 sha256。所以 datasets 的 sha256 pin 進設定檔、`freeze.stage_v` 改為 true 之後，輸出仍逐位元相同：序列只由 seed 決定。
+   - 腳本不在 `HARNESS_FILES` 中：它不是 harness，runner 與 report 都不讀它。
+   - `test_stage_v_frozen` 是否鎖它的 sha256，由凍結那一步決定。重新產生的測試已確保 committed 的輸出就是這份腳本在 committed 檔上的結果。
