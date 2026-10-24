@@ -417,10 +417,12 @@ def test_the_frozen_configs_default_to_the_repo_files():
     root = Path(bp.__file__).resolve().parent.parent
     cap, pins = (root / "configs" / "capacity.toml").read_bytes(), (root / "configs" / "pins.toml").read_bytes()
     stage_d = (root / "configs" / "stage_d.toml").read_bytes()   # 043: read too (a release's git archive has it)
-    assert not (root / "configs" / "stage_v.toml").exists()   # 044: only at Stage V's freeze
+    stage_v = (root / "configs" / "stage_v.toml").read_bytes()   # 044: the harness's, frozen only at Stage V's freeze
+    assert tomllib.loads(stage_v.decode())["freeze"]["stage_v"] is False
     assert cp.frozen_configs() == (tomllib.loads(cap.decode()), hashlib.sha256(cap).hexdigest(),
                                    hashlib.sha256(pins).hexdigest(), tomllib.loads(stage_d.decode()),
-                                   hashlib.sha256(stage_d).hexdigest(), None, None)
+                                   hashlib.sha256(stage_d).hexdigest(), tomllib.loads(stage_v.decode()),
+                                   hashlib.sha256(stage_v).hexdigest())
 
 
 def test_a_missing_capacity_toml_is_not_frozen(tmp_path):
@@ -808,8 +810,8 @@ def test_a_stage_v_profile_loads_after_stage_vs_freeze(tmp_path, pins):
 
 
 def test_no_stage_v_profile_loads_before_stage_vs_freeze(tmp_path, pins):
-    """044 item 6: configs/stage_v.toml exists only from Stage V's freeze; without it (this checkout), or not frozen,
-    every §12 profile is refused: fail closed."""
+    """044 item 6: configs/stage_v.toml has [freeze] stage_v = true only from Stage V's freeze; without it, or not
+    frozen (this checkout: the harness's stage_v.toml, stage_v = false), every §12 profile is refused: fail closed."""
     doc = stage_v_doc(pins)
     for frozen in (FROZEN, cp.frozen_configs(), frozen_configs(stage_v=frozen_stage_v(stage_v=False)),
                    frozen_configs(stage_v={"slo": frozen_stage_v()["slo"]})):

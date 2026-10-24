@@ -918,3 +918,41 @@
     - 研究端（`stage_v_plan`）必須以同一算法自行實作，不 import capserve。`service/tests/test_gateway_path.py` 中比對兩端的測試，在 `stage_v_plan` 存在之前會 skip。
     - 另有測試鎖定 capserve 是平坦的 package（沒有子 package，閉包只追一層）。
 12. **study profile**：`service/profiles/provisional-stage-v.json`，B0 的 fingerprint 與 KV 幾何。五個 v- class 的 limits 由已 commit 的 c1b / `-d-a2-b0` class 逐欄複製；c8 為 uniform-8k-o512 的 token 上限，加上 c1b uniform-8k 的 8 / 8。測試從 committed 的檔案逐欄比對。
+
+## 實作補記二（2026-10-24，harness：`stage_v_plan` 與 `configs/stage_v.toml`；沒有任何 Stage V 數據）
+
+`benchmarks/stage_v_plan.py`、`configs/stage_v.toml`（`[freeze] stage_v = false`、`mini = ""`、`gateway_path_sha256 = ""`）與 `tests/test_stage_v_plan.py` 已依本文以 TDD 實作。凍結模組只 import（`capacity_plan`、`core_b_plan`、`stage_d_plan`、`run_core_a.sha256_json`），一個位元組都沒有改，也不 import capserve。產品端另有 `service/tests/test_stage_v_settings.py`：研究端渲染的每個點的 gateway 設定，capserve 都能載入，並在該點的 profile 上服務，`/readyz` 的 limits、佇列設定與候選政策都等於計畫值；deploy（`study=False`）拒絕其中的候選政策。`service/tests/test_gateway_path.py` 中比對兩端 AST 閉包的測試不再 skip，兩端在這份 checkout 上相同（16 個檔案）。下列是本文沒有寫死、實作時決定的細節，以及和本文字面不同、依程式處理的地方。
+
+1. **`configs/stage_v.toml` 在凍結前就存在**：本文「凍結」第 1 步本來就要求它和 harness 一起 commit，只是 `stage_v = false`。所以產品補記第 9 項的「沒有 `configs/stage_v.toml`（目前的 checkout）」不再成立。§12 的 loader 仍然 fail closed：`[freeze] stage_v` 不是 true，每一份 §12 profile 都被拒絕，正式部署的行為不變。產品測試 `test_the_frozen_configs_default_to_the_repo_files` 改為讀取這份檔案，並斷言 `stage_v = false`。
+2. **點的欄位**：
+   - 本文列出的欄位之外，另加三個：`per_block`（block r 讀 `<dataset>-r<r>`）、`out_pinned`（只有 L 點，`--custom-output-len -1`）、`limits`（`/readyz` 必須回報的 max_concurrency、max_queue、max_prompt_tokens、max_output_tokens；weighted-v1 為產品補記第 6 項的包絡）。
+   - 「class(es)」寫成清單 `classes`，weighted-v1 依准入順序列出兩個 class。
+   - `view` 的值為 `client`、`upstream`、`worse`（V2：兩種 view 取較差者）。
+   - profile 的 sha256 寫在設定檔，由 `profile_problems` 對 checkout 比對，不寫死在模組中。
+3. **P-U8K 的 max_queue 記為 8**（產品補記第 10 項）：`limits` 記錄 class 的 8；W 點記錄政策的 32。
+4. **單位與跳過**：
+   - `[stage_v.units]` 列出產品對應的全部 7 個單位，單點的單位也列出，供 analysis 的 `units` 段使用。本文設定檔一節只寫了 V1-2K、V1-8K、W1 三個多點單位。
+   - 跳過的群組是該點所屬單位的所有點。P-U2K-var、F-U2K-var、F-U2K 與 mini 的 W-mini 不屬於任何單位，只跳過自己。
+   - 原因：若把 var 那一對放進 PACE-2K，依預測 var 會 FAIL，P-U2K 就會被停測；否決規則也無法成立，因為 F-U2K-var 被跳過後不可能 PASS。
+   - 否決規則寫在模組（`VETOES`），不在設定檔。
+5. **`[stage_v.weighted_v1]` 就是 gateway 的 `[admission]` 表**（policy、budget、max_queue、classes [{name, units, max_concurrency}]）。
+   - 依產品補記第 5 項，不寫「order fifo」與「上限 1,920 / 8,064」。
+   - 測試改從 study profile 確認兩個 class 為 1,920 / 8,064 token、輸出 128。
+6. **pacing 的重算規則寫進設定檔**：`source`、`round_to = 10`，以及每個 tier 的 workload、prompt、c_kv、burst_requests、burst_tokens、rate_tokens_per_s。
+   - burst 的個數也依規則重算：`burst_requests = ⌊(1 − m) × 該 tier 的 S2 TTFT ÷ 斜率⌋`。2K 為 ⌊1,900 ÷ 324.23⌋ = 5，8K 為 ⌊5,700 ÷ 1,389.15⌋ = 4，就是 042 D5「套上 guard band 後」的個數；本文只寫「沿用 042 D5 的換算」。數值不變（9,600 / 32,256）。
+   - 和 λ_ref 一樣，數值 pin 在設定檔，因為 WSL 的部署沒有 `results/`。`pacing_problems` 在 Mac 上從 committed 的 D5 檔重算並比對。
+7. **逾時表**：V2 有 5 個點（待決事項第 6 項加入 F-U2K），所以 1,260 s 有 5 個，不是測試清單寫的「1,260 × 4」。其他值都和本文相同。
+8. **mini 的參數放在 `stage_v_plan.MINI`**：n 2、N 20、sentinel 在 C 2、各點的 C、L-U8K 改讀 `v1-mini-8192`、GW-U8K-O512 在 r2 強制逾時。
+   - W-mini 是 `POINTS` 中只屬於 mini 的點：V4、C 9、`v4-mini`，不屬於任何單位。
+   - 本文沒有寫 mini 各點的 bench 估計。為了時數上限的檢查，模組寫入 N = 20 的粗估（合計約 0.54 h，本文估 0.6 h），只用於 mini 自己的上限檢查。
+   - 假的 SLO、N = 20 的 patch、5 s 的強制逾時，以及「在最後一次計畫的 V boot 之前強制停止」由 runner 實作，和 `run_stage_d` 相同。
+9. **時數規則的常數**：上限檢查的保留量 0.06 h（`END_RESERVE_H`）與 sentinel 的 bench 估計 103 s 是模組常數，不在設定檔。`cap_allows`、`total_cap_allows`、`min_gap_ok` 以 Fraction 精確計算，由 runner 與 report 共用。
+10. **請求路徑與 profile 的檢查不在 `build_plan` 內**：
+    - `gateway_path_problems`（列出的檔案等於 AST 閉包；有凍結值時 sha 相等）與 `profile_problems` 由 runner 在 session 開始時呼叫。
+    - 原因：V-CLS 之後，請求路徑可以在 main 上繼續修改（見「凍結」），report 仍必須能重建計畫。
+    - `build_plan` 只檢查 stage_v.toml、stage_d.toml 與兩者的一致性。
+11. **`stage_v_problems` 也讀 stage_d.toml**：`[slo]`、`[secondary_slo]`、sentinel 與 var-2048 必須等於凍結的 stage_d.toml。`build_plan` 另要求傳入的 stage_d.toml 的 sha256 等於 `stage_d_sha256`（`be7909b1…`），並執行 `stage_d_plan.stage_d_problems`。
+12. **gateway 設定一律寫出佇列設定**：產品的 2.0 / 300.0 也寫（等於預設值，行為不變），所以 `/readyz` 的 queue 可以直接和計畫比對。計畫記錄每個點渲染出的 TOML 位元組的 sha256（`gateway_toml_sha256`）。
+13. **`--request-id-prefix <tag>-` 加在 argv 的最後**；diff 測試確認凍結函式的輸出只有三處差異。
+14. **巢狀 TOML writer 自行跳脫字串**（`"`、`\`、控制字元與 U+007F）：JSON 的字串跳脫不處理 U+007F，而 `ensure_ascii` 會產生 TOML 不接受的 surrogate 跳脫。非有限的浮點數、None 與其他型別一律拒絕。
+15. **計畫帶 `kind = "verify"`**：每個 session 都是 D-C 的形式（固定點、n 個 run、每個 run 一次 boot），`run_stage_d` 的 harness 會讀這個鍵。

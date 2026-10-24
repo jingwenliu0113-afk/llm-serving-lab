@@ -1,0 +1,444 @@
+# Stage V settings: decision 044, PREREGISTRATION §12 (DRAFT). Machine-readable; benchmarks/stage_v_plan.py checks every
+# value against the 044 rules (stage_v_problems) and refuses a plan otherwise. Like configs/stage_d.toml (039), Stage V
+# never writes configs/pins.toml, configs/capacity.toml or configs/stage_d.toml; it reads the frozen stage_d.toml (tau1,
+# var-2048, SLO, sentinel) read-only. capserve's §12 loader reads [freeze] stage_v, [freeze] gateway_path_sha256 and
+# [slo] from this file (044 實作補記 9): every §12 profile is refused until stage_v = true.
+schema_version = 1
+
+[freeze]
+# 044 凍結: commit and push §12, 044, this file, the five Stage V modules and their tests, the product code, the study
+# profile and results/stage_v/prereg-sim/; pin the datasets; run the mini under the GPU lock and commit it; then set
+# stage_v = true, mini and gateway_path_sha256, add tests/test_stage_v_frozen.py, and only then collect Stage V data.
+# stage_v_plan refuses true unless mini names a passed smoke-v-* session of this harness on this request path.
+stage_v = false
+mini = ""                                                 # session id of the passed mini smoke (smoke-v-<date>)
+gateway_path_sha256 = ""                                  # the frozen request path (stage_v_plan.gateway_path_sha256)
+
+[stage_v]
+seed = 20261008                                           # Core B seed (block orders, the V1 / V4 datasets)
+n = 5                                                     # runs per point, one boot each (039 D-C)
+guard_band = 0.05                                         # 030 8.1 m
+stage_d_sha256 = "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5"  # the frozen stage_d.toml (039)
+hour_caps_h = { mini = 1.0, V-ADM = 3.5, V-CLS = 7.0 }    # per session, about 1.3 x the estimate
+total_cap_h = 12                                          # every V session (mini, formal, reruns, aborted)
+min_gap_h = 2                                             # between formal V sessions (finished_at to start)
+run_overhead_s = { B0 = 95, T = 110 }                     # per run besides the bench: D-C's 94 s; T's boot
+nontrivial = { u_w = 0.9, n1 = 0.9 }                      # V4: U_W >= 0.9 x 32; V2: requests in vLLM >= 0.9 C
+join_tolerance_ms = 50                                    # (h): each gateway ttft_s <= client ttft + 50 ms
+gateway_drain_s = 5                                       # D-C's drain_timeout_s
+# the request path: the AST import closure of service/capserve/__main__.py (stage_v_plan.gateway_path_files)
+gateway_path_files = [
+    "service/capserve/__init__.py",
+    "service/capserve/__main__.py",
+    "service/capserve/admission.py",
+    "service/capserve/app.py",
+    "service/capserve/config.py",
+    "service/capserve/gateway_path.py",
+    "service/capserve/guard.py",
+    "service/capserve/keys.py",
+    "service/capserve/metrics.py",
+    "service/capserve/openai_api.py",
+    "service/capserve/profile.py",
+    "service/capserve/proxy.py",
+    "service/capserve/retry.py",
+    "service/capserve/server.py",
+    "service/capserve/tokens.py",
+    "service/capserve/upstream.py",
+]
+
+[stage_v.sessions]
+# 044: each session's points (block_order shuffles from this order); V-ADM first, then V-CLS, >= 2 h apart
+mini = ["GW-U8K-O512", "L-U8K", "GW-M8K-T", "P-U2K", "F-U2K-var", "W-mini"]
+V-ADM = ["P-U2K", "P-U8K", "P-U2K-var", "F-U2K-var", "F-U2K", "W-90", "W-50"]
+V-CLS = ["GW-U32K", "GW-U2K-O512", "GW-U8K-O512", "GW-M8K-T", "L-U2K", "L-U8K"]
+
+# Points: server_base (the stage_d_plan workload whose server boots: B0, or T), client_base (stage_d_plan.bench_argv_for
+# builds the client from it, with only 044's three differences), tau_base (its tau1 sets the timeout); profile and its
+# sha256 (the bytes served), classes (weighted-v1: both, in admission order), provisional (served with
+# --allow-provisional), queue ([stage_v.queue]), admission (weighted-v1, [stage_v.weighted_v1]), pacing (a tier of
+# [stage_v.pacing], or ""), dataset ("" for the random dataset; per_block: block r reads <dataset>-r<r>), out_pinned (L
+# points: --custom-output-len -1), view ("worse": the worse of upstream and client), unit (a [stage_v.units] unit, or
+# "" for a point that skips alone), bench_est_s (044's estimate), limits (what /readyz must report; weighted-v1: its
+# envelope).
+
+[stage_v.points.GW-U32K]
+study = "V-GW"
+server_base = "U32K"
+client_base = "U32K"
+tau_base = "U32K"
+C = 2
+profile = "service/profiles/verified-formal-20261023-d-a1b-b0.json"
+profile_sha256 = "5ff99c5981109a6c6d6c861f6937c6059a18dc33b992c53c015cff7ba4231c97"
+classes = ["uniform-32k"]
+provisional = false
+queue = "product"
+admission = false
+pacing = ""
+dataset = ""
+per_block = false
+out_pinned = false
+view = "client"
+unit = "VG-32K"
+bench_est_s = 1462
+limits = { max_concurrency = 2, max_queue = 2, max_prompt_tokens = 32640, max_output_tokens = 128 }
+
+[stage_v.points.GW-U2K-O512]
+study = "V-GW"
+server_base = "U2K-O512"
+client_base = "U2K-O512"
+tau_base = "U2K-O512"
+C = 32
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k-o512"]
+provisional = true
+queue = "product"
+admission = false
+pacing = ""
+dataset = ""
+per_block = false
+out_pinned = false
+view = "client"
+unit = "V1-2K"
+bench_est_s = 216
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 1920, max_output_tokens = 512 }
+
+[stage_v.points.GW-U8K-O512]
+study = "V-GW"
+server_base = "U8K-O512"
+client_base = "U8K-O512"
+tau_base = "U8K-O512"
+C = 12
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-8k-o512"]
+provisional = true
+queue = "product"
+admission = false
+pacing = ""
+dataset = ""
+per_block = false
+out_pinned = false
+view = "client"
+unit = "V1-8K"
+bench_est_s = 426
+limits = { max_concurrency = 12, max_queue = 12, max_prompt_tokens = 8064, max_output_tokens = 512 }
+
+[stage_v.points.GW-M8K-T]
+study = "V-GW"
+server_base = "M8K-T"
+client_base = "M8K-T"
+tau_base = "M8K-T"
+C = 4
+profile = "service/profiles/verified-formal-20261023-d-a1b-t.json"
+profile_sha256 = "8c8d013a05e2344b777c0f3c40a90f084372a06c4b150246801769e2f1cffdea"
+classes = ["mixed-8k-t"]
+provisional = false
+queue = "product"
+admission = false
+pacing = ""
+dataset = "mixed-8192"
+per_block = false
+out_pinned = false
+view = "client"
+unit = "VG-M8K-T"
+bench_est_s = 490
+limits = { max_concurrency = 4, max_queue = 4, max_prompt_tokens = 32640, max_output_tokens = 128 }
+
+[stage_v.points.L-U2K]
+study = "V1"
+server_base = "U2K-O512"
+client_base = "U2K-var"
+tau_base = "U2K-O512"
+C = 32
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k-o512"]
+provisional = true
+queue = "product"
+admission = false
+pacing = ""
+dataset = "v1-2048"
+per_block = true
+out_pinned = true
+view = "client"
+unit = "V1-2K"
+bench_est_s = 156
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 1920, max_output_tokens = 512 }
+
+[stage_v.points.L-U8K]
+study = "V1"
+server_base = "U8K-O512"
+client_base = "U8K-var"
+tau_base = "U8K-O512"
+C = 8
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-8k-o512-c8"]
+provisional = true
+queue = "product"
+admission = false
+pacing = ""
+dataset = "v1-8192"
+per_block = true
+out_pinned = true
+view = "client"
+unit = "V1-8K"
+bench_est_s = 370
+limits = { max_concurrency = 8, max_queue = 8, max_prompt_tokens = 8064, max_output_tokens = 512 }
+
+[stage_v.points.P-U2K]
+study = "V2"
+server_base = "U2K-gw"
+client_base = "U2K-gw"
+tau_base = "U2K-gw"
+C = 32
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k"]
+provisional = true
+queue = "slow"
+admission = false
+pacing = "2048"
+dataset = ""
+per_block = false
+out_pinned = false
+view = "worse"
+unit = "PACE-2K"
+bench_est_s = 130
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 1920, max_output_tokens = 128 }
+
+[stage_v.points.P-U8K]
+study = "V2"
+server_base = "U8K-gw"
+client_base = "U8K-gw"
+tau_base = "U8K-gw"
+C = 8
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-8k"]
+provisional = true
+queue = "slow"
+admission = false
+pacing = "8192"
+dataset = ""
+per_block = false
+out_pinned = false
+view = "worse"
+unit = "PACE-8K"
+bench_est_s = 325
+limits = { max_concurrency = 8, max_queue = 8, max_prompt_tokens = 8064, max_output_tokens = 128 }  # queue: the class's 8
+
+[stage_v.points.P-U2K-var]
+study = "V2"
+server_base = "U2K-var"
+client_base = "U2K-var"
+tau_base = "U2K-var"
+C = 32
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k"]
+provisional = true
+queue = "slow"
+admission = false
+pacing = "2048"
+dataset = "var-2048"
+per_block = false
+out_pinned = false
+view = "worse"
+unit = ""
+bench_est_s = 80
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 1920, max_output_tokens = 128 }
+
+[stage_v.points.F-U2K-var]
+study = "V2"
+server_base = "U2K-var"
+client_base = "U2K-var"
+tau_base = "U2K-var"
+C = 32
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k"]
+provisional = true
+queue = "slow"
+admission = false
+pacing = ""
+dataset = "var-2048"
+per_block = false
+out_pinned = false
+view = "worse"
+unit = ""
+bench_est_s = 78
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 1920, max_output_tokens = 128 }
+
+[stage_v.points.F-U2K]
+study = "V2"
+server_base = "U2K-gw"
+client_base = "U2K-gw"
+tau_base = "U2K-gw"
+C = 32
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k"]
+provisional = true
+queue = "slow"
+admission = false
+pacing = ""
+dataset = ""
+per_block = false
+out_pinned = false
+view = "worse"
+unit = ""
+bench_est_s = 125
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 1920, max_output_tokens = 128 }
+
+[stage_v.points.W-90]
+study = "V4"
+server_base = "U2K-var"
+client_base = "U2K-var"
+tau_base = "U8K-gw"
+C = 32
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k", "v-uniform-8k"]
+provisional = true
+queue = "slow"
+admission = true
+pacing = ""
+dataset = "v4-90"
+per_block = true
+out_pinned = false
+view = "upstream"
+unit = "W1"
+bench_est_s = 170
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 8064, max_output_tokens = 128 }
+
+[stage_v.points.W-50]
+study = "V4"
+server_base = "U2K-var"
+client_base = "U2K-var"
+tau_base = "U8K-gw"
+C = 32
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k", "v-uniform-8k"]
+provisional = true
+queue = "slow"
+admission = true
+pacing = ""
+dataset = "v4-50"
+per_block = true
+out_pinned = false
+view = "upstream"
+unit = "W1"
+bench_est_s = 330
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 8064, max_output_tokens = 128 }
+
+[stage_v.points.W-mini]
+# the mini only: v4-mini's first nine rows are one 2K and eight 8K (33 units > 32), formal policy parameters
+study = "V4"
+server_base = "U2K-var"
+client_base = "U2K-var"
+tau_base = "U8K-gw"
+C = 9
+profile = "service/profiles/provisional-stage-v.json"
+profile_sha256 = "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+classes = ["v-uniform-2k", "v-uniform-8k"]
+provisional = true
+queue = "slow"
+admission = true
+pacing = ""
+dataset = "v4-mini"
+per_block = false
+out_pinned = false
+view = "upstream"
+unit = ""
+bench_est_s = 30
+limits = { max_concurrency = 32, max_queue = 32, max_prompt_tokens = 8064, max_output_tokens = 128 }
+
+[stage_v.queue]
+# the gateway's max_queue_wait_s / request_deadline_s: the product defaults (V-GW, V1; D-C's), or "slow" (V2, V4)
+product = { max_queue_wait_s = 2.0, request_deadline_s = 300.0 }
+slow = { max_queue_wait_s = 120.0, request_deadline_s = 600.0 }
+
+[stage_v.weighted_v1]
+# 043 7.3 A: the gateway's [admission] verbatim. Strict FIFO with head-of-line blocking (the controller's only order);
+# 2K (1,920 tokens) and 8K (8,064 tokens) are the study profile's class limits.
+policy = "weighted-v1"
+budget = 32
+max_queue = 32
+classes = [{ name = "v-uniform-2k", units = 1, max_concurrency = 32 }, { name = "v-uniform-8k", units = 4, max_concurrency = 8 }]
+
+[stage_v.pacing]
+# 044 V2, frozen by rule: slope = the least-squares slope of the mean largest first-wave TTFT over C <= C_KV in source
+# (2K 324.23 ms, 8K 1,389.15 ms; the file's own fit spans every C); rate = round_to x floor(prompt / slope / round_to);
+# burst = burst_requests x prompt, burst_requests = floor(0.95 x the tier's S2 TTFT / slope) (042 D5).
+# stage_v_plan.pacing_problems recomputes it from the committed file (a WSL deploy carries no results/).
+source = "results/stage_d/d5-startup-wave/analysis.json"
+round_to = 10
+"2048" = { workload = "U2K", prompt = 1920, c_kv = 35, burst_requests = 5, burst_tokens = 9600, rate_tokens_per_s = 5920 }
+"8192" = { workload = "U8K", prompt = 8064, c_kv = 13, burst_requests = 4, burst_tokens = 32256, rate_tokens_per_s = 5800 }
+
+[stage_v.datasets]
+# stage_v_datasets on WSL (CPU only, flock -n), pinned before the mini; "" until then. var-2048 is D-C's (stage_d.toml),
+# mixed-8192 007's 8K mix (pins.toml).
+v1-2048-r1 = ""
+v1-2048-r2 = ""
+v1-2048-r3 = ""
+v1-2048-r4 = ""
+v1-2048-r5 = ""
+v1-8192-r1 = ""
+v1-8192-r2 = ""
+v1-8192-r3 = ""
+v1-8192-r4 = ""
+v1-8192-r5 = ""
+v4-90-r1 = ""
+v4-90-r2 = ""
+v4-90-r3 = ""
+v4-90-r4 = ""
+v4-90-r5 = ""
+v4-50-r1 = ""
+v4-50-r2 = ""
+v4-50-r3 = ""
+v4-50-r4 = ""
+v4-50-r5 = ""
+v1-mini-8192 = ""
+v4-mini = ""
+var-2048 = "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1"
+mixed-8192 = "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2"
+
+[stage_v.units]
+# 044 產品對應: a unit holds only when each of its points PASSes; once a run of one is not ok, all of them leave the
+# later boots. The V2 controls and the var pair are in none (PACE-2K's var veto: stage_v_plan.VETOES).
+VG-32K = ["GW-U32K"]
+VG-M8K-T = ["GW-M8K-T"]
+V1-2K = ["L-U2K", "GW-U2K-O512"]
+V1-8K = ["L-U8K", "GW-U8K-O512"]
+PACE-2K = ["P-U2K"]
+PACE-8K = ["P-U8K"]
+W1 = ["W-90", "W-50"]
+
+[stage_v.sentinel]
+# stage_d.toml's: one boot at the start and one at the end of every session, U2K at C 25 on the Core B server, direct
+workload = "U2K"
+C = 25
+tolerance = 0.03
+
+[slo]
+# 037 §3 / 044: S2, stage_d.toml's
+id = "S2"
+ttft_p95_ms = { "2048" = 2000, "8192" = 6000, "32768" = 20000 }
+tpot_p95_ms = 100
+mixed_long = "budget"
+
+[secondary_slo.S1]
+id = "S1"
+ttft_p95_ms = { "2048" = 1000, "8192" = 3000, "32768" = 10000 }
+tpot_p95_ms = 50
+mixed_long = "budget"
+
+[secondary_slo.S3]
+id = "S3"
+ttft_p95_ms = { "2048" = 2000, "8192" = 6000, "32768" = 20000 }
+tpot_p95_ms = 200
+mixed_long = "budget"
