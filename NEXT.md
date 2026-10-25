@@ -70,8 +70,9 @@
   - [x] q1-metal pilot（Mac lock 下，2026-10-23 06:16Z）：`results/stage_q/pilot-q1-metal-20261023`，20 個 job 全部 ok，`pilot_problems` 通過，harness `34256f12…` 等於目前的版本。
   - [ ] pilot：q1-cuda、q2（RTX，**等 GPU 空閒**）→ 三個 pilot 齊了才凍結（`freeze.stage_q` 與三個 pilot id）；凍結後 Stage Q 的 harness 不能再改。
   - [ ] Q3：下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**使用者 2026-10-23 同意**；已下載（2026-10-24 23:51Z–10-25 00:18Z，GPU 為 FREE 時開始，`snapshot_download`，16 個檔）；
-        4 個 shard 的 sha256 與 pins 的核對：下載剛完成時 GPU 已被另一個專案取得 lock，依規則延到 FREE 時再讀 WSL 磁碟；
-        之後在 WSL 產生 chunk 檔並 pin sha256 → pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性）→ 凍結。
+        4 個 shard 的 sha256 都等於 pins（2026-10-25 04:2xZ，FREE 時在 `flock -n` 下讀）。chunk 檔已在 WSL 產生並 pin（`ff66e6d`：297,194 token、580 chunk、sha256 `7174626e…`，
+        tokenizer.json 為 005 交叉驗證的 `5f9e4d49…`），部署 `ff66e6d`；
+        下一步：pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性；**等 GPU 閒置佔用 ≤ 1,018 MiB**，見 E1-P 第 2 項）→ 凍結。
   - 觀察：Mac 的 140W adapter 目前只協商到 94 W（20 V × 4.69 A；名稱檢查會通過）。可能是線材或連接埠的限制，重負載時電池可能下降（016 的充電閘門會處理）。
 - **Stage E**（decision 041，DRAFT 第 3 版；PREREGISTRATION §11）：
   - [x] 第 2 版經審查（44 項確認）與設計 workflow（3 位設計者、3 位評審）後改寫為第 3 版（`6db1512`），設計前看過的重算在 `results/stage_e/prereg-tally/`。
