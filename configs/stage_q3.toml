@@ -7,8 +7,8 @@ schema_version = 1
 
 [freeze]
 # 040 凍結 (Q3): commit and push 040, this file, stage_q3 and its tests together, then set true, then collect Q3 data.
-stage_q3 = false
-pilot_q3 = ""                                             # session id of the passed Q3 pilot (RTX)
+stage_q3 = true                                           # 040 凍結 (Q3), 2026-10-25 (harness 2bc3f2ee...)
+pilot_q3 = "pilot-q3-20261025b"                          # session id of the passed Q3 pilot (RTX)
 
 [stage_q3]
 chunks_sha256 = "7174626e373bc3344021007ae1160a9696b7c1387ed3453fa3e0e48748441fe1"  # data/stage_q/q3-chunks-512.jsonl (stage_q3.py chunks, WSL, 2026-10-25)

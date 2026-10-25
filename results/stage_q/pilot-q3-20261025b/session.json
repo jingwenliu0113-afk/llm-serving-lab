@@ -1,0 +1,31 @@
+{
+ "schema_version": 1,
+ "session_id": "pilot-q3-20261025b",
+ "stage": "Q",
+ "part": "q3",
+ "mode": "pilot",
+ "platform": "wsl2-cuda",
+ "status": "finished",
+ "plan_sha256": "6a37ec2fb4a8c855566da1d30ef99a671a0e7927e0a9fa0d1f7ea73279f3b867",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "gpu_lock_held": true,
+ "harness_sha256": "2bc3f2ee99128bf394c0e03029632e1e216d43c184616d0464c48ccbb6690480",
+ "chunks_sha256": "7174626e373bc3344021007ae1160a9696b7c1387ed3453fa3e0e48748441fe1",
+ "inputs_verified": false,
+ "superseded": {},
+ "started_at": "2026-10-25T15:18:41.351513+00:00",
+ "host": {
+  "system": "Linux",
+  "wsl": true,
+  "nvidia": true
+ },
+ "vllm_version": "0.30.0",
+ "finished_at": "2026-10-25T15:25:11.714950+00:00",
+ "outcomes": {
+  "ok": 2,
+  "oom": 0,
+  "error": 0
+ },
+ "env_flags": [],
+ "env_valid": true
+}

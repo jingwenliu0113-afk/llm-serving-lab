@@ -1,6 +1,6 @@
 # 040 — Stage Q 事先登記（DRAFT）：quality 的三個缺口
 
-- 狀態：**Q1 / Q2 已凍結（2026-10-25，`configs/stage_q.toml` 的 `freeze.stage_q = true` 與三個 pilot，harness `34256f12…`；見文末「pilot 紀錄」）**；Q3 仍為 DRAFT（自己的 `freeze.stage_q3`）。凍結前沒有收任何 Stage Q 的正式數據。
+- 狀態：**Q1 / Q2 已凍結（2026-10-25，`configs/stage_q.toml` 的 `freeze.stage_q = true` 與三個 pilot，harness `34256f12…`；見文末「pilot 紀錄」）**；**Q3 已凍結（2026-10-25，`freeze.stage_q3 = true`、`pilot_q3 = "pilot-q3-20261025b"`，harness `2bc3f2ee…`）**。凍結前沒有收任何 Stage Q 的正式數據。
 - 日期：2026-10-23
 - 對應：037（Phase 3 範圍）、005（quality 指標與 task set）、020（quality 改在 RTX）、PREREGISTRATION §3 / H-A5
 - 時點：任何 Stage Q 數據之前。設計者看過 Core A 的 quality 結果（README「Quality」），用到的地方在「揭露」寫明。
@@ -303,4 +303,7 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
   - vLLM 同時警告：WSL2 上 CPU 卸載加 CUDA graph 需要 pinned memory，而 Windows（WDDM）對 pinned memory 有約實體記憶體 50% 的全系統上限，用量過多時整台主機可能失去回應、需要強制重開機。主機有 31.2 GB 實體記憶體（當時可用 26.7 GB），8 GB 約為上限的一半。
   - 因為改成 "1" 會讓整台 Windows 主機（也是另一個專案的機器）承擔風險，是否改用 "1" 重跑 pilot 交由使用者決定；不改的話，依本文第 77 行 Q3 記為 NT，另寫 decision log 說明替代方案。
 - **使用者決定（2026-10-25）**：試一次 `pin_memory` "1"。`configs/stage_q3.toml` 的 `pin_memory` 由 "0" 改為 "1"（兩個 job 都用；依審查紀錄，pin_memory 不影響數值）。只在 GPU lock 空著、主機可用記憶體 ≥ 20 GB 時跑 pilot；這次之後不論成敗都不再換其他設定，失敗就依第 77 行把 Q3 記為 NT。
+- **Q3 第二次**：`pilot-q3-20261025b`（15:18–15:25Z，部署 `f53f7d3`，`pin_memory` "1"）：兩個 job 都 ok（W4A16 97 s、KV 35,635 token；BF16 卸載 8 GB 217 s、KV 45,670 token），env 有效，harness `2bc3f2ee…`；過程中主機一直有回應（ssh 正常，GPU 回到 157 MiB）。
+  - 揭露：pilot 的 row 照設計記錄每段的 NLL（本文「一個 row 記錄每段的 NLL」）；檢查 pilot 時兩個 checkpoint 在這 10 段的 NLL 被印出並看到。H-Q3 的門檻（PPL 比值 − 1 ≤ 2 %）與判定規則在凍結前早已寫定，沒有因此改動；pilot 的 10 段不進入正式分析。
+- **Q3 凍結（2026-10-25）**：`stage_q3.freeze_evidence_problems` 沒有任何問題；`configs/stage_q3.toml` 設 `freeze.stage_q3 = true` 與 `pilot_q3`。正式 plan 為兩個 job 各 580 段。`tests/test_stage_q3.py` 檢查 repo 的設定檔指向這個 pilot、`pin_memory` 為 "1"、harness 等於 `2bc3f2ee…` 而且凍結證據沒有問題；拒絕條件的測試改用明確的 DRAFT 設定。凍結沒有改動任何設計、門檻或判定規則。
 

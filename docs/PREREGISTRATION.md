@@ -491,7 +491,7 @@ H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。本節�
 
 ## 10. Stage Q addendum：quality 的三個缺口（decision 037、040）
 
-**狀態：Q1 / Q2 已凍結（2026-10-25，040 文末「pilot 紀錄」）**：`configs/stage_q.toml` 的 `freeze.stage_q = true` 與三個通過的 pilot（`pilot-q1-metal-20261023`、`pilot-q1-cuda-20261025`、`pilot-q2-20261025b`）。凍結前沒有任何 Stage Q 的正式數據。Q3 仍為 DRAFT（`freeze.stage_q3`）。
+**狀態：Q1 / Q2 已凍結（2026-10-25，040 文末「pilot 紀錄」）**：`configs/stage_q.toml` 的 `freeze.stage_q = true` 與三個通過的 pilot（`pilot-q1-metal-20261023`、`pilot-q1-cuda-20261025`、`pilot-q2-20261025b`）。凍結前沒有任何 Stage Q 的正式數據。Q3 也已凍結（2026-10-25，`freeze.stage_q3` 與 pilot `pilot-q3-20261025b`；pin_memory "1" 是使用者 2026-10-25 的決定，040 文末）。
 本節只摘要；完整規則與揭露見 decision 040。第 1–9 節不變，H-A5 與 Core A 的判定不受影響。
 
 - **沿用 §3（005）的規則**：WikiText-2 test、llama.cpp b11146、005 的 flag set、KLD 的流程（BF16 base → self-KLD → 3 個 quant → 刪除 base）、

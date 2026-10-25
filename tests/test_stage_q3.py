@@ -18,7 +18,8 @@ import stage_q3 as q3
 ROOT = Path(__file__).resolve().parent.parent
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
 PINS_SHA = hashlib.sha256((ROOT / "configs" / "pins.toml").read_bytes()).hexdigest()
-CFG = tomllib.loads((ROOT / "configs" / "stage_q3.toml").read_text())
+REPO_CFG = tomllib.loads((ROOT / "configs" / "stage_q3.toml").read_text())   # frozen 2026-10-25 (040 凍結, Q3)
+CFG = {**REPO_CFG, "freeze": {"stage_q3": False, "pilot_q3": ""}}               # an explicit DRAFT config
 CROSSCHECK = json.loads((ROOT / "quality" / "subsets" / "tokenizer-crosscheck.json").read_text())
 ENGINE_LOG = ("INFO Using FLASH_ATTN backend.\nINFO running in text-only mode\n"
               "INFO Using Triton/FLA GDN prefill kernel\nINFO GDN decode kernel: triton\n")
@@ -97,7 +98,19 @@ def test_oom_is_read_from_the_end_of_the_log():
 
 # ---------------------------------------------------------------- config, plans and the freeze evidence
 
-def test_the_repo_config_is_well_formed_and_not_yet_frozen(monkeypatch):
+def test_the_repo_config_is_frozen_on_the_passed_pilot_of_this_harness(monkeypatch):
+    """040 凍結 (Q3, 2026-10-25): the repo config names the passed pilot (pin_memory "1", user decision 2026-10-25),
+    which ran this harness, this config and the pinned chunk file; any edit after the freeze fails here."""
+    monkeypatch.setattr(q3, "CHUNKS", q3.WIKITEXT_TOKENS // q3.N_CTX)
+    assert q3.config_problems(REPO_CFG) == [] and REPO_CFG["freeze"] == {"stage_q3": True, "pilot_q3": "pilot-q3-20261025b"}
+    assert REPO_CFG["stage_q3"]["pin_memory"] == "1"
+    assert q3.harness_sha256() == "2bc3f2ee99128bf394c0e03029632e1e216d43c184616d0464c48ccbb6690480"
+    assert q3.freeze_evidence_problems(REPO_CFG, ROOT, PINS) == []
+    assert [(j["id"], j["n_chunks"]) for j in q3.build_plan(PINS, REPO_CFG, mode="formal", root=ROOT)["jobs"]] == [
+        ("score-w4a16", 580), ("score-bf16", 580)]
+
+
+def test_the_draft_config_is_well_formed_and_not_yet_frozen(monkeypatch):
     monkeypatch.setattr(q3, "CHUNKS", q3.WIKITEXT_TOKENS // q3.N_CTX)       # the repo pins the real file (580)
     assert q3.config_problems(CFG) == [] and CFG["freeze"]["stage_q3"] is False
     assert CFG["stage_q3"]["chunks"] == 580 and len(CFG["stage_q3"]["chunks_sha256"]) == 64   # pinned 2026-10-25
