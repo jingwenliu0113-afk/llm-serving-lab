@@ -1,0 +1,365 @@
+{
+ "schema_version": 1,
+ "session_id": "smoke-e1p-20261025b",
+ "stage": "E1P",
+ "mode": "smoke",
+ "formal": false,
+ "purpose": "exploratory",
+ "decision": "041 v3 \u00a71.6",
+ "status": "finished",
+ "plan_sha256": "a55f2a379798058eb1cfefb600e70fbb9558303066558a63c3e44c4a5daa0cb2",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "stage_e1p_sha256": "aa355b4c18a7d7bd50cf555aab2bf162a1696b80cdc4967a7c4c64d64f0ebad3",
+ "harness_sha256": "414deba60f84f29fa48ea45ada42947c99a34576f09095a3bf022727c194db62",
+ "gpu_idle": {
+  "decision": "031",
+  "v_total_mib": 16303,
+  "f_peak_mib": 15157,
+  "margin_mib": 128,
+  "bound_mib": 1018,
+  "util_max_pct": 5,
+  "range_max_mib": 64,
+  "windows": 3,
+  "window_samples": 30,
+  "interval_s": 1.0,
+  "spill_tol_mib": 64
+ },
+ "started_at": "2026-10-25T10:15:15.469609+00:00",
+ "cap_s": 10800.0,
+ "elapsed_at_start_s": 0.1,
+ "boots": {
+  "b1": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296",
+    "--otlp-traces-endpoint",
+    "http://127.0.0.1:4318/v1/traces",
+    "--enable-logging-iteration-details"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {
+     "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "http/protobuf"
+    },
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "server_started": true,
+   "startup_ok": true,
+   "reasons": [],
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 849,
+    "mem_min_mib": 849,
+    "mem_max_mib": 849,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849,
+     849
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "startup": {
+    "counts": {
+     "nondefault_args": 1,
+     "backend": 11,
+     "compile_cache": 5,
+     "cuda_graph": 34,
+     "kv_memory": 3,
+     "init_time": 6,
+     "warning": 1,
+     "error": 0
+    },
+    "nondefault": {
+     "max_num_batched_tokens": 2048,
+     "otlp_traces_endpoint": "http://127.0.0.1:4318/v1/traces",
+     "enable_logging_iteration_details": true,
+     "kv_cache_memory_bytes": 4294967296
+    },
+    "log_facts": {
+     "attention_backend": "FLASH_ATTN",
+     "attn_block_size": 528,
+     "text_only": true,
+     "gdn_prefill_kernel": "Triton/FLA",
+     "gdn_prefill_requested": "triton",
+     "gdn_decode_kernel": "triton",
+     "gdn_warmup_failed": null,
+     "kv_cache_tokens": 123128,
+     "max_concurrency": 3.76,
+     "max_model_len_logged": 32768
+    },
+    "available_kv_gib": null
+   },
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "otlp_traces_endpoint": "http://127.0.0.1:4318/v1/traces",
+    "enable_logging_iteration_details": true,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010651_phys_0",
+     "dedicated_mib": 859.1,
+     "shared_mib": 90.3
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010651_phys_0",
+      "dedicated_mib": 15117.6,
+      "shared_mib": 234.3,
+      "delta_mib": 144.0,
+      "spilled": false
+     },
+     {
+      "when": "b1-n1",
+      "luid": "luid_0x00000000_0x00010651_phys_0",
+      "dedicated_mib": 15569.3,
+      "shared_mib": 108.3,
+      "delta_mib": 18.0,
+      "delta_ready_mib": -126.0,
+      "spilled": false
+     },
+     {
+      "when": "b1-n2",
+      "luid": "luid_0x00000000_0x00010651_phys_0",
+      "dedicated_mib": 15569.3,
+      "shared_mib": 108.3,
+      "delta_mib": 18.0,
+      "delta_ready_mib": -126.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   },
+   "receiver": {
+    "posts": 12,
+    "spans": 63,
+    "llm_request": 48,
+    "decode_errors": [],
+    "errors": []
+   },
+   "smi": "raw/b1-smi.jsonl",
+   "smi_summary": {
+    "n_samples": 143,
+    "fields_missing": [],
+    "temp_max_c": 68.0
+   },
+   "smi_problems": [],
+   "n_valid": 2,
+   "failed": false
+  }
+ },
+ "failed_boots": 0,
+ "stopped": null,
+ "host": {
+  "system": "Linux",
+  "wsl": true,
+  "nvidia": true
+ },
+ "versions": {
+  "driver": {
+   "got": "617.42",
+   "phase1": "617.42",
+   "same": true
+  },
+  "vllm": {
+   "got": "0.30.0",
+   "phase1": "0.30.0",
+   "same": true
+  },
+  "torch": {
+   "got": "2.13.0+cu130",
+   "phase1": "2.13.0+cu130",
+   "same": true
+  }
+ },
+ "vllm_version": "0.30.0",
+ "finished_at": "2026-10-25T10:18:20.399641+00:00",
+ "elapsed_s": 185.0,
+ "env_flags": [],
+ "env_valid": true,
+ "outcomes": {
+  "boots": 1,
+  "benches": 2,
+  "valid": 2,
+  "invalid": 0,
+  "not_run": 0,
+  "failed_boots": 0
+ },
+ "smoke": {
+  "ok": true,
+  "checks": {
+   "covered": true,
+   "not_stopped": true,
+   "every_bench_valid": true,
+   "startup": true,
+   "spans": true,
+   "f_computable": true,
+   "steps_in_window": true,
+   "input_lens_8064": true,
+   "derived_schema": true,
+   "blocks": true,
+   "no_spill": true,
+   "smi": true,
+   "teardown_clean": true
+  },
+  "covered": [
+   [
+    "b1-n1",
+    "A"
+   ],
+   [
+    "b1-n2",
+    "B"
+   ]
+  ]
+ },
+ "masked": [
+  "raw/b1-n1.bench.json",
+  "raw/b1-n2.bench.json",
+  "raw/b1-n1.bench.log",
+  "raw/b1-n2.bench.log",
+  "raw/b1.spans.jsonl",
+  "raw/b1-n1.metrics.before.txt",
+  "raw/b1-n2.metrics.before.txt",
+  "raw/b1-n1.metrics.after.txt",
+  "raw/b1-n2.metrics.after.txt",
+  "raw/b1-n1.steps.jsonl",
+  "raw/b1-n2.steps.jsonl",
+  "raw/b1-n1.series.jsonl",
+  "raw/b1-n2.series.jsonl",
+  "raw/b1-n1-requests.jsonl",
+  "raw/b1-n2-requests.jsonl",
+  "raw/b1-n1-e1.json",
+  "raw/b1-n2-e1.json",
+  "raw/b1.otlp"
+ ],
+ "rows_sha256": "bb46d8045c2b0bd27a3d307f97a0b95b2b2678bde24fbca7c484d6d1ebf96386"
+}

@@ -1,0 +1,25 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/b1-smi.jsonl": {
+   "sha256": "3a7d2f556d87be59d8f059e053331dfc5dd0599800b7f711dce094c9d336e4cb",
+   "size_bytes": 24987
+  },
+  "raw/b1.server.log": {
+   "sha256": "0b266e1af7a47fe6080e79b6e9a2162f8039a5ffbe2bf77dd88f0d8300e33aa7",
+   "size_bytes": 259163
+  },
+  "raw/b1.smi.csv": {
+   "sha256": "e01ca34a4ce68ff27925df0d15cceeee2f04306f4a4cc10924275b7900fb8f6b",
+   "size_bytes": 13722
+  },
+  "raw/env/b1.after.json": {
+   "sha256": "0da0e4b470cdb6a1022ec7db7d880b0cb0fc95eb0825a52e252515348225a4f0",
+   "size_bytes": 3481
+  },
+  "raw/env/b1.before.json": {
+   "sha256": "ebc6978de337d67637c98a0cb936f89ea8a1e06952d329ad6592e3493c54ba91",
+   "size_bytes": 3479
+  }
+ }
+}

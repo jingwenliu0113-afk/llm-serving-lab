@@ -1,0 +1,57 @@
+{
+ "schema_version": 1,
+ "stage": "E1P",
+ "mode": "smoke",
+ "decision": "041 v3 \u00a71.6",
+ "derived_from": "formal-20261009-coreb-uniform",
+ "L": 8192,
+ "mix": "uniform",
+ "C": 8,
+ "warmup": 8,
+ "seeds": {
+  "A": 20261008,
+  "B": 20261023
+ },
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "stage_e1p_sha256": "aa355b4c18a7d7bd50cf555aab2bf162a1696b80cdc4967a7c4c64d64f0ebad3",
+ "stage_e1_sha256": "b161152d27a3581cabf384c35f722afc338d65c3be113e30c77e1b5170be1feb",
+ "harness_sha256": "414deba60f84f29fa48ea45ada42947c99a34576f09095a3bf022727c194db62",
+ "seed_check_sha256": "60cfd8e496d7daf8a79901755a640f82c488d3e167e66dd866097a8b23a96c20",
+ "kv_cache_memory_bytes": 4294967296,
+ "expected_blocks": 248,
+ "block_size": 528,
+ "gpu_memory_utilization": "0.91",
+ "gdn_prefill_backend": "triton",
+ "timeout_s": 720,
+ "span_wait_s": 30,
+ "cap_s": 10800.0,
+ "boot_margin_s": 1800,
+ "temp_stop_c": 88,
+ "max_failed_boots": 2,
+ "smoke": null,
+ "boots": [
+  {
+   "boot": 1,
+   "benches": [
+    {
+     "boot": 1,
+     "bench": 1,
+     "tag": "b1-n1",
+     "seed_label": "A",
+     "seed": 20261008,
+     "N": 16,
+     "prefix": "e1p-b1-n1-"
+    },
+    {
+     "boot": 1,
+     "bench": 2,
+     "tag": "b1-n2",
+     "seed_label": "B",
+     "seed": 20261023,
+     "N": 16,
+     "prefix": "e1p-b1-n2-"
+    }
+   ]
+  }
+ ]
+}

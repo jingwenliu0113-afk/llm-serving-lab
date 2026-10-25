@@ -1,6 +1,6 @@
 # 041 — Stage E 事先登記（DRAFT，第 3 版）：三個機制問題
 
-- 狀態：**DRAFT**，**E1-D 已凍結（2026-10-23，見 1.7）**；E1-P、E2、E3 仍為 DRAFT。寫在任何 Stage E 數據之前；各部分在 smoke / pilot 與審查後各自凍結。
+- 狀態：**DRAFT**，**E1-D 已凍結（2026-10-23，見 1.7）**，**E1-P 已凍結（2026-10-25，見 1.7）**；E2、E3 仍為 DRAFT。寫在任何 Stage E 數據之前；各部分在 smoke / pilot 與審查後各自凍結。
   - 第 3 版有四個相對 037 範圍的決定（第 6 節 A1–A4）；**使用者 2026-10-23 決定四項都採建議的選項**（第 6 節）。
 - 日期：2026-10-23。第 1 版 → 第 2 版 → 第 3 版都在同一天，三版之間沒有任何 Stage E 數據。修訂經過見文末。
 - 對應：037（Phase 3 範圍）、024 / 025（Advanced）、028 / 032（C0）、030 / 039（逾時）、031（閒置與 spill）、PREREGISTRATION §2（H-A2）與 §11（本文摘要）。
@@ -129,6 +129,10 @@
 - **E1-D 已凍結（2026-10-23）**：`configs/stage_e1.toml` 的 `freeze.e1 = true`，`e1_harness_sha256 = 87b937d12799853b50745bc4430de5c26f8b9db71cd6726aebb78466a656c00d`（`benchmarks/stage_e1.py` 與 `benchmarks/c0_analysis.py`）。凍結時清單中的檔一個都還沒取回。`tests/test_stage_e1.py` 檢查設定檔的 pin 等於目前的 harness，所以兩個檔都不再修改；E1-D 的規則之後只能以新的 decision log 修訂。輸出寫在 `results/stage_e/<新的 session>/`。
   - 取回：`python benchmarks/stage_e1.py fetch-list | while read -r args; do tools/rtx/fetch_raw.sh $args; done`，只在 `tools/rtx/gpu_status.sh` 印出 FREE 時執行。
 - **`freeze.e1p`**：smoke 1 次 boot、2 個 bench（seed A、B 各一，N 16）。通過條件：每個主 id 都有 span、F 算得出來、時間窗內有 step 紀錄、seed B 的 input_lens 全部 8,064、derived schema 正確；延遲遮蔽，不看。
+- **E1-P 已凍結（2026-10-25）**：`configs/stage_e1p.toml` 的 `freeze.e1p = true`、`freeze.smoke_e1p = "smoke-e1p-20261025b"`。凍結證據是這次一次通過的 smoke（部署 `ff66e6d`，1 次 boot、2 個 bench 都有效，13 項 smoke 檢查都通過，env 有效，`elapsed_s` 185，`harness_sha256` `414deba60f84f29fa48ea45ada42947c99a34576f09095a3bf022727c194db62`，等於凍結時的 harness）。延遲已遮蔽，沒有看。
+  - seed 檢查（`results/stage_e/e1p-seed-check/seed_check.json`，`637d70f`）在 smoke 之前通過。
+  - 第一次嘗試 `smoke-e1p-20261025`（2026-10-24 23:46Z）在第一次 boot 前被 031 的閒置檢查拒絕（Windows 桌面程式佔用 1,179 MiB，超過上限 1,018 MiB），沒有啟動 server、沒有任何 bench；它和通過的 smoke 都已取回並列在 `results/stage_e/wsl-inventory.txt`。
+  - 正式 plan 的上限 = 3.0 h − 185 s = 10,615 s；`tests/test_stage_e1p.py` 檢查 repo 的設定檔指向這次 smoke、smoke 的 harness 等於目前的 harness，所以 E1-P 的模組之後不再修改；規則只能以新的 decision log 修訂。拒絕條件的測試改用明確的 DRAFT 設定。
 - **E1-P 的實作（2026-10-23，harness 寫成時決定，沒有任何 E1-P 數據）**：
   - 設定檔是 `configs/stage_e1p.toml`（`freeze.e1p`、`freeze.smoke_e1p`、`[e1p]`），不是 `stage_e1.toml`：後者隨 E1-D 凍結，鍵是固定的（`stage_e1.CONFIG_KEYS`），加鍵會讓 E1-D 拒絕執行；這也符合 §0「每個部分一個設定檔」。`[e1p]` 的值固定為 1.6 的值（`stage_e1p_plan.E1P_VALUES`），L1–L5 的門檻讀 E1-D 凍結的 `stage_e1.toml`。`freeze.smoke_e1p` 只能是 `results/stage_e` 下的 session id。
   - 模組：`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`；`harness_sha256` 也包含匯入的 `run_c0_probe.py` 與 `c0_analysis.py`（§0）。`stage_e1.py` 只匯入（它的 pin 由自己的測試保護）；plan 與分析另外核對 `stage_e1.harness_sha256()` 仍等於 `freeze.e1_harness_sha256`，否則拒絕。
@@ -548,3 +552,6 @@
   - E2、E3、Stage Q、Q3：見 040 #45–#49（沒有 job 程序啟動過的 Stage Q session 記為 refused、保留繼承的 SIG_IGN、refused 範圍涵蓋兩段 try 之間、module 說明）。剩餘風險（程序建立瞬間的訊號）只記錄、不修，理由見 040。
   - 測試：seed 檢查與 runner 的 bench argv 逐一比對（smoke 與正式）、每個 N 與 seed 的竄改、server 啟動前已達 88 °C（第 2 次 boot 時為有效的 temperature 停止）與 10 s 的等待、取樣器的問題讓 smoke 失敗、正式 session 的 env / smi 位置、從未開始的 bench 的 not_run。
 
+### E1-P 凍結（2026-10-25）
+
+- seed 檢查通過（N 200 與 16，seed A、B 的每個 prompt 在 server 端都是 8,064 token，兩個 seed 不同）→ smoke 第一次嘗試被閒置檢查拒絕（Windows 桌面程式的 GPU 記憶體）→ 使用者關閉程式後第二次嘗試 `smoke-e1p-20261025b` 通過 → 凍結（1.7「E1-P 已凍結」）。凍結沒有改動 1.6 的設計、門檻或讀法；只改了 `[freeze]`。

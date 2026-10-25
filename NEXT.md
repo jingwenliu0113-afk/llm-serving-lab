@@ -87,7 +87,7 @@
         注意：在 zsh 中 `$args` 不會拆字，而 `fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin；請用 bash 並逐行執行。
   - [x] E3 的兩個 Q4_0 已產生並 pin（2026-10-23，Mac lock 下；4B `ee05b023…` 2,543,899,584 B，9B `2dfcbfd3…` 5,313,356,768 B）。
   - [x] E3 Mac pilot（Mac lock 下，2026-10-23 06:2xZ）：`results/stage_e/pilot-e3-metal-20261023`，5 個 job ok、sentinel 正常、env 有效（140W adapter，協商 94 W），`pilot_problems` 通過，harness `85b9842c…` 等於目前的版本。結果已遮蔽。
-  - [ ] E3：`produce_gguf_e3.py sync` 傳到 WSL（約 7.9 GB，**等 GPU 空閒**，不在正式 session 期間讀寫 WSL）→ RTX pilot → 兩個旗標一起凍結（Mac 先不凍：任一平台的正式 plan 都要兩個旗標與兩個 pilot，先凍沒有好處）→ `tools/rtx/push_session.sh stage_e pilot-e3-metal-20261023` → 正式（每個平台最多兩次嘗試）。
+  - [ ] E3：`produce_gguf_e3.py sync` 傳到 WSL 已完成（2026-10-25 08:2x–10:1xZ，GPU 為 FREE、沒有 session；兩個 Q4_0 在 WSL 上 VERIFIED）→ RTX pilot → 兩個旗標一起凍結（Mac 先不凍：任一平台的正式 plan 都要兩個旗標與兩個 pilot，先凍沒有好處）→ `tools/rtx/push_session.sh stage_e pilot-e3-metal-20261023` → 正式（每個平台最多兩次嘗試）。
   - 注意：Stage Q 與 E3 的 Mac pilot 已綁定目前的 `stage_q.py` / `stage_e3.py`；若之後必須修改，pilot 要重跑。
   - [x] E2 harness 審查：確認 18 項，全部修正（smoke 綁定設計並改為 12 次 boot、通過條件補齊、停止規則、重跑上限、R / Λ / L̄q、incomplete 的代換規則等；041 修訂紀錄「E2 harness 審查」）。
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
@@ -99,6 +99,10 @@
         1. [x] seed 檢查通過（2026-10-25，部署 `b517cdc`，`637d70f`）：N 200 與 16，seed A、B 的每個 prompt 在 server 端都是 8,064 token，兩個 seed 不同。原本的指令：seed 檢查（只用 CPU，`flock -n` 下）：`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e1p_seed_check.py` → Mac 上 `tools/rtx/fetch_seed_check.sh`（核對 sha256）→ commit。不通過時（seed B 有 prompt 不是 8,064，或 A、B 相同）要另寫 decision log 換 seed，不能自行改。
         2. smoke 的第一次嘗試 `smoke-e1p-20261025`（2026-10-24 23:46Z）在第一次 boot 前被 031 的閒置檢查拒絕：GPU 閒置佔用 1,179 MiB，超過上限 1,018 MiB（之前的 session 閒置時約 650–720 MiB）。
            Windows 端開著的桌面程式（ChatGPT、工作管理員、設定、Windows Terminal、codex-computer-use 等）用掉 GPU 記憶體；依規則不關閉 Windows 程序，等使用者處理後以新的 id 重跑 smoke。
+           2026-10-25：使用者關閉 Windows 桌面程式後閒置佔用降到 849–894 MiB；BingWallpaper 自行重啟（1,072 MiB），使用者同意由我關閉剩下的一般程式，只結束 BingWallpaper 與它的 WebView 子程序（系統程序不動），回到 849 MiB。
+           第二次嘗試 `smoke-e1p-20261025b`（10:15–10:18Z，部署 `ff66e6d`）**通過**：1 次 boot、2 個 bench 有效，13 項檢查都通過，elapsed 185 s，harness `414deba6…`。兩次嘗試都已取回（`wsl-inventory.txt`）。
+        3. [x] **凍結**（2026-10-25）：`freeze.e1p = true`、`smoke_e1p = "smoke-e1p-20261025b"`；041 §1.7 與 PREREGISTRATION §11 已更新。正式 plan 的上限 10,615 s（3.0 h − 185 s），6 次 boot。
+        4. [ ] 部署凍結 commit → 留空檔 → 正式（`--mode formal`，flock 下 `--formal`，約 2.5 h；開始前確認 GPU 閒置 ≤ 1,018 MiB、lock FREE，並請使用者中斷遠端桌面）→ 取回 → `stage_e1p_analysis.py`。
         2. smoke：`python benchmarks/stage_e1p_plan.py --mode smoke --out ~/e1p-smoke-plan.json`，`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_e1p.py --plan ~/e1p-smoke-plan.json --out results/stage_e/smoke-e1p-<date> --gpu-lock-held --smoke`
         3. 取回、凍結（`freeze.e1p = true`、`smoke_e1p`）→ 正式（約 2.5 h，上限 3.0 h 減 smoke 的時間）→ `stage_e1p_analysis.py --out results/stage_e/e1p-analysis-<date>/e1p.json`。
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）

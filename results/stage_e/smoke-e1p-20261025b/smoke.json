@@ -1,0 +1,28 @@
+{
+ "ok": true,
+ "checks": {
+  "covered": true,
+  "not_stopped": true,
+  "every_bench_valid": true,
+  "startup": true,
+  "spans": true,
+  "f_computable": true,
+  "steps_in_window": true,
+  "input_lens_8064": true,
+  "derived_schema": true,
+  "blocks": true,
+  "no_spill": true,
+  "smi": true,
+  "teardown_clean": true
+ },
+ "covered": [
+  [
+   "b1-n1",
+   "A"
+  ],
+  [
+   "b1-n2",
+   "B"
+  ]
+ ]
+}

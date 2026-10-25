@@ -27,7 +27,9 @@ import test_run_stage_e2 as tre2
 
 ROOT = Path(__file__).resolve().parent.parent
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
-CFG = tomllib.loads(pp.CONFIG.read_text())
+REPO_CFG = tomllib.loads(pp.CONFIG.read_text())                       # frozen 2026-10-25 (041 v3 §1.7)
+CFG = {**REPO_CFG, "freeze": {"e1p": False, "smoke_e1p": ""}}          # an explicit DRAFT config for the refusal
+                                                                        # checks (as E1-D's tests after its freeze)
 E1CFG = tomllib.loads((ROOT / "configs" / "stage_e1.toml").read_text())
 BASE_ENV = {"PATH": "/usr/bin", "HOME": "/home/u"}
 SEED_LABEL = {20261008: "A", 20261023: "B"}
@@ -307,7 +309,20 @@ def lock_stop_after(n):
 
 # ---------------------------------------------------------------- config, seed check and plans
 
-def test_the_repo_config_is_041s_and_unfrozen():
+def test_the_repo_config_is_frozen_on_the_passed_smoke_of_this_harness():
+    """041 v3 §1.7 freeze (2026-10-25): the repo config names the passed smoke, which ran this harness; any edit of
+    the E1-P modules (or of the config outside [freeze]) after the freeze fails here before a GPU session runs on it."""
+    assert pp.config_problems(REPO_CFG) == []
+    assert REPO_CFG["freeze"] == {"e1p": True, "smoke_e1p": "smoke-e1p-20261025b"}
+    smoke = json.loads((ROOT / "results" / "stage_e" / "smoke-e1p-20261025b" / "session.json").read_text())
+    assert smoke["status"] == "finished" and smoke["smoke"]["ok"] is True and smoke["env_valid"] is True
+    assert smoke["harness_sha256"] == pp.harness_sha256() == "414deba60f84f29fa48ea45ada42947c99a34576f09095a3bf022727c194db62"
+    assert pp.config_sha256(REPO_CFG) == pp.config_sha256(CFG)                # [freeze] is the only change
+    p = pp.build_plan(PINS, REPO_CFG, mode="formal", root=ROOT)
+    assert p["smoke"] == {"session": "smoke-e1p-20261025b", "elapsed_s": 185.0} and p["cap_s"] == 10800 - 185
+
+
+def test_the_draft_config_is_041s_and_unfrozen():
     assert pp.config_problems(CFG) == [] and CFG["freeze"] == {"e1p": False, "smoke_e1p": ""}
     assert pp.config_problems(frozen()) == []
     for sid in ("", "..", ".", "../x", "a/b", "x y"):

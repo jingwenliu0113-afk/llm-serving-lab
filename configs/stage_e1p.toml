@@ -6,8 +6,8 @@
 schema_version = 1
 
 [freeze]
-e1p = false
-smoke_e1p = ""                                            # session id of the passed smoke (results/stage_e/<id>)
+e1p = true                                                # 041 v3 §1.7 freeze, 2026-10-25 (harness 414deba6...)
+smoke_e1p = "smoke-e1p-20261025b"                         # session id of the passed smoke (results/stage_e/<id>)
 
 [e1p]
 seeds = { A = 20261008, B = 20261023 }                    # A = Core B's seed (Advanced, C0); B fixed 2026-10-23
