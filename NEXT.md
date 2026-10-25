@@ -69,7 +69,8 @@
   - [x] 修正後的覆核：Q1 / Q2 確認 5 項、Q3 確認 3 項（共 4 項 must-fix），全部處理（040「修正後的覆核」）：stub 與嘗試次數、分析自己找 session、`--superseded` 機制、精確的端點、pilot 記錄 base 大小、Q3 去掉結尾換行與 V1 的平手規則。
   - [x] q1-metal pilot（Mac lock 下，2026-10-23 06:16Z）：`results/stage_q/pilot-q1-metal-20261023`，20 個 job 全部 ok，`pilot_problems` 通過，harness `34256f12…` 等於目前的版本。
   - [ ] pilot：q1-cuda、q2（RTX，**等 GPU 空閒**）→ 三個 pilot 齊了才凍結（`freeze.stage_q` 與三個 pilot id）；凍結後 Stage Q 的 harness 不能再改。
-  - [ ] Q3：下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**使用者 2026-10-23 同意**；下載會讀寫 WSL 的網路與磁碟，**等 Stage D 正式鏈結束、GPU 空閒**；
+  - [ ] Q3：下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**使用者 2026-10-23 同意**；已下載（2026-10-24 23:51Z–10-25 00:18Z，GPU 為 FREE 時開始，`snapshot_download`，16 個檔）；
+        4 個 shard 的 sha256 與 pins 的核對：下載剛完成時 GPU 已被另一個專案取得 lock，依規則延到 FREE 時再讀 WSL 磁碟；
         之後在 WSL 產生 chunk 檔並 pin sha256 → pilot（含 `cpu_offload_gb` 與 WSL pinned memory 的可行性）→ 凍結。
   - 觀察：Mac 的 140W adapter 目前只協商到 94 W（20 V × 4.69 A；名稱檢查會通過）。可能是線材或連接埠的限制，重負載時電池可能下降（016 的充電閘門會處理）。
 - **Stage E**（decision 041，DRAFT 第 3 版；PREREGISTRATION §11）：
@@ -80,9 +81,9 @@
   - [x] 修正後的覆核：確認 9 項（E3 的 plan 雜湊含 `[freeze]` 為 must-fix），全部修正（`13d7a74`）。
   - [x] E1-D 凍結前覆核兩輪（041 §1 逐條、在已看過的數據上重現 §1.2、取回檔案的格式、端到端）：F 尖峰的錨點改為 s + 5 ms（must-fix，§5 第 13 項揭露）等，全部處理（`937ed5d`）。
   - [x] **E1-D 凍結**（2026-10-23，`freeze.e1 = true`，`e1_harness_sha256 = 87b937d1…`）。
-  - [ ] E1-D 取回（**等 GPU 空閒**：Stage D 的鏈結束、`tools/rtx/gpu_status.sh` 為 FREE）：
-        `python benchmarks/stage_e1.py fetch-list | while read -r args; do tools/rtx/fetch_raw.sh $args; done`
-        → `python benchmarks/stage_e1.py analyze --out results/stage_e/e1-<date>/e1.json` → 結果文件（描述，不是檢定）。
+  - [x] E1-D 取回與分析（2026-10-24 23:49–23:51Z，`gpu_status.sh` 為 FREE）：48 個 raw 檔唯讀取回、sha256 相符；`results/stage_e/e1-20261025/e1.json`（`c95cbf4`）；
+        結果文件 **045**（描述，不是檢定；獨立 agent 從 e1.json 與輸入重算每個數字、重跑分析逐位元相同）：三個數據集的鏈都 holds，沒有用到容許的 1 段。
+        注意：在 zsh 中 `$args` 不會拆字，而 `fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin；請用 bash 並逐行執行。
   - [x] E3 的兩個 Q4_0 已產生並 pin（2026-10-23，Mac lock 下；4B `ee05b023…` 2,543,899,584 B，9B `2dfcbfd3…` 5,313,356,768 B）。
   - [x] E3 Mac pilot（Mac lock 下，2026-10-23 06:2xZ）：`results/stage_e/pilot-e3-metal-20261023`，5 個 job ok、sentinel 正常、env 有效（140W adapter，協商 94 W），`pilot_problems` 通過，harness `85b9842c…` 等於目前的版本。結果已遮蔽。
   - [ ] E3：`produce_gguf_e3.py sync` 傳到 WSL（約 7.9 GB，**等 GPU 空閒**，不在正式 session 期間讀寫 WSL）→ RTX pilot → 兩個旗標一起凍結（Mac 先不凍：任一平台的正式 plan 都要兩個旗標與兩個 pilot，先凍沒有好處）→ `tools/rtx/push_session.sh stage_e pilot-e3-metal-20261023` → 正式（每個平台最多兩次嘗試）。
@@ -91,7 +92,7 @@
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
   - [ ] E2（**等 GPU 空閒**，WSL）：原始碼核對（prefix caching 路徑、warmup 來源、`vllm:prefix_cache_hits_total`、`cache_config_info` 的 `mamba_cache_mode` 標籤、span 的 cached-token 欄位、`num_requests_waiting`）→ `stage_e2_datasets.py` 產生共享前綴 dataset 並 pin sha256 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
   - [x] E1-P harness 寫成並審查（2026-10-23，DRAFT）：`configs/stage_e1p.toml`、`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`、`stage_e1p_seed_check.py`、`tests/test_stage_e1p.py`；三輪審查（都沒有 must-fix）全部處理（041 修訂紀錄「E1-P harness 審查」「E1-P 修正後的覆核」「第三次覆核」；E2、E3、Stage Q、Q3 的中斷、SIGTERM 與 refused 範圍一併修正，040 #39–#49）。
-  - GPU 佇列（2026-10-24）：Stage D 結束後，另一個專案的 `agent_gym_serve` 自 01:09Z 起持有 GPU lock；不搶占。
+  - GPU 佇列（2026-10-24）：Stage D 結束後，另一個專案的 `agent_gym_serve` 自 01:09Z 起持有 GPU lock；不搶占。23:42Z 空出（部署、seed 檢查、取回、Q3 下載都在此時完成），10-25 00:18Z 前又被另一個專案取得。
         lock 空出後依序：部署 HEAD（`deploy_bundle.py`）→ E1-P seed 檢查與 smoke → D-B 的 raw 取證 → E1-D 取回 → Q3 下載 → E3 / Stage Q 的 RTX pilot → E2。
   - [ ] E1-P（**等 GPU 空閒**，WSL）：
         1. [x] seed 檢查通過（2026-10-25，部署 `b517cdc`，`637d70f`）：N 200 與 16，seed A、B 的每個 prompt 在 server 端都是 8,064 token，兩個 seed 不同。原本的指令：seed 檢查（只用 CPU，`flock -n` 下）：`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e1p_seed_check.py` → Mac 上 `tools/rtx/fetch_seed_check.sh`（核對 sha256）→ commit。不通過時（seed B 有 prompt 不是 8,064，或 A、B 相同）要另寫 decision log 換 seed，不能自行改。
