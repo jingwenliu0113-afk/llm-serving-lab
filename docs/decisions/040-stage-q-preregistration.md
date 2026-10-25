@@ -296,4 +296,10 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 - **凍結（2026-10-25）**：三個 pilot（`pilot-q1-metal-20261023`、`pilot-q1-cuda-20261025`、`pilot-q2-20261025b`）都是同一個 harness、每個 job 都 ok，`stage_q.freeze_evidence_problems` 沒有任何問題；`configs/stage_q.toml` 設 `freeze.stage_q = true` 與三個 pilot id。
   - `tests/test_stage_q.py` 檢查 repo 的設定檔指向這三個 pilot、harness 等於 `34256f12…` 而且凍結證據沒有問題，所以 Stage Q 的模組之後不再修改；拒絕條件的測試改用明確的 DRAFT 設定。`test_stage_q_analysis` 的 CLI 拒絕測試改用暫時的 DRAFT 設定檔（原本的測試在凍結後會把一份空的分析寫進 `results/stage_q/`；那份檔案沒有 commit，已刪除）。
   - 凍結沒有改動任何設計、門檻或判定規則；只改了 `[freeze]`。
+- **Q3 第一次**：`pilot-q3-20261025`（15:09–15:14Z，部署 `5205915`，`pin_memory` "0"），**不是通過的 pilot**：
+  - `score-w4a16` ok（10 段，97 s，KV 35,635 token）。
+  - `score-bf16`（`cpu_offload_gb` 8）exit 1、沒有分數檔：vLLM 載入時卸載了 8.06 GB 參數（UVAOffloader），但印出「Pinned memory is not available on this platform; falling back to device memory for UVA buffers」；之後 profile run 時 Qwen3.5 GDN 的 Triton prefill kernel（`fused_post_conv_prep`）收到 CPU 上的張量：`ValueError: Pointer argument cannot be accessed from Triton (cpu tensor?)`，engine 初始化失敗。
+  - 推論：WSL 上關閉 pinned memory（`VLLM_WSL2_ENABLE_PIN_MEMORY=0`）時，卸載的權重是一般的 CPU 張量，GPU 上的 Triton kernel 讀不到；本文第 77 行預先列出的可行性風險。審查紀錄（第 231 行附近）記下「pilot 若需要 "1"，再補記」。
+  - vLLM 同時警告：WSL2 上 CPU 卸載加 CUDA graph 需要 pinned memory，而 Windows（WDDM）對 pinned memory 有約實體記憶體 50% 的全系統上限，用量過多時整台主機可能失去回應、需要強制重開機。主機有 31.2 GB 實體記憶體（當時可用 26.7 GB），8 GB 約為上限的一半。
+  - 因為改成 "1" 會讓整台 Windows 主機（也是另一個專案的機器）承擔風險，是否改用 "1" 重跑 pilot 交由使用者決定；不改的話，依本文第 77 行 Q3 記為 NT，另寫 decision log 說明替代方案。
 
