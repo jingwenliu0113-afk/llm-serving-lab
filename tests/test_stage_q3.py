@@ -97,8 +97,10 @@ def test_oom_is_read_from_the_end_of_the_log():
 
 # ---------------------------------------------------------------- config, plans and the freeze evidence
 
-def test_the_repo_config_is_well_formed_and_not_yet_frozen():
+def test_the_repo_config_is_well_formed_and_not_yet_frozen(monkeypatch):
+    monkeypatch.setattr(q3, "CHUNKS", q3.WIKITEXT_TOKENS // q3.N_CTX)       # the repo pins the real file (580)
     assert q3.config_problems(CFG) == [] and CFG["freeze"]["stage_q3"] is False
+    assert CFG["stage_q3"]["chunks"] == 580 and len(CFG["stage_q3"]["chunks_sha256"]) == 64   # pinned 2026-10-25
     assert q3.config_problems({**CFG, "freeze": {"stage_q3": True, "pilot_q3": ""}})
     assert q3.config_problems({**CFG, "stage_q3": {**CFG["stage_q3"], "bf16_cpu_offload_gb": -1}})
     assert q3.config_problems({**CFG, "stage_q3": {**CFG["stage_q3"], "chunks": 58}})       # 0 or 580 only
@@ -174,7 +176,7 @@ def with_pilot(tmp_path):
     return root, pinned_cfg(chunks, frozen=True)
 
 
-def test_plans_score_both_checkpoints_with_the_core_b_engine(tmp_path):
+def test_plans_score_both_checkpoints_with_the_core_b_engine(tmp_path, monkeypatch):
     root, cfg = with_pilot(tmp_path)
     p = q3.build_plan(PINS, cfg, mode="formal", stage_q3_sha256="q" * 64, pins_sha256="p" * 64, root=root)
     w, b = p["jobs"]
@@ -190,6 +192,7 @@ def test_plans_score_both_checkpoints_with_the_core_b_engine(tmp_path):
         assert j["n_chunks"] == 12 and j["env"]["HF_HUB_OFFLINE"] == "1"
     assert (w["engine"]["cpu_offload_gb"], b["engine"]["cpu_offload_gb"]) == (0, CFG["stage_q3"]["bf16_cpu_offload_gb"])
     assert p["chunks"]["chunks"] == 12 and p["harness_sha256"] == q3.harness_sha256()
+    monkeypatch.setattr(q3, "CHUNKS", q3.WIKITEXT_TOKENS // q3.N_CTX)       # the repo config pins the real 580
     pilot = q3.build_plan(PINS, CFG, mode="pilot")
     assert all(j["n_chunks"] == q3.PILOT_CHUNKS for j in pilot["jobs"]) and pilot["chunks"]["sha256"] is None
 
