@@ -95,14 +95,15 @@
   - [x] E1-P harness 寫成並審查（2026-10-23，DRAFT）：`configs/stage_e1p.toml`、`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`、`stage_e1p_seed_check.py`、`tests/test_stage_e1p.py`；三輪審查（都沒有 must-fix）全部處理（041 修訂紀錄「E1-P harness 審查」「E1-P 修正後的覆核」「第三次覆核」；E2、E3、Stage Q、Q3 的中斷、SIGTERM 與 refused 範圍一併修正，040 #39–#49）。
   - GPU 佇列（2026-10-24）：Stage D 結束後，另一個專案的 `agent_gym_serve` 自 01:09Z 起持有 GPU lock；不搶占。23:42Z 空出（部署、seed 檢查、取回、Q3 下載都在此時完成），10-25 00:18Z 前又被另一個專案取得。
         lock 空出後依序：部署 HEAD（`deploy_bundle.py`）→ E1-P seed 檢查與 smoke → D-B 的 raw 取證 → E1-D 取回 → Q3 下載 → E3 / Stage Q 的 RTX pilot → E2。
-  - [ ] E1-P（**等 GPU 空閒**，WSL）：
+  - [x] E1-P（完成，046）：
         1. [x] seed 檢查通過（2026-10-25，部署 `b517cdc`，`637d70f`）：N 200 與 16，seed A、B 的每個 prompt 在 server 端都是 8,064 token，兩個 seed 不同。原本的指令：seed 檢查（只用 CPU，`flock -n` 下）：`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e1p_seed_check.py` → Mac 上 `tools/rtx/fetch_seed_check.sh`（核對 sha256）→ commit。不通過時（seed B 有 prompt 不是 8,064，或 A、B 相同）要另寫 decision log 換 seed，不能自行改。
         2. smoke 的第一次嘗試 `smoke-e1p-20261025`（2026-10-24 23:46Z）在第一次 boot 前被 031 的閒置檢查拒絕：GPU 閒置佔用 1,179 MiB，超過上限 1,018 MiB（之前的 session 閒置時約 650–720 MiB）。
            Windows 端開著的桌面程式（ChatGPT、工作管理員、設定、Windows Terminal、codex-computer-use 等）用掉 GPU 記憶體；依規則不關閉 Windows 程序，等使用者處理後以新的 id 重跑 smoke。
            2026-10-25：使用者關閉 Windows 桌面程式後閒置佔用降到 849–894 MiB；BingWallpaper 自行重啟（1,072 MiB），使用者同意由我關閉剩下的一般程式，只結束 BingWallpaper 與它的 WebView 子程序（系統程序不動），回到 849 MiB。
            第二次嘗試 `smoke-e1p-20261025b`（10:15–10:18Z，部署 `ff66e6d`）**通過**：1 次 boot、2 個 bench 有效，13 項檢查都通過，elapsed 185 s，harness `414deba6…`。兩次嘗試都已取回（`wsl-inventory.txt`）。
         3. [x] **凍結**（2026-10-25）：`freeze.e1p = true`、`smoke_e1p = "smoke-e1p-20261025b"`；041 §1.7 與 PREREGISTRATION §11 已更新。正式 plan 的上限 10,615 s（3.0 h − 185 s），6 次 boot。
-        4. [ ] 部署凍結 commit → 留空檔 → 正式（`--mode formal`，flock 下 `--formal`，約 2.5 h；開始前確認 GPU 閒置 ≤ 1,018 MiB、lock FREE，並請使用者中斷遠端桌面）→ 取回 → `stage_e1p_analysis.py`。
+        4. [x] 正式 `formal-20261025-e1p`（部署 `1de7895`，10:27:46–12:55:11Z，8,845 s / 上限 10,615 s）：6 次 boot、24 / 24 bench 有效，沒有停止，每次 boot 閒置 522 MiB。
+           分析 `results/stage_e/e1p-analysis-20261025/e1p.json`（`178ba8b`）：讀法 **無法判定（觸發太少）**（seed A 尖峰 6、A_in {88}；seed B 尖峰 0、B_in 空）。結果文件 **046**（描述；獨立重算、重跑逐位元相同）。E1 的「內容或位置」問題留給 Future Work，不重跑、不延長。
         2. smoke：`python benchmarks/stage_e1p_plan.py --mode smoke --out ~/e1p-smoke-plan.json`，`flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/run_stage_e1p.py --plan ~/e1p-smoke-plan.json --out results/stage_e/smoke-e1p-<date> --gpu-lock-held --smoke`
         3. 取回、凍結（`freeze.e1p = true`、`smoke_e1p`）→ 正式（約 2.5 h，上限 3.0 h 減 smoke 的時間）→ `stage_e1p_analysis.py --out results/stage_e/e1p-analysis-<date>/e1p.json`。
 ## Phase 2 結案時的狀態（2026-10-19，decision 036）
