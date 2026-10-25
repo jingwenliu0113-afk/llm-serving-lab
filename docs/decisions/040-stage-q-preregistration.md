@@ -302,4 +302,5 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
   - 推論：WSL 上關閉 pinned memory（`VLLM_WSL2_ENABLE_PIN_MEMORY=0`）時，卸載的權重是一般的 CPU 張量，GPU 上的 Triton kernel 讀不到；本文第 77 行預先列出的可行性風險。審查紀錄（第 231 行附近）記下「pilot 若需要 "1"，再補記」。
   - vLLM 同時警告：WSL2 上 CPU 卸載加 CUDA graph 需要 pinned memory，而 Windows（WDDM）對 pinned memory 有約實體記憶體 50% 的全系統上限，用量過多時整台主機可能失去回應、需要強制重開機。主機有 31.2 GB 實體記憶體（當時可用 26.7 GB），8 GB 約為上限的一半。
   - 因為改成 "1" 會讓整台 Windows 主機（也是另一個專案的機器）承擔風險，是否改用 "1" 重跑 pilot 交由使用者決定；不改的話，依本文第 77 行 Q3 記為 NT，另寫 decision log 說明替代方案。
+- **使用者決定（2026-10-25）**：試一次 `pin_memory` "1"。`configs/stage_q3.toml` 的 `pin_memory` 由 "0" 改為 "1"（兩個 job 都用；依審查紀錄，pin_memory 不影響數值）。只在 GPU lock 空著、主機可用記憶體 ≥ 20 GB 時跑 pilot；這次之後不論成敗都不再換其他設定，失敗就依第 77 行把 Q3 記為 NT。
 

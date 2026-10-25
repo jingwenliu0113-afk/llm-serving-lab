@@ -15,6 +15,6 @@ chunks_sha256 = "7174626e373bc3344021007ae1160a9696b7c1387ed3453fa3e0e48748441fe
 chunks = 580                                              # its chunk count (llama-perplexity: 580 at 297,194 tokens)
 bf16_cpu_offload_gb = 8                                   # 040: 9B BF16 (17.9 GB language-only) needs offload on 16 GB
 max_num_batched_tokens = 512                              # one chunk per step: bounds the fp32 prompt-logprob tensor
-pin_memory = "0"                                          # VLLM_WSL2_ENABLE_PIN_MEMORY for both jobs (pins stage_b)
+pin_memory = "1"                                          # VLLM_WSL2_ENABLE_PIN_MEMORY for both jobs: "1" (040 pilot record, user 2026-10-25)
 n_boot = 10000                                            # 040: chunk bootstrap of the paired delta NLL
 seed = 20261008                                           # the bootstrap seed (Core B seed)
