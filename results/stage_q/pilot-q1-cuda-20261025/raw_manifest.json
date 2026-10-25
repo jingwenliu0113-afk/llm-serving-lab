@@ -1,0 +1,85 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/kld-4B-Q4_K_M.stderr.txt": {
+   "sha256": "c543fe7c2babb3d9e306ce903c36b63d6554f69f71d5a4e0f77ed4f04fa046d5",
+   "size_bytes": 605
+  },
+  "raw/kld-4B-Q4_K_M.stdout.txt": {
+   "sha256": "202c7c308ae01d04df6eb3ea28e4d51d4dd997dd9359bdf85fa19bbe3b388535",
+   "size_bytes": 2564
+  },
+  "raw/kld-4B-Q6_K.stderr.txt": {
+   "sha256": "ed6c86cbf1a33e69d923a18ee22c4d4a83ab2824d3f2180fe769f7eeb985e8e2",
+   "size_bytes": 605
+  },
+  "raw/kld-4B-Q6_K.stdout.txt": {
+   "sha256": "94c665c8e660a04158919073954462cb75d1844e22daedaa912b13ee5ffe820a",
+   "size_bytes": 2562
+  },
+  "raw/kld-4B-Q8_0.stderr.txt": {
+   "sha256": "577560fd72375d7626a5313255c6d6c7fa0ef828528046b04b078b7e2165ce91",
+   "size_bytes": 605
+  },
+  "raw/kld-4B-Q8_0.stdout.txt": {
+   "sha256": "bd62d6eee46baa6137238f7c31d4d24a62f00b89c8571b7ff6eeecf29d821efa",
+   "size_bytes": 2562
+  },
+  "raw/kld-9B-Q4_K_M.stderr.txt": {
+   "sha256": "b5a79a60a80139b219d1e525c79fb719e984655629896c0bb801ed9c9ddd24b1",
+   "size_bytes": 605
+  },
+  "raw/kld-9B-Q4_K_M.stdout.txt": {
+   "sha256": "8a7296f69f55ae0eace462d583cf1b90eb3b822b5b6e98286b75794b91287784",
+   "size_bytes": 2564
+  },
+  "raw/kld-9B-Q6_K.stderr.txt": {
+   "sha256": "6078355da1e26ec24305c9c929149b610136ab682984557ca9cda8a68ef0f483",
+   "size_bytes": 605
+  },
+  "raw/kld-9B-Q6_K.stdout.txt": {
+   "sha256": "a963c0148bc1d4137d410f6fa49f2e74d312e70c8bc49264e4f4e802ec7b641b",
+   "size_bytes": 2563
+  },
+  "raw/kld-9B-Q8_0.stderr.txt": {
+   "sha256": "0b721a462967b679298a27f373d3e7395c564a19f80c04b8e9799b1588ea92fe",
+   "size_bytes": 605
+  },
+  "raw/kld-9B-Q8_0.stdout.txt": {
+   "sha256": "0f3f4bdbc099564a12b8f99fd21e43ab3419bbd28f6e731be43dc836e3e0e617",
+   "size_bytes": 2562
+  },
+  "raw/kld_base-4B.stderr.txt": {
+   "sha256": "8602d3dfa53d021745f2d554374df3fa9d0a8afcbde18697cf7ec1344f21dc8d",
+   "size_bytes": 901
+  },
+  "raw/kld_base-4B.stdout.txt": {
+   "sha256": "5ef49e2a2e47b9f2f7610fac6086ed1acfcd36bf4ec2694a30c1c48ec34d352d",
+   "size_bytes": 119
+  },
+  "raw/kld_base-9B.stderr.txt": {
+   "sha256": "de69f03cc83643e4c9a7092aaad90bcbb01c0cc2135af4861d7ca0faf4c67248",
+   "size_bytes": 901
+  },
+  "raw/kld_base-9B.stdout.txt": {
+   "sha256": "f33c60c6ec3ca5d6bc086a57a3c44b554fd17d845e441ec233acf1594b6db9db",
+   "size_bytes": 116
+  },
+  "raw/kld_self-4B.stderr.txt": {
+   "sha256": "61898257b282e0816736489ef23abbf595c45b6937fd00a2f1e16748ca8529bc",
+   "size_bytes": 605
+  },
+  "raw/kld_self-4B.stdout.txt": {
+   "sha256": "4e20d27e6119ebccb809cfcccfc49ba6de3154b62584659bfe088ba77deab314",
+   "size_bytes": 2572
+  },
+  "raw/kld_self-9B.stderr.txt": {
+   "sha256": "3526dd20f17c9c6e8df7b10dc4dbfe4cb641c3de9fad61ed0f6de80d83da0ce9",
+   "size_bytes": 605
+  },
+  "raw/kld_self-9B.stdout.txt": {
+   "sha256": "52a8ce468364f144415424888f3d68abdacff9395b48d7429306b6a12968f49d",
+   "size_bytes": 2572
+  }
+ }
+}
