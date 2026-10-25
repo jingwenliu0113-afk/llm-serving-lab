@@ -239,7 +239,12 @@ def test_no_analysis_before_the_freeze_or_without_its_evidence(tmp_path, pilot_r
         analyze(root, cfg)
 
 
-def test_the_cli_refuses_the_unfrozen_repo_config(tmp_path, capsys):
-    assert qa2.main(["--out", str(ROOT / "results" / "stage_q" / "analysis.json")]) == 2
+def test_the_cli_refuses_an_unfrozen_config(tmp_path, capsys, monkeypatch):
+    """The repo config is frozen since 2026-10-25 (040 凍結); an explicit DRAFT copy stands for the unfrozen config."""
+    draft = tmp_path / "stage_q.toml"
+    draft.write_text(sq.CONFIG.read_text().replace("stage_q = true", "stage_q = false", 1))
+    monkeypatch.setattr(sq, "CONFIG", draft)
+    out = ROOT / "results" / "stage_q" / "analysis-test-unfrozen.json"
+    assert qa2.main(["--out", str(out)]) == 2
     assert "freeze.stage_q" in capsys.readouterr().err
-    assert not (ROOT / "results" / "stage_q" / "analysis.json").exists()
+    assert not out.exists()

@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "captured_at_utc": "2026-10-25T14:44:49.009955+00:00",
+  "repo": {
+    "commit": "2e641fdf8163ecb14ec469f379819e330b29a696",
+    "dirty": false,
+    "status": [],
+    "source": "DEPLOYED_COMMIT"
+  },
+  "os": {
+    "system": "Linux",
+    "release": "6.6.114.1-microsoft-standard-WSL2",
+    "machine": "x86_64",
+    "wsl": true,
+    "pretty_name": "Ubuntu 22.04.5 LTS",
+    "id": "ubuntu",
+    "version_id": "22.04"
+  },
+  "hardware": {
+    "cpu": "AMD Ryzen 5 7600 6-Core Processor",
+    "logical_cpus": 12,
+    "ram_bytes": 32599269376
+  },
+  "gpu": {
+    "nvidia": [
+      {
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "driver_version": "617.42",
+        "compute_cap": "12.0",
+        "memory_total_mib": 16303,
+        "memory_used_mib": 157,
+        "utilization_gpu_pct": 0,
+        "pstate": "P5",
+        "power_draw_w": 9.99,
+        "temperature_c": 42,
+        "clocks_sm_mhz": 180,
+        "clocks_max_sm_mhz": 3090,
+        "power_limit_w": 300.0,
+        "enforced_power_limit_w": 300.0,
+        "power_default_limit_w": 300.0,
+        "clocks_event_reasons_active": "0x0000000000000400"
+      }
+    ],
+    "cuda_toolkit_on_path": null,
+    "host_cc": "cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+    "cuda_home": null,
+    "cuda_home_nvcc": null
+  },
+  "power": {
+    "source": null,
+    "battery_pct": null,
+    "battery_state": null,
+    "ac_adapter": null,
+    "powermode": null,
+    "powermode_label": null,
+    "thermal": null
+  },
+  "load": {
+    "loadavg_1m": 1.92333984375,
+    "loadavg_5m": 1.5439453125,
+    "loadavg_15m": 0.8779296875,
+    "mac_heavy_lock_present": null,
+    "mac_heavy_lock_owner": null,
+    "gpu_lock_held": true
+  },
+  "runtime": {
+    "llama_cpp": {
+      "binary": "/home/wenn0113/llm-serving-lab/third_party/llama.cpp/build-cuda/bin/llama-perplexity",
+      "version": "0.5.0",
+      "build_number": 11146,
+      "commit": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+      "built_with": "GNU 11.4.0 for Linux x86_64"
+    },
+    "vllm": null
+  },
+  "env": {},
+  "capture_python": "3.12.13",
+  "config": null,
+  "probe_errors": [
+    "git rev-parse: exit 128: fatal: not a git repository (or any of the parent directories): .git",
+    "nvcc: command not found (nvcc)"
+  ]
+}

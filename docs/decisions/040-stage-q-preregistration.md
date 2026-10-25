@@ -1,6 +1,6 @@
 # 040 — Stage Q 事先登記（DRAFT）：quality 的三個缺口
 
-- 狀態：**DRAFT**。harness、pilot 與審查完成後凍結；凍結前不收任何 Stage Q 的正式數據。
+- 狀態：**Q1 / Q2 已凍結（2026-10-25，`configs/stage_q.toml` 的 `freeze.stage_q = true` 與三個 pilot，harness `34256f12…`；見文末「pilot 紀錄」）**；Q3 仍為 DRAFT（自己的 `freeze.stage_q3`）。凍結前沒有收任何 Stage Q 的正式數據。
 - 日期：2026-10-23
 - 對應：037（Phase 3 範圍）、005（quality 指標與 task set）、020（quality 改在 RTX）、PREREGISTRATION §3 / H-A5
 - 時點：任何 Stage Q 數據之前。設計者看過 Core A 的 quality 結果（README「Quality」），用到的地方在「揭露」寫明。
@@ -292,4 +292,8 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
   - 因此 `delete_kld-9B-c2048` 依規則保留 KLD 基準檔供診斷，記為 error（`data/kld/pilot-q2-20261025/` 留在 WSL，不進 git）。
   - stderr / stdout 以 `fetch_raw.sh` 唯讀取回，sha256 和 raw_manifest 相符；session 已取回並 commit（不含 raw/）。
 - 凍結證據要求每個 job 都 ok（實作補記 6），所以 q2 以新的 session id 重跑 pilot；設定、harness 與 plan 都不變。pilot 不是正式數據，重跑不影響任何判定。
+- **q2 第二次**：`pilot-q2-20261025b`（14:33–14:58Z，部署 `2e641fd`），24 個 job 都 ok，env 有效，harness `34256f12…`。
+- **凍結（2026-10-25）**：三個 pilot（`pilot-q1-metal-20261023`、`pilot-q1-cuda-20261025`、`pilot-q2-20261025b`）都是同一個 harness、每個 job 都 ok，`stage_q.freeze_evidence_problems` 沒有任何問題；`configs/stage_q.toml` 設 `freeze.stage_q = true` 與三個 pilot id。
+  - `tests/test_stage_q.py` 檢查 repo 的設定檔指向這三個 pilot、harness 等於 `34256f12…` 而且凍結證據沒有問題，所以 Stage Q 的模組之後不再修改；拒絕條件的測試改用明確的 DRAFT 設定。`test_stage_q_analysis` 的 CLI 拒絕測試改用暫時的 DRAFT 設定檔（原本的測試在凍結後會把一份空的分析寫進 `results/stage_q/`；那份檔案沒有 commit，已刪除）。
+  - 凍結沒有改動任何設計、門檻或判定規則；只改了 `[freeze]`。
 

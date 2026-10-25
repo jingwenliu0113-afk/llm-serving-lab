@@ -14,7 +14,8 @@ import stage_q as sq
 
 ROOT = Path(__file__).resolve().parent.parent
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
-CFG = tomllib.loads((ROOT / "configs" / "stage_q.toml").read_text())
+REPO_CFG = tomllib.loads((ROOT / "configs" / "stage_q.toml").read_text())   # frozen 2026-10-25 (040 凍結)
+CFG = {**REPO_CFG, "freeze": {"stage_q": False, "pilot_q1_metal": "", "pilot_q1_cuda": "", "pilot_q2": ""}}  # DRAFT
 PILOT_IDS = {"pilot_q1_metal": "pilot-q1m", "pilot_q1_cuda": "pilot-q1c", "pilot_q2": "pilot-q2"}
 FROZEN = {**CFG, "freeze": {"stage_q": True, **PILOT_IDS}}
 
@@ -249,7 +250,17 @@ def test_a_failed_base_skips_its_kld_runs(tmp_path):
 
 # ---------------------------------------------------------------- config, freeze and evidence
 
-def test_the_repo_config_is_well_formed_and_not_yet_frozen():
+def test_the_repo_config_is_frozen_on_three_passed_pilots_of_this_harness():
+    """040 凍結 (2026-10-25): the repo config names the three passed pilots, each of this harness; any edit of the
+    Stage Q modules after the freeze fails here before a GPU session runs on it."""
+    assert sq.config_problems(REPO_CFG) == []
+    assert REPO_CFG["freeze"] == {"stage_q": True, "pilot_q1_metal": "pilot-q1-metal-20261023",
+                                  "pilot_q1_cuda": "pilot-q1-cuda-20261025", "pilot_q2": "pilot-q2-20261025b"}
+    assert sq.harness_sha256() == "34256f12c4294be833981074ced8eacf2537d6763851f96f3068ba85bf49633f"
+    assert sq.freeze_evidence_problems(REPO_CFG, ROOT, PINS) == []
+
+
+def test_the_draft_config_is_well_formed_and_not_yet_frozen():
     assert sq.config_problems(CFG) == [] and CFG["freeze"]["stage_q"] is False
     assert CFG["stage_q"]["phase1_session"] == "formal-20261010-quality"
     assert sq.config_problems({**CFG, "freeze": {**CFG["freeze"], "stage_q": True}})      # true needs the pilot ids
@@ -257,7 +268,7 @@ def test_the_repo_config_is_well_formed_and_not_yet_frozen():
 
 
 def test_formal_plans_need_the_freeze_this_parts_pilot_and_record_the_harness(frozen_root, tmp_path):
-    for cfg in (None, CFG):
+    for cfg in (CFG,):                                                     # the DRAFT copy (the repo is frozen)
         with pytest.raises(sq.StageQError, match="freeze.stage_q"):
             sq.build_plan(PINS, part="q2", mode="formal", cfg=cfg, root=frozen_root)
     with pytest.raises(sq.StageQError, match="pilot first"):
