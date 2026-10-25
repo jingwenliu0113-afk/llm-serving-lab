@@ -1,0 +1,28 @@
+{
+ "f_spikes": {
+  "spike_groups": [],
+  "F_ms": {},
+  "rate_g1_23": 0.0,
+  "n_dec_anchor": {
+   "median_g1_23": 2,
+   "spikes": {},
+   "n_counts_g1_23": {
+    "1": 1,
+    "2": 22
+   },
+   "nearest_stamp_minus_s_ms_range_g1_23": [
+    -0.8189678192138672,
+    0.4792213439941406
+   ],
+   "spikes_at_median_plus_1": 0,
+   "spikes_at_median_plus_1_unambiguous": 0,
+   "ambiguous_groups_g1_23": 0
+  }
+ },
+ "episodes": [],
+ "l1_in_normal_groups": {
+  "groups": 23,
+  "spikes": 0
+ },
+ "n_dec_median": 3
+}

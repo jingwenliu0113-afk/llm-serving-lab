@@ -1,0 +1,432 @@
+{
+ "stage": "E1P",
+ "decision": "041 v3 \u00a71.6",
+ "descriptive_only": true,
+ "session": "formal-20261025-e1p",
+ "reading": {
+  "row": "few_spikes",
+  "text": "\u7121\u6cd5\u5224\u5b9a\uff08\u89f8\u767c\u592a\u5c11\uff09",
+  "J": 0.0,
+  "A_in": [
+   88
+  ],
+  "B_in": [],
+  "A_in_and_prior": [
+   88
+  ],
+  "descriptive_only": true
+ },
+ "data": {
+  "stopped": null,
+  "outcomes": {
+   "boots": 6,
+   "benches": 24,
+   "valid": 24,
+   "invalid": 0,
+   "not_run": 0,
+   "failed_boots": 0
+  },
+  "planned": {
+   "A": 12,
+   "B": 12
+  },
+  "valid": {
+   "A": 12,
+   "B": 12
+  },
+  "excluded": {
+   "A": [],
+   "B": []
+  },
+  "without_e1": {
+   "A": [],
+   "B": []
+  },
+  "insufficient_data": false,
+  "incomplete_session": false
+ },
+ "seeds": {
+  "A": {
+   "benches": 12,
+   "spikes": 6,
+   "spike_idx_counts": [
+    [
+     16,
+     1
+    ],
+    [
+     88,
+     4
+    ],
+    [
+     128,
+     1
+    ]
+   ],
+   "repeated": [
+    [
+     88,
+     4
+    ]
+   ],
+   "per_bench": [
+    {
+     "tag": "b1-n1",
+     "position": 1,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b1-n4",
+     "position": 4,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b2-n2",
+     "position": 2,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b2-n3",
+     "position": 3,
+     "spike_idx": [
+      128
+     ],
+     "episodes": [
+      129
+     ],
+     "e1_error": null
+    },
+    {
+     "tag": "b3-n1",
+     "position": 1,
+     "spike_idx": [
+      16,
+      88
+     ],
+     "episodes": [
+      17,
+      89
+     ],
+     "e1_error": null
+    },
+    {
+     "tag": "b3-n4",
+     "position": 4,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b4-n2",
+     "position": 2,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b4-n3",
+     "position": 3,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b5-n1",
+     "position": 1,
+     "spike_idx": [
+      88
+     ],
+     "episodes": [
+      89
+     ],
+     "e1_error": null
+    },
+    {
+     "tag": "b5-n4",
+     "position": 4,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b6-n2",
+     "position": 2,
+     "spike_idx": [
+      88
+     ],
+     "episodes": [
+      89
+     ],
+     "e1_error": null
+    },
+    {
+     "tag": "b6-n3",
+     "position": 3,
+     "spike_idx": [
+      88
+     ],
+     "episodes": [
+      89
+     ],
+     "e1_error": null
+    }
+   ],
+   "benches_with_episodes": 12,
+   "episodes": 6,
+   "slip_rate": 0.5,
+   "slips_by_position": [
+    {
+     "position": 1,
+     "benches": 3,
+     "episodes": 3
+    },
+    {
+     "position": 2,
+     "benches": 3,
+     "episodes": 1
+    },
+    {
+     "position": 3,
+     "benches": 3,
+     "episodes": 2
+    },
+    {
+     "position": 4,
+     "benches": 3,
+     "episodes": 0
+    }
+   ],
+   "spike_slip": {
+    "spikes": 6,
+    "spikes_in_slip_groups": 6,
+    "slip_groups": 6,
+    "slip_groups_with_spike": 6
+   },
+   "chain": {
+    "episodes": 6,
+    "continuous": 0,
+    "outside_base_range": 0,
+    "evaluable": 6,
+    "with_a_failing_link": 0,
+    "l1_rate_in_normal_groups": 0.0,
+    "chain": "holds",
+    "start_idx": [
+     [
+      17,
+      1
+     ],
+     [
+      89,
+      4
+     ],
+     [
+      129,
+      1
+     ]
+    ]
+   }
+  },
+  "B": {
+   "benches": 12,
+   "spikes": 0,
+   "spike_idx_counts": [],
+   "repeated": [],
+   "per_bench": [
+    {
+     "tag": "b1-n2",
+     "position": 2,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b1-n3",
+     "position": 3,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b2-n1",
+     "position": 1,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b2-n4",
+     "position": 4,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b3-n2",
+     "position": 2,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b3-n3",
+     "position": 3,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b4-n1",
+     "position": 1,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b4-n4",
+     "position": 4,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b5-n2",
+     "position": 2,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b5-n3",
+     "position": 3,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b6-n1",
+     "position": 1,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    },
+    {
+     "tag": "b6-n4",
+     "position": 4,
+     "spike_idx": [],
+     "episodes": [],
+     "e1_error": null
+    }
+   ],
+   "benches_with_episodes": 12,
+   "episodes": 0,
+   "slip_rate": 0.0,
+   "slips_by_position": [
+    {
+     "position": 1,
+     "benches": 3,
+     "episodes": 0
+    },
+    {
+     "position": 2,
+     "benches": 3,
+     "episodes": 0
+    },
+    {
+     "position": 3,
+     "benches": 3,
+     "episodes": 0
+    },
+    {
+     "position": 4,
+     "benches": 3,
+     "episodes": 0
+    }
+   ],
+   "spike_slip": {
+    "spikes": 0,
+    "spikes_in_slip_groups": 0,
+    "slip_groups": 0,
+    "slip_groups_with_spike": 0
+   },
+   "chain": {
+    "episodes": 0,
+    "continuous": 0,
+    "outside_base_range": 0,
+    "evaluable": 0,
+    "with_a_failing_link": 0,
+    "l1_rate_in_normal_groups": 0.0,
+    "chain": "not evaluable",
+    "start_idx": []
+   }
+  }
+ },
+ "slip_rate_all": 0.25,
+ "earlier_slip_rates": {
+  "C0": 0.21,
+  "Advanced": 0.89,
+  "Core": 2.67,
+  "note": "episodes per bench in other sessions and on other servers"
+ },
+ "stage_e1_harness_sha256": "87b937d12799853b50745bc4430de5c26f8b9db71cd6726aebb78466a656c00d",
+ "inputs_sha256": {
+  "session.json": "c0de3b008ee9733225cea92becdadca5053662b3a399bfa08a0e48d6d07d0cee",
+  "plan.json": "eed29e8d2c2f6f6efe5fde1ddff0c98d92b46b71618fd8410c3568f90553d522",
+  "rows.jsonl": "58b6ebfdc40f753e8ef5216d78f1494e77409b80fca6ae11e52314420adc8bc3",
+  "derived/b1-n1-requests.jsonl": "bef6101fb251aa2b3bd68c218ebd8501bcc8d8c13bf946ef32faf5fae86d12c4",
+  "derived/b1-n1-e1.json": "494e0b78ae30a2a3cedf8f48e8abe9638f32069209db19d8a6769731ef983162",
+  "derived/b1-n2-requests.jsonl": "59d8815a5c61252c1a52a7addb9b8a6d63c99a75cb96fce394df4607a079d0d8",
+  "derived/b1-n2-e1.json": "c3f199daaf21a6faa139dda26828091596f3d9fe3b2b4e3dd580018fddff52ef",
+  "derived/b1-n3-requests.jsonl": "b598404f27b7cced0316a21698cdc64658079a42cc23cefc18cebb6763ba3d72",
+  "derived/b1-n3-e1.json": "bf6815bcd5d1375c21509992ff4383e6f657f64e1362c20dccf25c42f0d2261b",
+  "derived/b1-n4-requests.jsonl": "13641020cd678405d6a2c4891d71df92b9f3a8d48cc42748f145af29b4d31133",
+  "derived/b1-n4-e1.json": "a5f7cf99a17e6bf629d0ec50124818287fa2a0894b7befb774ebbe65c17516be",
+  "derived/b2-n1-requests.jsonl": "1b431631abbebddfff1d010aed8ab05b61bd013f726bc74814133069ecd66c70",
+  "derived/b2-n1-e1.json": "aa9e96c7d406d6f985c296478276e4fd2e4cd64af0cb019d3f28d9c0c1c11971",
+  "derived/b2-n2-requests.jsonl": "f5f6a4ba3d951b2f9d90689091be3c79ea61f6d09af2af9727926086e6b08674",
+  "derived/b2-n2-e1.json": "080b6fb856858af5f489c2d729b8baadb9c5f8ede9f25846ba5ca5252357696c",
+  "derived/b2-n3-requests.jsonl": "9904f814684b5a87a48be32379ac102575361239942da1428af8bba548a8ce97",
+  "derived/b2-n3-e1.json": "78540ad787f116a8715832d0e72147c34516eb9a5226614857208b1c7b4deca1",
+  "derived/b2-n4-requests.jsonl": "6a3ea674373f214a92549d1dbba7916e8df9d3e135693cce4f45d4cec3b1fa78",
+  "derived/b2-n4-e1.json": "1c8f4a8476332662423ec5f19b3268f8093b61f79f5b9d08945969034fbe3171",
+  "derived/b3-n1-requests.jsonl": "1cc40ddccc5711c9b24b1b3e3e13cc9595c7ec246cff62b5aaf1074d7386cf21",
+  "derived/b3-n1-e1.json": "0a89224b324a61573320c179978baadbd9ee0212db052171466dbf8494621cc1",
+  "derived/b3-n2-requests.jsonl": "265af1fe9a83984ed9f0180e65684f8e0ae1b4ca0301580ec07f72f64a929e68",
+  "derived/b3-n2-e1.json": "e16f836bb12b330cc25f284d75fab1e92900962062414e2b3fb3968ad6597f5e",
+  "derived/b3-n3-requests.jsonl": "b159959da5e4c63e5a678d0ce1a683a01278609fe59aa2998a7825b9edb3b867",
+  "derived/b3-n3-e1.json": "bc8c582cc49faee93470b6f1b09d6371c9bb18c1e04736de0141732821da3653",
+  "derived/b3-n4-requests.jsonl": "ae9084b8b23221aed97c42af5f9dfaae1b50ba624daeb861c9f57b7d68c8a724",
+  "derived/b3-n4-e1.json": "3acab87e8ed6931709450261e50c4b9b3de3e2074420c39924d0dfcd05cb52c6",
+  "derived/b4-n1-requests.jsonl": "27ea7a6c0ceed2684802b1c21c3b3a16f87dfd63c7774938ecf66f0898404bf8",
+  "derived/b4-n1-e1.json": "595157db8737aff22f7bab3a835f1dde7ed23c5f85e3be966c542c89b2c65b6e",
+  "derived/b4-n2-requests.jsonl": "1c0c2320c6337674ce6a4887e167fb455a800873151db8a631264c105f0d23c7",
+  "derived/b4-n2-e1.json": "d910ab9d12009ecd31e9c6651bfb63b9b6182c0822bf836d6f4b739342a027fa",
+  "derived/b4-n3-requests.jsonl": "b85caba44a09b6ab28b53ee4d80fdacaece6d0a89d4b5731faea56c0e5cf693e",
+  "derived/b4-n3-e1.json": "67a4bc40031267fa263ccd0fc24d06256b0923e20bb0f57603d8ebb1a6e7bf13",
+  "derived/b4-n4-requests.jsonl": "ab07d72e2a4c8054d9a8c7ace60c438c814ff57d1c47e4b41df1668fba5c136f",
+  "derived/b4-n4-e1.json": "fc3705494f24970843ba107a8ae25c0523de4b003825da3bb6941e865d978e2b",
+  "derived/b5-n1-requests.jsonl": "9aa4c5d78a5581829f22507d1add5c6a26614b3aee5477f4ed1df624654779d1",
+  "derived/b5-n1-e1.json": "ffc04778202f85393f62ad78b18a38700c9a7278bf87f33479c29b392ed8cac7",
+  "derived/b5-n2-requests.jsonl": "13a970acf4e77dd94a8d0d93038e5a202047d7f533d81302c09848e475ecd3d7",
+  "derived/b5-n2-e1.json": "3dd2c33166a9a26d425953852f7e3320f753d3431158c42b936297d04492fffa",
+  "derived/b5-n3-requests.jsonl": "41ea46ff761edb3af8258a04d740d06c9b93f5f4effd25f9affdbee752481af9",
+  "derived/b5-n3-e1.json": "1154b628329dfc5cdf96fadb916f72b464f3e0707990956df6c1c927c8236d90",
+  "derived/b5-n4-requests.jsonl": "9dd98e7fcc36dde0c38192feff021a2e6665effd50e4e78c33b05ce5f6260009",
+  "derived/b5-n4-e1.json": "53cd21404092587fa735acf201c6baf855b3f0f875c3191b239c4aa41631778d",
+  "derived/b6-n1-requests.jsonl": "4600174f4a996229e16866c5e58eb4a9ae3dff2b5932be6e8da88a5246280783",
+  "derived/b6-n1-e1.json": "ceae1c9c60b5617c184054d1549372088b45047777bd334ed437a3d31f9544a2",
+  "derived/b6-n2-requests.jsonl": "abeab0b5719ecfc1d94a2323de2dc7599cedaa49a269fe61f550a312caf6662a",
+  "derived/b6-n2-e1.json": "6a0492cd917e28be48bfc587391db577c01716e23d9e00ec9c416591355ab553",
+  "derived/b6-n3-requests.jsonl": "baac81d97c8da660ab309eb6ad11ab10af73f85a91e45716cd199676f695e3ff",
+  "derived/b6-n3-e1.json": "78f1537d94714cd9b14015dce27b9923a22a3ed6967690be913aa2b0a4f1be7e",
+  "derived/b6-n4-requests.jsonl": "2473bcc9ec43ea6991e18503bd469fed071329cbb594c828571f9cd70e5d8d0f",
+  "derived/b6-n4-e1.json": "c015f54228c609a80857d80d719d4604ef1a64ad8e4e2491ce3619b81788588b"
+ },
+ "harness_sha256": "414deba60f84f29fa48ea45ada42947c99a34576f09095a3bf022727c194db62",
+ "stage_e1p_sha256": "aa355b4c18a7d7bd50cf555aab2bf162a1696b80cdc4967a7c4c64d64f0ebad3"
+}

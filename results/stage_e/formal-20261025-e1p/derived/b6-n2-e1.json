@@ -1,0 +1,80 @@
+{
+ "f_spikes": {
+  "spike_groups": [
+   11
+  ],
+  "F_ms": {
+   "11": 40.79905708658771
+  },
+  "rate_g1_23": 0.043478260869565216,
+  "n_dec_anchor": {
+   "median_g1_23": 2,
+   "spikes": {
+    "11": {
+     "n": 3,
+     "decode_only": 3,
+     "edges": {
+      "arrival_minus_stamp_ms": 3.4940242767333984,
+      "stamp_minus_arrival_ms": 12.50600814819336,
+      "end_minus_stamp_ms": 3.2973289489746094,
+      "stamp_minus_end_ms": 42.702674865722656
+     },
+     "nearest_stamp_minus_s_ms": 1.7027854919433594,
+     "margin_ms": 3.2973289489746094,
+     "ambiguous": false
+    }
+   },
+   "n_counts_g1_23": {
+    "2": 22,
+    "3": 1
+   },
+   "nearest_stamp_minus_s_ms_range_g1_23": [
+    -0.8203983306884766,
+    2.055644989013672
+   ],
+   "spikes_at_median_plus_1": 1,
+   "spikes_at_median_plus_1_unambiguous": 1,
+   "ambiguous_groups_g1_23": 0
+  }
+ },
+ "episodes": [
+  {
+   "start_idx": 89,
+   "k": 11,
+   "position": 1,
+   "length": 7,
+   "continuous": false,
+   "in_base_range": true,
+   "links": {
+    "L1": true,
+    "L2": true,
+    "L3": true,
+    "L4": true,
+    "L5": true
+   },
+   "values": {
+    "F0_ms": 40.79905708658771,
+    "n_dec": 4,
+    "n_dec_median": 3,
+    "L3_dev_ms": -337.24117279052734,
+    "gap_ms": 91.11642837524414,
+    "dQ_ms": 348.9882269999985,
+    "send_lag_ms": [
+     0.06241999926714925,
+     0.18319900027563563,
+     0.16713900004106108,
+     0.2272789997732616,
+     0.22490999981528148,
+     0.2780189997793059,
+     0.19633899955806555
+    ],
+    "send_lag_ms_max": 0.2780189997793059
+   }
+  }
+ ],
+ "l1_in_normal_groups": {
+  "groups": 22,
+  "spikes": 0
+ },
+ "n_dec_median": 3
+}
