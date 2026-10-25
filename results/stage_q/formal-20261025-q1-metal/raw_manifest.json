@@ -1,0 +1,69 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/ppl-4B-BF16.stderr.txt": {
+   "sha256": "61ced9e59d6be04a414f6eb031074285eaeafab63b766f0194a4c44ced5e3cbd",
+   "size_bytes": 634
+  },
+  "raw/ppl-4B-BF16.stdout.txt": {
+   "sha256": "9aec5dc5ec655e29189b91740bb2acc4bc7457f82af52313b0ad11d8a382d313",
+   "size_bytes": 21507
+  },
+  "raw/ppl-4B-Q4_K_M.stderr.txt": {
+   "sha256": "4235b02e29d631f1c213f3e0205e86861381b274a715526d5af23947ffe96a42",
+   "size_bytes": 635
+  },
+  "raw/ppl-4B-Q4_K_M.stdout.txt": {
+   "sha256": "736ccb8a9cb9e6eb895664bac99ebbb9bea3d6439b706056c74cfec9960355de",
+   "size_bytes": 21828
+  },
+  "raw/ppl-4B-Q6_K.stderr.txt": {
+   "sha256": "eceb240cae2d10cc89f0ea6af5a9287172c5341e163b25043c443a2c80082d37",
+   "size_bytes": 634
+  },
+  "raw/ppl-4B-Q6_K.stdout.txt": {
+   "sha256": "b3ce62e0ba40b9cae1828f1dcf5e99e5fb67c95ae58bbb4f55b1bab97e59db94",
+   "size_bytes": 21552
+  },
+  "raw/ppl-4B-Q8_0.stderr.txt": {
+   "sha256": "1751ce390d1dc70e1ee41e090ff1e6e4963f1213a76f6980fec262a1d1eba668",
+   "size_bytes": 634
+  },
+  "raw/ppl-4B-Q8_0.stdout.txt": {
+   "sha256": "b993cc19e6b3cfbe409648bfae85786ac950744fc3205e9da02a0794123c1d58",
+   "size_bytes": 21509
+  },
+  "raw/ppl-9B-BF16.stderr.txt": {
+   "sha256": "286f85cb59aa568a944590b29a735061fb8b82a6d894f259939d589680f81bed",
+   "size_bytes": 635
+  },
+  "raw/ppl-9B-BF16.stdout.txt": {
+   "sha256": "4129c5c449cd95aa362357dc33e35b041f572b782a146b1ddbb1cd965b85dfc1",
+   "size_bytes": 21476
+  },
+  "raw/ppl-9B-Q4_K_M.stderr.txt": {
+   "sha256": "61fc7445bf0a81b446008d1d4198ab6534ad8eb261cfa12249b6a67c26947a1e",
+   "size_bytes": 635
+  },
+  "raw/ppl-9B-Q4_K_M.stdout.txt": {
+   "sha256": "2790cc973ea74290e987f808861c511f94d6168589cab555ac3dee7062d58241",
+   "size_bytes": 21476
+  },
+  "raw/ppl-9B-Q6_K.stderr.txt": {
+   "sha256": "bcda9e86f165e20eeb2ed9252415b4138bd6dd3994cda0424b582d44efb40cbb",
+   "size_bytes": 635
+  },
+  "raw/ppl-9B-Q6_K.stdout.txt": {
+   "sha256": "5461c5abe470716a59dd6f118b67161044fbf99376948f3a6b043a905ba9fbc1",
+   "size_bytes": 21476
+  },
+  "raw/ppl-9B-Q8_0.stderr.txt": {
+   "sha256": "66d0fb513a0d02841a56e64e02c241ba856c52b4d963c9869df6aee3cf5fc4ec",
+   "size_bytes": 635
+  },
+  "raw/ppl-9B-Q8_0.stdout.txt": {
+   "sha256": "b82552fcd4702e6fd5c7900ebf35411398f8c55f06d6f62cddd6e33cc152f84c",
+   "size_bytes": 21476
+  }
+ }
+}

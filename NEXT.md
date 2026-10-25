@@ -18,9 +18,8 @@
 
 ### 暫停點（2026-10-25 約 15:35Z，使用者因額度要求暫停；接手時從這裡開始）
 
-- **仍在執行（不需要 Claude，不要中斷）**：Mac 上的 Stage Q q1-metal 正式 session `results/stage_q/formal-20261025-q1-metal`（Mac lock 下，15:09Z 開始，暫停時 8 / 20 個 job）。
-  中斷會浪費一次正式嘗試（每個部分最多 2 次），所以讓它跑完。接手時：確認 `session.json` 的 status 為 finished、env 有效、`/tmp/ai-portfolio-mac-heavy.lock` 已釋放，
-  再 commit 這個目錄（`raw/` 依 .gitignore 不進 git）；log 在 scratchpad，不重要。
+- **q1-metal 正式第 1 次嘗試無效**（16:44Z 結束，已 commit；040 文末）：KLD 的 10 個 job 因 Mac 磁碟不足被跳過（可用約 30 GB，需要 76 GB），
+  而且我在 session 期間 commit 了主 checkout，env 判為無效。第 2 次（最後一次）嘗試前：Mac 要有 ≥ 76 GB 可用（由使用者決定刪哪些檔），執行期間不碰主 checkout。
 - **WSL 部署**：暫停前開始部署 `8a02e68`（Q3 凍結）；下一個 GPU 工作前先確認 `~/llm-serving-lab/DEPLOYED_COMMIT` 等於 HEAD，不同就重新部署。
 - **今天完成**（細節見各 decision）：部署與 E1-P seed 檢查、D-B raw 取證（042）、E1-D 取回與 045、Q3 下載與 chunk pin、E3 兩個 Q4_0 傳到 WSL、
   E1-P smoke → 凍結 → 正式 → 046（無法判定，觸發太少）、044 的 WSL 唯讀複核（實作補記十一）、Stage Q 三個 pilot → 凍結（Q1 / Q2）、Q3 pilot（pin_memory "1"，使用者決定）→ 凍結。

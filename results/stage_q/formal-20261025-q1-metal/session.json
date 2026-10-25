@@ -1,0 +1,119 @@
+{
+ "schema_version": 1,
+ "session_id": "formal-20261025-q1-metal",
+ "stage": "Q",
+ "part": "q1-metal",
+ "mode": "formal",
+ "platform": "macos-metal",
+ "status": "finished",
+ "plan_sha256": "79718573688087d373fb8370368a8c8a83378f1852058b0640e1748655026b5b",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "mac_lock_held": true,
+ "gpu_lock_held": false,
+ "harness_sha256": "34256f12c4294be833981074ced8eacf2537d6763851f96f3068ba85bf49633f",
+ "inputs_verified": true,
+ "superseded": {},
+ "started_at": "2026-10-25T15:09:50.849071+00:00",
+ "powermode": 2,
+ "host": {
+  "system": "Darwin",
+  "wsl": false,
+  "nvidia": false
+ },
+ "finished_at": "2026-10-25T16:44:47.317304+00:00",
+ "outcomes": {
+  "ok": 8,
+  "oom": 0,
+  "error": 2,
+  "skipped": 10
+ },
+ "env_flags": [
+  {
+   "job_id": "ppl-4B-BF16",
+   "phase": "after",
+   "reason": "repo commit 'f53f7d398a7402f907d9eff795510e70e55c3e93' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-4B-Q8_0",
+   "phase": "before",
+   "reason": "repo commit 'f53f7d398a7402f907d9eff795510e70e55c3e93' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-4B-Q8_0",
+   "phase": "after",
+   "reason": "repo commit 'f53f7d398a7402f907d9eff795510e70e55c3e93' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-4B-Q8_0",
+   "phase": "after",
+   "reason": "repo dirty=True (the code differs from the recorded commit)"
+  },
+  {
+   "job_id": "ppl-4B-Q6_K",
+   "phase": "before",
+   "reason": "repo commit 'f53f7d398a7402f907d9eff795510e70e55c3e93' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-4B-Q6_K",
+   "phase": "before",
+   "reason": "repo dirty=True (the code differs from the recorded commit)"
+  },
+  {
+   "job_id": "ppl-4B-Q6_K",
+   "phase": "after",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-4B-Q4_K_M",
+   "phase": "before",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-4B-Q4_K_M",
+   "phase": "after",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-9B-BF16",
+   "phase": "before",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-9B-BF16",
+   "phase": "after",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-9B-Q8_0",
+   "phase": "before",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-9B-Q8_0",
+   "phase": "after",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-9B-Q6_K",
+   "phase": "before",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-9B-Q6_K",
+   "phase": "after",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-9B-Q4_K_M",
+   "phase": "before",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  },
+  {
+   "job_id": "ppl-9B-Q4_K_M",
+   "phase": "after",
+   "reason": "repo commit 'c7ecdd4d4dd77eff83e420e2040b1e99b98664b3' != preflight '5205915719ce3b53cd1dc9c3b5bd4ed5cc26d36c' (mid-session code change)"
+  }
+ ],
+ "env_valid": false,
+ "charge_pauses": []
+}

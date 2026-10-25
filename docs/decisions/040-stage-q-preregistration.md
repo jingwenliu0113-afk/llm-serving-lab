@@ -306,4 +306,9 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 - **Q3 第二次**：`pilot-q3-20261025b`（15:18–15:25Z，部署 `f53f7d3`，`pin_memory` "1"）：兩個 job 都 ok（W4A16 97 s、KV 35,635 token；BF16 卸載 8 GB 217 s、KV 45,670 token），env 有效，harness `2bc3f2ee…`；過程中主機一直有回應（ssh 正常，GPU 回到 157 MiB）。
   - 揭露：pilot 的 row 照設計記錄每段的 NLL（本文「一個 row 記錄每段的 NLL」）；檢查 pilot 時兩個 checkpoint 在這 10 段的 NLL 被印出並看到。H-Q3 的門檻（PPL 比值 − 1 ≤ 2 %）與判定規則在凍結前早已寫定，沒有因此改動；pilot 的 10 段不進入正式分析。
 - **Q3 凍結（2026-10-25）**：`stage_q3.freeze_evidence_problems` 沒有任何問題；`configs/stage_q3.toml` 設 `freeze.stage_q3 = true` 與 `pilot_q3`。正式 plan 為兩個 job 各 580 段。`tests/test_stage_q3.py` 檢查 repo 的設定檔指向這個 pilot、`pin_memory` 為 "1"、harness 等於 `2bc3f2ee…` 而且凍結證據沒有問題；拒絕條件的測試改用明確的 DRAFT 設定。凍結沒有改動任何設計、門檻或判定規則。
+- **q1-metal 正式第 1 次嘗試**：`formal-20261025-q1-metal`（Mac lock 下，15:09–16:44Z）：finished，但 **env 無效**，20 個 job 只有 8 個 ok，記為一次無效的嘗試（每個部分最多 2 次）。
+  - 10 個 KLD job 被磁碟檢查跳過（4B、9B 都是）：`data/kld` 可用約 30 GB，需要 26 GB 加上保留 50 GB；`delete_kld-*` 因此記為 error。pilot 只跑少數 chunk，用量小，沒有遇到。
+  - env 無效：session 執行期間，主 checkout 上有 commit（Q3 凍結 `f53f7d3`、`8a02e68`，暫停點 `c7ecdd4`），每個 job 前後的 env 擷取都記到「repo commit 與 preflight 不同（mid-session code change）」與 dirty。Mac 的 session 直接從主 checkout 執行，這是操作上的錯誤。
+  - 8 個 PPL job（4B / 9B 的 BF16、Q8_0、Q6_K、Q4_K_M）都 ok，但屬於無效的 session，不進入分析。
+  - 第 2 次嘗試之前：Mac 的可用空間要 ≥ 76 GB（26 + 50，由使用者決定釋放哪些檔案）；session 執行期間不得在主 checkout 上 commit 或改檔（或改從獨立的 clone 執行）。
 
