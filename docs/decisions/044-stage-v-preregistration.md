@@ -1382,3 +1382,21 @@
    - **被強制結束的嘗試**（should-fix，第 10 項起就有）：SIGKILL、OOM、`wsl --shutdown` 或重開機只留下 mkdir 時寫的暫時 session.json（沒有 `previous_formal`、`aborted`、`env_valid`）。依實作補記六的操作補上 finished_at、in_progress 改為 false 之後，runner 照常開始下一個 session，但產生器的鏈走到它時以「沒有記錄 previous_formal、又沒有中止」拒絕，之後每個合法 session 都寫不出 profile。改正：沒有 `env_valid` 的紀錄和 preflight 中止一樣，以 runner 自己的規則（`gap_problems`）找它的前一個，繼續往前走；它沒有三個 sha，迴圈本來就略過它，它之前的 session 由時數加總涵蓋。有 `env_valid` 卻沒有 `previous_formal` 也沒有中止的紀錄仍然拒絕。測試：中間的 V-CLS 或 V-ADM 嘗試被強制結束並補上 finished_at 之後，之後的有效 V-ADM 照常寫出。
    - **訊息**（nit）：plan.json 無法確認（例如中間 V-CLS 的 plan.json 被誤刪），而 session.json 記錄的是另一個 plan 時，拒絕的訊息原本把它稱為「較早的 V-ADM session」。現在改為說明 plan.json 不是 session.json 記錄的 plan，無法確認它是不是同 plan 的 session（fail closed）。
    - 只改產生器、它的測試與文件；`harness_sha256` 與 `gateway_path_sha256` 不變，不需要新的 mini。突變（只在記憶體中）：拿掉改名目錄的讀取（6 個測試失敗）、改回只對中止的 session 往前走（2 個）、拿掉新的訊息（1 個），都被抓到。
+
+## 實作補記十一（2026-10-25，WSL 的唯讀複核；沒有任何 Stage V 數據）
+
+「揭露」要求凍結前在 WSL 的 venv 唯讀複核 vLLM bench 的行為。GPU 空閒、沒有 session 時（2026-10-25 12:58Z），以 `sha256sum` 讀 WSL `.venv/lib/python3.12/site-packages/vllm/benchmarks/` 的檔案，和設計與兩輪審查逐行讀過的 scratch 副本比對：
+
+| 檔案 | sha256（WSL） | 和 scratch 副本 |
+|---|---|---|
+| `serve.py` | `ec255c3b3f3bade1584e01e043f80a699225f657d31d7290a835d26a61eec142` | 相同 |
+| `lib/endpoint_request_func.py` | `d49b306d437dc34e4cbec8bf76e8934b026152439fa89098370724dba2361e18` | 相同 |
+| `datasets/datasets.py` | `dd052d2f38b4535c04f00a5e43cd60ef2d748fc842fc920babf0f5619a9e2bf6` | 相同 |
+| `datasets/utils.py` | `14efee4c78ea60b38e1be458c192ff1972c3295dbebe91bacff414ebcf89c3b6` | 相同 |
+| `lib/ready_checker.py` | `1ed87d5c1e0166c95e57fbecd0688a0716fb6dcfb6824d01278751d78ac7b4c0` | scratch 沒有這個檔；凍結的 client 不做 ready check（實作補記七第 1 項），不用到它 |
+| `lib/utils.py` | `984adbebafade520c50b96e24c15423bc0379ae6af0929a368f9453f4f406812` | scratch 沒有這個檔（只記錄） |
+
+- 「揭露」列的項目都在前四個檔案中，位元組相同，所以先前在 scratch 副本上確認的行為就是 WSL 上的行為：`CustomDataset.sample` 讀 `output_tokens`（`datasets/datasets.py` 約 2589–2597 行）；warmup 重送 row 0；ready check 預設略過（`--ready-check-timeout-sec` 0）；`x-request-id` 只在有 request_id 時送出；前後各兩次 GET /metrics；aiohttp 的 limit = C 與 keepalive 60 s；只對 random / prefix_repetition 送一次 `/tokenize`。
+- aiohttp 為 3.14.3（2026-10-25 在 WSL 以 `import aiohttp` 讀出，042 D-B 的取證）。
+- 只讀檔案，沒有啟動任何程序；沒有改 harness，`harness_sha256` 與 `gateway_path_sha256` 不變。
+
