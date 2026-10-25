@@ -16,6 +16,25 @@
 - **不變**：Phase 1、Phase 2 的結果與凍結；正式設定仍釘住 `verified-formal-20261017-c1b.json`，改變釘選需要使用者決定。
 - **使用者端**：正式 session 之前，建議使用者停用 BingWallpaper 的自動啟動（Windows 系統設定，我不修改）。
 
+### 暫停點（2026-10-25 約 15:35Z，使用者因額度要求暫停；接手時從這裡開始）
+
+- **仍在執行（不需要 Claude，不要中斷）**：Mac 上的 Stage Q q1-metal 正式 session `results/stage_q/formal-20261025-q1-metal`（Mac lock 下，15:09Z 開始，暫停時 8 / 20 個 job）。
+  中斷會浪費一次正式嘗試（每個部分最多 2 次），所以讓它跑完。接手時：確認 `session.json` 的 status 為 finished、env 有效、`/tmp/ai-portfolio-mac-heavy.lock` 已釋放，
+  再 commit 這個目錄（`raw/` 依 .gitignore 不進 git）；log 在 scratchpad，不重要。
+- **WSL 部署**：暫停前開始部署 `8a02e68`（Q3 凍結）；下一個 GPU 工作前先確認 `~/llm-serving-lab/DEPLOYED_COMMIT` 等於 HEAD，不同就重新部署。
+- **今天完成**（細節見各 decision）：部署與 E1-P seed 檢查、D-B raw 取證（042）、E1-D 取回與 045、Q3 下載與 chunk pin、E3 兩個 Q4_0 傳到 WSL、
+  E1-P smoke → 凍結 → 正式 → 046（無法判定，觸發太少）、044 的 WSL 唯讀複核（實作補記十一）、Stage Q 三個 pilot → 凍結（Q1 / Q2）、Q3 pilot（pin_memory "1"，使用者決定）→ 凍結。
+- **GPU 佇列（依序；每個 session 之間留空檔；開始前 `tools/rtx/gpu_status.sh` 為 FREE、GPU 閒置 ≤ 1,018 MiB，並請使用者不要用 Windows 桌面 / 遠端桌面，BingWallpaper 會自動重啟）**：
+  1. E3 RTX pilot：`python benchmarks/stage_e3.py plan --platform wsl2-cuda --mode pilot --out ~/e3-cuda-pilot-plan.json`，
+     `flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e3.py run --plan ~/e3-cuda-pilot-plan.json --bin third_party/llama.cpp/build-cuda/bin --models models/gguf --out results/stage_e/pilot-e3-cuda-<date> --gpu-lock-held`
+     → 取回（`tools/rtx/fetch_all_sessions.sh stage_e`）→ 兩個旗標一起凍結（Mac pilot `pilot-e3-metal-20261023` 已有）→ 正式（每個平台最多兩次嘗試）。
+  2. Stage Q 正式：q1-cuda、q2（`quality/stage_q.py plan --part <part> --mode formal`，run 加 `--bin third_party/llama.cpp/build-cuda/bin --models models/gguf --data data --gpu-lock-held`）→ 三個都完成後 `stage_q_analysis.py`。
+  3. Q3 正式（`quality/stage_q3.py plan --mode formal`，約 5 h；開始前主機可用記憶體 ≥ 20 GB）→ `stage_q3.py analyze`。
+  4. E2：原始碼核對 → dataset 產生並 pin → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
+  5. 043 的 RTX 產品測試 IT-0–6（`rtx-verified.toml`）。
+  6. Stage V（044）：WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT + mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。
+- **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。
+
 ### 下一步
 
 - 產品 v1（decision 038）：
