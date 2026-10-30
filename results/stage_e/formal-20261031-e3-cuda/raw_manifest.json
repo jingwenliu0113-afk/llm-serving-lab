@@ -1,0 +1,213 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/decode-4B-Q4_0-2048-r1.stderr.txt": {
+   "sha256": "10e45d00c4f77f2c9e0283742abc2da33aa2dd386e29f7cee331615297b9a575",
+   "size_bytes": 128488
+  },
+  "raw/decode-4B-Q4_0-2048-r1.stdout.txt": {
+   "sha256": "96251e7b9856deb1f99be4b0d81e69ea901b7c63704a2a660366c5bea23af0f7",
+   "size_bytes": 1138
+  },
+  "raw/decode-4B-Q4_0-2048-r2.stderr.txt": {
+   "sha256": "25dfcf68c7187281f20186556a687f9021832f31091eed03b6e8b6e911f48ae7",
+   "size_bytes": 128487
+  },
+  "raw/decode-4B-Q4_0-2048-r2.stdout.txt": {
+   "sha256": "2bee6708130062b0776ca45f681a219d20c27a4446c293c9ae5def162190eea3",
+   "size_bytes": 1137
+  },
+  "raw/decode-4B-Q4_0-2048-r3.stderr.txt": {
+   "sha256": "05752a3efbdd9f364d59bbeb501dbb50fd92d0db605caee991beb4d6ef1257c9",
+   "size_bytes": 128487
+  },
+  "raw/decode-4B-Q4_0-2048-r3.stdout.txt": {
+   "sha256": "ff9cab04bf501ff328f00d707388f44a48b5d757ab98ad2750744df1757bdc9a",
+   "size_bytes": 1137
+  },
+  "raw/decode-4B-Q4_K_M-2048-r1.stderr.txt": {
+   "sha256": "5c024e3d3f33f9cd103f5e2af3258b7b34b1cde1e8c6b395c76ea830c373e361",
+   "size_bytes": 128501
+  },
+  "raw/decode-4B-Q4_K_M-2048-r1.stdout.txt": {
+   "sha256": "0df4f8e96e79ac918bbfe656f54c11e3c193401c57708b9108d00c9416b79e5b",
+   "size_bytes": 1148
+  },
+  "raw/decode-4B-Q4_K_M-2048-r2.stderr.txt": {
+   "sha256": "25e31c105a69e554f76382fc216e5c8e0906adc7d5375cdd4f87a2ef31dec1e0",
+   "size_bytes": 128501
+  },
+  "raw/decode-4B-Q4_K_M-2048-r2.stdout.txt": {
+   "sha256": "9f6ccccc24bc01aa6aba6ea5c7b6da42a03234d3daf5ecb6f5dada1724e76f68",
+   "size_bytes": 1149
+  },
+  "raw/decode-4B-Q4_K_M-2048-r3.stderr.txt": {
+   "sha256": "5126bbc647416a3904db2ff9d2625a7192f45ea6e86094d61c444f9939521855",
+   "size_bytes": 128501
+  },
+  "raw/decode-4B-Q4_K_M-2048-r3.stdout.txt": {
+   "sha256": "1b717aff83e0e0f14a4c11eb15efd8f3e4acb09f1ce71b897fb0810eff5a43c9",
+   "size_bytes": 1148
+  },
+  "raw/decode-4B-Q6_K-2048-r1.stderr.txt": {
+   "sha256": "edb6194d4ca434ca650a926ad4c9172d48e6a7dd4685f6624dd7213678a4bbcd",
+   "size_bytes": 128450
+  },
+  "raw/decode-4B-Q6_K-2048-r1.stdout.txt": {
+   "sha256": "d98f3929900e0c53ab5dc9c99944a6ca0ec2b99d618420a8b8d8b83dcf5899db",
+   "size_bytes": 1138
+  },
+  "raw/decode-4B-Q6_K-2048-r2.stderr.txt": {
+   "sha256": "e7746f7054e88c98cbf368179ca7da1c543030b2e1524fe5ba7933314df0252a",
+   "size_bytes": 128450
+  },
+  "raw/decode-4B-Q6_K-2048-r2.stdout.txt": {
+   "sha256": "2f875c7f224c33b04440f4ad70776023ff35e53ea161129350182a2a5342f6eb",
+   "size_bytes": 1136
+  },
+  "raw/decode-4B-Q6_K-2048-r3.stderr.txt": {
+   "sha256": "611ad67d3b66156542529da1fe8cd7a71114eb1166433bda52b4338d49ec89fb",
+   "size_bytes": 128450
+  },
+  "raw/decode-4B-Q6_K-2048-r3.stdout.txt": {
+   "sha256": "6163dc0d21165e4d1eba30d87341448c0c75fb97bf4ead9a969c59afd7183610",
+   "size_bytes": 1137
+  },
+  "raw/decode-4B-Q8_0-2048-r1.stderr.txt": {
+   "sha256": "6710a68f4d8233877213a2095b52e0a38d24b12976e6259271ea5dde2d8bc6a2",
+   "size_bytes": 128449
+  },
+  "raw/decode-4B-Q8_0-2048-r1.stdout.txt": {
+   "sha256": "bdabac25f645a637b873e31613cabfdf378de18b9617c494799979c10e087d00",
+   "size_bytes": 1137
+  },
+  "raw/decode-4B-Q8_0-2048-r2.stderr.txt": {
+   "sha256": "f203bd1402158d2a1cd25acd78cf64dfea6fe4309b44246670750e686ae88746",
+   "size_bytes": 128449
+  },
+  "raw/decode-4B-Q8_0-2048-r2.stdout.txt": {
+   "sha256": "5f918c9744ba3aa188daabde1ef9b859418a105ed11ac72c5f170f1c397f7301",
+   "size_bytes": 1137
+  },
+  "raw/decode-4B-Q8_0-2048-r3.stderr.txt": {
+   "sha256": "0b51fd95c30618c5116628646758fb9ef60da473e131c91ec2478c60183282ef",
+   "size_bytes": 128449
+  },
+  "raw/decode-4B-Q8_0-2048-r3.stdout.txt": {
+   "sha256": "cc4b410cb0fc1c1a399b7c1dac2abfbdc1879d73ae75dd39363bbabfdbb3fd7b",
+   "size_bytes": 1133
+  },
+  "raw/decode-9B-Q4_0-2048-r1.stderr.txt": {
+   "sha256": "5e9d09dbefa0bd1d59caf87bb033acc0e7f15b2e0d80f32efe5ea71acd6791f6",
+   "size_bytes": 128449
+  },
+  "raw/decode-9B-Q4_0-2048-r1.stdout.txt": {
+   "sha256": "16437cf07f19ca77e327043c6ac75aebb16dae7f84018a2eace803e65da16fc9",
+   "size_bytes": 1137
+  },
+  "raw/decode-9B-Q4_0-2048-r2.stderr.txt": {
+   "sha256": "970725a80656345fcb86b2fcf9a7a6e88351baf1155f2445cc1c823dfba0ec53",
+   "size_bytes": 128449
+  },
+  "raw/decode-9B-Q4_0-2048-r2.stdout.txt": {
+   "sha256": "d7cfa294b3dbd50e3666ed3558cea85b1e2f483f4cb04ec9503e7a2dc18de1d8",
+   "size_bytes": 1137
+  },
+  "raw/decode-9B-Q4_0-2048-r3.stderr.txt": {
+   "sha256": "28a0ffa4ab8d509350607bdb3ac095e42799271ee77f7b51536559ff3cf43baf",
+   "size_bytes": 128449
+  },
+  "raw/decode-9B-Q4_0-2048-r3.stdout.txt": {
+   "sha256": "dccf345f56916910875d76eb2c33734c9767c0efbeb112e774efaf6908f23b8a",
+   "size_bytes": 1139
+  },
+  "raw/decode-9B-Q4_K_M-2048-r1.stderr.txt": {
+   "sha256": "f8dd51c4331996e7998db3347d6d5181cd5cf1a5a046af57966543d24cc646e9",
+   "size_bytes": 128462
+  },
+  "raw/decode-9B-Q4_K_M-2048-r1.stdout.txt": {
+   "sha256": "6c231aaab5e76bf1639a2b9b8795b718416956988542b51b5942d40ee6dedf84",
+   "size_bytes": 1153
+  },
+  "raw/decode-9B-Q4_K_M-2048-r2.stderr.txt": {
+   "sha256": "b984b16c541e4ce38b1b33b502801404b082aac0ac4bc9f0ae07db266ff5ee7c",
+   "size_bytes": 128462
+  },
+  "raw/decode-9B-Q4_K_M-2048-r2.stdout.txt": {
+   "sha256": "3c07b1c426c89bec619522925a9aebd467b44a27a5cd6f4e444e5532938923a0",
+   "size_bytes": 1154
+  },
+  "raw/decode-9B-Q4_K_M-2048-r3.stderr.txt": {
+   "sha256": "5eb914a80534b025f5aad8d15eda291f1f3f9bacf1de064b59411c33605e102f",
+   "size_bytes": 128462
+  },
+  "raw/decode-9B-Q4_K_M-2048-r3.stdout.txt": {
+   "sha256": "76b7efa3169f3fe20f722b5979110d80ed6f6ab4766edb3d867c63d282386ad1",
+   "size_bytes": 1154
+  },
+  "raw/decode-9B-Q6_K-2048-r1.stderr.txt": {
+   "sha256": "754c23b19ca4f18fd61374b55811d8bcdd508d913a4ecc18a0d7649e70a7faeb",
+   "size_bytes": 128408
+  },
+  "raw/decode-9B-Q6_K-2048-r1.stdout.txt": {
+   "sha256": "dce8c3bfe958fb45548429bc352088e1eb0c2e1832a4204e5e93a837e603d03c",
+   "size_bytes": 1142
+  },
+  "raw/decode-9B-Q6_K-2048-r2.stderr.txt": {
+   "sha256": "654ea14c57fc52a969413045efd8fed239bf4edd1f657a6143d6fb341dde5a70",
+   "size_bytes": 128409
+  },
+  "raw/decode-9B-Q6_K-2048-r2.stdout.txt": {
+   "sha256": "95a5edf4319a0b31afe1d9f7c10ad90bf535dc7d59a5d647af216893a5de424e",
+   "size_bytes": 1144
+  },
+  "raw/decode-9B-Q6_K-2048-r3.stderr.txt": {
+   "sha256": "ae65aa4edf32447f134997d783e9c84363b57de9b4fbaf3c3f0008e74ec11acb",
+   "size_bytes": 128408
+  },
+  "raw/decode-9B-Q6_K-2048-r3.stdout.txt": {
+   "sha256": "42ae5f0dacf2bd933963f650c202d380c5b0593dc45986991594159dacb4042d",
+   "size_bytes": 1141
+  },
+  "raw/decode-9B-Q8_0-2048-r1.stderr.txt": {
+   "sha256": "0c43a322fd41f30e6dffb2f63a4ee45d807afb846b60f135fb0b977c54056d88",
+   "size_bytes": 128407
+  },
+  "raw/decode-9B-Q8_0-2048-r1.stdout.txt": {
+   "sha256": "d4b045226c07c1388e52a6d43080a1466d9318816872c403342fc0580bbff45c",
+   "size_bytes": 1143
+  },
+  "raw/decode-9B-Q8_0-2048-r2.stderr.txt": {
+   "sha256": "fa3506b9c86fef985be76dcd4988dc19f8a11c1bdecf2011e4b27d5cd280e124",
+   "size_bytes": 128407
+  },
+  "raw/decode-9B-Q8_0-2048-r2.stdout.txt": {
+   "sha256": "1e3b560919ae547efd4ab0fff648fdcc11daa142cd73e7c83d072bea14fb15c7",
+   "size_bytes": 1142
+  },
+  "raw/decode-9B-Q8_0-2048-r3.stderr.txt": {
+   "sha256": "1b6cb3e6470e203bc57f7575fcc8ecb3220f5ac1996cfb7f8aa06a40605064b2",
+   "size_bytes": 128407
+  },
+  "raw/decode-9B-Q8_0-2048-r3.stdout.txt": {
+   "sha256": "e89bca41a06945721d23583fcca7a0db377416d300615d7d22960855b3d35658",
+   "size_bytes": 1142
+  },
+  "raw/sentinel-end.stderr.txt": {
+   "sha256": "e6daa407767450b50013808db447625c44ae83ef8a4ac9f030353497dad41e7c",
+   "size_bytes": 128501
+  },
+  "raw/sentinel-end.stdout.txt": {
+   "sha256": "7b9a80935b2341fd1a0dcbec4bdf99ddd7a243b57adaaeabe30078e68f8cc19b",
+   "size_bytes": 1148
+  },
+  "raw/sentinel-start.stderr.txt": {
+   "sha256": "bc78444164e20ecf72f542867db27610121fc67382ca41957aabaff69984cdbf",
+   "size_bytes": 128501
+  },
+  "raw/sentinel-start.stdout.txt": {
+   "sha256": "1c748d19136de659c1960cec5c304ad94aba58648eb9cb55b723396ec705c1d5",
+   "size_bytes": 1148
+  }
+ }
+}
