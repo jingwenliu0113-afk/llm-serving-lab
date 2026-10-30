@@ -97,7 +97,8 @@ class World(td.World):
                 return 0, "refused"
             return (200, "") if alive else (0, "refused")
         lab = 'engine="0",model_name="m"'
-        mamba = "" if self.no_mamba else f'mamba_cache_mode="{"align" if self.pc else "none"}",'
+        mamba = "" if self.no_mamba else (f'mamba_block_size="{528 if self.pc else 32768}",'
+                                          f'mamba_cache_mode="{"align" if self.pc else "none"}",')
         text = (f'vllm:cache_config_info{{block_size="528",enable_prefix_caching="{self.pc}",engine="0",{mamba}'
                 f'num_gpu_blocks="{self.blocks}"}} 1.0\n'
                 f"vllm:num_requests_running{{{lab}}} 3.0\nvllm:num_requests_waiting{{{lab}}} 2.0\n"
@@ -147,7 +148,7 @@ class World(td.World):
         self.q_count, self.q_sum = self.q_count + n, self.q_sum + 0.1 * n
         self.prompt_tokens += 5 * thr
         if (self.pc and not self.no_hits) or (not self.pc and self.hits_off):
-            self.hits += (n + warm) * 1584
+            self.hits += (n + warm - 1) * 1584              # a fresh boot: the first request (a warmup) misses
         self.point = f"bench:{self.label}"
         self.t += 10.0
         return 0, False
@@ -210,6 +211,7 @@ def test_a_smoke_session_checks_every_condition_and_mix_and_masks_the_latencies(
         "a10", "teardown_clean", "mamba_cache_mode", "memory", "blocks", "covered"}
     assert sm["measured_blocks"] == {"B0": 248, "T": 248, "T256": 248, "K25": 155, "TK25": 155, "PC": 248}
     assert sm["mamba_cache_mode"] == {"PC-off": "none", "PC-on": "align"}
+    assert sm["mamba_block_size"] == {"PC-off": "32768", "PC-on": "528"}    # recorded only (E2 source check, 2026-10-31)
     assert set(sm["mem_increment_mib"].values()) == {15000} and sm["mem_limit_mib"] == 15157 + 128
     out = root / "results" / "stage_e" / "smoke-e2"
     for pattern in ("*.bench.json", "*.metrics.*.txt", "*.steps.jsonl", "*.series.jsonl"):
@@ -256,6 +258,22 @@ def test_the_per_request_cached_tokens_decide_the_hit_check_when_present(tmp_pat
     assert s["smoke"]["checks"]["pc_on_hits"] is False
     assert re2.pc_hits_problems("B0", "PC-off", 0, N=4, warmup=1, shared=1584, cached=[0, 0, 7, 0])
     assert re2.pc_hits_problems("PC", "PC-on", 10 ** 9, N=4, warmup=1, shared=1584, cached=[1584] * 4) == []
+
+
+@pytest.mark.parametrize("N, warmup, main_hits, ok", [
+    (20, 25, 0, False),      # the smoke: the 24 warmups that can hit (the first misses on a fresh boot) are not enough
+    (20, 25, 18, False), (20, 25, 19, True), (20, 25, 20, True),
+    (250, 25, 214, False),   # 85.6 % of the main requests: the warmups no longer make up the difference
+    (250, 25, 237, False), (250, 25, 238, True), (250, 25, 250, True),
+    (20, 0, 19, True), (20, 0, 18, False)])
+def test_the_counter_floor_counts_only_main_requests(N, warmup, main_hits, ok):
+    """041 v3 §2.8 (E2 source check, 2026-10-31): vLLM 0.30.0's llm_request span has no cached-token attribute, so the
+    counter decides PC-on; its delta also counts the warmups (row 0 resent), of which at most warmup - 1 can hit on a
+    fresh boot. The floor is therefore (0.95 N + max(warmup - 1, 0)) x 1,584, i.e. >= 95 % of the main requests."""
+    delta = (main_hits + max(warmup - 1, 0)) * 1584
+    got = re2.pc_hits_problems("PC", "PC-on", delta, N=N, warmup=warmup, shared=1584)
+    assert (got == []) is ok, got
+    assert re2.pc_hits_problems("PC", "PC-on", (N + warmup + 2) * 1584, N=N, warmup=warmup, shared=1584)   # ceiling
 
 
 def test_a_smoke_plan_must_be_build_plans_and_its_datasets_the_pinned_ones(tmp_path):

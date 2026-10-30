@@ -278,7 +278,7 @@
 - 問題：在這個 hybrid（GDN）模型與 vLLM 0.30.0 上，共享前綴時 prefix caching 能否縮短短類 TTFT？所有基準都關閉 PC，所以它不是已觀察到的 H-B4 的成因。
 - 處理的定義：PC 的 flag，加上 vLLM 因此改變的 hybrid cache 模式（024:194）；smoke 記錄 mamba_cache_mode 與 attention block size。
 - dataset（WSL、CPU 產生）：只呼叫一次 `RandomDataset.sample(num_requests = N + warmup, prefix_len, input_len, range_ratio = 0)`，seed 20261008；以 server 的 tokenizer 驗證每列恰好 1,920 token、所有列的共同 token-id 前綴 ≥ 3 × block_size（528 時 1,584），否則不寫檔；實測的共同前綴長度與 sha256 pin 在該部分的設定檔。
-- 命中檢查（每次 boot）：span 有 cached-token 欄位時（名稱含 cached 與 token；smoke 記錄名稱），N 個主 request 都要有值，≥ 95% 命中 1,584 token；否則 Δprefix_cache_hits ≥ 0.95 × N × 1,584 且 ≤ (N + warmup + 1) × 1,584；PC-off 必須為 0（兩種來源都檢查）；不符合時該 run 無效。
+- 命中檢查（每次 boot）：span 有 cached-token 欄位時（名稱含 cached 與 token；smoke 記錄名稱），N 個主 request 都要有值，≥ 95% 命中 1,584 token；否則 Δprefix_cache_hits ≥ (0.95 × N + max(warmup − 1, 0)) × 1,584 且 ≤ (N + warmup + 1) × 1,584（計數器也算到 warmup：warmup 重送第 0 列，fresh boot 的第一個必然未命中，其餘最多各 1,584，所以下界等於「≥ 95% 的主 request 命中」；2026-10-31 原始碼核對後修正，原本是 0.95 × N × 1,584）；PC-off 必須為 0（兩種來源都檢查）；不符合時該 run 無效。vLLM 0.30.0 的 span 沒有 cached-token 欄位，命中一律由計數器判定（修訂紀錄「E2 的 WSL 原始碼核對」）。
 - mamba_cache_mode 取自 /metrics 的 `vllm:cache_config_info` 標籤（WSL 原始碼核對確認標籤名稱）；smoke 中 PC-off 與 PC-on 都必須有值。
 - block_size 若不是 528：另寫 decision log 並重做 dataset，不臨時改設計。
 
@@ -292,7 +292,7 @@
 
 ### 2.10 E2 的凍結證據
 
-- **WSL 原始碼核對**（CPU，不需要 GPU lock）：hybrid 模型的 prefix caching 路徑（mamba_cache_mode、block size）；custom dataset 的 warmup 來源（serve.py:840-868）；/metrics 中 prefix cache 計數器的名稱；span 是否帶 cached-token 欄位；1 Hz 取樣中 `num_requests_waiting` 的來源。
+- **WSL 原始碼核對**（CPU，不需要 GPU lock）：hybrid 模型的 prefix caching 路徑（mamba_cache_mode、block size）；custom dataset 的 warmup 來源（serve.py:840-868）；/metrics 中 prefix cache 計數器的名稱；span 是否帶 cached-token 欄位；1 Hz 取樣中 `num_requests_waiting` 的來源。**已完成（2026-10-31）**，見修訂紀錄「E2 的 WSL 原始碼核對」。
 - **smoke**：設計中每個 (condition, mix) 一次 boot（12 次：B0、T、T256、K2.5、TK2.5 的 uniform 與 mixed，PC-off、PC-on 的共享前綴），`rc.mini_num_prompts(20)`。smoke 之前要先 pin 共享前綴 dataset 的 sha256；smoke 的 plan 必須恰好是 build_plan 的 smoke plan，datasets 都要符合 pin。通過條件：涵蓋全部 12 個 (cell, mix)；每次 boot 有效（non-default args 恰好符合、FLASH_ATTN、block 數 K2.5 155、其他含 PC 都是 248、block_size 528）；chunk 檢查；PC-on 命中符合、PC-off 為 0；PC-off 與 PC-on 的 mamba_cache_mode 有值；A10 (a)(b)(d) 通過，(c) 通過或豁免（有 preemption，或 PC）；T256 與 PC-on 的 bench 後記憶體增量 ≤ 15,157 + 128 MiB（否則依 2.9 另寫 decision log）；沒有 spill；teardown 乾淨；有 derived；env 有效。延遲遮蔽，不看：bench 結果、spans、OTLP、Prometheus 文字檔、steps、series 都刪除，session.json 不留 bench 時間窗與 startup 時間。
 - 凍結證據（`smoke_problems`）：smoke 跑完而且通過、env 有效、WSL CUDA host、pins 的 vLLM（smoke 也在開始前核對版本）、相同 harness、plan 等於目前設定下的 smoke plan、datasets 等於 pin、涵蓋全部 (cell, mix)、量到的 block 數等於預期。
 
@@ -558,3 +558,22 @@
 ### E1-P 凍結（2026-10-25）
 
 - seed 檢查通過（N 200 與 16，seed A、B 的每個 prompt 在 server 端都是 8,064 token，兩個 seed 不同）→ smoke 第一次嘗試被閒置檢查拒絕（Windows 桌面程式的 GPU 記憶體）→ 使用者關閉程式後第二次嘗試 `smoke-e1p-20261025b` 通過 → 凍結（1.7「E1-P 已凍結」）。凍結沒有改動 1.6 的設計、門檻或讀法；只改了 `[freeze]`。
+
+### E2 的 WSL 原始碼核對（2026-10-31，smoke 與凍結之前；沒有任何 E2 數據）
+
+- **方法**：GPU 空閒、沒有 session 時（2026-10-30 23:2xZ，E3 的 RTX 正式 session 與 q1-cuda 之間），唯讀把 WSL venv 中 `vllm-0.30.0.dist-info` 的 2,681 個 `.py` 與它們的 sha256 清單複製到 Mac 的 scratch，逐檔 sha256 相同；清單 commit 在 `results/stage_e/e2-source-check-20261031/vllm-0.30.0-py-sha256.txt`。`benchmarks/serve.py`（`ec255c3b…`）與 `benchmarks/datasets/datasets.py`（`dd052d2f…`）和 044 實作補記十一記錄的相同。四個問題各由一個 agent 讀原始碼與 harness 回答，再由另一個 agent 獨立反駁；只讀檔案，沒有啟動任何程序。主要引用的檔：`config/cache.py`（`f1c226ba…`）、`model_executor/models/config.py`（`074e0089…`）、`platforms/interface.py`（`e5e73c66…`）、`v1/core/sched/scheduler.py`（`c1db45f3…`）、`v1/core/kv_cache_utils.py`（`2666c9f1…`）、`v1/core/kv_cache_manager.py`（`58800535…`）、`v1/core/kv_cache_coordinator.py`（`bf342f79…`）、`v1/core/single_type_kv_cache_manager.py`（`0233531d…`）、`v1/kv_cache_interface.py`（`1cf202f1…`）、`v1/metrics/loggers.py`（`c12b4fbe…`）、`v1/metrics/stats.py`（`af1983dd…`）、`v1/engine/output_processor.py`（`e47b86cd…`）、`tracing/utils.py`（`2463b04c…`）、`engine/arg_utils.py`（`ead004ca…`）、`model_executor/models/qwen3_5.py`（`3abeac36…`）。
+- **2.10 的五項**：
+  1. prefix caching 路徑：PC-off 由 `--no-enable-prefix-caching` 明確關閉（BooleanOptionalAction），scheduler 用不查快取的 coordinator，命中恆為 0；hybrid 模型的 `mamba_cache_mode` 為 "none"，`mamba_block_size` 為 max_model_len 32,768。PC-on 由 `--enable-prefix-caching` 開啟，`mamba_cache_mode` 由 "none" 改為 "align"（要求 chunked prefill），`mamba_block_size` 等於 block size。兩者的 attention block size 都是 528（"none" 與 "align" 走同一個對齊分支，engine 取各 group 的最小值）；block 數是 KV 記憶體除以每個 block 的 bytes，與模式無關：4 GiB 為 248、2.5 GiB 為 155（和 Stage B 的實測一致）。命中粒度是 528（沒有 `--prefix-match-unit` 時取各 group block size 的 GCD），每個 1,920-token 的列最多命中 floor(1,919 / 528) × 528 = 1,584；align 模式把未命中列的第一段切在 1,584 並保留該處的 GDN 狀態，所以共享前綴的列命中恰好 1,584。
+  2. warmup 來源：bench 把 `input_requests[0]`（`--disable-shuffle` 時是第 0 列）重送 `--num-warmups` 次（= C；PC 格為 C 25），在主 run 之前並行送完；warmup 沒有 request id，不帶 prefix。ready check 預設略過（`--ready-check-timeout-sec` 0），bench 也不送其他 request，harness 在 bench 之前只送 /health 與 /metrics。041 引用的 serve.py:840-868 是 test_input 的建構，warmup 迴圈在 888–911。dataset 第 N 列之後的列（正式 250–274、smoke 20–274）不會送出；每列共享前綴、檔案 pin sha256，所以無害，不改。
+  3. /metrics：`vllm:prefix_cache_hits_total` 與 `vllm:prefix_cache_queries_total` 的單位是 token；每次准入記一次，被 preempt 後重新准入的記在另一個統計，不進計數器；PC-off 時 series 存在、值為 0。hybrid 模型的命中長度是所有 group 都同意的長度。`vllm:cache_config_info` 的標籤是 CacheConfig 每個欄位的字串：`enable_prefix_caching` 為 "True" / "False"，`mamba_cache_mode` 為 "none" / "align"，另有 `mamba_block_size`；值取自 API server 的設定（handshake 後只回寫 block 數、block size、mamba_block_size 等），所以 engine 實際的 PC 狀態由命中計數交叉確認（PC-off 為 0、PC-on > 0，harness 已檢查）。
+  4. span：`llm_request` span 只有 9 個固定 attribute（TTFT、e2e、queue、prompt / completion tokens、prefill / decode / inference 時間、request id）與 4 個可選的 request 參數，**沒有 cached-token attribute**，任何 tracing 選項都不會加上。所以 2.8 的逐 request 分支在 0.30.0 不會執行，PC 的命中檢查一律由計數器判定。
+  5. `vllm:num_requests_waiting`：scheduler stats 的 gauge；server 帶 `--async-scheduling`，所以在每個完成的 batch 更新。
+- **修正（凍結前）**：計數器的下界原本是 0.95 × N × 1,584，沒有扣掉 warmup。smoke（N 20、warmup 25）時，24 個 warmup 的命中就超過下界，主 request 完全沒命中也會通過；正式（N 250）只需約 86% 的主 request 命中。改為 (0.95 × N + max(warmup − 1, 0)) × 1,584：fresh boot 的第一個 warmup 必然未命中、其餘最多各 1,584，所以這等於「≥ 95% 的主 request 命中」，符合 2.8 原本的意思。上界 (N + warmup + 1) × 1,584 不變（"+1" 原本是為 ready check 預留，0.30.0 不送，只多一格寬鬆）。`run_stage_e2.pc_hits_problems` 與 2.8 的文字同步修正；測試的模擬改為 N + warmup − 1 個命中，並涵蓋 smoke 與正式的邊界。
+- **新增，只記錄**：每列與 smoke 摘要記錄 `cache_config_info` 的 `mamba_block_size`（預期 PC-off "32768"、PC-on "528"），在遮蔽前留下命中粒度的實測證據；不是通過條件。
+- **只記錄、不改**：
+  - PC-on 的 R（ctx tokens − Δprompt_tokens）會被 cached token 拉低：2.2 的 R 定義不適用於 PC 列，PC 列的 R 只是描述（R3 只用 T@8k）。
+  - PC-on 的 align 模式另外切 528 對齊的 chunk、共用前綴 block，所以 adv_decomp 的類別份額對 PC 列只是近似（描述用）；A10 的 (a)(b)(d) 不用分類模型。
+  - β 的取樣窗和 024 的慣例相同（兩次 scrape 之間，含 warmup）。
+  - pins 中 Stage B 的交叉驗算（每個 max_model_len request 66 個 block）只適用於 PC-off；PC-on 的 align 每個 request 為 69 個 block。harness 直接讀 /metrics 的 block 數，不受影響。
+  - 環境前提：`PROMETHEUS_MULTIPROC_DIR` 若被繼承，vLLM 會改用 multiprocess collector，而 server env 不會丟掉這個變數；smoke 前在 WSL 確認它沒有設定。
+- **smoke 要實測確認**：PC-off / PC-on 的 `mamba_cache_mode`（"none" / "align"）與 `mamba_block_size`；block size 528、block 數 248；`mamba_cache_mode` 與 `mamba_block_size` 在 compile hash 內，PC-on 的第一次 boot 可能需要重新 compile、啟動較久。

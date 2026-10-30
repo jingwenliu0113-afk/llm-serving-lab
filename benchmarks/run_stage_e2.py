@@ -99,7 +99,9 @@ def cached_tokens(spans: list, prefix: str, N: int):
 
 def pc_hits_problems(cond: str, cell: str, delta_hits, *, N: int, warmup: int, shared: int, cached=None) -> list:
     """PC-on: >= 95 % of the N main requests hit the shared prefix (per request when cached is given, else the counter
-    within [0.95 N, N + warmup + 1] x shared); PC-off: no hit at all (041 v3 §2.8)."""
+    within [0.95 N + max(warmup - 1, 0), N + warmup + 1] x shared: the delta also counts the warmups, which resend row 0,
+    and on a fresh boot the first of them misses; vLLM 0.30.0's spans carry no cached-token attribute, so the counter
+    decides there, 041 v3 §2.8 and its source check); PC-off: no hit at all (041 v3 §2.8)."""
     out = []
     if cached is not None:
         if len(cached) != N or any(v is None for v in cached):
@@ -113,7 +115,7 @@ def pc_hits_problems(cond: str, cell: str, delta_hits, *, N: int, warmup: int, s
     if delta_hits is None:
         return out + ([f"no {PREFIX_HITS} delta"] if cell.startswith("PC") else [])
     if cell == "PC-on":
-        lo, hi = HIT_FLOOR * N * shared, (N + warmup + 1) * shared
+        lo, hi = (HIT_FLOOR * N + max(warmup - 1, 0)) * shared, (N + warmup + 1) * shared
         if not lo <= delta_hits <= hi:
             out.append(f"prefix cache hits {delta_hits:.0f} outside [{lo:.0f}, {hi:.0f}] (041 v3 §2.8)")
     elif delta_hits != 0:
@@ -177,7 +179,8 @@ class E2Harness(rc._Harness):
             row["manip"].update(facts_ok=not manip, blocks_ok=not blocks, pc_label_ok=label_ok,
                                 num_gpu_blocks=(cache or {}).get("num_gpu_blocks"),
                                 block_size=(cache or {}).get("block_size"),
-                                mamba_cache_mode=e2p.cache_info_label(metrics, "mamba_cache_mode"))
+                                mamba_cache_mode=e2p.cache_info_label(metrics, "mamba_cache_mode"),
+                                mamba_block_size=e2p.cache_info_label(metrics, "mamba_block_size"))   # record only
             stop = ([] if ready else [f"server not ready{detail}"]) + manip + blocks
             if ready and not label_ok:
                 stop.append(f"cache_config_info enable_prefix_caching {label!r} for condition {boot['cond']}")
@@ -348,6 +351,7 @@ def smoke_checks(plan: dict, rows: list, session: dict) -> dict:
     return {"ok": all(checks.values()), "checks": checks, "covered": sorted([list(k) for k in by]),
             "measured_blocks": {r["cond"]: r["manip"].get("num_gpu_blocks") for r in rows},
             "mamba_cache_mode": mamba, "mem_increment_mib": mem, "mem_limit_mib": MEM_LIMIT_MIB,
+            "mamba_block_size": {r["cell"]: r["manip"].get("mamba_block_size") for r in run if r["mix"] == "shared"},
             "span_cached_key": {r["tag"]: r.get("span_cached_key") for r in run}}
 
 
