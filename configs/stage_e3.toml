@@ -6,10 +6,10 @@
 schema_version = 1
 
 [freeze]
-e3_metal = false
-e3_cuda = false
-pilot_e3_metal = ""                                       # session id of the passed Mac pilot
-pilot_e3_cuda = ""                                        # session id of the passed RTX pilot
+e3_metal = true                                           # frozen 2026-10-31 (041 §3.7: both flags together)
+e3_cuda = true
+pilot_e3_metal = "pilot-e3-metal-20261023"                # session id of the passed Mac pilot
+pilot_e3_cuda = "pilot-e3-cuda-20261031"                  # session id of the passed RTX pilot
 
 [e3]
 seed = 20261008                                           # job order: Random(sha256("<seed>:stage_e:E3:<platform>"))

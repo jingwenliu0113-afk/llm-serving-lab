@@ -19,7 +19,9 @@ import gguf_tensors  # noqa: E402
 import produce_gguf_e3 as pe  # noqa: E402
 
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
-CFG = tomllib.loads((ROOT / "configs" / "stage_e3.toml").read_text())
+REPO_CFG = tomllib.loads((ROOT / "configs" / "stage_e3.toml").read_text())   # frozen 2026-10-31 (041 §3.7)
+CFG = {**REPO_CFG, "freeze": {"e3_metal": False, "e3_cuda": False,               # an explicit DRAFT config
+                              "pilot_e3_metal": "", "pilot_e3_cuda": ""}}
 NEW = {"4B-Q4_0": {"sha256": "a" * 64, "size_bytes": 2_500_000_000, "token_embd_bytes": 380_000_000,
                    "token_embd_type": "Q6_K", "tied": True, "output_type": "",
                    "tensor_types": {"F32": 177, "Q4_0": 248, "Q6_K": 1}, "model_size": 2_490_000_000,
@@ -146,7 +148,19 @@ def formal(root, platform="wsl2-cuda"):
 
 # ---------------------------------------------------------------- config and plans
 
-def test_the_repo_config_is_well_formed_unfrozen_with_the_new_ggufs_pinned():
+def test_the_repo_config_is_frozen_on_the_two_passed_pilots_of_this_harness():
+    """041 §3.7 (2026-10-31): both platforms freeze together on their passed pilots, which ran this harness and this
+    config with all eight GGUFs verified; any edit after the freeze fails here."""
+    assert e3.config_problems(REPO_CFG) == [] and REPO_CFG["freeze"] == {
+        "e3_metal": True, "e3_cuda": True, "pilot_e3_metal": "pilot-e3-metal-20261023",
+        "pilot_e3_cuda": "pilot-e3-cuda-20261031"}
+    assert e3.harness_sha256() == "85b9842c081355a157a2f7f1c24ffaa7585011546cb016a5cf061c87de957ac3"
+    assert e3.freeze_evidence_problems(REPO_CFG, ROOT, PINS) == []
+    for platform in e3.PLATFORMS:
+        assert len(e3.build_plan(PINS, REPO_CFG, platform=platform, mode="formal", root=ROOT)["jobs"]) > 0
+
+
+def test_the_draft_config_is_well_formed_unfrozen_with_the_new_ggufs_pinned():
     assert e3.config_problems(CFG) == [] and CFG["freeze"] == {"e3_metal": False, "e3_cuda": False,
                                                                "pilot_e3_metal": "", "pilot_e3_cuda": ""}
     assert set(CFG["e3"]["files"]) == {f"{s}-{q}" for s in ("4B", "9B") for q in ("Q8_0", "Q6_K", "Q4_K_M", "Q4_0")}

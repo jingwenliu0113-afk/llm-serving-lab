@@ -1,6 +1,6 @@
 # 041 — Stage E 事先登記（DRAFT，第 3 版）：三個機制問題
 
-- 狀態：**DRAFT**，**E1-D 已凍結（2026-10-23，見 1.7）**，**E1-P 已凍結（2026-10-25，見 1.7）**；E2、E3 仍為 DRAFT。寫在任何 Stage E 數據之前；各部分在 smoke / pilot 與審查後各自凍結。
+- 狀態：**DRAFT**，**E1-D 已凍結（2026-10-23，見 1.7）**，**E1-P 已凍結（2026-10-25，見 1.7）**，**E3 已凍結（2026-10-31，兩個平台一起，見 3.7）**；E2 仍為 DRAFT。寫在任何 Stage E 數據之前；各部分在 smoke / pilot 與審查後各自凍結。
   - 第 3 版有四個相對 037 範圍的決定（第 6 節 A1–A4）；**使用者 2026-10-23 決定四項都採建議的選項**（第 6 節）。
 - 日期：2026-10-23。第 1 版 → 第 2 版 → 第 3 版都在同一天，三版之間沒有任何 Stage E 數據。修訂經過見文末。
 - 對應：037（Phase 3 範圍）、024 / 025（Advanced）、028 / 032（C0）、030 / 039（逾時）、031（閒置與 spill）、PREREGISTRATION §2（H-A2）與 §11（本文摘要）。
@@ -384,6 +384,8 @@
 ### 3.7 凍結證據
 
 每個平台一次 pilot：兩個 Q4_0 加 4B-Q4_K_M，L 2048，各 1 次，加 sentinel；結果遮蔽（commit 的 rows.jsonl 只留 job 的身分與結果，完整的列在 git-ignored 的 `raw/rows.full.jsonl`，每個 job 前後的 env capture 也放在 `raw/env/`，因為它們的時間戳等於 job 的時間；session.json 的 sentinel 只留漂移）。RTX 的正式 plan 要在 WSL 上核對 Mac 的 pilot，所以凍結 commit 之後先以 `tools/rtx/push_session.sh stage_e <Mac pilot id>` 把它（不含 raw/）放到 WSL。兩個平台共用 harness 與 `[e3]`，所以任一平台的正式 plan 都要兩個 freeze 旗標都是 true、兩個 pilot 都通過：先跑完的平台不會因為另一個平台的 pilot 逼出的 harness 修正而無法分析、也無法重跑。通過條件（`stage_e3.pilot_problems`）：session 跑完；每個 job ok（含每列的模型身分）；8 個 GGUF 的 sha256 與 header 都相符；env 有效（Mac 為 Apple 140W 並記錄協商瓦數；RTX 已量 B 且沒有 drift）；plan 是 build_plan 在此設定下的 pilot plan（含上限與參數數）；記錄的 `harness_sha256` 等於目前的 harness。
+
+- **E3 已凍結（2026-10-31）**：`configs/stage_e3.toml` 的 `freeze.e3_metal = true`、`freeze.e3_cuda = true`，`pilot_e3_metal = "pilot-e3-metal-20261023"`（Mac lock 下，2026-10-23，5 個 job ok、140W adapter 協商 94 W、env 有效）、`pilot_e3_cuda = "pilot-e3-cuda-20261031"`（GPU lock 下，2026-10-30 22:37–22:49Z，部署 `2c5fddf`，5 個 job ok、sentinel 正常、session B 沒有 drift、env 有效）。兩個 pilot 的 `pilot_problems` 都沒有問題，harness `85b9842c…` 與兩個 pilot 記錄的相同；pilot 的結果維持遮蔽，凍結前沒有看。`tests/test_stage_e3.py` 檢查 repo 的設定檔指向這兩個 pilot、harness 不變而且凍結證據沒有問題；拒絕條件的測試改用明確的 DRAFT 設定。凍結沒有改動任何設計、門檻或判定規則。正式 plan 各 26 個 job（Mac 上限 1.5 h、RTX 上限 1.0 h）。下一步：`tools/rtx/push_session.sh stage_e pilot-e3-metal-20261023` → 兩個平台的正式 session（每個平台最多兩次嘗試）。
 
 ## 4. 時數
 

@@ -515,7 +515,7 @@ H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。本節�
 
 ## 11. Stage E addendum：機制（decision 037、041）
 
-**狀態：DRAFT**（041 第 3 版；第 6 節的四個範圍決定，使用者 2026-10-23 都採建議的選項）；**E1-D 已凍結（2026-10-23，041 §1.7）**，**E1-P 已凍結（2026-10-25，041 §1.7，smoke `smoke-e1p-20261025b`）**，E2、E3 仍為 DRAFT。各部分各自凍結（各自的設定檔 `configs/stage_e1.toml`、`stage_e1p.toml`、`stage_e2.toml`、`stage_e3.toml`：`freeze.e1`、`e1p`、`e2`、`e3_cuda`、`e3_metal`）；凍結前沒有任何 Stage E 數據。
+**狀態：DRAFT**（041 第 3 版；第 6 節的四個範圍決定，使用者 2026-10-23 都採建議的選項）；**E1-D 已凍結（2026-10-23，041 §1.7）**，**E1-P 已凍結（2026-10-25，041 §1.7，smoke `smoke-e1p-20261025b`）**，**E3 已凍結（2026-10-31，041 §3.7，pilot `pilot-e3-metal-20261023` 與 `pilot-e3-cuda-20261031`）**，E2 仍為 DRAFT。各部分各自凍結（各自的設定檔 `configs/stage_e1.toml`、`stage_e1p.toml`、`stage_e2.toml`、`stage_e3.toml`：`freeze.e1`、`e1p`、`e2`、`e3_cuda`、`e3_metal`）；凍結前沒有任何 Stage E 數據。
 本節只摘要；完整規則、揭露與修訂紀錄見 decision 041。第 1–10 節不變，H-A2、H-B4、Advanced 與 C0 的判定不受影響。
 
 - **共通**：判定只有 supported、not supported、NT（NT 不等於 not supported，會換列時標 incomplete）；判定只用同一 session 的數字；只分析第一個有效的正式 session。

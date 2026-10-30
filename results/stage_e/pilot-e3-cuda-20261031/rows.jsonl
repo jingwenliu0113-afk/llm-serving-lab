@@ -1,0 +1,5 @@
+{"job_id": "sentinel-start", "kind": "sentinel", "position": "start", "size": "4B", "quant": "Q4_K_M", "L": 2048, "rep": 1, "model": "Qwen3.5-4B-Q4_K_M.gguf", "outcome": "ok", "stage": null, "reason": null}
+{"job_id": "decode-4B-Q4_0-2048-r1", "kind": "decode", "position": null, "size": "4B", "quant": "Q4_0", "L": 2048, "rep": 1, "model": "Qwen3.5-4B-Q4_0.gguf", "outcome": "ok", "stage": null, "reason": null}
+{"job_id": "decode-9B-Q4_0-2048-r1", "kind": "decode", "position": null, "size": "9B", "quant": "Q4_0", "L": 2048, "rep": 1, "model": "Qwen3.5-9B-Q4_0.gguf", "outcome": "ok", "stage": null, "reason": null}
+{"job_id": "decode-4B-Q4_K_M-2048-r1", "kind": "decode", "position": null, "size": "4B", "quant": "Q4_K_M", "L": 2048, "rep": 1, "model": "Qwen3.5-4B-Q4_K_M.gguf", "outcome": "ok", "stage": null, "reason": null}
+{"job_id": "sentinel-end", "kind": "sentinel", "position": "end", "size": "4B", "quant": "Q4_K_M", "L": 2048, "rep": 1, "model": "Qwen3.5-4B-Q4_K_M.gguf", "outcome": "ok", "stage": null, "reason": null}
