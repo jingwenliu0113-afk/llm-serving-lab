@@ -311,4 +311,9 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
   - env 無效：session 執行期間，主 checkout 上有 commit（Q3 凍結 `f53f7d3`、`8a02e68`，暫停點 `c7ecdd4`），每個 job 前後的 env 擷取都記到「repo commit 與 preflight 不同（mid-session code change）」與 dirty。Mac 的 session 直接從主 checkout 執行，這是操作上的錯誤。
   - 8 個 PPL job（4B / 9B 的 BF16、Q8_0、Q6_K、Q4_K_M）都 ok，但屬於無效的 session，不進入分析。
   - 第 2 次嘗試之前：Mac 的可用空間要 ≥ 76 GB（26 + 50，由使用者決定釋放哪些檔案）；session 執行期間不得在主 checkout 上 commit 或改檔（或改從獨立的 clone 執行）。
+- **q1-metal 正式第 2 次（最後一次）嘗試**：`formal-20261031-q1-metal`（Mac lock 下，2026-10-30 21:35–23:57Z）：**finished、20 / 20 ok、env 有效、沒有 env flag、沒有充電暫停**，powermode 2，140W adapter（協商 94 W），harness `34256f12…`。
+  - 使用者先釋放空間（開始時 `data/kld` 可用 107.2 GiB；兩個 KLD base 各約 24–26 GiB，跑完即刪除）。
+  - 從固定在 `09e2776` 的 git worktree（`.worktrees/`，git-ignored）執行，`--models`、`--data`、`--bin` 指向主 checkout 的絕對路徑；主 checkout 在這段期間的 commit 不影響 session 的 env capture。結束後把 session 目錄搬回主 checkout 的 `results/stage_q/`，再移除 worktree。
+  - 分析看到的 q1-metal 嘗試：`formal-20261025-q1-metal`（作廢）→ `formal-20261031-q1-metal`（有效），符合「之前最多一次作廢嘗試的第一個有效 session」。
+- **q1-cuda 正式**：`formal-20261031-q1-cuda`（GPU lock 下，2026-10-30 23:21–23:36Z，部署 `cd615d0`）：12 / 12 ok、env 有效，第一次嘗試即有效。
 

@@ -18,7 +18,7 @@
 
 ### 暫停點（2026-10-25 約 15:35Z，使用者因額度要求暫停；接手時從這裡開始）
 
-- **q1-metal 正式第 1 次嘗試無效**（16:44Z 結束，已 commit；040 文末）：KLD 的 10 個 job 因 Mac 磁碟不足被跳過（可用約 30 GB，需要 76 GB），
+- **（已處理，2026-10-31：第 2 次嘗試有效，見 040）** **q1-metal 正式第 1 次嘗試無效**（16:44Z 結束，已 commit；040 文末）：KLD 的 10 個 job 因 Mac 磁碟不足被跳過（可用約 30 GB，需要 76 GB），
   而且我在 session 期間 commit 了主 checkout，env 判為無效。第 2 次（最後一次）嘗試前：Mac 要有 ≥ 76 GB 可用（由使用者決定刪哪些檔），執行期間不碰主 checkout。
 - **WSL 部署**：暫停前開始部署 `8a02e68`（Q3 凍結）；下一個 GPU 工作前先確認 `~/llm-serving-lab/DEPLOYED_COMMIT` 等於 HEAD，不同就重新部署。
 - **今天完成**（細節見各 decision）：部署與 E1-P seed 檢查、D-B raw 取證（042）、E1-D 取回與 045、Q3 下載與 chunk pin、E3 兩個 Q4_0 傳到 WSL、
@@ -88,7 +88,8 @@
   - [x] q1-metal pilot（Mac lock 下，2026-10-23 06:16Z）：`results/stage_q/pilot-q1-metal-20261023`，20 個 job 全部 ok，`pilot_problems` 通過，harness `34256f12…` 等於目前的版本。
   - [x] pilot（2026-10-25，WSL）：q1-cuda `pilot-q1-cuda-20261025` 12 / 12 ok；q2 第一次 `pilot-q2-20261025` 22 / 24（一次性的 CUDA unknown error，040「pilot 紀錄」），第二次 `pilot-q2-20261025b` 24 / 24 ok。
   - [x] **Stage Q（Q1 / Q2）凍結**（2026-10-25）：`freeze.stage_q = true` 與三個 pilot id，harness `34256f12…`；040、PREREGISTRATION §10 已更新。
-  - [ ] Stage Q 正式 session（q1-metal 在 Mac lock 下、q1-cuda 與 q2 在 GPU lock 下；每個部分最多 2 次嘗試）→ `stage_q_analysis.py`。
+  - [ ] Stage Q 正式 session（每個部分最多 2 次嘗試）→ `stage_q_analysis.py`：
+        [x] q1-metal 第 2 次 `formal-20261031-q1-metal` 有效（20 / 20，env 有效；從固定 commit 的 worktree 執行）；[x] q1-cuda `formal-20261031-q1-cuda` 有效（12 / 12）；[ ] q2（2026-10-30 23:37Z 起在 GPU lock 下執行）。
   - [x] Q3 準備與凍結：下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**使用者 2026-10-23 同意**；已下載（2026-10-24 23:51Z–10-25 00:18Z，GPU 為 FREE 時開始，`snapshot_download`，16 個檔）；
         4 個 shard 的 sha256 都等於 pins（2026-10-25 04:2xZ，FREE 時在 `flock -n` 下讀）。chunk 檔已在 WSL 產生並 pin（`ff66e6d`：297,194 token、580 chunk、sha256 `7174626e…`，
         tokenizer.json 為 005 交叉驗證的 `5f9e4d49…`），部署 `ff66e6d`；
