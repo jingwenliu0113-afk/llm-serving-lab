@@ -1,0 +1,74 @@
+{
+ "schema_version": 1,
+ "stage": "Q",
+ "part": "q3",
+ "mode": "formal",
+ "platform": "wsl2-cuda",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "stage_q3_sha256": "ec9ed8c969255a98b49774500e2fd8bdf8883bae0dabb04dfb84c162b9e214e8",
+ "harness_sha256": "2bc3f2ee99128bf394c0e03029632e1e216d43c184616d0464c48ccbb6690480",
+ "chunks": {
+  "path": "{data}/stage_q/q3-chunks-512.jsonl",
+  "sha256": "7174626e373bc3344021007ae1160a9696b7c1387ed3453fa3e0e48748441fe1",
+  "chunks": 580
+ },
+ "n_ctx": 512,
+ "first": 256,
+ "scored": 255,
+ "jobs": [
+  {
+   "id": "score-w4a16",
+   "which": "w4a16",
+   "model": {
+    "repo": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "revision": "a398088c4228b0ae0c8c78df88fd1e4bf445f068"
+   },
+   "engine": {
+    "language_model_only": true,
+    "dtype": "bfloat16",
+    "kv_cache_dtype": "auto",
+    "attention_backend": "FLASH_ATTN",
+    "max_model_len": 1024,
+    "max_num_seqs": 4,
+    "max_num_batched_tokens": 512,
+    "gpu_memory_utilization": 0.91,
+    "enable_prefix_caching": false,
+    "gdn_prefill_backend": "triton",
+    "seed": 0,
+    "cpu_offload_gb": 0
+   },
+   "n_chunks": 580,
+   "env": {
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "1"
+   }
+  },
+  {
+   "id": "score-bf16",
+   "which": "bf16",
+   "model": {
+    "repo": "Qwen/Qwen3.5-9B",
+    "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+   },
+   "engine": {
+    "language_model_only": true,
+    "dtype": "bfloat16",
+    "kv_cache_dtype": "auto",
+    "attention_backend": "FLASH_ATTN",
+    "max_model_len": 1024,
+    "max_num_seqs": 4,
+    "max_num_batched_tokens": 512,
+    "gpu_memory_utilization": 0.91,
+    "enable_prefix_caching": false,
+    "gdn_prefill_backend": "triton",
+    "seed": 0,
+    "cpu_offload_gb": 8
+   },
+   "n_chunks": 580,
+   "env": {
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "1"
+   }
+  }
+ ]
+}

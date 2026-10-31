@@ -1,0 +1,37 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/score-bf16.job.json": {
+   "sha256": "00068921098ace3fb3a1b6991ccac50817d7dba6475d2b7af8051d217baf38ea",
+   "size_bytes": 591
+  },
+  "raw/score-bf16.scores.jsonl": {
+   "sha256": "3aed16a6775f471d6966ecf9beff50cb5ecfab71610c15be361d60e28beae425",
+   "size_bytes": 3967677
+  },
+  "raw/score-bf16.stderr.txt": {
+   "sha256": "1d7a24589f28f36180298dad66100a705afa8991b49e461312c93d034987c7de",
+   "size_bytes": 2624
+  },
+  "raw/score-bf16.stdout.txt": {
+   "sha256": "870c61451387f5fa7b217ea61267b541fe2a7ec9935a1d7d0cfbad697947a5d4",
+   "size_bytes": 14874
+  },
+  "raw/score-w4a16.job.json": {
+   "sha256": "7f64e20accce3899f6bab9c061666d61d3c8c5240465fc880b580c9066a3ef8d",
+   "size_bytes": 613
+  },
+  "raw/score-w4a16.scores.jsonl": {
+   "sha256": "8770a21ff09302f0c4a4878fd96419deaff2a69f3105a36545afffe3fdbee65d",
+   "size_bytes": 3962934
+  },
+  "raw/score-w4a16.stderr.txt": {
+   "sha256": "adf0ea76221f5526d2b9dfba091ba637622ae13f77ab83ff3a3444f9951621cc",
+   "size_bytes": 1465
+  },
+  "raw/score-w4a16.stdout.txt": {
+   "sha256": "b0899e6770d52da638697d23518ddd1b386dbb7ebb56d1999dda32420f31e1db",
+   "size_bytes": 13317
+  }
+ }
+}
