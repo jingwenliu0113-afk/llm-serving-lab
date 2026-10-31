@@ -1,4 +1,4 @@
-# listed_at_utc 2026-10-30T23:20:41Z (tools/rtx/fetch_all_sessions.sh; every session directory on WSL)
+# listed_at_utc 2026-10-31T00:29:55Z (tools/rtx/fetch_all_sessions.sh; every session directory on WSL)
 formal-20261025-e1p
 formal-20261031-e3-cuda
 pilot-e3-cuda-20261031
