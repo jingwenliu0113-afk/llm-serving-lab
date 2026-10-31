@@ -22,19 +22,21 @@
   - 公開前唯讀預查 `docs/PUBLIC_RELEASE_AUDIT.md`（沒有 blocker；結案時的待辦與要使用者決定的事都在文件裡）。
   - Stage Q：q1-metal 第 2 次（最後一次）有效、q1-cuda 有效（040）；q2 正式 `formal-20261031-q2` 於 2026-10-30 23:37Z 起在 GPU lock 下執行。
   - E3：RTX pilot → 凍結（`cd615d0`）→ RTX 與 Mac 正式 → 分析 → 結果文件 **047**。
-  - E2：WSL 原始碼核對（vLLM 0.30.0 的 2,681 個 .py 以 sha256 驗證後在 Mac 上核對；041 修訂紀錄「E2 的 WSL 原始碼核對」）；修正 PC-on 計數器下界（`534be5b`）。
+  - E2：WSL 原始碼核對（vLLM 0.30.0 的 2,681 個 .py 以 sha256 驗證後在 Mac 上核對；041 修訂紀錄「E2 的 WSL 原始碼核對」）；修正 PC-on 計數器下界（`534be5b`）→ dataset → smoke → 凍結（`3eafb5f`）→ 正式 → 分析 → 結果文件 **050**（R4）。
+  - Stage V：22 個 dataset 在 WSL 產生並 pin（`31bb260`，044 實作補記十二）。
 - **Mac 正式 session 的做法**：從固定 commit 的 git worktree（`.worktrees/`，git-ignored）執行，`--models`、`--data`、`--bin` 用主 checkout 的絕對路徑；結束後把 session 目錄搬回主 checkout 再移除 worktree。
   E3 的 041 §3.6 寫「在主 checkout 執行」，這次的偏離在 047 揭露；之後若再有 Mac 正式 session，要先檢查該部分的規則（或留在主 checkout、期間不 commit）。
 - **GPU 佇列（依序；每個 session 之間留空檔；開始前 `tools/rtx/gpu_status.sh` 為 FREE、GPU 閒置 ≤ 1,018 MiB；請使用者不要用 Windows 桌面 / 遠端桌面）**：
   1. [x] q2 → 取回 → `analysis-20261031.json` → 結果文件 **048**（H-Q1a、H-Q2a supported；H-Q1b、H-Q1c、H-Q2b not supported；獨立重算與兩位審查）。
   2. [x] E2 dataset 已產生並 pin（2026-10-31 00:59Z，sha256 `ca148974…`、共同前綴 1,599）；WSL 沒有 `PROMETHEUS_MULTIPROC_DIR`。
   3. [x] Q3 正式 `formal-20261031-q3`（2026-10-31 00:59:41–01:26:09Z，2 / 2 ok）→ raw 取回 → `q3-analysis-20261031.json` → 結果文件 **049**（H-Q3 not supported，+4.82%）。
-  4. E2：smoke `smoke-e2-20261031` 通過（01:27–01:50Z，12 / 12）→ **凍結**（2026-10-31）→ 正式（48 次 boot，約 4.2 h，上限 7.5 h）→ 取回 → `stage_e2_analysis.py` → 結果文件。
+  4. [x] E2：smoke `smoke-e2-20261031` 通過 → **凍結**（`3eafb5f`）→ 正式 `formal-20261031-e2`（01:51:41–05:21:36Z，48 / 48 有效）→ 取回（`31502a8`）→ `e2-analysis-20261031`（`b792196`）→ 結果文件 **050**：讀法 R4，不是 incomplete（C 8 重建的 KV 結構不足以讓 T 失效，C 25 的失效需要和 C 有關的因素；符合 S，但和負載 × KV 的交互作用分不開；成因沒有確立）；H-E2-0 / -R / a / e supported，H-E2b / c / k not supported（H-E2k 預測錯）。五個獨立核對、三位審查。
   5. Stage V（044，執行順序見 044「執行」第 5–11 步）：
-     a. 空檔中（`flock -n`、只用 CPU）：`.venv/bin/python benchmarks/stage_v_datasets.py --out-dir data/stage_v` → sha256 pin 進 `configs/stage_v.toml` → commit。
-     b. GPU 視窗 0：部署 HEAD（研究副本 `deploy_bundle`；產品 release `tools/rtx/deploy_service.sh`）→ 產品 IT-0–6（043 第 8 步，約 0.3 h，itest 自己取得 lock）：
-        `cd ~/llm-serving-service/releases/<sha> && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=service:benchmarks ~/llm-serving-lab/.venv/bin/python -m capserve.itest IT-0 IT-1 IT-2 IT-3 IT-4 IT-5 IT-6 --config service/deploy/rtx-verified.toml`
-        → mini：`stage_v_plan.py --session <…> --out …` 與 `run_stage_v.py … --gpu-lock-held --mini`（見 `run_stage_v.py` 的 Usage）。
+     a. [x] 22 個 dataset（2026-10-31 05:23–05:28Z，WSL、`flock -n`、只用 CPU）→ pin 進 `configs/stage_v.toml`（`31bb260`）。
+     b. GPU 視窗 0：部署 HEAD（研究副本 `deploy_bundle`；產品 release `tools/rtx/deploy_service.sh`）→ 產品 IT-0–6（043 第 8 步，約 0.3 h；itest 不自己取得 lock，而是檢查呼叫者已持有，所以要在 `flock -n /tmp/ai-portfolio-gpu.lock` 下執行）：
+        `cd ~/llm-serving-service/releases/<sha> && flock -n /tmp/ai-portfolio-gpu.lock env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=service:benchmarks ~/llm-serving-lab/.venv/bin/python -m capserve.itest IT-0 IT-1 IT-2 IT-3 IT-4 IT-5 IT-6 --config service/deploy/rtx-verified.toml`
+        → mini：`stage_v_plan.py --session mini --out /tmp/stage-v-plans/mini.json` 與 `run_stage_v.py --plan … --out results/stage_v/smoke-v-<date> --dataset v1-mini-8192=data/stage_v/v1-mini-8192.jsonl --dataset v4-mini=data/stage_v/v4-mini.jsonl --dataset var-2048=data/stage_d/var-2048.jsonl --dataset mixed-8192=data/core_b/mixed-8192.jsonl --gpu-lock-held --mini`。
+        **進行中**：部署 `b792196`（研究副本與產品 release），IT-0–6 與 mini `smoke-v-20261031` 在同一個 lock 下（IT 通過才跑 mini），約 06:0xZ 開始。
      c. commit mini → 凍結（`[freeze] stage_v`、mini id、`gateway_path_sha256`、`test_stage_v_frozen`）→ 部署凍結 commit。
      d. V-ADM（約 2.75 h）→ ≥ 2 h → V-CLS（約 5.25 h）→ 取回、report、結果 decision、產生器、README；是否改釘選由使用者決定。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
@@ -81,8 +83,8 @@
         session 時間必須帶 offset 且不倒退。由我決定、凍結前使用者仍可改：跳過規則改為逐點（實作補記六第 6 項）。
   - [x] 044 產生器的 `--validation-session` 路徑（Mac、0 GPU，TDD，合成 session；`feat/044-generator`，實作補記九；審查見實作補記十，含停止規則的重跑檢查：較早的 session 有 analysis.json 就拒絕，否則只有正面證據證明它無效時才放行，Mac 上的 Stage V 目錄必須加總等於開始時記錄的時數，其餘 fail closed；防誠實的錯誤、不防蓄意竄改，第 1、10、11、12 項）：只由 analysis.json 的 units 寫出至多一份 §12 profile，
         沒有會寫檔的單位成立時 exit 0、不寫檔；凍結、DEPLOYED_COMMIT 的請求路徑、base profile、工作樹、mini 一律拒絕；`gateway_path_sha256` 不變；40 個突變全部被抓到，實作補記十第 11 項另 27 個也全部被抓到。
-  - [ ] 044 之後（**等 GPU 空閒**）：WSL 唯讀複核（CustomDataset output_tokens、/tokenize、x-request-id、aiohttp、ready check 預設略過）→
-        WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT-0–6、mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。順序排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後。
+  - [ ] 044 之後（**等 GPU 空閒**）：[x] WSL 唯讀複核（實作補記十一）（CustomDataset output_tokens、/tokenize、x-request-id、aiohttp、ready check 預設略過）→
+        [x] WSL 上產生 dataset 並 pin（實作補記十二）→ GPU 視窗 0（產品 IT-0–6、mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。順序排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後。
         [x] `[stage_v.units]` 上方的註解已改為逐點跳過規則（Mac，實作補記九第 13 項、實作補記十第 9 項；在 pin `configs/stage_v.toml` 之前）。
 - **Stage Q**（decision 040，DRAFT；PREREGISTRATION §10）：
   - [x] Q1 / Q2 harness 與凍結檢查（`f65c081`、`49b88af`）：`configs/stage_q.toml`，三個 pilot 是凍結的證據，分析只接受凍結後的正式 session。
@@ -119,7 +121,7 @@
   - 注意：Stage Q 與 E3 的 Mac pilot 已綁定目前的 `stage_q.py` / `stage_e3.py`；若之後必須修改，pilot 要重跑。
   - [x] E2 harness 審查：確認 18 項，全部修正（smoke 綁定設計並改為 12 次 boot、通過條件補齊、停止規則、重跑上限、R / Λ / L̄q、incomplete 的代換規則等；041 修訂紀錄「E2 harness 審查」）。
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
-  - [ ] E2（**等 GPU 空閒**，WSL）：原始碼核對（prefix caching 路徑、warmup 來源、`vllm:prefix_cache_hits_total`、`cache_config_info` 的 `mamba_cache_mode` 標籤、span 的 cached-token 欄位、`num_requests_waiting`）→ `stage_e2_datasets.py` 產生共享前綴 dataset 並 pin sha256 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
+  - [x] E2：原始碼核對 → 共享前綴 dataset pin → smoke（12 次 boot）→ 凍結（`3eafb5f`）→ 正式 `formal-20261031-e2`（48 / 48）→ 分析 → 結果文件 **050**（R4，不是 incomplete；C 25 的成因沒有確立）。
   - [x] E1-P harness 寫成並審查（2026-10-23，DRAFT）：`configs/stage_e1p.toml`、`benchmarks/stage_e1p_plan.py`、`run_stage_e1p.py`、`stage_e1p_analysis.py`、`stage_e1p_seed_check.py`、`tests/test_stage_e1p.py`；三輪審查（都沒有 must-fix）全部處理（041 修訂紀錄「E1-P harness 審查」「E1-P 修正後的覆核」「第三次覆核」；E2、E3、Stage Q、Q3 的中斷、SIGTERM 與 refused 範圍一併修正，040 #39–#49）。
   - GPU 佇列（2026-10-24）：Stage D 結束後，另一個專案的 `agent_gym_serve` 自 01:09Z 起持有 GPU lock；不搶占。23:42Z 空出（部署、seed 檢查、取回、Q3 下載都在此時完成），10-25 00:18Z 前又被另一個專案取得。
         lock 空出後依序：部署 HEAD（`deploy_bundle.py`）→ E1-P seed 檢查與 smoke → D-B 的 raw 取證 → E1-D 取回 → Q3 下載 → E3 / Stage Q 的 RTX pilot → E2。
