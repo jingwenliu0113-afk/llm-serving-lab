@@ -30,8 +30,13 @@
   2. [x] E2 dataset 已產生並 pin（2026-10-31 00:59Z，sha256 `ca148974…`、共同前綴 1,599）；WSL 沒有 `PROMETHEUS_MULTIPROC_DIR`。
   3. [x] Q3 正式 `formal-20261031-q3`（2026-10-31 00:59:41–01:26:09Z，2 / 2 ok）→ raw 取回 → `q3-analysis-20261031.json` → 結果文件 **049**（H-Q3 not supported，+4.82%）。
   4. E2：smoke `smoke-e2-20261031` 通過（01:27–01:50Z，12 / 12）→ **凍結**（2026-10-31）→ 正式（48 次 boot，約 4.2 h，上限 7.5 h）→ 取回 → `stage_e2_analysis.py` → 結果文件。
-  5. 043 的 RTX 產品測試 IT-0–6（`rtx-verified.toml`）。
-  6. Stage V（044）：WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT + mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。
+  5. Stage V（044，執行順序見 044「執行」第 5–11 步）：
+     a. 空檔中（`flock -n`、只用 CPU）：`.venv/bin/python benchmarks/stage_v_datasets.py --out-dir data/stage_v` → sha256 pin 進 `configs/stage_v.toml` → commit。
+     b. GPU 視窗 0：部署 HEAD（研究副本 `deploy_bundle`；產品 release `tools/rtx/deploy_service.sh`）→ 產品 IT-0–6（043 第 8 步，約 0.3 h，itest 自己取得 lock）：
+        `cd ~/llm-serving-service/releases/<sha> && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=service:benchmarks ~/llm-serving-lab/.venv/bin/python -m capserve.itest IT-0 IT-1 IT-2 IT-3 IT-4 IT-5 IT-6 --config service/deploy/rtx-verified.toml`
+        → mini：`stage_v_plan.py --session <…> --out …` 與 `run_stage_v.py … --gpu-lock-held --mini`（見 `run_stage_v.py` 的 Usage）。
+     c. commit mini → 凍結（`[freeze] stage_v`、mini id、`gateway_path_sha256`、`test_stage_v_frozen`）→ 部署凍結 commit。
+     d. V-ADM（約 2.75 h）→ ≥ 2 h → V-CLS（約 5.25 h）→ 取回、report、結果 decision、產生器、README；是否改釘選由使用者決定。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
 
 ### 下一步
