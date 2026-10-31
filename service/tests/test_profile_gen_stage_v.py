@@ -9,7 +9,7 @@ holds or not exactly as the frozen analysis decides. git is faked (VGit): the St
 (FROZEN_V stands in for the frozen file: the configs are injected and the sessions record its sha256), the frozen
 modules at it and at the sessions' DEPLOYED_COMMIT, the request path at DEPLOYED_COMMIT and the base profiles at the
 freeze commit are this checkout's bytes unless a test says otherwise; the git helpers are also tested on a real
-repository."""
+repository. The last section checks what the generator writes for the two committed formal sessions (decision 051)."""
 
 import copy
 import datetime as dt
@@ -1585,3 +1585,64 @@ def test_the_generator_stays_outside_the_request_path():
     """044: profile_gen is not in the gateway's import closure, so writing it never moves gateway_path_sha256."""
     assert "service/capserve/profile_gen.py" not in gpath.gateway_path_files(ROOT)
     assert gpath.gateway_path_sha256(ROOT) == sv.gateway_path_sha256(ROOT)
+
+
+# ------------------------------------------------------------------ the committed Stage V sessions (051) --
+
+V_FREEZE = "c7ad0b4de3ebc2b08f03678bff40e19fcde2e2e1"     # configs/stage_v.toml [freeze] stage_v = true (044 實作補記十三)
+V_ADM, V_CLS = (ROOT / "results" / "stage_v" / f"formal-20261031-{x}" for x in ("v-adm", "v-cls"))
+
+
+def gen_v(session: Path) -> tuple:
+    """What the generator writes for a committed formal Stage V session, with this repository's git (tpg.RepoGit: the
+    real freeze and deployed commits and frozen files, a clean HEAD)."""
+    return pg.generate_stage_v(session, freeze_commit=V_FREEZE, generator_commit=GEN, git=tpg.RepoGit())
+
+
+def test_v_adm_writes_pace_8k_only():
+    """051: in formal-20261031-v-adm only PACE-8K holds (PACE-2K is vetoed by the var pair, W-90 and W-50 FAIL), so its
+    one profile is c1b's uniform-8k (8) verbatim plus pacing {32,256, 5,800} with the slow queue, and no admission."""
+    docs, holds = gen_v(V_ADM)
+    assert holds == ["PACE-8K"] and list(docs) == ["verified-formal-20261031-v-adm-b0"]
+    doc = docs["verified-formal-20261031-v-adm-b0"]
+    assert doc["admission"] is None and [c["name"] for c in doc["classes"]] == ["uniform-8k"]
+    (c,) = doc["classes"]
+    drop = ("pacing", "validation")
+    assert {k: v for k, v in c.items() if k not in drop} == \
+        {k: v for k, v in tpg.classes(C1B)["uniform-8k"].items() if k not in drop}
+    assert c["pacing"] == {"burst_tokens": 32256, "rate_tokens_per_s": 5800, "queue": SLOW}
+    assert (c["validation"]["unit"], c["validation"]["points"], c["validation"]["n"]) == ("PACE-8K", ["P-U8K"], 5)
+    assert doc["provenance"]["base_profiles"] == [{"id": C1B["profile_id"], "content_sha256": C1B["content_sha256"]}]
+
+
+def test_v_cls_writes_the_two_v1_classes_and_no_file_for_the_v_gw_units():
+    """051: in formal-20261031-v-cls VG-32K, VG-M8K-T, V1-2K and V1-8K hold. The V-GW units only make candidates for
+    the pin (NO_FILE_UNITS), so its one profile holds V1's two validated classes: d-a2-b0's O512 classes under V1's
+    names at V1's C, ABOVE_CKV kept on the 2K one, not_covered recomputed (044 §12)."""
+    docs, holds = gen_v(V_CLS)
+    assert holds == ["VG-32K", "VG-M8K-T", "V1-2K", "V1-8K"] and list(docs) == ["verified-formal-20261031-v-cls-b0"]
+    doc = docs["verified-formal-20261031-v-cls-b0"]
+    assert doc["admission"] is None
+    assert [(c["name"], *tpg.summary(c)) for c in doc["classes"]] == [
+        ("uniform-2k-o1-512", "verified", 1920, 512, 32, 32, "validated", "stage_v:V1-2K"),
+        ("uniform-8k-o1-512", "verified", 8064, 512, 8, 8, "validated", "stage_v:V1-8K")]
+    two, eight = doc["classes"]
+    assert (two["evidence"]["flags"], eight["evidence"]["flags"]) == (["WINDOW_SENSITIVE", "ABOVE_CKV"], [])
+    for c in doc["classes"]:
+        ev = c["evidence"]
+        assert c.get("pacing") is None and ev["via_gateway"] is True and ev["output_distribution"] == "uniform[1,512]"
+        assert "output_length_distribution" in ev["not_covered"]
+        assert not {"via_gateway", "output_length_other_than_measured"} & set(ev["not_covered"])
+    assert "in_vllm_wait_beyond_c_kv" in two["evidence"]["not_covered"]
+    assert doc["provenance"]["base_profiles"] == [{"id": D_A2_B0["profile_id"],
+                                                   "content_sha256": D_A2_B0["content_sha256"]}]
+
+
+def test_the_stage_v_profiles_are_committed_verified_and_not_pinned():
+    """051 / 037 §2: the generator's two files are committed and load as verified profiles (test_profile_gen's
+    regeneration test covers their bytes); the production config still pins c1b."""
+    for sid in ("v-adm", "v-cls"):
+        path = SERVICE / "profiles" / f"verified-formal-20261031-{sid}-b0.json"
+        assert cp.load_profile(path, allow_provisional=False).profile_id == path.stem
+    pinned = 'production_profile = "service/profiles/verified-formal-20261017-c1b.json"'
+    assert pinned in (SERVICE / "deploy" / "rtx-verified.toml").read_text()

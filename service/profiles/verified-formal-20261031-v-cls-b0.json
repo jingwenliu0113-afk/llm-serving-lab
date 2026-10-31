@@ -1,0 +1,243 @@
+{
+ "schema_version": 1,
+ "profile_id": "verified-formal-20261031-v-cls-b0",
+ "status": "verified",
+ "provisional_reason": null,
+ "slo": {
+  "id": "S2",
+  "terms": {
+   "ttft_p95_ms": {
+    "2048": 2000,
+    "8192": 6000,
+    "32768": 20000
+   },
+   "tpot_p95_ms": 100,
+   "mixed_long": "budget"
+  }
+ },
+ "server": {
+  "vllm_version": "0.30.0",
+  "model_repo": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+  "model_revision": "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "fingerprint_sha256": "98b9f41be7b75b6bf431e6c090124156360edfc929ccd6164001468da05b6d4f",
+  "num_gpu_blocks": 248,
+  "block_size": 528,
+  "long_prefill_token_threshold": null
+ },
+ "classes": [
+  {
+   "name": "uniform-2k-o1-512",
+   "max_prompt_tokens": 1920,
+   "max_output_tokens": 512,
+   "max_concurrency": 32,
+   "max_queue": 32,
+   "source": "stage_v:V1-2K",
+   "status": "verified",
+   "bound": "validated",
+   "unavailable_reason": null,
+   "evidence": {
+    "workload": "U2K-O512",
+    "scope": "uniform 1920-token prompts, exactly 512 output tokens (ignore-eos), on the Core B server (B0); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7, 039 D-A); at_c_prod's preemptions and KV peak are the whole bench process's (042)",
+    "c_prod": {
+     "value": 32,
+     "status": "EXACT"
+    },
+    "c_slo": {
+     "value": 32,
+     "status": "EXACT"
+    },
+    "c_kv": 30,
+    "c_cap": 60,
+    "flags": [
+     "WINDOW_SENSITIVE",
+     "ABOVE_CKV"
+    ],
+    "binding": [
+     "short"
+    ],
+    "margins": {
+     "short": 0.2917011926219857,
+     "tpot": 0.5567734571430483
+    },
+    "burst_max_ttft_ms": 10501.437437997083,
+    "server": "B0",
+    "output_tokens": 512,
+    "descriptive": {
+     "c_full": {
+      "value": null,
+      "status": "UNSTABLE"
+     },
+     "c_late": {
+      "value": 32,
+      "status": "LOWER"
+     }
+    },
+    "at_c_prod": {
+     "attainment_min": 0.96875,
+     "preemptions_max": 30.0,
+     "kv_cache_usage_peak_max": 1.0
+    },
+    "hypotheses": {
+     "H-D3": "not supported"
+    },
+    "not_covered": [
+     "prompt_length_variation",
+     "open_loop",
+     "start_up_wave",
+     "concurrent_classes",
+     "in_vllm_wait_beyond_c_kv",
+     "output_length_distribution"
+    ],
+    "output_distribution": "uniform[1,512]",
+    "datasets_sha256": [
+     "52e9ee8eda1019f3564aa0c99377e080700cae2c929f131c4f1cf98d121db179",
+     "200e9b67ee987a6ab645746042d52e20c467204c516a68899efde3a7abc7347d",
+     "e13f57042de83dfbd3d0c1ef5a65e18c171f74c24dccd16faf4184d367adf30c",
+     "53faf76e533aada822d6fb62fde4d14a07a4c3dfa247bea8ff82c0436606cab1",
+     "0126906c2249f3cb7b31c7e792d3add8ad7621ac626dee976dcae3f6f25d3160"
+    ],
+    "via_gateway": true
+   },
+   "validation": {
+    "study": "V1",
+    "unit": "V1-2K",
+    "points": [
+     "L-U2K",
+     "GW-U2K-O512"
+    ],
+    "measured_classes": [
+     "v-uniform-2k-o512"
+    ],
+    "worst_r": {
+     "L-U2K": {
+      "client": 0.6966897495140038,
+      "upstream": 0.6966897495140038
+     },
+     "GW-U2K-O512": {
+      "client": 0.7024676917499164,
+      "upstream": 0.698377104125143
+     }
+    },
+    "n": 5
+   }
+  },
+  {
+   "name": "uniform-8k-o1-512",
+   "max_prompt_tokens": 8064,
+   "max_output_tokens": 512,
+   "max_concurrency": 8,
+   "max_queue": 8,
+   "source": "stage_v:V1-8K",
+   "status": "verified",
+   "bound": "validated",
+   "unavailable_reason": null,
+   "evidence": {
+    "workload": "U8K-O512",
+    "scope": "uniform 8064-token prompts, exactly 512 output tokens (ignore-eos), on the Core B server (B0); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7, 039 D-A); at_c_prod's preemptions and KV peak are the whole bench process's (042)",
+    "c_prod": {
+     "value": 12,
+     "status": "EXACT"
+    },
+    "c_slo": {
+     "value": 12,
+     "status": "EXACT"
+    },
+    "c_kv": 12,
+    "c_cap": 24,
+    "flags": [],
+    "binding": [
+     "short"
+    ],
+    "margins": {
+     "short": 0.5752242062899313,
+     "tpot": 0.5264125532191737
+    },
+    "burst_max_ttft_ms": 16950.479360995814,
+    "server": "B0",
+    "output_tokens": 512,
+    "descriptive": {
+     "c_full": {
+      "value": 12,
+      "status": "EXACT"
+     },
+     "c_late": {
+      "value": 12,
+      "status": "EXACT"
+     }
+    },
+    "at_c_prod": {
+     "attainment_min": 1.0,
+     "preemptions_max": 0.0,
+     "kv_cache_usage_peak_max": 0.97165991902834
+    },
+    "hypotheses": {
+     "H-D3": "supported"
+    },
+    "not_covered": [
+     "prompt_length_variation",
+     "open_loop",
+     "start_up_wave",
+     "concurrent_classes",
+     "output_length_distribution"
+    ],
+    "output_distribution": "uniform[1,512]",
+    "datasets_sha256": [
+     "8f7ba0b23d6b9e4e92365bff24aa8e1c75b84f6c227941e5983e916341021ab1",
+     "d7fcaf685d53dc0c28d5941d6fccea6e63ec10fef96740d365a4739b486706ce",
+     "09e1ae52480f4507a8c0e562feb0790b0586e62fea01e065880909241ccbc674",
+     "6f006fda174a1488d430d71505ec4b8d469dec8f70d40f511beb727f3a6ffc38",
+     "e77fae9082fad259d6ab736ec94284c2f231e95695730f7a41f8ac05355ff612"
+    ],
+    "via_gateway": true
+   },
+   "validation": {
+    "study": "V1",
+    "unit": "V1-8K",
+    "points": [
+     "L-U8K",
+     "GW-U8K-O512"
+    ],
+    "measured_classes": [
+     "v-uniform-8k-o512-c8",
+     "v-uniform-8k-o512"
+    ],
+    "worst_r": {
+     "L-U8K": {
+      "client": 0.7308196574026377,
+      "upstream": 0.7308196574026377
+     },
+     "GW-U8K-O512": {
+      "client": 0.5347856857916895,
+      "upstream": 0.5316130278333352
+     }
+    },
+    "n": 5
+   }
+  }
+ ],
+ "admission": null,
+ "provenance": {
+  "source_session": "formal-20261031-v-cls",
+  "analysis_path": "results/stage_v/formal-20261031-v-cls/analysis.json",
+  "analysis_sha256": "0a76ae7f600583545a18da07562085fb2668611fba1ac45b7160b93d68e2cfd8",
+  "prereg_section": "§12",
+  "freeze_commit": "c7ad0b4de3ebc2b08f03678bff40e19fcde2e2e1",
+  "generator_commit": "c1c55c8bd7d3e1f491d741619ff9da4f22ec1072",
+  "deployed_commit": "c7ad0b4de3ebc2b08f03678bff40e19fcde2e2e1",
+  "capacity_sha256": "b7c4a6c68bdd7b39857b55f2cb6f00feb0e0fc134334263a22bb5284da843e21",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "stage_v_sha256": "fe1fb09415bc3ee56a5fa5187f52db5733cded86b87aca0dda54452fd060f02d",
+  "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259",
+  "capserve_sha256": "1113302ce74acfbcba40c5a90cd4db8696ccae2d97a260b078be886aaaa2ff87",
+  "base_profiles": [
+   {
+    "id": "verified-formal-20261023-d-a2-b0",
+    "content_sha256": "d14caf40ae078b2aae2c546aed2157c39aa9cab60964baa1ebdbe14e9bc1f555"
+   }
+  ],
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "gpu_driver": "617.42"
+ },
+ "content_sha256": "99521be7607d730c7b9a9184f2b386b0c2438d9db4110b9408eafbc79d92839a"
+}

@@ -125,6 +125,10 @@
 | V1-8K | L-U8K 與 GW-U8K-O512 | **成立**（worst_r 0.731 / 0.535） | 同一份 profile 的 `uniform-8k-o1-512`（8,064 / 512，C 8，`validated`） | 8K 長輸出可以服務，取代 043 的包絡規則；不涵蓋 prompt 長度不一、其他輸出分布；沒有 C_KV 的問題（L-U8K 的 KV 峰值 0.628）；C 12 本身永遠不能服務（043 §4、044 實作補記六第 2 項），GW-U8K-O512 只是「全部 512」的最壞情況證據 |
 | （描述） | var 那一對 | 否決 | 只改 README | 不得宣稱 pacing 修好 var |
 
+- **產物**（本文 commit 之後，在乾淨的 `c1c55c8` 上執行 `profile_gen --validation-session … --freeze-commit c7ad0b4 --out-dir service/profiles`，兩個 session 都 exit 0，只寫出上表的兩個檔）：
+  - `service/profiles/verified-formal-20261031-v-adm-b0.json`（檔案 sha256 `68051d9f…`，`content_sha256` `02afafe9…`；base c1b `1863d7e1…`）；
+  - `service/profiles/verified-formal-20261031-v-cls-b0.json`（`0ea8752e…`，`content_sha256` `99521be7…`；base d-a2-b0 `d14caf40…`）；
+  - 兩份的 `generator_commit` 都是 `c1c55c8`、`freeze_commit` 與 `deployed_commit` 都是 `c7ad0b4`、`gateway_path_sha256` `679a7c66…`；`test_profile_gen` 的重新產生測試涵蓋它們的位元組，`test_profile_gen_stage_v` 另檢查兩個 session 寫出的內容與「沒有釘選」。
 - 「單位成立」不等於「上線」：正式釘選 `verified-formal-20261017-c1b.json`（`rtx-verified.toml`，active class uniform-2k，32）不會因任何結果自動改變。改釘選之後要跑 IT-0–6（037 §2）。
 - V1 的兩個 class 從 D-A2 的 `…-d-a2-b0` 繼承 flags 與 `not_covered`（`uniform-2k-o1-512` 的 flags 為 [WINDOW_SENSITIVE, ABOVE_CKV]，含 `start_up_wave`、`in_vllm_wait_beyond_c_kv`），產生器只移除 `via_gateway` 與 `output_length_other_than_measured`，加入 `output_length_distribution`（044 §12 的 class）。
 

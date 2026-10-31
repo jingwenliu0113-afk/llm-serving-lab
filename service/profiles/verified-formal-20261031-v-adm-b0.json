@@ -1,0 +1,113 @@
+{
+ "schema_version": 1,
+ "profile_id": "verified-formal-20261031-v-adm-b0",
+ "status": "verified",
+ "provisional_reason": null,
+ "slo": {
+  "id": "S2",
+  "terms": {
+   "ttft_p95_ms": {
+    "2048": 2000,
+    "8192": 6000,
+    "32768": 20000
+   },
+   "tpot_p95_ms": 100,
+   "mixed_long": "budget"
+  }
+ },
+ "server": {
+  "vllm_version": "0.30.0",
+  "model_repo": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+  "model_revision": "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "fingerprint_sha256": "98b9f41be7b75b6bf431e6c090124156360edfc929ccd6164001468da05b6d4f",
+  "num_gpu_blocks": 248,
+  "block_size": 528,
+  "long_prefill_token_threshold": null
+ },
+ "classes": [
+  {
+   "name": "uniform-8k",
+   "max_prompt_tokens": 8064,
+   "max_output_tokens": 128,
+   "max_concurrency": 8,
+   "max_queue": 8,
+   "source": "stage_c:U8K:c_prod:EXACT",
+   "status": "verified",
+   "bound": "exact",
+   "unavailable_reason": null,
+   "evidence": {
+    "workload": "U8K",
+    "scope": "uniform 8064-token prompts, 128 output tokens (ignore-eos); closed loop at C admitted requests, steady state (requests idx in [C, N - C)); latency after admission (030 8.1 / 8.7)",
+    "c_prod": {
+     "value": 8,
+     "status": "EXACT"
+    },
+    "c_slo": {
+     "value": 8,
+     "status": "EXACT"
+    },
+    "c_kv": 13,
+    "c_cap": 26,
+    "flags": [],
+    "binding": [
+     "tpot"
+    ],
+    "margins": {
+     "short": 0.5868001608249263,
+     "tpot": 0.11648499438185145
+    },
+    "burst_max_ttft_ms": 11044.393299998774
+   },
+   "pacing": {
+    "burst_tokens": 32256,
+    "rate_tokens_per_s": 5800,
+    "queue": {
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    }
+   },
+   "validation": {
+    "study": "V2",
+    "unit": "PACE-8K",
+    "points": [
+     "P-U8K"
+    ],
+    "measured_classes": [
+     "v-uniform-8k"
+    ],
+    "worst_r": {
+     "P-U8K": {
+      "client": 0.883135920716546,
+      "upstream": 0.883135920716546
+     }
+    },
+    "n": 5
+   }
+  }
+ ],
+ "admission": null,
+ "provenance": {
+  "source_session": "formal-20261031-v-adm",
+  "analysis_path": "results/stage_v/formal-20261031-v-adm/analysis.json",
+  "analysis_sha256": "cd2aa42823b75a81af569286b7049de01845f47681c7263aac0d981aec46189a",
+  "prereg_section": "§12",
+  "freeze_commit": "c7ad0b4de3ebc2b08f03678bff40e19fcde2e2e1",
+  "generator_commit": "c1c55c8bd7d3e1f491d741619ff9da4f22ec1072",
+  "deployed_commit": "c7ad0b4de3ebc2b08f03678bff40e19fcde2e2e1",
+  "capacity_sha256": "b7c4a6c68bdd7b39857b55f2cb6f00feb0e0fc134334263a22bb5284da843e21",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "stage_v_sha256": "fe1fb09415bc3ee56a5fa5187f52db5733cded86b87aca0dda54452fd060f02d",
+  "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259",
+  "capserve_sha256": "1113302ce74acfbcba40c5a90cd4db8696ccae2d97a260b078be886aaaa2ff87",
+  "base_profiles": [
+   {
+    "id": "verified-formal-20261017-c1b",
+    "content_sha256": "1863d7e1766bc41b4351981714c85eaf1530d984ca9d8e07866f56dae786c8bc"
+   }
+  ],
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "gpu_driver": "617.42"
+ },
+ "content_sha256": "02afafe93f459a8d15fedc8e3d6df387c8cfc691acab5eb80a6c872a808c7d8c"
+}
