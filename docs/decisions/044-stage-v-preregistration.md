@@ -1,6 +1,6 @@
 # 044 — Stage V 事先登記（DRAFT）：Stage D 產品化的驗證研究（V-GW、V1、V2、V4）
 
-- 狀態：**FROZEN（2026-10-31，mini `smoke-v-20261031`，實作補記十三）**（設計；待決事項已依建議定案，見文末）。harness、產品程式、一次 mini smoke 與兩輪審查都完成後凍結（見「凍結」）。凍結前不收任何 V 的正式數據。
+- 狀態：**FROZEN（2026-10-31，mini `smoke-v-20261031`，實作補記十三）**（設計；待決事項已依建議定案，見文末）。**正式結果見 decision 051**（`formal-20261031-v-adm`、`formal-20261031-v-cls` 都有效；PACE-8K、VG-32K、VG-M8K-T、V1-2K、V1-8K 成立，PACE-2K 被否決，W1 不成立；H-GW4 與對照組 F-U2K-var 沒有如預測）。harness、產品程式、一次 mini smoke 與兩輪審查都完成後凍結（見「凍結」）。凍結前不收任何 V 的正式數據。
   - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）；產生器的 `--validation-session` 路徑已完成並經審查（`feat/044-generator`，實作補記九、十；合成 session，沒有 Stage V 數據）。WSL 唯讀複核已完成（2026-10-25，實作補記十一），22 個 dataset 已產生並 pin（2026-10-31，實作補記十二），GPU 視窗 0（產品 IT 與 mini）通過並凍結（2026-10-31，實作補記十三）。
 - 日期：2026-10-24
 - 對應：
@@ -1459,3 +1459,8 @@
   - 既有測試：`tests/test_stage_v_plan.py` 與 `tests/test_stage_v_analysis.py` 的 `CFG` 改為明確的 DRAFT（`[freeze]` 清空），repo 的凍結設定另以 `REPO_CFG` 檢查（除了 `[freeze]` 和 DRAFT 相同）；`stage_v_plan.main` 在凍結後的 repo 設定上可以產生正式 plan，mini 仍然不能是正式。`service/tests/test_profile.py` 的兩個測試原本斷言這個 checkout 的 `stage_v.toml` 未凍結，改為已凍結：repo 的設定不再以「[freeze] stage_v」拒絕 §12 profile，但仍拒絕請求路徑不是 `679a7c66…` 的 profile；未凍結或缺少 `[freeze]` 時一律拒絕的情況照舊測試（fail closed）。
   - 044 的設計、門檻、讀法與產品程式都沒有改；harness 與請求路徑的位元組和 mini 跑的相同。
 - 下一步：部署凍結 commit → GPU 視窗 1 `formal-<date>-v-adm`（上限 3.5 h）→ ≥ 2 h → GPU 視窗 2 `formal-<date>-v-cls`（上限 7.0 h）。
+
+## 結果後註記（2026-10-31；本文的規則沒有改變）
+
+- 兩個正式 session 的結果、讀法與揭露見 decision 051。
+- 核對時發現一處文字和實作不一致（051 核對事實 16）：實作補記六第 8 項寫「Python 看得到的每一種結束都寫出 `finished_at`、`in_progress: false` 與 `aborted`」，但 `run_stage_v.run_session` 只在例外時寫入 `aborted`（`benchmarks/run_stage_v.py:803`），正常結束的 session.json 沒有這個鍵；report 以 `s.get("aborted")` 為假判定沒有中止。三個 session 都沒有 `aborted` 鍵，判定不受影響。harness 是凍結的，不改程式；正式 session 依凍結的 harness 執行（只在例外時寫入 `aborted`）。本註記只記錄文字和實作的差異，不改寫該項。

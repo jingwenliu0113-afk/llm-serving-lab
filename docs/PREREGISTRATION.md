@@ -578,3 +578,8 @@ H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。本節�
   - V-GW 的通過只讓 uniform-32k / mixed-8k-t 成為正式釘選的候選；
   - 正式釘選不會自動改變（037 §2）。
 - **輸出**：`results/stage_v/<session>/analysis.json`。
+
+〔凍結後註記，2026-10-31：兩個正式 session（`formal-20261031-v-adm`、`formal-20261031-v-cls`）都有效，結果見 decision 051。
+成立的單位：PACE-8K、VG-32K、VG-M8K-T、V1-2K、V1-8K；PACE-2K 被 var 那一對否決；W1 不成立（W-90、W-50 FAIL）。
+H-P1、H-P2、H-GW1–4、H-L1、H-L2、H-W0 supported，H-P3、H-W1、H-W2 not supported；H-GW4 沒有如預測（預測 MARGINAL 或 FAIL），其他 11 個如預測；不是 hypothesis 的對照組 F-U2K-var 也沒有如預測（預測 FAIL，實測 PASS），PACE-2K 的否決由它觸發。
+正式釘選沒有改變。本節規則沒有改變。〕
