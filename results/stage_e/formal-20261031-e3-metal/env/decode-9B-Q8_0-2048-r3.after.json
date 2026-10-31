@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "captured_at_utc": "2026-10-31T00:15:47.301891+00:00",
+  "repo": {
+    "commit": "b9088a37d37278a59444b4f71e6b21ef8ac96d5b",
+    "dirty": false,
+    "status": [
+      "?? results/stage_e/formal-20261031-e3-metal/"
+    ],
+    "source": "git"
+  },
+  "os": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "wsl": false,
+    "product_name": "macOS",
+    "product_version": "27.0.1",
+    "build_version": "26A434"
+  },
+  "hardware": {
+    "cpu": "Apple M4 Pro",
+    "logical_cpus": 12,
+    "ram_bytes": 51539607552,
+    "iogpu_wired_limit_mb": 0
+  },
+  "gpu": {
+    "nvidia": null,
+    "cuda_toolkit_on_path": null,
+    "host_cc": null,
+    "cuda_home": null,
+    "cuda_home_nvcc": null
+  },
+  "power": {
+    "source": "AC",
+    "battery_pct": 79,
+    "battery_state": "AC attached; not charging",
+    "ac_adapter": {
+      "wattage_w": 94,
+      "manufacturer": "Apple Inc.",
+      "name": "140W USB-C Power Adapter"
+    },
+    "powermode": 2,
+    "powermode_label": "high_power",
+    "thermal": {
+      "thermal_warning_recorded": false,
+      "performance_warning_recorded": false,
+      "cpu_limits": {}
+    }
+  },
+  "load": {
+    "loadavg_1m": 0.6201171875,
+    "loadavg_5m": 0.70361328125,
+    "loadavg_15m": 0.85009765625,
+    "mac_heavy_lock_present": true,
+    "mac_heavy_lock_owner": "pid=21772\nstarted_at=2026-10-31T00:05:30Z\ncwd=/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/.worktrees/e3-metal-20261031\nproject=llm-serving-lab\ncommand=/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/.venv/bin/python benchmarks/stage_e3.py run --plan /private/tmp/claude-501/-Users-liujingwen-Desktop-AI-Portfolio-llm-serving-lab/7e882394-1a55-4068-8e62-710fa960d4fe/scratchpad/e3-metal-formal-plan.json --bin /Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/third_party/llama.cpp/build-metal/bin --models /Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/models/gguf --out results/stage_e/formal-20261031-e3-metal\n",
+    "gpu_lock_held": null
+  },
+  "runtime": {
+    "llama_cpp": {
+      "binary": "/Users/liujingwen/Desktop/AI-Portfolio/llm-serving-lab/third_party/llama.cpp/build-metal/bin/llama-bench",
+      "version": "0.5.0",
+      "build_number": 11146,
+      "commit": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+      "built_with": "AppleClang 21.0.0.21000334 for Darwin arm64"
+    },
+    "vllm": null
+  },
+  "env": {},
+  "capture_python": "3.12.13",
+  "config": null,
+  "probe_errors": []
+}
