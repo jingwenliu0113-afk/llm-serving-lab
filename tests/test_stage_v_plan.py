@@ -26,7 +26,8 @@ import stage_v_plan as svp
 ROOT = Path(__file__).resolve().parent.parent
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
 CFG_RAW = (ROOT / "configs" / "stage_v.toml").read_bytes()
-CFG = tomllib.loads(CFG_RAW.decode())
+REPO_CFG = tomllib.loads(CFG_RAW.decode())                       # frozen 2026-10-31 (044 凍結紀錄)
+CFG = {**REPO_CFG, "freeze": {"stage_v": False, "mini": "", "gateway_path_sha256": ""}}  # an explicit DRAFT: the tests build their own freeze
 SD_RAW = (ROOT / "configs" / "stage_d.toml").read_bytes()
 SD_CFG = tomllib.loads(SD_RAW.decode())
 HEX = "a" * 64
@@ -111,9 +112,12 @@ def diff(a, b):
 
 # ------------------------------------------------------------------ stage_v.toml (044) --
 
-def test_the_repo_config_is_044s_before_the_freeze():
+def test_the_repo_config_is_044s_and_differs_from_the_draft_only_in_the_freeze():
     assert svp.stage_v_problems(CFG, PINS, SD_CFG) == []
-    assert CFG["freeze"] == {"stage_v": False, "mini": "", "gateway_path_sha256": ""}
+    assert svp.stage_v_problems(REPO_CFG, PINS, SD_CFG) == []
+    assert {k: v for k, v in REPO_CFG.items() if k != "freeze"} == {k: v for k, v in CFG.items() if k != "freeze"}
+    assert REPO_CFG["freeze"] == {"stage_v": True, "mini": "smoke-v-20261031", "gateway_path_sha256":
+                                  "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"}
     v = CFG["stage_v"]
     assert (v["seed"], v["n"], v["guard_band"]) == (20261008, 5, 0.05)
     assert v["stage_d_sha256"] == hashlib.sha256(SD_RAW).hexdigest()               # the frozen stage_d.toml (039)
@@ -742,13 +746,16 @@ def test_main_writes_the_plan(tmp_path, monkeypatch):
     out = tmp_path / "plan.json"
     assert svp.main(["--session", "V-CLS", "--out", str(out)]) == 0
     got = json.loads(out.read_text())
-    want = svp.build_plan(CFG, PINS, SD_CFG, session_name="V-CLS",
-                          pins_sha256=hashlib.sha256((ROOT / "configs" / "pins.toml").read_bytes()).hexdigest(),
-                          stage_v_sha256=hashlib.sha256(CFG_RAW).hexdigest(),
-                          stage_d_sha256=hashlib.sha256(SD_RAW).hexdigest())
+    shas = dict(pins_sha256=hashlib.sha256((ROOT / "configs" / "pins.toml").read_bytes()).hexdigest(),
+                stage_v_sha256=hashlib.sha256(CFG_RAW).hexdigest(), stage_d_sha256=hashlib.sha256(SD_RAW).hexdigest())
+    want = svp.build_plan(REPO_CFG, PINS, SD_CFG, session_name="V-CLS", **shas)       # main reads the repo's file
     assert got == json.loads(json.dumps(want)) and svp.plan_sha256(got) == svp.plan_sha256(want)
+    assert svp.main(["--session", "V-CLS", "--out", str(out), "--formal"]) == 0    # frozen: a formal plan
+    got = json.loads(out.read_text())
+    want = svp.build_plan(REPO_CFG, PINS, SD_CFG, session_name="V-CLS", formal=True, **shas)
+    assert got == json.loads(json.dumps(want))                                       # formal gates, adds no key
     with pytest.raises(SystemExit):
-        svp.main(["--session", "V-CLS", "--out", str(out), "--formal"])
+        svp.main(["--session", "mini", "--out", str(out), "--formal"])               # the mini is never formal
 
 
 def test_the_plan_module_imports_only_frozen_research_modules():

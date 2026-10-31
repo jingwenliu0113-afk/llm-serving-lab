@@ -30,7 +30,8 @@ import stage_v_plan as sv
 
 ROOT = Path(__file__).resolve().parent.parent
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
-CFG = tomllib.loads((ROOT / "configs" / "stage_v.toml").read_text())
+REPO_CFG = tomllib.loads((ROOT / "configs" / "stage_v.toml").read_text())   # frozen 2026-10-31 (044 凍結紀錄)
+CFG = {**REPO_CFG, "freeze": {"stage_v": False, "mini": "", "gateway_path_sha256": ""}}  # an explicit DRAFT: the tests build their own freeze
 SD_RAW = (ROOT / "configs" / "stage_d.toml").read_bytes()
 SD_CFG = tomllib.loads(SD_RAW.decode())
 

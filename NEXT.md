@@ -37,7 +37,7 @@
         `cd ~/llm-serving-service/releases/<sha> && flock -n /tmp/ai-portfolio-gpu.lock env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=service:benchmarks ~/llm-serving-lab/.venv/bin/python -m capserve.itest IT-0 IT-1 IT-2 IT-3 IT-4 IT-5 IT-6 --config service/deploy/rtx-verified.toml`
         → mini：`stage_v_plan.py --session mini --out /tmp/stage-v-plans/mini.json` 與 `run_stage_v.py --plan … --out results/stage_v/smoke-v-<date> --dataset v1-mini-8192=data/stage_v/v1-mini-8192.jsonl --dataset v4-mini=data/stage_v/v4-mini.jsonl --dataset var-2048=data/stage_d/var-2048.jsonl --dataset mixed-8192=data/core_b/mixed-8192.jsonl --gpu-lock-held --mini`。
         [x] 部署 `b792196`；IT-0–6 全部通過（05:42–05:44Z）；mini `smoke-v-20261031`（05:44:20–06:06:30Z）通過，13 項檢查都 true，凍結證據檢查沒有問題。
-     c. commit mini → 凍結（`[freeze] stage_v`、mini id、`gateway_path_sha256`、`test_stage_v_frozen`）→ 部署凍結 commit。
+     c. [x] commit mini（`e5e1600`）→ **凍結**（2026-10-31，`[freeze] stage_v = true`、mini `smoke-v-20261031`、`gateway_path_sha256` `679a7c66…`、`tests/test_stage_v_frozen.py`；044 實作補記十三）→ 部署凍結 commit。
      d. V-ADM（約 2.75 h）→ ≥ 2 h → V-CLS（約 5.25 h）→ 取回、report、結果 decision、產生器、README；是否改釘選由使用者決定。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
 

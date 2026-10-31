@@ -418,8 +418,8 @@ def test_the_frozen_configs_default_to_the_repo_files():
     root = Path(bp.__file__).resolve().parent.parent
     cap, pins = (root / "configs" / "capacity.toml").read_bytes(), (root / "configs" / "pins.toml").read_bytes()
     stage_d = (root / "configs" / "stage_d.toml").read_bytes()   # 043: read too (a release's git archive has it)
-    stage_v = (root / "configs" / "stage_v.toml").read_bytes()   # 044: the harness's, frozen only at Stage V's freeze
-    assert tomllib.loads(stage_v.decode())["freeze"]["stage_v"] is False
+    stage_v = (root / "configs" / "stage_v.toml").read_bytes()   # 044: the harness's, frozen at Stage V's freeze
+    assert tomllib.loads(stage_v.decode())["freeze"]["stage_v"] is True       # 2026-10-31 (044 實作補記十三)
     assert cp.frozen_configs() == (tomllib.loads(cap.decode()), hashlib.sha256(cap).hexdigest(),
                                    hashlib.sha256(pins).hexdigest(), tomllib.loads(stage_d.decode()),
                                    hashlib.sha256(stage_d).hexdigest(), tomllib.loads(stage_v.decode()),
@@ -812,12 +812,15 @@ def test_a_stage_v_profile_loads_after_stage_vs_freeze(tmp_path, pins):
 
 def test_no_stage_v_profile_loads_before_stage_vs_freeze(tmp_path, pins):
     """044 item 6: configs/stage_v.toml has [freeze] stage_v = true only from Stage V's freeze; without it, or not
-    frozen (this checkout: the harness's stage_v.toml, stage_v = false), every §12 profile is refused: fail closed."""
+    frozen, every §12 profile is refused: fail closed. This checkout's stage_v.toml is frozen (2026-10-31, 044
+    實作補記十三), so it no longer refuses for [freeze] stage_v; it still refuses a profile of another request path."""
     doc = stage_v_doc(pins)
-    for frozen in (FROZEN, cp.frozen_configs(), frozen_configs(stage_v=frozen_stage_v(stage_v=False)),
+    for frozen in (FROZEN, frozen_configs(stage_v=frozen_stage_v(stage_v=False)),
                    frozen_configs(stage_v={"slo": frozen_stage_v()["slo"]})):
         msg = refusal(tmp_path, doc, allow_provisional=True, pins=pins, frozen=frozen)
         assert "[freeze] stage_v" in msg
+    msg = refusal(tmp_path, doc, allow_provisional=True, pins=pins, frozen=cp.frozen_configs())
+    assert "[freeze] stage_v" not in msg and "gateway_path_sha256" in msg     # the doc's path is the test's, not 679a7c66
     for frozen, needle in ((frozen_configs(frozen_capacity(capacity=False), stage_v=frozen_stage_v()),
                             "[freeze] capacity"),
                            (frozen_configs(stage_d=frozen_stage_d(stage_d=False), stage_v=frozen_stage_v()),

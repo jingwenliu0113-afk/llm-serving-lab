@@ -535,6 +535,7 @@ H-D6 U2K-var not supported、U8K-var supported；H-D7 兩點 supported。本節�
 
 **狀態：DRAFT**。harness、044 的產品程式、一次 mini smoke 與兩輪審查完成後，連同 `configs/stage_v.toml` 一起凍結
 （`freeze.stage_v = true`、`tests/test_stage_v_frozen.py`）。凍結前沒有任何 Stage V 數據。
+**已凍結（2026-10-31）**：mini `smoke-v-20261031` 通過，`gateway_path_sha256` `679a7c66…`（044 實作補記十三）。
 本節只摘要；完整規則、揭露與依據見 decision 044。第 1–11 節不變，Phase 1–3 既有的判定不受影響。
 
 - **沿用 §8 / §9（030、039 D-C）**：

@@ -1,7 +1,7 @@
 # 044 — Stage V 事先登記（DRAFT）：Stage D 產品化的驗證研究（V-GW、V1、V2、V4）
 
-- 狀態：**DRAFT**（設計；待決事項已依建議定案，見文末）。harness、產品程式、一次 mini smoke 與兩輪審查都完成後凍結（見「凍結」）。凍結前不收任何 V 的正式數據。
-  - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）；產生器的 `--validation-session` 路徑已完成並經審查（`feat/044-generator`，實作補記九、十；合成 session，沒有 Stage V 數據）。WSL 唯讀複核已完成（2026-10-25，實作補記十一），22 個 dataset 已產生並 pin（2026-10-31，實作補記十二）。尚待：GPU 視窗 0（產品 IT 與 mini），之後才凍結。
+- 狀態：**FROZEN（2026-10-31，mini `smoke-v-20261031`，實作補記十三）**（設計；待決事項已依建議定案，見文末）。harness、產品程式、一次 mini smoke 與兩輪審查都完成後凍結（見「凍結」）。凍結前不收任何 V 的正式數據。
+  - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）；產生器的 `--validation-session` 路徑已完成並經審查（`feat/044-generator`，實作補記九、十；合成 session，沒有 Stage V 數據）。WSL 唯讀複核已完成（2026-10-25，實作補記十一），22 個 dataset 已產生並 pin（2026-10-31，實作補記十二），GPU 視窗 0（產品 IT 與 mini）通過並凍結（2026-10-31，實作補記十三）。
 - 日期：2026-10-24
 - 對應：
   - 043：7.3 的候選設計、7.4 的驗證研究、「使用者決定」；
@@ -843,6 +843,7 @@
 
 **狀態：DRAFT**。harness、044 的產品程式、一次 mini smoke 與兩輪審查完成後，連同 `configs/stage_v.toml` 一起凍結
 （`freeze.stage_v = true`、`tests/test_stage_v_frozen.py`）。凍結前沒有任何 Stage V 數據。
+**已凍結（2026-10-31）**：mini `smoke-v-20261031` 通過，`gateway_path_sha256` `679a7c66…`（044 實作補記十三）。
 本節只摘要；完整規則、揭露與依據見 decision 044。第 1–11 節不變，Phase 1–3 既有的判定不受影響。
 
 - **沿用 §8 / §9（030、039 D-C）**：
@@ -1436,3 +1437,25 @@
 - 檔案留在 WSL 的 `data/stage_v/`（不 commit，和其他 dataset 相同）；mini 與正式 session 依 pin 核對 sha256。
 - 只改了設定檔的 pin、它上方的註解與測試；harness（`stage_v_plan.HARNESS_FILES` 的五個檔）與 `gateway_path_sha256` 都不變。設計、門檻與讀法沒有改。
 - 下一步：GPU 視窗 0（部署 HEAD、產品 IT-0–6、mini）。
+
+## 實作補記十三（2026-10-31，GPU 視窗 0 與凍結；mini 的延遲已遮蔽，沒有任何 Stage V 正式數據）
+
+「前置與時序」第 6、7 步與「凍結」第 3、4 步。
+
+- **部署**：研究副本與產品 release 都是 `b792196`（`deploy_bundle`、`tools/rtx/deploy_service.sh`）。
+- **GPU 視窗 0**（一個 `flock -n /tmp/ai-portfolio-gpu.lock`，開始前 `gpu_status.sh` 為 FREE、GPU 245 MiB）：
+  1. 產品 IT-0 至 IT-6（043 第 8 步，`--config service/deploy/rtx-verified.toml`，05:42:24–05:44:19Z）：全部 ok，產品 run `pt-20261031T054225Z-itest`（只在 WSL 的 `~/llm-serving-service/runs/`，`research_valid` false）。IT 通過才接著跑 mini。
+  2. mini `smoke-v-20261031`（05:44:20–06:06:30Z，`run_stage_v.py --mini`，`stage_v_plan.py --session mini` 當場產生的 plan）：
+     - 12 次 boot、12 個 run：開頭與結尾 sentinel（U2K @ 2）、block 1 的六個點、block 2 的 P-U2K、F-U2K-var、W-mini、L-U8K。
+     - GW-U8K-O512 r1 是刻意的 5 s 逾時（無效），它的 r2 依逐點跳過規則不再測（`skip_walked`）；在最後一次計畫的 V boot（block 2 的 GW-M8K-T）之前強制觸發時數上限的停止（`cap_stop` forced，elapsed 1,227 s）。其餘 9 個 V run 與兩次 sentinel 都有效。
+     - `smoke.ok` true，13 項檢查（replay_clean、other_runs_valid、forced_timeouts_hit、derived_schema、boots_passed_checks、gateway_ok、forced_cap_stop、prefill_waited、queued、nontrivial_computable、recorded_hashes、clean_teardowns、skip_walked）都是 true；`replay_problems`、`invalid_runs`、`gateway_faults` 都是空的；env 有效。
+     - 延遲依 `rc.mask_smoke` 丟棄，10 個 `raw/*.gateway.log` 已刪除（sha256 在 `raw_manifest.json`，`gateway_logs_discarded`），沒有看任何延遲。
+     - session.json 記錄 harness `a1e4a564…`、`gateway_path_sha256` `679a7c66…`、`capserve_sha256` `1113302c…`、每個點的 profile sha256，以及 4 個 dataset 的 sha256（`v1-mini-8192`、`v4-mini` 等於實作補記十二的 pin；`var-2048`、`mixed-8192` 不變）。
+- **取回**：06:06:53Z `tools/rtx/fetch_all_sessions.sh stage_v`（不含 raw/）；`results/stage_v/wsl-inventory.txt` 只列出這個 mini。commit `e5e1600`。
+- **凍結**（本次 commit）：
+  - `configs/stage_v.toml` 的 `[freeze]`：`stage_v = true`、`mini = "smoke-v-20261031"`、`gateway_path_sha256 = "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"`（`stage_v_plan.gateway_path_sha256()`，16 個請求路徑檔）。只改 `[freeze]` 的三個值與它們的註解。
+  - `stage_v_plan.freeze_evidence_problems`、`stage_v_problems`、`gateway_path_problems`、`profile_problems` 在凍結後的設定上都沒有問題。
+  - 新增 `tests/test_stage_v_frozen.py`：5 個模組與 `stage_v.toml` 的 sha256 寫死、凍結證據、請求路徑與 profile 的位元組（044 凍結：從凍結到 V-CLS 結束不能改）。
+  - 既有測試：`tests/test_stage_v_plan.py` 與 `tests/test_stage_v_analysis.py` 的 `CFG` 改為明確的 DRAFT（`[freeze]` 清空），repo 的凍結設定另以 `REPO_CFG` 檢查（除了 `[freeze]` 和 DRAFT 相同）；`stage_v_plan.main` 在凍結後的 repo 設定上可以產生正式 plan，mini 仍然不能是正式。`service/tests/test_profile.py` 的兩個測試原本斷言這個 checkout 的 `stage_v.toml` 未凍結，改為已凍結：repo 的設定不再以「[freeze] stage_v」拒絕 §12 profile，但仍拒絕請求路徑不是 `679a7c66…` 的 profile；未凍結或缺少 `[freeze]` 時一律拒絕的情況照舊測試（fail closed）。
+  - 044 的設計、門檻、讀法與產品程式都沒有改；harness 與請求路徑的位元組和 mini 跑的相同。
+- 下一步：部署凍結 commit → GPU 視窗 1 `formal-<date>-v-adm`（上限 3.5 h）→ ≥ 2 h → GPU 視窗 2 `formal-<date>-v-cls`（上限 7.0 h）。

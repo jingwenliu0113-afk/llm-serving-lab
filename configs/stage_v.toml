@@ -10,9 +10,9 @@ schema_version = 1
 # profile and results/stage_v/prereg-sim/; pin the datasets; run the mini under the GPU lock and commit it; then set
 # stage_v = true, mini and gateway_path_sha256, add tests/test_stage_v_frozen.py, and only then collect Stage V data.
 # stage_v_plan refuses true unless mini names a passed smoke-v-* session of this harness on this request path.
-stage_v = false
-mini = ""                                                 # session id of the passed mini smoke (smoke-v-<date>)
-gateway_path_sha256 = ""                                  # the frozen request path (stage_v_plan.gateway_path_sha256)
+stage_v = true                                            # 044 凍結 2026-10-31 (044 凍結紀錄)
+mini = "smoke-v-20261031"                                 # session id of the passed mini smoke (smoke-v-<date>)
+gateway_path_sha256 = "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"  # the frozen request path (stage_v_plan.gateway_path_sha256)
 
 [stage_v]
 seed = 20261008                                           # Core B seed (block orders, the V1 / V4 datasets)
