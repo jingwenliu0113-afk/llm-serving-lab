@@ -1,0 +1,41 @@
+{
+ "session": "formal-20261031-q3",
+ "harness_sha256": "2bc3f2ee99128bf394c0e03029632e1e216d43c184616d0464c48ccbb6690480",
+ "stage_q3_sha256": "ec9ed8c969255a98b49774500e2fd8bdf8883bae0dabb04dfb84c162b9e214e8",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "outcomes": {
+  "w4a16": "ok",
+  "bf16": "ok"
+ },
+ "ppl": {
+  "w4a16": 8.580978988662059,
+  "bf16": 8.186505304099333
+ },
+ "ppl_ratio_minus_1": 0.04818584608565479,
+ "tokens": 147900,
+ "delta_nll": {
+  "mean": 0.047060904228223434,
+  "ci95": [
+   0.044693279786790385,
+   0.049510155900309924
+  ],
+  "n_chunks": 580,
+  "n_boot": 10000,
+  "seed": 20261008
+ },
+ "top1_agreement": 0.9028870858688303,
+ "H-Q3": {
+  "verdict": "not supported",
+  "bound": 0.02,
+  "prediction": "supported"
+ },
+ "q3": {
+  "attempts": [
+   "formal-20261031-q3"
+  ],
+  "superseded": {},
+  "status": "analyzed",
+  "session": "formal-20261031-q3",
+  "void_before": []
+ }
+}
