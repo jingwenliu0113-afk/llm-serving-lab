@@ -1,0 +1,112 @@
+{
+ "ok": true,
+ "checks": {
+  "covered": true,
+  "every_boot_valid": true,
+  "a10": true,
+  "pc_on_hits": true,
+  "pc_off_no_hits": true,
+  "chunk_checks": true,
+  "blocks": true,
+  "derived": true,
+  "no_spill": true,
+  "teardown_clean": true,
+  "mamba_cache_mode": true,
+  "memory": true
+ },
+ "covered": [
+  [
+   "B0@25",
+   "mixed"
+  ],
+  [
+   "B0@8",
+   "uniform"
+  ],
+  [
+   "B0@8k",
+   "mixed"
+  ],
+  [
+   "B0@8k",
+   "uniform"
+  ],
+  [
+   "PC-off",
+   "shared"
+  ],
+  [
+   "PC-on",
+   "shared"
+  ],
+  [
+   "T256@25",
+   "mixed"
+  ],
+  [
+   "T256@25",
+   "uniform"
+  ],
+  [
+   "T@25",
+   "mixed"
+  ],
+  [
+   "T@8",
+   "uniform"
+  ],
+  [
+   "T@8k",
+   "mixed"
+  ],
+  [
+   "T@8k",
+   "uniform"
+  ]
+ ],
+ "measured_blocks": {
+  "B0": 248,
+  "T": 248,
+  "T256": 248,
+  "K25": 155,
+  "TK25": 155,
+  "PC": 248
+ },
+ "mamba_cache_mode": {
+  "PC-off": "none",
+  "PC-on": "align"
+ },
+ "mem_increment_mib": {
+  "b1-B0-c8-uniform-r1": 15153,
+  "b1-B0-c25-mixed-r1": 15155,
+  "b1-T-c8-uniform-r1": 15051,
+  "b1-T-c25-mixed-r1": 15053,
+  "b1-T256-c25-uniform-r1": 15061,
+  "b1-T256-c25-mixed-r1": 15073,
+  "b1-B0-c8k-uniform-r1": 13619,
+  "b1-B0-c8k-mixed-r1": 13619,
+  "b1-T-c8k-uniform-r1": 13517,
+  "b1-T-c8k-mixed-r1": 13519,
+  "b1-PC-off-shared-r1": 15153,
+  "b1-PC-on-shared-r1": 15111
+ },
+ "mem_limit_mib": 15285,
+ "mamba_block_size": {
+  "PC-off": "32768",
+  "PC-on": "528"
+ },
+ "span_cached_key": {
+  "b1-B0-c8-uniform-r1": null,
+  "b1-B0-c25-mixed-r1": null,
+  "b1-T-c8-uniform-r1": null,
+  "b1-T-c25-mixed-r1": null,
+  "b1-T256-c25-uniform-r1": null,
+  "b1-T256-c25-mixed-r1": null,
+  "b1-B0-c8k-uniform-r1": null,
+  "b1-B0-c8k-mixed-r1": null,
+  "b1-T-c8k-uniform-r1": null,
+  "b1-T-c8k-mixed-r1": null,
+  "b1-PC-off-shared-r1": null,
+  "b1-PC-on-shared-r1": null
+ }
+}

@@ -1,6 +1,6 @@
 # 041 — Stage E 事先登記（DRAFT，第 3 版）：三個機制問題
 
-- 狀態：**DRAFT**，**E1-D 已凍結（2026-10-23，見 1.7）**，**E1-P 已凍結（2026-10-25，見 1.7）**，**E3 已凍結（2026-10-31，兩個平台一起，見 3.7）**；E2 仍為 DRAFT。寫在任何 Stage E 數據之前；各部分在 smoke / pilot 與審查後各自凍結。
+- 狀態：**DRAFT**，**E1-D 已凍結（2026-10-23，見 1.7）**，**E1-P 已凍結（2026-10-25，見 1.7）**，**E3 已凍結（2026-10-31，兩個平台一起，見 3.7）**，**E2 已凍結（2026-10-31，見 2.10 與修訂紀錄「E2 凍結」）**。寫在任何 Stage E 數據之前；各部分在 smoke / pilot 與審查後各自凍結。
   - 第 3 版有四個相對 037 範圍的決定（第 6 節 A1–A4）；**使用者 2026-10-23 決定四項都採建議的選項**（第 6 節）。
 - 日期：2026-10-23。第 1 版 → 第 2 版 → 第 3 版都在同一天，三版之間沒有任何 Stage E 數據。修訂經過見文末。
 - 對應：037（Phase 3 範圍）、024 / 025（Advanced）、028 / 032（C0）、030 / 039（逾時）、031（閒置與 spill）、PREREGISTRATION §2（H-A2）與 §11（本文摘要）。
@@ -585,3 +585,11 @@
 - `configs/stage_e2.toml` 的 `shared_prefix.sha256` 與 `common_prefix = 1599` 照實 pin；`tests/test_stage_e2_plan.py` 檢查 repo 的設定 pin 這個檔，拒絕條件的測試改用明確的未 pin 版本。設計、門檻與讀法都沒有改。
 - 同一個空檔確認 WSL 的登入環境沒有設定 `PROMETHEUS_MULTIPROC_DIR`（原始碼核對列出的環境前提）。
 - 下一步：Q3 正式 session 結束後部署 → smoke（12 次 boot）→ 凍結。
+
+### E2 凍結（2026-10-31）
+
+- **smoke `smoke-e2-20261031`**（GPU lock，部署 `173cb8f`，2026-10-31 01:27:52–01:50:10Z）：12 / 12 次 boot 有效，`smoke.ok` true，12 項檢查（covered、every_boot_valid、a10、pc_on_hits、pc_off_no_hits、chunk_checks、blocks、derived、no_spill、teardown_clean、mamba_cache_mode、memory）都通過；env 有效。延遲已遮蔽，沒有看。
+  - 原始碼核對的預測都由實測確認：`mamba_cache_mode` PC-off "none"、PC-on "align"；`mamba_block_size` "32768" / "528"；block 數 B0 / T / T256 / PC 248、K2.5 / TK2.5 155；llm_request span 沒有 cached-token 欄位（`span_cached_key` 都是 None，命中由計數器判定）。
+  - bench 後記憶體增量：T256 15,061 / 15,073 MiB、PC-on 15,111 MiB，都在 15,157 + 128 = 15,285 MiB 之內，所以不需要依 2.9 另寫 decision log。
+- **凍結**：`configs/stage_e2.toml` 的 `freeze.e2 = true`、`smoke_e2 = "smoke-e2-20261031"`。`smoke_problems` 沒有問題，harness `a7a5f9d3…` 等於 smoke 記錄的值。`tests/test_stage_e2_plan.py` 檢查 repo 的設定檔指向這個 smoke、harness 不變而且凍結證據沒有問題；拒絕條件的測試改用明確的 DRAFT 設定。凍結沒有改動任何設計、門檻或讀法。
+- 正式 plan：48 次 boot（3 個 restart block），上限 7.5 h（`cap_s` 27,000）；正式 session 在 WSL 主 checkout 的 `results/stage_e/` 下執行。

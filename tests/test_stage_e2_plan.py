@@ -14,7 +14,8 @@ import test_run_stage_e2 as tre2
 
 ROOT = Path(__file__).resolve().parent.parent
 PINS = tomllib.loads((ROOT / "configs" / "pins.toml").read_text())
-CFG = tomllib.loads((ROOT / "configs" / "stage_e2.toml").read_text())
+REPO_CFG = tomllib.loads((ROOT / "configs" / "stage_e2.toml").read_text())   # frozen 2026-10-31 (041 §2.10)
+CFG = {**REPO_CFG, "freeze": {"e2": False, "smoke_e2": ""}}                     # an explicit DRAFT config
 SB = PINS["stage_b"]
 KW = dict(gdn_prefill_backend=SB["gdn_prefill_backend"], gpu_memory_utilization=SB["gpu_memory_utilization"],
           vllm_bin="/v", base_env={"PATH": "/usr/bin", "HOME": "/h"})
@@ -26,7 +27,17 @@ def frozen(smoke="smoke-e2"):
     return {**CFG, "freeze": {"e2": True, "smoke_e2": smoke}, "e2": e}
 
 
-def test_the_repo_config_is_well_formed_and_unfrozen():
+def test_the_repo_config_is_frozen_on_the_passed_smoke_of_this_harness():
+    """041 v3 §2.10 (2026-10-31): the repo config names the passed smoke smoke-e2-20261031 (12 / 12 boots, every check
+    true), which ran this harness and this config with the pinned datasets; any edit after the freeze fails here."""
+    assert e2.config_problems(REPO_CFG, PINS) == [] and REPO_CFG["freeze"] == {"e2": True, "smoke_e2": "smoke-e2-20261031"}
+    assert e2.harness_sha256() == "a7a5f9d377173c3535d225131ad26d700c80acc07ca5416ad24d6fd3eb238c3b"
+    assert e2.smoke_problems(ROOT / "results" / "stage_e" / "smoke-e2-20261031", PINS, REPO_CFG) == []
+    plan = e2.build_plan(PINS, REPO_CFG, mode="formal")
+    assert len(plan["boots"]) == 48 and plan["cap_s"] == 7.5 * 3600
+
+
+def test_the_draft_config_is_well_formed_and_unfrozen():
     assert e2.config_problems(CFG, PINS) == [] and CFG["freeze"] == {"e2": False, "smoke_e2": ""}
     assert CFG["e2"]["expected_blocks"] == {"B0": 248, "T": 248, "T256": 248, "K25": 155, "TK25": 155, "PC": 248}
     assert e2.config_problems(frozen(), PINS) == []

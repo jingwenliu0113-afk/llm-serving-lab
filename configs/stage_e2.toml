@@ -5,8 +5,8 @@
 schema_version = 1
 
 [freeze]
-e2 = false
-smoke_e2 = ""                                             # session id of the passed smoke (results/stage_e/<id>)
+e2 = true                                                 # frozen 2026-10-31 (041 §2.10)
+smoke_e2 = "smoke-e2-20261031"                            # session id of the passed smoke (results/stage_e/<id>)
 
 [e2]
 seed = 20261008                                           # block order: Random(sha256("<seed>:stage_e:E2:block:<r>"))
