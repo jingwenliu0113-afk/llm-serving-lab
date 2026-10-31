@@ -578,3 +578,10 @@
   - pins 中 Stage B 的交叉驗算（每個 max_model_len request 66 個 block）只適用於 PC-off；PC-on 的 align 每個 request 為 69 個 block。harness 直接讀 /metrics 的 block 數，不受影響。
   - 環境前提：`PROMETHEUS_MULTIPROC_DIR` 若被繼承，vLLM 會改用 multiprocess collector，而 server env 不會丟掉這個變數；smoke 前在 WSL 確認它沒有設定。
 - **smoke 要實測確認**：PC-off / PC-on 的 `mamba_cache_mode`（"none" / "align"）與 `mamba_block_size`；block size 528、block 數 248；`mamba_cache_mode` 與 `mamba_block_size` 在 compile hash 內，PC-on 的第一次 boot 可能需要重新 compile、啟動較久。
+
+### E2 共享前綴 dataset 的 pin（2026-10-31，smoke 之前；沒有任何 E2 數據）
+
+- GPU 空閒、沒有 session 時（2026-10-31 00:59Z，q2 與 Q3 之間；部署 `88936bb`），在 WSL 以 `benchmarks/stage_e2_datasets.py --out data/stage_e/shared-2048.jsonl`（`HF_HUB_OFFLINE=1`）產生：275 列，每列 1,920 token（以 server 的 tokenizer 驗證），所有列的共同 token-id 前綴 1,599（≥ 3 × 528 = 1,584），sha256 `ca148974b2b0045579e9573f9000fd5cb33ab9fa95c78d17961d00fa472e75f7`。
+- `configs/stage_e2.toml` 的 `shared_prefix.sha256` 與 `common_prefix = 1599` 照實 pin；`tests/test_stage_e2_plan.py` 檢查 repo 的設定 pin 這個檔，拒絕條件的測試改用明確的未 pin 版本。設計、門檻與讀法都沒有改。
+- 同一個空檔確認 WSL 的登入環境沒有設定 `PROMETHEUS_MULTIPROC_DIR`（原始碼核對列出的環境前提）。
+- 下一步：Q3 正式 session 結束後部署 → smoke（12 次 boot）→ 凍結。

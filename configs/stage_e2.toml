@@ -21,4 +21,4 @@ specificity = 0.10                                        # |ln(U_8k / U_8)| <= 
 cap_hours = 7.5                                           # lock-holding cap of the formal session
 # PC cells' dataset (stage_e2_datasets.py, WSL): rows of `total` tokens sharing a RandomDataset prefix of prefix_len;
 # the token-id prefix common to every row must be >= min_shared (3 x 528 blocks); sha256 / common_prefix pinned on WSL
-shared_prefix = { total = 1920, min_shared = 1584, prefix_len = 1600, rows = 275, sha256 = "", common_prefix = 0 }
+shared_prefix = { total = 1920, min_shared = 1584, prefix_len = 1600, rows = 275, sha256 = "ca148974b2b0045579e9573f9000fd5cb33ab9fa95c78d17961d00fa472e75f7", common_prefix = 1599 }   # WSL 2026-10-31, deploy 88936bb

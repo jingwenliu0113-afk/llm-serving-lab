@@ -34,10 +34,20 @@ def test_the_repo_config_is_well_formed_and_unfrozen():
         bad = {**CFG, "e2": {**CFG["e2"], "expected_blocks": {**CFG["e2"]["expected_blocks"], "PC": pc}}}
         assert any("expected_blocks" in p for p in e2.config_problems(bad, PINS)), pc
     assert e2.config_problems({**CFG, "e2": {**CFG["e2"], "kv25_bytes": 2 * 2 ** 30}}, PINS)
-    unpinned = {**frozen(), "e2": {**frozen()["e2"], "shared_prefix": CFG["e2"]["shared_prefix"]}}
+    blank = {**CFG["e2"]["shared_prefix"], "sha256": "", "common_prefix": 0}
+    unpinned = {**frozen(), "e2": {**frozen()["e2"], "shared_prefix": blank}}
     assert any("shared_prefix" in p for p in e2.config_problems(unpinned, PINS))
     with pytest.raises(e2.PlanError, match="pinned first"):
-        e2.smoke_plan(PINS, CFG)                                                    # the dataset comes before the smoke
+        e2.smoke_plan(PINS, {**CFG, "e2": {**CFG["e2"], "shared_prefix": blank}})   # the dataset comes before the smoke
+
+
+def test_the_repo_config_pins_the_shared_prefix_dataset_made_on_wsl():
+    """041 v3 §2.8 / §2.10: stage_e2_datasets.py on WSL (2026-10-31, deploy 88936bb) wrote 275 rows of 1,920 tokens whose
+    common token-id prefix is 1,599 (>= 1,584 = 3 x 528); its sha256 and the measured prefix are pinned before the smoke."""
+    sp = CFG["e2"]["shared_prefix"]
+    assert sp["sha256"] == "ca148974b2b0045579e9573f9000fd5cb33ab9fa95c78d17961d00fa472e75f7"
+    assert sp["common_prefix"] == 1599 >= sp["min_shared"] == 1584 and sp["rows"] == 275 and sp["total"] == 1920
+    assert e2.smoke_plan(PINS, CFG)["datasets_sha256"]["shared:2048"] == sp["sha256"]
 
 
 def test_a_plan_pins_the_configs_content_without_freeze():

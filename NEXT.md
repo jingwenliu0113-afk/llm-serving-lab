@@ -27,9 +27,9 @@
   E3 的 041 §3.6 寫「在主 checkout 執行」，這次的偏離在 047 揭露；之後若再有 Mac 正式 session，要先檢查該部分的規則（或留在主 checkout、期間不 commit）。
 - **GPU 佇列（依序；每個 session 之間留空檔；開始前 `tools/rtx/gpu_status.sh` 為 FREE、GPU 閒置 ≤ 1,018 MiB；請使用者不要用 Windows 桌面 / 遠端桌面）**：
   1. q2 跑完 → 取回（`tools/rtx/fetch_all_sessions.sh stage_q`）→ `quality/stage_q_analysis.py --out results/stage_q/analysis-<date>.json` → Stage Q 結果文件（獨立重算）。
-  2. 空檔中（不需要 GPU lock，但不能有 GPU session）：E2 dataset 產生並 pin（`benchmarks/stage_e2_datasets.py`，WSL）；確認 WSL 沒有設定 `PROMETHEUS_MULTIPROC_DIR`。
-  3. Q3 正式（`quality/stage_q3.py plan --mode formal`，約 5 h；開始前主機可用記憶體 ≥ 20 GB）→ `stage_q3.py analyze`。
-  4. E2：部署 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
+  2. [x] E2 dataset 已產生並 pin（2026-10-31 00:59Z，sha256 `ca148974…`、共同前綴 1,599）；WSL 沒有 `PROMETHEUS_MULTIPROC_DIR`。
+  3. Q3 正式 `formal-20261031-q3`（2026-10-31 約 01:01Z 起，GPU lock，約 5 h）→ 取回 raw（`fetch_raw`）→ `stage_q3.py analyze`。
+  4. E2：部署（含 dataset 的 pin）→ smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
   5. 043 的 RTX 產品測試 IT-0–6（`rtx-verified.toml`）。
   6. Stage V（044）：WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT + mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
