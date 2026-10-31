@@ -39,9 +39,12 @@
         → mini：`stage_v_plan.py --session mini --out /tmp/stage-v-plans/mini.json` 與 `run_stage_v.py --plan … --out results/stage_v/smoke-v-<date> --dataset v1-mini-8192=data/stage_v/v1-mini-8192.jsonl --dataset v4-mini=data/stage_v/v4-mini.jsonl --dataset var-2048=data/stage_d/var-2048.jsonl --dataset mixed-8192=data/core_b/mixed-8192.jsonl --gpu-lock-held --mini`。
         [x] 部署 `b792196`；IT-0–6 全部通過（05:42–05:44Z）；mini `smoke-v-20261031`（05:44:20–06:06:30Z）通過，13 項檢查都 true，凍結證據檢查沒有問題。
      c. [x] commit mini（`e5e1600`）→ **凍結**（2026-10-31，`[freeze] stage_v = true`、mini `smoke-v-20261031`、`gateway_path_sha256` `679a7c66…`、`tests/test_stage_v_frozen.py`；044 實作補記十三）→ 部署凍結 commit。
-     d. **進行中**：部署凍結 commit `c7ad0b4`（研究副本）→ V-ADM `formal-20261031-v-adm`（約 06:35Z 起，預估 2.75 h，上限 3.5 h）→ ≥ 2 h（runner 強制）→ V-CLS `formal-20261031-v-cls`（預估 5.26 h，上限 7.0 h）
-        → 取回（`fetch_all_sessions.sh stage_v`）→ `stage_v_report.py` → 結果 decision → 產生器（`profile_gen --validation-session`，只為通過的單位寫 profile）→ README 的 Stage V 段；是否改釘選由使用者決定。
-        V-ADM 有 gateway 造成的無效 run 時停在空檔，先寫 decision log（044）。V-CLS 的遠端指令：`stage_v_plan.py --session V-CLS --formal`，dataset 為 mixed-8192 與 v1-{2048,8192}-r1..r5。
+     d. [x] 部署凍結 commit `c7ad0b4`（研究副本）→ V-ADM `formal-20261031-v-adm`（06:28:13–08:14:41Z，25 boot / 25 run 全部有效，gateway_faults 無，env 有效，沒有 cap_stop）
+        → 取回（`db05c73`）→ `stage_v_report.py`（Mac，重跑逐位元相同 `cd2aa428…`，`c37ff96`）：PACE-8K 成立；PACE-2K 被 var 讀法否決（P-U2K-var FAIL、F-U2K-var PASS；P-U2K 本身 PASS）；W1 不成立（W-90、W-50 FAIL）；
+        所有預測都命中。獨立驗證 workflow 進行中（重算、稽核、機制、反駁、批評者）。
+     e. **進行中**：V-CLS `formal-20261031-v-cls`：背景鏈在 10:16Z（V-ADM 結束 + 2 h）後檢查 `gpu_status.sh`，FREE 才在 `flock -n` 下啟動（預估 5.26 h，上限 7.0 h）；
+        遠端指令 `stage_v_plan.py --session V-CLS --formal`，dataset 為 mixed-8192 與 v1-{2048,8192}-r1..r5。
+        之後：取回（`fetch_all_sessions.sh stage_v`）→ `stage_v_report.py` → 驗證 → 結果 decision 051 → 產生器（`profile_gen --validation-session`，只為通過的單位寫 profile）→ README 的 Stage V 段；是否改釘選由使用者決定。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
 
 ### 下一步
