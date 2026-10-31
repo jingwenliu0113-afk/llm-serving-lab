@@ -5,7 +5,7 @@
 這是一個事先登記（pre-registered）的實驗：hypothesis、門檻、metric 與 protocol 都在看到正式數據之前寫定並凍結，
 之後的任何變更都有 decision log。結論只來自有效的正式 session，失敗、OOM、not testable 的單位照實報告。
 
-> **狀態（2026-10-23）：Phase 3 進行中**（使用者決定，decision 037）：執行 036 列出的後續研究與產品 v1，SPEC 的 Optional 除外。
+> **狀態（2026-10-31）：Phase 3 進行中**（使用者決定，decision 037）：執行 036 列出的後續研究與產品 v1，SPEC 的 Optional 除外。
 > 下文 Phase 1、Phase 2 的結果都已定案，不因 Phase 3 而改變；正式產品 profile 的釘選也不變。
 > - **Phase 1 已完成**，結果保留、不重新分析：
 >   - Core：A（macos-metal、wsl2-cuda）、B（uniform、mixed）、quality、deployment decision table。
@@ -14,7 +14,33 @@
 >   - Research Stage C：Fixed-SLO 下的最大並發容量。事先登記已凍結（PREREGISTRATION §8、decision 030，2026-10-17）；
 >     C0 的有限度排查為分支 A（decision 032）。最終結果（decision 035，重跑 `formal-20261017-c1b`）：C_PROD 為 uniform 2K 32、uniform 8K 8、mixed 2K / 8K 2。
 >   - Engineering：建在 vLLM 之上的 Capacity-Aware Serving Service（`service/`），以正式設定 `service/deploy/rtx-verified.toml` 部署。
->   - 只有 Stage C 驗證過的容量（`service/profiles/verified-formal-20261017-c1b.json`）是產品限制；其他都標為 provisional。
+>   - 只有 Stage C 驗證過的容量（`service/profiles/verified-formal-20261017-c1b.json`）是產品限制；Phase 2 結案時其他都標為 provisional。
+>     Phase 3 另產生三份 Stage D verified profile（043），只 commit、不釘選，不是正式設定。
+> - **Phase 3**（decision 037–050；結果見下方「Phase 3 結果」）：
+>   - 研究已完成的部分（判定或讀法都依各自凍結的規則）：
+>     - Stage D（042，四個 session 都有效；RTX、直連 vLLM、封閉迴路，除非另外註明）：U32K 的 C_SLO 2 ≤ C_KV 3（H-D1 supported）；
+>       T（chunk 上限 512）讓 mixed 8K 的 C_PROD 2 → 4、uniform 8K 8 → 4（H-D2a、H-D2b supported；B0 來自 c1b，跨 session）；
+>       輸出 512 時 uniform 2K 的 C_SLO 32 > C_KV 30（H-D3 not supported）；
+>       正式 class uniform-2k（32）在 prompt 長度不一時 FAIL（H-D6 not supported；只重播一條 pin 住的序列）；
+>       經過 gateway 兩個 uniform class 都 PASS（H-D7，只對應 `capserve_sha256` `53488c6d…` 那一版）；
+>       開放迴路 uniform 8K 為 0.2519 req/s（H-D4 supported），uniform 2K 為 NT。
+>     - Stage E1-D（045，描述，不是檢定）：8K 雙模式的「滑移」在三個既有數據集都符合事先定義的計數規則
+>       （holds，不是統計結論；C0 與 Core 只量得到五環中的兩環）。
+>     - Stage E1-P（046，描述）：滑移的觸發（F 尖峰）和 prompt 內容還是 bench 中的位置綁定：無法判定（觸發太少；seed B 在 12 個 bench 中沒有尖峰）。
+>     - Stage E2（050）：T 在 2K、C 8 有效（KV 4 與 2.5 GiB），在 C 25 無效；結果符合 S（負載），
+>       但和負載 × KV 的交互作用分不開，C 25 的成因沒有確立（讀法 R4）。
+>     - Stage E3（047，兩個平台各自判定，不比較快慢）：H-E3a（跨 size 的非比例成分）Mac、RTX 各自 supported；
+>       H-E3b（Q4_K_M 對 Q4_0 的配方層級格式成本）Mac supported，RTX not supported（格式效應在兩個 size 不一致，不解讀，也不表示 RTX 沒有格式成本）；
+>       依固定寫法，原因依平台而異。H-A2 仍是 refuted。
+>     - Stage Q（048）：KLD 的順序在 Metal（`-c 512`）與 CUDA 2K / 8K 都成立（H-Q1a、H-Q2a supported）；
+>       Metal 與 CUDA 的 KLD / PPL 差異在部分設定超出事先界線（H-Q1b 3 / 6 格、H-Q1c 1 / 8 個設定，not supported；不代表任何平台有缺陷，也不是平台排名）；
+>       2K / 8K 對 512 的 KLD 比值有 4 / 12 格超出 [0.5, 2.0]（H-Q2b not supported，跨 session）。
+>     - Stage Q3（049）：這一組 W4A16 checkpoint 的 PPL 比 BF16 高 4.82%，超過事先寫定的 2%（H-Q3 not supported；點估計對照門檻，不是統計檢定）。
+>   - 產品：capserve v1（038）的七項已實作；v1 的 release 在 RTX 上通過 IT-0 至 IT-6 與時間有界的常駐檢查，TLS 沒有在 RTX 上測；
+>     Stage D 的產品化（043）實作完成，三份 Stage D verified profile 只 commit、不釘選；
+>     043 要求的 RTX IT-0 至 IT-6 於 2026-10-31 以 release `b792196` 通過。
+>   - Stage V（044，Stage D 產品化的驗證研究）：事先登記於 2026-10-31 凍結，正式 session 進行中，還沒有結果。
+>   - 正式釘選不變：`rtx-verified.toml` 仍釘住 `verified-formal-20261017-c1b.json`，active class 為 uniform-2k（32）。
 
 ## 研究範圍
 
@@ -50,13 +76,21 @@
 - [SPEC.md](SPEC.md)：研究問題與範圍。
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
   分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
-- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–041）。
+  之後的 addendum（§7 Advanced、§8–§12 Stage C / D / Q / E / V）各自在正式數據之前凍結；Stage E 的各部分分別凍結。
+- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–050）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
   - 023 是 Gate 的決定，024 是 Advanced 的事先登記（凍結 commit `97a948c`），025 是 Advanced 的結果，026 是 Phase 1 收尾的決定，027 是 Phase 2 的兩條線與治理規則。
   - Phase 2：
     - 028 / 032 是 C0；029 是 capserve 的架構與實作補記；030 是 Stage C 的事先登記（凍結 commit `b3c9109`）；031 是 GPU 閒置判定；
     - 033 是第一個 C1 session（已被取代），034 是重跑的取捨規則，035 是最終結果，036 是 Phase 2 結案（含適用條件、IT 的限制與正式 profile 的保護）。
-  - Phase 3：037 是範圍、順序與共通規則；038 是 capserve v1 中不依賴研究結果的設計；039 / 040 / 041 是 Stage D / Q / E 的事先登記（DRAFT）。
+  - Phase 3：
+    - 037 是範圍、順序與共通規則；038 是 capserve v1 中不依賴研究結果的設計（已實作；RTX 產品測試通過 IT-0 至 IT-6 與常駐檢查，TLS 沒有在 RTX 上測）。
+    - 039 / 040 / 041 是 Stage D / Q / E 的事先登記，都已在正式數據之前凍結：039 於 2026-10-23（`fd95164`）；
+      040 的 Q1 / Q2 與 Q3 於 2026-10-25；041 各部分分別凍結：E1-D 2026-10-23、E1-P 2026-10-25、E3 與 E2 2026-10-31
+      （041 用當地日期；047 以 UTC 記 E3 的凍結為 2026-10-30 22:50:55Z）。
+    - 042 是 Stage D 的結果；043 是 Stage D 的產品化（實作完成：產生器、三份不釘選的 verified profile、拒絕規則、keep-alive 修正；驗證研究轉到 044）。
+    - 044 是 Stage V（Stage D 產品化的驗證研究：V-GW、V1、V2、V4）的事先登記，2026-10-31 凍結（mini `smoke-v-20261031`）；正式 session 進行中。
+    - 045 / 046 是 Stage E1-D / E1-P 的結果（描述，不是檢定）；047 是 Stage E3 的結果；048 是 Stage Q（Q1、Q2）的結果；049 是 Stage Q3 的結果；050 是 Stage E2 的結果。
 - [docs/EXPERIMENT_RULES.md](docs/EXPERIMENT_RULES.md)、[docs/RESULTS_FORMAT.md](docs/RESULTS_FORMAT.md)、[docs/STORAGE_PLAN.md](docs/STORAGE_PLAN.md)。
 - [MACHINE_POLICY.md](MACHINE_POLICY.md)：兩台機器的分工與 lock。
 - [configs/pins.toml](configs/pins.toml)：所有 pin。
@@ -141,6 +175,8 @@ uv sync && uv run pytest -q
   - 每個平台只有 4B-Q4_K_M 對 9B-Q8_0 這 1 組超出 ±20%（觀測比約 2.2，預測比 2.99），因此 refuted；其餘 14 組都在 ±20% 內。
   - macos-metal 上 4B-Q8_0 對 9B-Q4_K_M、9B-Q6_K 這 2 組略快於預測（+5.0%、+2.4%）。
   - 原因 Core 沒有檢驗。未檢驗的推測：有一部分成本與權重 bytes 無關，例如 GDN recurrent 狀態與 kernel 開銷。
+    - Phase 3 Stage E3（047，見下方）在每個平台各自的一個 session 內重現了跨 size 的非比例成分（Mac、RTX 各自 supported；Mac 另有 Q4_K_M 對 Q4_0 的配方層級格式成本），
+      但分不開固定開銷與頻寬效率，也沒有檢驗 GDN recurrent 狀態這個具體來源，所以這個推測仍未檢驗。H-A2 的判定不變。
 - **context**：decode 從 2K 到 32K 的降幅，點估計在兩個平台上都是 bit 越低越大。
   - macos-metal：4B 0.25–0.28，9B 0.16–0.23；相鄰差距都在 noise 內，屬於不推翻、也不確認。
   - wsl2-cuda：4B 0.16–0.22，9B 0.12–0.15；相鄰差距都超出 noise。
@@ -175,7 +211,9 @@ sessions：`formal-20261009-coreb-uniform`（102 / 102 ok）、`formal-20261010-
 
 ### Quality（wsl2-cuda，`-c 512`；decision 005、020）
 
-session：`formal-20261010-quality`（46 / 46 ok，env 有效）。quality 視為 model × quant 的屬性，兩個平台共用（Metal 上沒有量）。
+session：`formal-20261010-quality`（46 / 46 ok，env 有效）。quality 視為 model × quant 的屬性，兩個平台共用（Phase 1 在 Metal 上沒有量）。
+Phase 3 的 Stage Q（048，見下方）在 Metal 上量了 `-c 512`：「兩個平台共用」只在 KLD 的順序上有證據（H-Q1a）；數值在部分設定超出事先界線
+（H-Q1b 3 / 6 格、H-Q1c 1 / 8 個設定；不代表哪個平台有缺陷）。本表與 H-A5 都不變。
 
 | config | KLD vs 同 size BF16（± SE） | same top-1 % | WikiText PPL（± SE，描述性） |
 |---|---|---|---|
@@ -273,6 +311,8 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - allocator 沒有操弄。KV 只能往下調（熱 boot 可用量上限約 4.14 GiB，sm_120 不支援 fp8 KV），所以「KV 是主因」最多只能是推論級（R5）；兩個 L 都沒有落在 R5。
 - 8K uniform 的 boot 之間有兩個模式（約 2.48 與 2.82 秒，成因未知），使 8K 的 noise 偏大。事後把模式拉齊重算（敏感度計算，不是判定），8K 的類別與列都不變（025「限制」）。
 - Core 的判定與 deployment decision table 都不因 Advanced 改變。
+- Phase 3 的後續（025 的判定、類別與判讀列都不變）：8K 雙模式的滑移見 E1-D / E1-P（045、046，描述）；
+  2K 的 T 失效見 E2（050，R4，C 25 的成因沒有確立）；T 在 fixed-SLO 容量上看到同方向的取捨（042：uniform 8K 的 C_PROD 8 → 4、mixed 8K 2 → 4，跨 session）。
 
 ### Phase 2 Stage C：Fixed-SLO 下的最大並發（decision 030 / 033–036）
 
@@ -293,10 +333,16 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - **H-S1（mixed 降低容量）**：2K、8K 都 supported。
 - **H-S2（C_SLO ≤ C_KV）**：U2K（34 ≤ 35）、U8K（8 ≤ 13）都 supported。
 - 兩項都和事先預測相同。
+  - Stage D 的補充（042 D-A2；判定不變）：c1b 的 H-S2 成立，是因為 TPOT 先失守，不是因為量到 KV 是限制。
+    輸出 512 時 uniform 2K 的 C_SLO 為 32 > C_KV 30，所以 H-S2 不能延伸成「C_KV 一定是 SLO 容量的上界」。
 - **開場湧入不在估計量內**：C 個 request 同時到達時，第一波的 TTFT 最高可到 10.4 s（uniform-2k）、11.0 s（uniform-8k）。
+  - Stage D 的 D5（042，事後描述，來源是 c1b）：只有第一波超過門檻，C_PROD 時第二波已回到門檻內；
+    只用 C ≤ C_KV 的點，第一波最大 TTFT 對 C 的斜率為 324.2 ms / request（U2K）與 1,389.2 ms / request（U8K）。量的是已暖機的 server，不是冷啟動。
+  - 產品不對第一波宣稱 SLO（043）。
 - **verified profile**：`service/profiles/verified-formal-20261017-c1b.json`，由產生器產生，是正式的產品上限。
   - uniform-2k 32、uniform-8k 8、mixed-2k 2、mixed-8k 2，四個都是 exact。
   - 範圍只限封閉迴路、128 個 output token、准入之後的延遲（030 8.9）。
+  - Stage D 另有三份 verified profile，只 commit、不釘選，都不是正式設定（043，見「Phase 3 結果」的產品段）。
 - **第一個 session `formal-20261017-c1`（033）已被取代**：
   - 原因：BingWallpaper 在 session 中途自行啟動，造成 2 次 spill，共 5 個 run 無效。結果是 U8K 無法檢定，U2K 只有下界。
   - 使用者決定以相同的凍結協定重跑，並事先寫定「新 session 有效時全部以它為準」（034）。
@@ -322,8 +368,12 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
   - 經過 capserve gateway 的流量：容量是直接對 vLLM 的 `/v1/completions` 量的，不含 gateway 的開銷、chat template 與 `/tokenize` 呼叫；
   - 開場湧入：C 個 request 同時到達時，uniform 第一波的 TTFT 最高 10–11 s；
   - 准入前的排隊、prefix caching，以及其他 GPU、版本或模型。
+- **Stage D 的補充量測**（042；正式 c1b profile 的範圍不因此擴大，上面的「不涵蓋」仍適用）：
+  - uniform-2k（32）在 prompt 長度不一時 **FAIL**（直連、只重播一條 pin 住的長度序列），uniform-8k（8）PASS；
+  - 經過 gateway 兩者都 PASS，但只對應 `capserve_sha256` `53488c6d…` 那一版，之後的 gateway 變更沒有量；
+  - 開放迴路、輸出長度與 mixed 見「Phase 3 結果」的 Stage D 段。
 
-**產品整合測試**（RTX；029、036）
+**產品整合測試**（RTX；029、036、038、043）
 
 | 測試（release `7513d62`；最終 `5201760` 重跑了 verified 的 IT-0、1、2、4、5、6 與 provisional 的 IT-0、3、6，結果相同） | verified profile | provisional-rtx（同一 release） |
 |---|---|---|
@@ -338,29 +388,265 @@ session：`formal-20261011-adv`（60 / 60 次 boot 有效，0 逾時；凍結 co
 - **正式 profile 的保護**：`rtx-verified.toml` 以 `production_profile` 釘住 verified profile。
   - 部署與 IT 都會拒絕其他 profile，也拒絕任何允許 provisional 的執行（`--allow-provisional`、`CAPSERVE_ALLOW_PROVISIONAL=1`）。
   - provisional profile 不得使用 Stage C 的 class 名稱。
+  - Phase 3（043）另加：provisional profile 也不得使用 Stage D 的 class 名稱；輸出上限大於 128 的 verified class、T profile 上 mixed-8k-t 以外的 class
+    都不能作為 active class（ProfileError，任何旗標都不能覆寫）；deploy 只啟動 B0，所以 T 目前不部署。
+
+Phase 3 的產品測試（038、043；只證明功能正常，不是容量量測：輸出只在 WSL 的 `~/llm-serving-service/runs/`，`research_valid` false）：
+
+| release | 設定 | 測試 | 結果 |
+|---|---|---|---|
+| `c9202c5`（038） | verified profile（`rtx-verified.toml`） | IT-0 至 IT-6 | 全部通過。IT-3 改以生成的 token 數判定後是決定性的通過（串流 8 / 128、非串流 49 / 128）；IT-4 的 23 項計數全部相等 |
+| `c9202c5`（038） | provisional-rtx（`rtx.toml`） | IT-0 至 IT-6 | 全部通過；IT-3 為 8 / 1,024 與 46 / 1,024 |
+| `f670c22`（038） | verified profile，`tokenizer = "local"` | IT-0 至 IT-6 | 全部通過（gateway 在 local 模式下實際啟動） |
+| `4711390`（038） | 釘選的 profile，常駐模式 | 時間有界的常駐檢查 | SIGKILL vLLM 後自動重啟並再度就緒；stop 後沒有再重啟 |
+| `b792196`（043 第 8 步，2026-10-31） | verified profile（`rtx-verified.toml`） | IT-0 至 IT-6 | 全部通過（keep-alive 修正改變了 `capserve_sha256`，所以重跑） |
+
+- IT-4 的計數一致之後，兩份 RTX 設定才改為 `tokenizer = "local"`（038 §4）；計數一致只限 RTX 上測過的 23 個案例。
+- keep-alive 修正與之後的 gateway 變更對延遲的影響沒有量過；`b792196` 的 IT 只證明功能正常。
+- TLS 沒有在 RTX 上測（正式設定只綁 loopback，沒有 TLS）。
+
+### Phase 3 結果（decision 037–050）
+
+- 每個 study 都在正式數據之前事先登記並凍結（037 §3）；判定或讀法由凍結的分析程式產生，執行上的偏離寫在各段。
+- supported / not supported 是套用事先寫定規則的結果：多數是逐點類別或點估計對照門檻，Stage Q 的順序是 Holm 校正的 z 檢定；NT 是 not testable。
+  E1 是探索性的描述（037 §3），結果不當作正式判定。
+- Phase 1、Phase 2 的判定、deployment decision table 與正式產品的釘選都不因 Phase 3 而改變。
+- 依 SPEC 仍不做 Mac 與 PC 的排名：Stage Q 的 Metal ÷ CUDA 比值是事先登記的平台一致性檢查；E3 兩個平台各自判定，不比較快慢。
+
+#### Stage D：容量的延伸（decision 039 / [042](docs/decisions/042-stage-d-results.md)）
+
+sessions：`formal-20261023-d-a1b`、`-d-a2`、`-d-b`、`-d-c`，四個都有效；判定全部依 039 凍結的規則（凍結 commit `fd95164`），沒有事後修改。
+只依 S2 判定（S1、S3 只作描述性的界線）。RTX 5070 Ti、vLLM 0.30.0、W4A16；server 只有 Core B（B0）或 T（`--long-prefill-token-threshold 512`）。
+
+| D-A（封閉迴路，准入之後；都是 EXACT） | C_KV | C_SLO | C_PROD | 先失守 | 旗標 |
+|---|---|---|---|---|---|
+| U32K | 3 | 2 | **2** | TPOT | — |
+| U8K-T | 13 | 5 | **4** | 短類 TTFT | — |
+| M8K-T（10% 32K） | 13 | 5 | **4** | TPOT | WINDOW_SENSITIVE |
+| U2K-O512（輸出 512） | 30 | 32 | **32** | 短類 TTFT | WINDOW_SENSITIVE、ABOVE_CKV |
+| U8K-O512（輸出 512） | 12 | 12 | **12** | 短類 TTFT | — |
+
+| hypothesis（事先預測都是 supported） | 判定 |
+|---|---|
+| H-D1 C_SLO(U32K) ≤ C_KV = 3 | supported（2） |
+| H-D2a C_PROD(M8K-T) > C_PROD(M8K) = 2 | supported（4） |
+| H-D2b C_PROD(U8K-T) < C_PROD(U8K) = 8 | supported（4） |
+| H-D3 輸出 512 時 C_SLO ≤ C_KV | U2K-O512 **not supported**（32 > 30）；U8K-O512 supported（12） |
+| H-D4 開放迴路 λ_PROD < λ_ref | U2K-P **NT**；U8K-P supported（0.4 λ_ref EXACT = 0.2519 req/s） |
+| H-D6 prompt 長度不一時 C_PROD 仍 PASS（直連） | U2K-var **not supported**（FAIL）；U8K-var supported |
+| H-D7 經過 gateway 時 C_PROD 仍 PASS | U2K-gw、U8K-gw 都 supported |
+
+- 圖例：NT = not testable；λ_ref = C_PROD ÷ c1b 在 C_PROD 的平均 e2e 延遲（Little's law 下平均並發等於 C_PROD 的到達率）；
+  W′ = [2C, N − C)，比穩態時間窗 [C, N − C) 再去掉開場的第二波；WINDOW_SENSITIVE = 改用 W′ 時判定不同；
+  ABOVE_CKV = C_PROD > C_KV（多出的 request 在 vLLM 內排隊，gateway 無法讓它逾時）。
+- H-D6、H-D7 是逐點判定；若把 H-D6 當成「兩點都 PASS」的合取命題，結果是 not supported。
+- **T 的取捨**（B0 的數字來自 c1b，跨 session）：U8K 的 C_PROD 8 → 4，M8K 2 → 4，所以 T 不是全面提高容量；T 只量了 8K、只有 512 一個值。
+- **超過 C_KV**（U2K-O512）：准入只檢查 prompt 需要的 block、不預留輸出的 block（024 的原始碼唯讀查看加上本次計數），所以 C_SLO 可以超過 C_KV。
+  代價（描述）：C 32 的每個 run 都有 8 / 256 個 request 停頓 4.24–5.22 s，P95 依規則仍通過；32 → 33 是斷崖（R_short 0.708 → 1.031），guard band 沒有預警。
+- **D-B**（開放迴路，直連 vLLM、不靠准入控制，不是 gateway 的上限）：U8K-P 的 0.4 λ_ref 是格點最低點，真正的值在 [0.4, 0.55) λ_ref 之間，只差一格就是 INFEASIBLE。
+  U2K-P 為 NT：一個 run 只完成 533 / 535 個 request 而無效（和 client 連線重用的競態一致，機制仍是推論）；依規則不補跑。
+- **D-C**（固定點）：
+  - U2K-var 各 run 的 R_short 為 0.944、0.856、0.989、1.021，只重播一條 pin 住的長度序列；去掉第二波（W′）後 P95 仍比 c1b 的 uniform 高 65–71%（跨 session）。
+  - 經過 gateway：W′ 的短類 P95 比 c1b 直連多 38%（U2K）與 29%（U8K）（跨 session，無法拆成 gateway 排隊與上游）；uniform-2k 的最差 R_TPOT 0.923，離 guard band 只剩 0.027。
+    兩點只對應 `capserve_sha256` `53488c6d…` 那一版，之後的 gateway 變更（含 043 的 keep-alive 修正）沒有量。
+  - uniform-8k 的長度不一與經過 gateway 是分開驗證的，組合沒有量過。
+- **D5 開場湧入**：用 c1b 既有數據的事後描述，不是事先登記的檢定（見 Stage C 的「開場湧入」）。
+- 揭露：
+  - 四個 session 連續占用 GPU lock 23.6 h，超過使用者「一次約 7–9 h、最壞約 12 h」的字面範圍（每個 session 單獨都在 12 h 之內）。
+  - 跨 session 漂移約 1.5% 時，U8K-T 的 C_PROD 是 3–4，M8K-T 是 4–5。
+  - 範圍只有一台機器、一個模型；輸出只有 128 與 512（512 只量了 uniform，O512 class 不能服務），129–511 與少於 128 的輸出對任何 class（含正式的 uniform-2k）都沒有量過；
+    mixed 沒有開放迴路、長度不一與經過 gateway 的數字。
+
+#### Stage E1-D / E1-P：8K 滑移的觸發（decision [045](docs/decisions/045-stage-e1d-results.md)、[046](docs/decisions/046-stage-e1p-results.md)；描述，不是檢定）
+
+依 041 §1.1，E1 只做描述（沒有檢定，也沒有信賴區間），結果只寫進 decision 與 Future Work，不改任何判定。
+
+- **E1-D**（045，`e1-20261025`，只在 Mac 上分析既有數據，沒有用到 GPU）：Advanced（B0、G、K3）、C0、Core B C 8 三個數據集的滑移鏈都 **holds**。
+  - holds 是 041 事先定義的計數規則，不是統計結論；三個數據集中，計入且可評估的段裡有一環不成立的都是 0 段（容許 1 段）。
+  - 只有 Advanced 量得到五環（L1–L5）；C0 與 Core 沒有 F、Q 與 step 紀錄，只量得到 L3、L4，L1、L2、L5 是 null（沒有評估），不是成立。
+  - Advanced 中每組第一個 request 的 F 尖峰（F > 35 ms；F 是 server 端從 arrival 到 queued 的時間）和滑移一一對應（8 / 8 對 0 / 208），
+    尖峰組在被排進 engine 之前多經過一個 decode-only step。
+  - 限制：F > 35 ms 是看過數據後才定的，B0、G、K3 上的重現不是獨立驗證；若把 T、TG 的 20 次尖峰算進非滑移組，L1 誤報率 5.90%，超過 2%；
+    樣本 21 段，一台機器、一個模型、一組 prompt，只有 8K uniform、C 8；三個數據集來自三個 session，不合併。
+- **E1-P**（046，`formal-20261025-e1p`，觀測版 B0）：問 F 尖峰和 prompt 內容還是 bench 中的位置綁定。讀法為 **「無法判定（觸發太少）」**。
+  - seed A（20261008）有 6 個尖峰，位置 88 在 4 / 12 個 bench 重現，6 段滑移的五環都成立；seed B（20261023）在 12 個有效 bench 中沒有任何尖峰。
+  - 只有一個 session、兩個 seed；server 和 C0 不同，不和 C0 比較。依 041 不重跑、不延長，任何後續探針都要另寫 decision log。
+
+#### Stage E2：2K 的 T 為什麼無效（decision [050](docs/decisions/050-stage-e2-results.md)）
+
+session：`formal-20261031-e2`（48 / 48 次 boot 有效；凍結 commit `3eafb5f`，執行上沒有偏離）。全部 L 2048。
+025 中 T512 在 2K、C 25 無效；三個候選解釋是 S（負載）、V（T 與 KV 受限的交互作用）、Th（threshold 太大）。
+f 是 mixed 對短類的懲罰被移除的比例；m 是 mixed 短類 P95 本身的改善（對數）；T 有效（E）要求類別 M 或 P，而且 m ≥ 0.20。
+
+| 格 | f | 類別 | T 有效（E）/ 無效（I） | preemption（mixed 3 次） |
+|---|---|---|---|---|
+| T@25（C 25，KV 4 GiB） | 0.079 | N | **I** | 266 |
+| T256@25（threshold 256） | 0.133 | N | **I** | 371 |
+| T@8（C 8，KV 4 GiB） | 1.070 | M | **E** | 0 |
+| T@8k（C 8，KV 2.5 GiB） | 0.945 | M | **E** | 44 |
+
+- 讀法 **R4**（041 §2.7），不是 incomplete：「C 8 重建的 KV 結構不足以讓 T 失效，C 25 的失效需要和 C 有關的因素。
+  β_ok 成立：符合 S，但也可能是負載與 KV 的交互作用，分不開。」依 041 §2.11 與 §6 A4，**C 25 的成因沒有確立**。
+- 前提都成立：三個 B0 參照都重現 2K 的懲罰（H-C0：+442.2%、+620.3%、+682.2%）；
+  C 25 與 C 8 的負載差夠大（β_ok：mixed 期間取樣中有 request 在排隊的份額 0.915 對 0.333，差 0.582 ≥ 0.20）；
+  KV 降到 2.5 GiB 確實造成 KV 受限（KV_ok：gate-zone，即有 request 在等、free block 放不下一個長類的份額，0.151 對 0，超出 noise）。
+- hypotheses：H-E2-0（B0 重現懲罰）、H-E2-R（T@25 無效）、H-E2a（T@8 有效）supported，預測對；
+  H-E2b（T@8k 無效，V 的預測）、H-E2c（T256@25 有效，Th 的預測）not supported，事先不預測；
+  H-E2k（C 8 時 B0 的 KV 降到 2.5 GiB 讓 ρ 至少升高 20%）not supported，預測錯（a 0.042）；H-E2e（prefix caching 的能力檢查）supported（Y_on ÷ Y_off 0.244）。
+  H-E2-0（只有 C 25 事先已知）、H-E2-R 與 H-E2e 列在 041 §5 第 4 項「已知或幾乎必然的結果」。
+- 限定：
+  - K2.5 重建的是 KV 結構，不是 C 25 的 KV 壓力（gate-zone 0.151 對 0.460、preemption 44 對 266）；「KV 結構不足以讓 T 失效」只對這個程度成立。
+    描述上，K2.5 下 T 的改善較小（f 1.070 → 0.945；I_KV 0.169，只作描述），所以 R4 不能讀成「KV 對 T 沒有影響」。
+  - 四格的型態恰好符合 S 的預測，但不能單獨選出 S：V 沒有被推翻，Th 沒有被排除（T256 依 041 的附註「沒有鑑別力」）。
+  - C 25 的 U（uniform 的短類 P95）由開頭同時送出的 25 個 request 決定（和 024 / 025 相同的量法）；類別 N 依賴這個量法，
+    但 T@25 與 T256@25 的 m 都低於 0.20，判定 I 不受影響。
+  - T 在 C 8 有效但有代價（描述）：uniform 短類 P95 約兩倍、長類 P95 +11%、mixed throughput −4.7%。
+  - H-E2e 只是能力檢查，不是 H-B4 的機制檢驗；0.244 主要來自開頭同時送出的 25 個 request，去掉這 25 個之後 P95 沒有縮短，不是穩態效果。
+  - 只有一個 session，SE 只含同 session 內 3 次 restart 的雜訊；和 025 的並列是跨 session 的描述。allocator 仍未操弄、未檢驗。
+  - 不改變 H-B4、025 的判定（2K 仍是 R6、T512 仍是 N）或任何產品設定。
+
+#### Stage E3：H-A2 被推翻的原因（decision [047](docs/decisions/047-stage-e3-results.md)）
+
+sessions：`formal-20261031-e3-metal`、`formal-20261031-e3-cuda`（各 26 / 26 ok，env 有效）。只量 L 2048，每格 3 次重複，每個平台一個 session；兩個平台各自判定，不合併，不比較快慢。
+
+| | macos-metal | wsl2-cuda |
+|---|---|---|
+| 前提：H-A2 配對（9B-Q8_0 / 4B-Q4_K_M）的觀測比，bytes 比 2.9929 | 2.2027，成立 | 2.2256，成立 |
+| H-E3a 非比例成分：a_f（Q8_0 / Q6_K / Q4_K_M，ms；事先預測 supported） | **supported**（4.701 / 4.878 / 5.528） | **supported**（1.731 / 1.428 / 2.117） |
+| H-E3b 4-bit k-quant 的格式成本：D_4B、D_9B（門檻 κ；事先不預測） | **supported**（−0.9266、−0.9787，都超出 κ 0.7614） | **not supported**（−0.2517 超出、−0.1400 在 κ 0.2277 之內） |
+| 讀法表（041 §3.5） | 第 3 列：非比例成分與 4-bit k-quant 的格式成本並存 | 第 6 列：格式效應不一致，不解讀 H-E3b |
+
+- 定義（041 §3.3）：a_f 是同一格式跨 size 的截距（ms / token），> 0 代表 decode 時間中有一段和 bytes 不成比例；D_s = r(s, Q4_0) − r(s, Q4_K_M) 是對 6 個舊設定全域擬合的殘差差
+  （D < 0 指相對擬合 Q4_0 比 Q4_K_M 快），負而且 |D_s| 超出 max(2·SE_D, κ) 才算格式成本；κ 是兩個 size 中 |r(s, Q6_K) − r(s, Q4_K_M)| 的最大值。
+- 兩個平台落在不同的列，依 041 §3.5 的固定寫法是「原因依平台而異」；RTX 的格式效應沒有解讀，所以這句話不表示 RTX 的原因已知而且和 Mac 不同，也不表示 RTX 沒有格式成本。
+- 「格式成本」是 Q4_K_M 對 Q4_0 的配方層級對比，不是 Q4_K block 格式本身的每 byte 成本。非比例成分是固定開銷還是頻寬效率，本設計分不開。
+- RTX 的 D_4B 只以 0.024 ms 越過門檻，很脆弱。κ 是看過 Phase 1 數據後才定的；H-E3b 事先沒有預測，不算預測成功。
+- SE 只反映同一 session 內 3 個 process 的雜訊；Mac 在 140W adapter（協商 94 W）下取得，和 Phase 1（70W）的數字只並列、不解讀。
+- 偏離（已揭露）：Mac 正式 session 從固定在 `b9088a3` 的 git worktree 執行，偏離 041 §3.6；harness 與設定相同，對數據與讀法沒有影響。
+- **H-A2 的判定不變（refuted）**；E3 沒有檢驗 GDN recurrent 狀態這個具體來源。
+
+#### Stage Q：Metal 與長 context 的 quality（decision [048](docs/decisions/048-stage-q-results.md)）
+
+sessions：`formal-20261031-q1-metal`（Metal `-c 512`；第 1 次嘗試 env 無效作廢，這是第 2 次）、`formal-20261031-q1-cuda`、`formal-20261031-q2`（CUDA `-c 2048` / `-c 8192`）；
+CUDA 的 PPL 與 `-c 512` 的 KLD 來自 Phase 1 的 `formal-20261010-quality`。事先預測五個都是 supported；結果 2 個 supported、3 個 not supported。
+
+| hypothesis | 判定 | 關鍵數字 |
+|---|---|---|
+| H-Q1a Metal 上 KLD(Q8_0) < KLD(Q6_K) < KLD(Q4_K_M) | supported | 4 個 z 檢定都通過 Holm |
+| H-Q1b KLD_Metal ÷ KLD_CUDA 在 [0.8, 1.25]（前 200 chunks） | **not supported**（3 / 6 格超出） | 超出：4B Q8_0 0.3532、9B Q8_0 0.2699、9B Q4_K_M 0.6764；6 格都小於 1（0.270–0.908） |
+| H-Q1c PPL_Metal ÷ PPL_CUDA 在 [0.995, 1.005] | **not supported**（1 / 8 個設定超出） | 9B Q4_K_M 1.0131；其他 7 個的差距在 −0.10% 到 +0.003% |
+| H-Q2a CUDA 2K / 8K 上 KLD 的順序 | supported | 8 個 z 檢定都通過 Holm |
+| H-Q2b KLD(c) ÷ KLD(512) 在 [0.5, 2.0] | **not supported**（4 / 12 格超出上界） | 4B Q8_0 c8192 2.1369、4B Q6_K c8192 2.0652、9B Q8_0 c2048 2.0926、9B Q8_0 c8192 2.4824 |
+
+- H-Q1b、H-Q1c 的 not supported 只代表兩個平台的數值差異超過事先寫定的界線，不代表任何一個平台有缺陷，也不是品質優劣或平台排名。
+  每個 KLD 都對自己平台的 BF16 算，沒有共同的參考；沒有做 backend 消融，不歸因到任何 kernel。
+- 9B Q4_K_M 在 Q1b 是 Metal 的 KLD 較低，在 Q1c 卻是 Metal 的 PPL 較高；只並列，不解釋。
+- H-Q2b 的 12 個比值都大於 1（1.23–2.48）是事後描述（040 沒有方向預測；c512 來自 Phase 1，跨 session），不能說 KLD 隨 context 增加是一般規律；界線不事後放寬。
+- 限定：Q1 的 KLD 只有前 200 chunks，不能直接和 Core A 的 580-chunk KLD 比；Q1c 與 Q2b 是跨 session 的比較；長 context 只在 CUDA 量，c8192 只有 36 chunks；
+  每部分一個 session；只有 WikiText-2，downstream 沒有重測。
+- Phase 1 的 pilot 已預示 H-Q1b（9B）與 H-Q1c（9B Q4_K_M）不成立的方向，界線與預測沒有因此修改；Q1b 超出的格子和 pilot 不完全相同（4B Q8_0 新超出、9B Q6_K 回到界線內）。
+- 偏離與違規（已揭露）：q1-metal 第 2 次嘗試從 worktree 執行（對數值與判定沒有影響）；q2 期間在 Mac 上以 ssh 唯讀列出 WSL 目錄一次（q2 只量 PPL 與 KLD、不量時間，env 擷取沒有 flag）。
+- H-A5 與 Core A 的 quality 判定不變。
+
+#### Stage Q3：Core B 的 W4A16 checkpoint 的 quality（decision [049](docs/decisions/049-stage-q3-results.md)）
+
+session：`formal-20261031-q3`（2 / 2 ok；vLLM 0.30.0，RTX 5070 Ti，WSL2）。WikiText-2 test 的 580 段 512-token chunk，每段計分後 255 個 token。
+
+- **H-Q3 not supported**：PPL W4A16 8.5810 對 BF16（CPU 卸載 8 GiB）8.1865，**+4.82%**，超過事先寫定的 2% 界線。
+  040 預測 supported，預測錯了；凍結前的第二次 pilot（10 段，+4.24%）已預示這個方向，門檻與判定規則沒有因此修改。
+- 判定依點估計的 PPL 比對照實質門檻，不是統計檢定。附加資訊：逐段配對 ΔNLL 0.04706 nat / token，95% CI [0.04469, 0.04951]
+  （只含 chunk 間的變異，相鄰 chunk 是連續文字，可能偏窄）；top-1 一致率 0.9029（兩個 checkpoint 的 rank-1 token 是否相同，不是準確率）。
+- 只描述這一組 checkpoint：`RedHatAI/Qwen3.5-9B-quantized.w4a16@a398088c` 對 `Qwen/Qwen3.5-9B@c2022362`。
+  W4A16 的 base revision 沒有核對，所以 +4.82% 是兩個 checkpoint 的差，不只是量化的效果。每個 checkpoint 只跑一次；BF16 的 CPU 卸載是否改變數值沒有測試。
+- 和 GGUF 的 PPL 並列只作描述（不同 runtime 與量化方式），不比優劣；不推論原因，也不說 W4A16「不可用」或「有缺陷」，不推廣成 9B 的 4-bit 量化一般都超過 2%。
+- Core A、Core B、H-A5 與 Q1 / Q2 的判定都不變（Core B 用的就是這個 checkpoint，Q3 只是它的 quality 背景）。
+
+#### 產品：capserve v1 與 Stage D 的產品化（decision [038](docs/decisions/038-capserve-v1-design.md)、[043](docs/decisions/043-stage-d-productization.md)）
+
+- **v1（038）**：thinking 預設關閉（client 可開啟）、IT-3 以 token 數判定、adaptive Retry-After、gateway 內建 tokenizer、per-key quota、TLS、常駐功能。
+  - 七項都只改 gateway 的行為，不改 vLLM 的啟動參數與送進 vLLM 的負載上限，所以送進 vLLM 的負載仍在 verified 範圍內
+    （容量本身是直連 vLLM 量的；經過 gateway 的 client 端延遲只有 D-C 對舊版 gateway `53488c6d…` 的兩點）；經過 gateway 的 chat 流量沒有量過。
+  - TLS 只在自動化測試中以測試產生的自簽憑證驗證（038 補記 6），沒有在 RTX 上測；正式設定只綁 loopback。常駐只做過時間有界的 RTX 測試，研究期間不常駐（037）。
+- **Stage D 的產品化（043，實作完成）**：產生器寫出三份 verified profile，都**只 commit、不釘選**，不是正式設定：
+  - `verified-formal-20261023-d-a1b-b0`：uniform-32k（2）；
+  - `verified-formal-20261023-d-a1b-t`：uniform-8k-t（4，只作報告）、mixed-8k-t（4）；
+  - `verified-formal-20261023-d-a2-b0`：uniform-2k-o512（32，ABOVE_CKV）、uniform-8k-o512（12）。
+  - verified 不等於可服務：uniform-8k-t 與兩個 O512 class 不能作為 active class；mixed-8k-t 的 profile 允許，但 deploy 不啟動 T（拒絕規則見上方「正式 profile 的保護」）。
+  - keep-alive 修正：client → gateway 這段的閒置上限改為 75 s（原本是 uvicorn 預設的 5 s）。只保護閒置上限低於 75 s 的 client，
+    閒置更久或不設上限的 client 仍有同類競態；它改變了 `capserve_sha256`，所以 D-C 的 H-D7 只對應舊版。
+- **正式設定不變**：active class 維持 c1b 的 uniform-2k（32），並揭露 D-C 長度不一的 FAIL（見 Stage D 段的 D-C）。
+  任何 Stage D class 要先通過 V-GW 並由使用者決定，才可能進入正式釘選；T 現在不部署。
+- **仍然不可用**（043 §7.5）：多 class 准入、token 加權准入、prefill pacing；O512 class 的服務；T 的部署與 uniform-8k-t 的服務；
+  經過 gateway 的開放迴路宣稱；uniform-2k 在 prompt 長度不一時的 SLO 宣稱。
+- IT 的結果見上方「產品整合測試」。
+
+#### Stage V：Stage D 產品化的驗證研究（decision [044](docs/decisions/044-stage-v-preregistration.md)）
+
+- 範圍（044）：V-GW（Stage D 的 class 經過 capserve gateway，在 C_PROD 是否仍成立）、V1（輸出長度在 [1, 512] 均勻、事先 pin 住時 SLO 是否成立）、
+  V2（開場湧入的 prefill pacing，開 / 關）、V4（`weighted-v1` 多 class 准入，pacing 關閉）；V3（經過 gateway 的開放迴路）依使用者的決定延後。
+- 事先登記已於 2026-10-31 凍結（mini `smoke-v-20261031` 通過，延遲已遮蔽）；正式 session 進行中，還沒有任何結果。
 
 ### 證據不支持的部分
 
-- Metal 上的 quality、長 context（> 512）的 quality、Core B（W4A16）的 quality：都沒有量。
+- Metal 上的 quality、長 context（> 512）的 quality、Core B（W4A16）的 quality：Phase 1、Phase 2 都沒有量；Phase 3 的 Stage Q / Q3 量了一部分（048、049）。仍不支持的是：
+  - Metal 與 CUDA 數值差異的原因（沒有 backend 消融）；2K / 8K 的 KLD 比 512 大（事後描述、跨 session、每個 context 一個 session）是否為一般規律，以及原因；
+  - Metal 上的長 context 與 32K 的 quality；新平台或新 context 下的 downstream；session 之間的變異；
+  - W4A16 的長 context 與 downstream quality、其他 4-bit checkpoint，以及 +4.82% 的原因（Q3 只有 vLLM 0.30.0、WikiText-2 512-token chunk、這一組 checkpoint、各一次 run）。
 - Mac 的多使用者 serving：沒有量（SPEC：Core B 只在 NVIDIA）。
 - 跨 size 的 quality 只有 H-A5(a) 這一組配對；其他 4B 對 9B 的 quality 關係都是 unmeasured。
-- H-A2 被推翻的原因：沒有檢驗。
+- H-A2 被推翻的原因：Core 沒有檢驗；Phase 3 Stage E3（047）只量 L 2048、每個平台一個 session。仍不支持的是：
+  非比例成分是固定開銷還是頻寬效率；RTX 有沒有格式成本；格式成本解釋了偏差的多少；推廣到其他 k-quant、量化配方、模型、context 或 build。
 - H-B4 的機制：只在 8K 隔離出主因（Advanced R1）。2K 落在 R6：T、G、TG 都沒有移除過半，KV 可能有關，但未確立（未達 R5）。allocator 沒有操弄。
+  - Phase 3 Stage E2（050）：T512 在 2K、C 25 仍無效，在 C 8（KV 4 GiB 與 2.5 GiB）有效；讀法 R4，C 25 的成因仍沒有確立
+    （符合 S，但和負載 × KV 的交互作用分不開）；allocator 仍未操弄、未檢驗。
 - Advanced 只測了一個 chunk threshold（512）與一個 KV 劑量（3 GiB）；其他值、其他模型與 runtime 版本的效果未知。
+  - Phase 3 另外只測了 threshold 256（只在 2K、C 25，沒有鑑別力）與 KV 2.5 GiB（只在 2K、C 8；H-E2k not supported，a 0.042 < 0.20），
+    以及 Stage D 中 T = 512 在 8K 的容量（042）。其他 threshold、KV 劑量、C、L、模型與 runtime 版本仍未知。
+- 8K 滑移鏈（E1-D、E1-P）：只做描述，鏈的因果沒有檢驗；F 多約 15 ms 的根本原因沒有量（需要 profiling）；觸發和 prompt 內容還是 bench 位置綁定沒有回答，
+  seed 之間尖峰數 6 對 0 的原因也未確立；C0 與 Core 的 L1、L2、L5 沒有量；T、TG 的尖峰是否造成滑移沒有描述。
+- 容量（Stage D 之後）：mixed 的開放迴路、長度不一與經過 gateway 都沒有量；uniform-2k 的開放迴路為 NT；「gateway 的並發上限加上 Poisson 到達」從未量過；
+  H-D7 的理由（gateway 在 C_PROD 不排隊）沒有量到；D-B 無效 run 的 keep-alive 機制仍是推論；長度不一只重播了一條序列；新的 Stage D class 沒有長度不一、經過 gateway 或開放迴路的證據。
+- 產品（043 §7.5）：多 class 准入、token 加權准入、prefill pacing 都只有候選設計，未經驗證、不上線（驗證研究見 044，進行中）；
+  同一台 server 上兩個 class 同時並發從未量過；2K / 8K 的 token 加權准入是從未量過，不是被反駁；
+  keep-alive 修正與之後的 gateway 變更對延遲的影響沒有量過；TLS 沒有在 RTX 上測。
 
 ## Future Work（decision 026；Phase 2 的處理見 027）
 
 以下都沒有在 Phase 1 中回答。Phase 2（027）只處理其中的 fixed-SLO 最大並發，以及 8K 雙模式的有限度排查；其餘仍要使用者另外決定。
 Phase 2 結案後的後續項目（產品化 v1、開放迴路容量、其他輸出長度、開場湧入、O-32K / O-T 等）見 decision 036。
 使用者 2026-10-22 決定在 Phase 3 執行這些後續與下列各項，SPEC 的 Optional 除外（decision 037）。
+Phase 3 到 2026-10-31 的處理：產品化 v1 由 038 完成；O-32K、O-T、輸出 512 與直連的開放迴路由 Stage D 量測（042；uniform-2k 的開放迴路為 NT），
+開場湧入由 042 的 D5 以 c1b 的既有數據做事後描述。043 把 D-A 的結果寫成三份只 commit、不釘選的 verified profile 與拒絕規則，D-B、D-C 只寫進適用條件；
+O512 與 T 的服務、prefill pacing、經過 gateway 的開放迴路宣稱仍然不可用（043 §7.5），產品也不對第一波宣稱 SLO。
+下列各項的 Phase 3 結果標在各項之下；仍開放的部分照實列出。
 
 - **8K uniform 的雙模式**：短類 P95 在 boot 之間落在約 2.48 秒或約 2.82 秒，成因未知（025「限制」）。
   它使 8K 的 noise 偏大；事後把模式拉齊重算，8K 的類別與判讀列都不變，也不影響既有的部署結論，所以目前不追查。
   - Phase 2 的有限度排查（C0，decision 028 / 032）：機制是一組 request 錯過一個 2048-token prefill step（約 349 ms）。
     6 次 boot 中沒有偵測到 boot 層級的差異（Rrun，檢定力有限），Stage C 採預設協定。
-  - 觸發的時點仍未知，不再追查：5 段滑移中有 4 段從同一個 request（idx 89）開始；每次 boot 的第 1 個 bench 都沒有滑移；
+  - C0 中觸發的時點仍未知，Phase 2 結案時決定不再追查：5 段滑移中有 4 段從同一個 request（idx 89）開始；每次 boot 的第 1 個 bench 都沒有滑移；
     偏高比例 21%，低於 Phase 1 的 67%。
+  - Phase 3 的 Stage E1 接著追查（描述，不是檢定，不改任何判定；結果見「Phase 3 結果」）：E1-D（045）的滑移鏈依事先定義的計數規則在三個數據集都 holds
+    （Advanced 量得到五環，C0 與 Core 只量得到 L3、L4）；E1-P（046）無法判定（觸發太少）。
+    - 仍未回答：鏈的因果、F 多約 15 ms 的根本原因（需要 profiling）、觸發和內容還是位置綁定、seed 之間尖峰數 6 對 0 的原因、
+      032 的偏高比例和 Phase 1 不同（需要多個 session）。
 - **2K 的 H-B4 成因**：落在 R6（KV 可能有關，但未確立），分解與操弄不一致。
+  - Phase 3 Stage E2（050）：讀法 R4，依 041 以條件式結論結束，C 25 的成因沒有確立；「高負載、KV 不受限」的格子做不出來，仍是未解的部分。
 - **其他 Advanced 項目**：fixed-SLO 最大並發（已由 Phase 2 的 Stage C 回答，見 035）、其他 chunk threshold 或 KV 劑量、prefix caching、allocator 的操弄。
+  - Phase 3：E2 量了 threshold 256（只在 2K、C 25；也無效，但依 041 的附註沒有鑑別力，不能據此判斷 threshold 大小）、KV 2.5 GiB（只在 2K、C 8；H-E2k not supported），
+    以及 prefix caching 的能力檢查（H-E2e supported；只是能力檢查，不是 H-B4 的機制檢驗；限這個模型、vLLM 0.30.0 與開頭同時送出的量法，不是穩態效果）；
+    T = 512 在 8K 的容量取捨由 042 量到。其他 chunk threshold 仍未回答；allocator 的操弄仍沒有做。
 - **H-A2 被推翻的原因**：Core 沒有檢驗。
+  - Phase 3 Stage E3（047）：Mac 與 RTX 各自重現跨 size 的非比例成分（H-E3a）；Mac 另有 Q4_K_M 對 Q4_0 的配方層級格式成本（H-E3b），RTX 的格式效應不一致、不解讀。
+    仍開放：非比例成分是固定開銷還是頻寬效率；RTX 有沒有格式成本；格式成本解釋了偏差的多少；
+    8K / 32K、imatrix、`--pure`、其他模型與 build 都沒有量；SE 只含同 session 的雜訊，跨 session 的再現性未知。
 - **quality 的缺口**：Metal 上的 quality、長 context（> 512）的 quality、Core B（W4A16）的 quality。
+  - Phase 3：Stage Q（048）量了 Metal（`-c 512`）與 CUDA 的 2K / 8K，Q3（049）量了 W4A16，都只有 WikiText-2 的 PPL / KLD、每部分一個 session
+    （Q3 只有這一組 checkpoint、各一次 run）；判定見「Phase 3 結果」。
+    留下的問題：兩平台數值差異的成因、9B Q4_K_M 的 KLD / PPL 對比、2K / 8K 的 KLD 比 512 大是否為一般規律及其原因、downstream 重測；
+    W4A16 的長 context / downstream、其他 checkpoint，以及超出 2% 的原因。
+- **產品與容量的後續**（043、044）：
+  - V-GW、V1、V2、V4（Stage V，044；各自的問題見「Phase 3 結果」的 Stage V 段）：使用者 2026-10-24 決定都做；正式 session 進行中，還沒有結果。
+  - V3（經過 gateway 的開放迴路）延後：要先另寫 decision 修正 D-B 的 client 連線重用缺陷，不能補跑 D-B。
+  - T 的部署與 V5 要使用者決定；較長輸出的服務要靠包絡規則或 V1；mixed 的各項延伸都沒有量。
+  - 常駐要等研究的 GPU 工作結束，並取得使用者同意。
