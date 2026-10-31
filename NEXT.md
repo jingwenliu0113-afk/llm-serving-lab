@@ -26,7 +26,7 @@
 - **Mac 正式 session 的做法**：從固定 commit 的 git worktree（`.worktrees/`，git-ignored）執行，`--models`、`--data`、`--bin` 用主 checkout 的絕對路徑；結束後把 session 目錄搬回主 checkout 再移除 worktree。
   E3 的 041 §3.6 寫「在主 checkout 執行」，這次的偏離在 047 揭露；之後若再有 Mac 正式 session，要先檢查該部分的規則（或留在主 checkout、期間不 commit）。
 - **GPU 佇列（依序；每個 session 之間留空檔；開始前 `tools/rtx/gpu_status.sh` 為 FREE、GPU 閒置 ≤ 1,018 MiB；請使用者不要用 Windows 桌面 / 遠端桌面）**：
-  1. q2 跑完 → 取回（`tools/rtx/fetch_all_sessions.sh stage_q`）→ `quality/stage_q_analysis.py --out results/stage_q/analysis-<date>.json` → Stage Q 結果文件（獨立重算）。
+  1. [x] q2 → 取回 → `analysis-20261031.json` → 結果文件 **048**（H-Q1a、H-Q2a supported；H-Q1b、H-Q1c、H-Q2b not supported；獨立重算與兩位審查）。
   2. [x] E2 dataset 已產生並 pin（2026-10-31 00:59Z，sha256 `ca148974…`、共同前綴 1,599）；WSL 沒有 `PROMETHEUS_MULTIPROC_DIR`。
   3. Q3 正式 `formal-20261031-q3`（2026-10-31 約 01:01Z 起，GPU lock，約 5 h）→ 取回 raw（`fetch_raw`）→ `stage_q3.py analyze`。
   4. E2：部署（含 dataset 的 pin）→ smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。

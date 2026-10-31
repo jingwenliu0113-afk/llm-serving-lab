@@ -1,6 +1,6 @@
 # 040 — Stage Q 事先登記（DRAFT）：quality 的三個缺口
 
-- 狀態：**Q1 / Q2 已凍結（2026-10-25，`configs/stage_q.toml` 的 `freeze.stage_q = true` 與三個 pilot，harness `34256f12…`；見文末「pilot 紀錄」）**；**Q3 已凍結（2026-10-25，`freeze.stage_q3 = true`、`pilot_q3 = "pilot-q3-20261025b"`，harness `2bc3f2ee…`）**。凍結前沒有收任何 Stage Q 的正式數據。
+- 狀態：**Q1 / Q2 的正式結果見 048（H-Q1a、H-Q2a supported；H-Q1b、H-Q1c、H-Q2b not supported）**；**Q1 / Q2 已凍結（2026-10-25，`configs/stage_q.toml` 的 `freeze.stage_q = true` 與三個 pilot，harness `34256f12…`；見文末「pilot 紀錄」）**；**Q3 已凍結（2026-10-25，`freeze.stage_q3 = true`、`pilot_q3 = "pilot-q3-20261025b"`，harness `2bc3f2ee…`）**。凍結前沒有收任何 Stage Q 的正式數據。
 - 日期：2026-10-23
 - 對應：037（Phase 3 範圍）、005（quality 指標與 task set）、020（quality 改在 RTX）、PREREGISTRATION §3 / H-A5
 - 時點：任何 Stage Q 數據之前。設計者看過 Core A 的 quality 結果（README「Quality」），用到的地方在「揭露」寫明。
@@ -314,6 +314,7 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
 - **q1-metal 正式第 2 次（最後一次）嘗試**：`formal-20261031-q1-metal`（Mac lock 下，2026-10-30 21:35–23:57Z）：**finished、20 / 20 ok、env 有效、沒有 env flag、沒有充電暫停**，powermode 2，140W adapter（協商 94 W），harness `34256f12…`。
   - 使用者先釋放空間（開始時 `data/kld` 可用 107.2 GiB；兩個 KLD base 各約 24–26 GiB，跑完即刪除）。
   - 從固定在 `09e2776` 的 git worktree（`.worktrees/`，git-ignored）執行，`--models`、`--data`、`--bin` 指向主 checkout 的絕對路徑；主 checkout 在這段期間的 commit 不影響 session 的 env capture。結束後把 session 目錄搬回主 checkout 的 `results/stage_q/`，再移除 worktree。
+  - **偏離**：實作補記 14 寫「正式 session 在主 checkout 執行（……Stage Q 不這樣做）」，上面第 1 次嘗試後的補救只寫了「或改從獨立的 clone 執行」，實際用的是 worktree，沒有事先修訂補記 14。`09e2776` 的 tree 已含第 1 次嘗試的 `session.json`，worktree 中的 runner 看得到它（env 擷取的 lock owner 直接記錄 cwd 為 worktree）；建立 worktree 當下主 checkout 是否有未 commit 的 q1-metal 嘗試無法事後證明（目前沒有）。符合規則的做法是留在主 checkout、期間不 commit（「獨立的 clone」同樣偏離補記 14）。對數值與判定沒有影響；048 揭露。
   - 分析看到的 q1-metal 嘗試：`formal-20261025-q1-metal`（作廢）→ `formal-20261031-q1-metal`（有效），符合「之前最多一次作廢嘗試的第一個有效 session」。
 - **q1-cuda 正式**：`formal-20261031-q1-cuda`（GPU lock 下，2026-10-30 23:21–23:36Z，部署 `cd615d0`）：12 / 12 ok、env 有效，第一次嘗試即有效。
 - **q2 正式**：`formal-20261031-q2`（GPU lock 下，2026-10-30 23:36–10-31 00:58Z，部署 `cd615d0`）：24 / 24 ok、env 有效，第一次嘗試即有效。
