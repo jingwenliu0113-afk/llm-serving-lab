@@ -16,23 +16,24 @@
 - **不變**：Phase 1、Phase 2 的結果與凍結；正式設定仍釘住 `verified-formal-20261017-c1b.json`，改變釘選需要使用者決定。
 - **使用者端**：正式 session 之前，建議使用者停用 BingWallpaper 的自動啟動（Windows 系統設定，我不修改）。
 
-### 暫停點（2026-10-25 約 15:35Z，使用者因額度要求暫停；接手時從這裡開始）
+### 目前進度（2026-10-31，使用者 10-31 要求繼續；有需要決定的事或全部做完才回報）
 
-- **（已處理，2026-10-31：第 2 次嘗試有效，見 040）** **q1-metal 正式第 1 次嘗試無效**（16:44Z 結束，已 commit；040 文末）：KLD 的 10 個 job 因 Mac 磁碟不足被跳過（可用約 30 GB，需要 76 GB），
-  而且我在 session 期間 commit 了主 checkout，env 判為無效。第 2 次（最後一次）嘗試前：Mac 要有 ≥ 76 GB 可用（由使用者決定刪哪些檔），執行期間不碰主 checkout。
-- **WSL 部署**：暫停前開始部署 `8a02e68`（Q3 凍結）；下一個 GPU 工作前先確認 `~/llm-serving-lab/DEPLOYED_COMMIT` 等於 HEAD，不同就重新部署。
-- **今天完成**（細節見各 decision）：部署與 E1-P seed 檢查、D-B raw 取證（042）、E1-D 取回與 045、Q3 下載與 chunk pin、E3 兩個 Q4_0 傳到 WSL、
-  E1-P smoke → 凍結 → 正式 → 046（無法判定，觸發太少）、044 的 WSL 唯讀複核（實作補記十一）、Stage Q 三個 pilot → 凍結（Q1 / Q2）、Q3 pilot（pin_memory "1"，使用者決定）→ 凍結。
-- **GPU 佇列（依序；每個 session 之間留空檔；開始前 `tools/rtx/gpu_status.sh` 為 FREE、GPU 閒置 ≤ 1,018 MiB，並請使用者不要用 Windows 桌面 / 遠端桌面，BingWallpaper 會自動重啟）**：
-  1. E3 RTX pilot：`python benchmarks/stage_e3.py plan --platform wsl2-cuda --mode pilot --out ~/e3-cuda-pilot-plan.json`，
-     `flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_e3.py run --plan ~/e3-cuda-pilot-plan.json --bin third_party/llama.cpp/build-cuda/bin --models models/gguf --out results/stage_e/pilot-e3-cuda-<date> --gpu-lock-held`
-     → 取回（`tools/rtx/fetch_all_sessions.sh stage_e`）→ 兩個旗標一起凍結（Mac pilot `pilot-e3-metal-20261023` 已有）→ 正式（每個平台最多兩次嘗試）。
-  2. Stage Q 正式：q1-cuda、q2（`quality/stage_q.py plan --part <part> --mode formal`，run 加 `--bin third_party/llama.cpp/build-cuda/bin --models models/gguf --data data --gpu-lock-held`）→ 三個都完成後 `stage_q_analysis.py`。
+- **2026-10-31 完成**（細節見各 decision）：
+  - 公開前唯讀預查 `docs/PUBLIC_RELEASE_AUDIT.md`（沒有 blocker；結案時的待辦與要使用者決定的事都在文件裡）。
+  - Stage Q：q1-metal 第 2 次（最後一次）有效、q1-cuda 有效（040）；q2 正式 `formal-20261031-q2` 於 2026-10-30 23:37Z 起在 GPU lock 下執行。
+  - E3：RTX pilot → 凍結（`cd615d0`）→ RTX 與 Mac 正式 → 分析 → 結果文件 **047**。
+  - E2：WSL 原始碼核對（vLLM 0.30.0 的 2,681 個 .py 以 sha256 驗證後在 Mac 上核對；041 修訂紀錄「E2 的 WSL 原始碼核對」）；修正 PC-on 計數器下界（`534be5b`）。
+- **Mac 正式 session 的做法**：從固定 commit 的 git worktree（`.worktrees/`，git-ignored）執行，`--models`、`--data`、`--bin` 用主 checkout 的絕對路徑；結束後把 session 目錄搬回主 checkout 再移除 worktree。
+  E3 的 041 §3.6 寫「在主 checkout 執行」，這次的偏離在 047 揭露；之後若再有 Mac 正式 session，要先檢查該部分的規則（或留在主 checkout、期間不 commit）。
+- **揭露待寫**：q2 執行中（2026-10-31 約 00:29Z）我在 Mac 上跑了一次 `fetch_all_sessions.sh stage_e`（WSL 唯讀列目錄），違反「GPU session 期間不讀 WSL」；q2 只量 PPL / KLD，不受影響。q2 結果寫進 040 時一併記錄。
+- **GPU 佇列（依序；每個 session 之間留空檔；開始前 `tools/rtx/gpu_status.sh` 為 FREE、GPU 閒置 ≤ 1,018 MiB；請使用者不要用 Windows 桌面 / 遠端桌面）**：
+  1. q2 跑完 → 取回（`tools/rtx/fetch_all_sessions.sh stage_q`）→ `quality/stage_q_analysis.py --out results/stage_q/analysis-<date>.json` → Stage Q 結果文件（獨立重算）。
+  2. 空檔中（不需要 GPU lock，但不能有 GPU session）：E2 dataset 產生並 pin（`benchmarks/stage_e2_datasets.py`，WSL）；確認 WSL 沒有設定 `PROMETHEUS_MULTIPROC_DIR`。
   3. Q3 正式（`quality/stage_q3.py plan --mode formal`，約 5 h；開始前主機可用記憶體 ≥ 20 GB）→ `stage_q3.py analyze`。
-  4. E2：原始碼核對 → dataset 產生並 pin → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
+  4. E2：部署 → smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
   5. 043 的 RTX 產品測試 IT-0–6（`rtx-verified.toml`）。
   6. Stage V（044）：WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT + mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。
-- **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。
+- **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
 
 ### 下一步
 
