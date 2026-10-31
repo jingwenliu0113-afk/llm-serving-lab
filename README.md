@@ -39,7 +39,10 @@
 >   - 產品：capserve v1（038）的七項已實作；v1 的 release 在 RTX 上通過 IT-0 至 IT-6 與時間有界的常駐檢查，TLS 沒有在 RTX 上測；
 >     Stage D 的產品化（043）實作完成，三份 Stage D verified profile 只 commit、不釘選；
 >     043 要求的 RTX IT-0 至 IT-6 於 2026-10-31 以 release `b792196` 通過。
->   - Stage V（044，Stage D 產品化的驗證研究）：事先登記於 2026-10-31 凍結，正式 session 進行中，還沒有結果。
+>   - Stage V（044 / 051，Stage D 產品化的驗證研究；經過 capserve gateway、封閉迴路）：兩個正式 session 都有效。
+>     uniform-32k（2）與 mixed-8k-t（4，T）經過 gateway 在 C_PROD 成立（V-GW）；輸出在 [1, 512] 均勻時 2K（32）與 8K（8）成立（V1，5 條序列）；
+>     prefill pacing 只有 8K 成立（PACE-8K；2K 被 var 那一對否決），`weighted-v1` 多 class 准入不成立（2K 的 TTFT）；
+>     H-GW4 與對照組 F-U2K-var 沒有如預測。新的兩份 verified profile 只 commit、不釘選。
 >   - 正式釘選不變：`rtx-verified.toml` 仍釘住 `verified-formal-20261017-c1b.json`，active class 為 uniform-2k（32）。
 
 ## 研究範圍
@@ -89,7 +92,7 @@
       040 的 Q1 / Q2 與 Q3 於 2026-10-25；041 各部分分別凍結：E1-D 2026-10-23、E1-P 2026-10-25、E3 與 E2 2026-10-31
       （041 用當地日期；047 以 UTC 記 E3 的凍結為 2026-10-30 22:50:55Z）。
     - 042 是 Stage D 的結果；043 是 Stage D 的產品化（實作完成：產生器、三份不釘選的 verified profile、拒絕規則、keep-alive 修正；驗證研究轉到 044）。
-    - 044 是 Stage V（Stage D 產品化的驗證研究：V-GW、V1、V2、V4）的事先登記，2026-10-31 凍結（mini `smoke-v-20261031`）；正式 session 進行中。
+    - 044 是 Stage V（Stage D 產品化的驗證研究：V-GW、V1、V2、V4）的事先登記，2026-10-31 凍結（mini `smoke-v-20261031`）；051 是 Stage V 的結果。
     - 045 / 046 是 Stage E1-D / E1-P 的結果（描述，不是檢定）；047 是 Stage E3 的結果；048 是 Stage Q（Q1、Q2）的結果；049 是 Stage Q3 的結果；050 是 Stage E2 的結果。
 - [docs/EXPERIMENT_RULES.md](docs/EXPERIMENT_RULES.md)、[docs/RESULTS_FORMAT.md](docs/RESULTS_FORMAT.md)、[docs/STORAGE_PLAN.md](docs/STORAGE_PLAN.md)。
 - [MACHINE_POLICY.md](MACHINE_POLICY.md)：兩台機器的分工與 lock。
@@ -575,16 +578,49 @@ session：`formal-20261031-q3`（2 / 2 ok；vLLM 0.30.0，RTX 5070 Ti，WSL2）�
   - keep-alive 修正：client → gateway 這段的閒置上限改為 75 s（原本是 uvicorn 預設的 5 s）。只保護閒置上限低於 75 s 的 client，
     閒置更久或不設上限的 client 仍有同類競態；它改變了 `capserve_sha256`，所以 D-C 的 H-D7 只對應舊版。
 - **正式設定不變**：active class 維持 c1b 的 uniform-2k（32），並揭露 D-C 長度不一的 FAIL（見 Stage D 段的 D-C）。
-  任何 Stage D class 要先通過 V-GW 並由使用者決定，才可能進入正式釘選；T 現在不部署。
-- **仍然不可用**（043 §7.5）：多 class 准入、token 加權准入、prefill pacing；O512 class 的服務；T 的部署與 uniform-8k-t 的服務；
-  經過 gateway 的開放迴路宣稱；uniform-2k 在 prompt 長度不一時的 SLO 宣稱。
+  uniform-32k 與 mixed-8k-t 已通過 V-GW（051），成為正式釘選的候選；是否改釘選由使用者決定，改了之後跑 IT-0–6；T 現在不部署。
+- **仍然不可用**（043 §7.5，Stage V 之後）：多 class 准入與 token 加權准入（`weighted-v1` 不成立）；2K 的 prefill pacing（被否決）；
+  兩個 O512 class 的服務（由 V1 的 `uniform-*-o1-512` 取代，見 Stage V 段）；T 的部署與 uniform-8k-t 的服務；
+  經過 gateway 的開放迴路宣稱；uniform-2k 在 prompt 長度不一時的 SLO 宣稱。PACE-8K 有 verified profile，但預設關閉、不釘選。
 - IT 的結果見上方「產品整合測試」。
 
 #### Stage V：Stage D 產品化的驗證研究（decision [044](docs/decisions/044-stage-v-preregistration.md)）
 
 - 範圍（044）：V-GW（Stage D 的 class 經過 capserve gateway，在 C_PROD 是否仍成立）、V1（輸出長度在 [1, 512] 均勻、事先 pin 住時 SLO 是否成立）、
   V2（開場湧入的 prefill pacing，開 / 關）、V4（`weighted-v1` 多 class 准入，pacing 關閉）；V3（經過 gateway 的開放迴路）依使用者的決定延後。
-- 事先登記已於 2026-10-31 凍結（mini `smoke-v-20261031` 通過，延遲已遮蔽）；正式 session 進行中，還沒有任何結果。
+- 事先登記已於 2026-10-31 凍結（mini `smoke-v-20261031` 通過，延遲已遮蔽）。結果見 decision [051](docs/decisions/051-stage-v-results.md)。
+
+sessions：`formal-20261031-v-adm`（V2、V4；25 / 25 有效，1.77 h）、`formal-20261031-v-cls`（V-GW、V1；32 / 32 有效，5.30 h）；部署凍結 commit `c7ad0b4`，GPU lock 下執行，
+之間空檔 2.03 h；都是第一次、也是唯一一次執行。判定 view：V-GW、V1 用 client，V2 取 upstream 與 client 較差者，V4 用 upstream；判定只看 W，guard band 0.95。
+
+| 點 | 判定 | 最差 R（判定 view） | 預測 |
+|---|---|---|---|
+| GW-U32K（uniform-32k @ 2） | PASS | 0.625（TPOT） | PASS |
+| GW-U2K-O512（輸出 512 @ 32） | PASS | 0.702（TTFT；ABOVE_CKV，每個 run 8 / 256 個 4–5 s 停頓） | PASS |
+| GW-U8K-O512（輸出 512 @ 12） | PASS | 0.535（TTFT） | PASS |
+| GW-M8K-T（mixed-8k-t @ 4，T） | PASS | 0.796（TTFT） | **MARGINAL 或 FAIL（沒有如預測）** |
+| L-U2K（輸出 [1, 512] @ 32） | PASS | 0.697（TPOT） | PASS |
+| L-U8K（輸出 [1, 512] @ 8） | PASS | 0.731（TPOT） | PASS |
+| P-U2K / P-U8K（pacing 開） | PASS / PASS | 0.922 / 0.883（TPOT） | PASS / PASS |
+| P-U2K-var（pacing 開） | FAIL（1 個 run） | 1.019（client TTFT） | FAIL |
+| F-U2K-var / F-U2K（對照，pacing 關） | PASS / PASS | 0.920 / 0.922 | **FAIL（沒有如預測）** / PASS |
+| W-90 / W-50（`weighted-v1`） | FAIL / FAIL（各 1 個 run） | 1.384 / 1.667（2K TTFT） | FAIL / FAIL |
+
+- **成立的單位**：VG-32K、VG-M8K-T（只成為正式釘選的候選，沒有新檔）；V1-2K、V1-8K（`verified-formal-20261031-v-cls-b0`：`uniform-2k-o1-512` 32、`uniform-8k-o1-512` 8，bound `validated`）；
+  PACE-8K（`verified-formal-20261031-v-adm-b0`：c1b uniform-8k（8）加上 pacing {32,256, 5,800} 與佇列 120 s / 600 s）。兩份 profile 都只 commit、不釘選。
+- **不成立**：PACE-2K（P-U2K PASS，但 var 那一對讀法為「pacing 在 var 上有害」，否決）；W1（W-90、W-50 的 2K TTFT FAIL，U_W ≥ 28.8，不是 trivial）。
+- 12 個 hypothesis 中 11 個如預測；H-GW4 與不是 hypothesis 的對照組 F-U2K-var 沒有如預測，PACE-2K 的否決正是由後者觸發。
+- 讀法的限定：
+  - PACE-8K 只表示 pacing 開啟時穩態的 S2 成立（W 中 pacing 沒有約束任何 request），不是改善；V-ADM 沒有 8K 不開 pacing 的對照。
+    第一波沒有改善：2K 和同 session 的 F-U2K 相同；8K 只能和 D-C 跨 session 比較（相差 ≤ 10%，只作描述）。
+  - PACE-2K 的否決很脆弱：P-U2K-var 只有 1 個 run、只在 client view 超過（R 1.019），F-U2K-var 的 r3 在判定邊界上；規則是機械式的，不重跑、不改判。
+  - GW-U2K-O512 的 PASS 是「個數斷崖」型：每個 run 8 個停頓，到 13 個 P95 就 FAIL；V 只量了 C 32。
+  - GW-U2K-O512 與 L-U2K 的 full 視窗為 FAIL（開場第一波），只作描述；不對第一波宣稱 SLO。
+  - V1 只涵蓋 5 條 [1, 512] 均勻序列；極短輸出的 TPOT（L-U2K 1–16 箱 P95 303 ms）不決定合併的 P95，不代表每一種輸出長度都符合。
+  - 在 C_PROD 時 gateway 不排隊（queue_wait 0，依構造）；同一個 request 的 client − upstream TTFT 約 7 ms（2K）到 72 ms（32K）。
+    和 042 直連的跨 session 差各點方向不一（−415 ms 到 +2.26 s），只作描述，不能歸因。
+- 範圍：一台機器、一個模型、一版凍結的 gateway（`capserve serve`，不是 `deploy up`）、封閉迴路、`/v1/completions` 加 `ignore_eos`；
+  沒有量 prompt 長度不一、開放迴路、32K 或 T 在政策下、pacing 與 weighted-v1 同時開啟、快速 429。
 
 ### 證據不支持的部分
 
@@ -604,10 +640,11 @@ session：`formal-20261031-q3`（2 / 2 ok；vLLM 0.30.0，RTX 5070 Ti，WSL2）�
     以及 Stage D 中 T = 512 在 8K 的容量（042）。其他 threshold、KV 劑量、C、L、模型與 runtime 版本仍未知。
 - 8K 滑移鏈（E1-D、E1-P）：只做描述，鏈的因果沒有檢驗；F 多約 15 ms 的根本原因沒有量（需要 profiling）；觸發和 prompt 內容還是 bench 位置綁定沒有回答，
   seed 之間尖峰數 6 對 0 的原因也未確立；C0 與 Core 的 L1、L2、L5 沒有量；T、TG 的尖峰是否造成滑移沒有描述。
-- 容量（Stage D 之後）：mixed 的開放迴路、長度不一與經過 gateway 都沒有量；uniform-2k 的開放迴路為 NT；「gateway 的並發上限加上 Poisson 到達」從未量過；
-  H-D7 的理由（gateway 在 C_PROD 不排隊）沒有量到；D-B 無效 run 的 keep-alive 機制仍是推論；長度不一只重播了一條序列；新的 Stage D class 沒有長度不一、經過 gateway 或開放迴路的證據。
-- 產品（043 §7.5）：多 class 准入、token 加權准入、prefill pacing 都只有候選設計，未經驗證、不上線（驗證研究見 044，進行中）；
-  同一台 server 上兩個 class 同時並發從未量過；2K / 8K 的 token 加權准入是從未量過，不是被反駁；
+- 容量（Stage D 之後）：mixed 的開放迴路與長度不一都沒有量（經過 gateway 只有 GW-M8K-T 在 C_PROD，051）；uniform-2k 的開放迴路為 NT；「gateway 的並發上限加上 Poisson 到達」從未量過；
+  H-D7 的理由（gateway 在 C_PROD 不排隊）在 Stage V 量到 queue_wait 0，但那是依構造（client 數等於上限），負載下的排隊沒有量；D-B 無效 run 的 keep-alive 機制仍是推論；
+  長度不一只重播了一條序列；新的 Stage D class 只有經過 gateway（C_PROD）與輸出長度不一（V1）的證據（051），沒有 prompt 長度不一與開放迴路的證據。
+- 產品（043 §7.5、051）：`weighted-v1`（043 的參數）在 0.9 / 0.5 兩個 mix 下 2K 的 TTFT 不符合 S2（各 1 個 run），其他參數、mix 與政策都沒有量；
+  prefill pacing 只有 8K 成立（預設關閉、不釘選），2K 被否決，第一波沒有改善；pacing 與 weighted-v1 同時開啟、32K 或 T 在政策下都沒有量；
   keep-alive 修正與之後的 gateway 變更對延遲的影響沒有量過；TLS 沒有在 RTX 上測。
 
 ## Future Work（decision 026；Phase 2 的處理見 027）
@@ -618,6 +655,7 @@ Phase 2 結案後的後續項目（產品化 v1、開放迴路容量、其他輸
 Phase 3 到 2026-10-31 的處理：產品化 v1 由 038 完成；O-32K、O-T、輸出 512 與直連的開放迴路由 Stage D 量測（042；uniform-2k 的開放迴路為 NT），
 開場湧入由 042 的 D5 以 c1b 的既有數據做事後描述。043 把 D-A 的結果寫成三份只 commit、不釘選的 verified profile 與拒絕規則，D-B、D-C 只寫進適用條件；
 O512 與 T 的服務、prefill pacing、經過 gateway 的開放迴路宣稱仍然不可用（043 §7.5），產品也不對第一波宣稱 SLO。
+Stage V（051）之後：V1 的兩個 `validated` class 與 PACE-8K 有 verified profile（不釘選）；`weighted-v1` 與 PACE-2K 不成立；T 的服務與經過 gateway 的開放迴路宣稱仍不可用。
 下列各項的 Phase 3 結果標在各項之下；仍開放的部分照實列出。
 
 - **8K uniform 的雙模式**：短類 P95 在 boot 之間落在約 2.48 秒或約 2.82 秒，成因未知（025「限制」）。
@@ -646,7 +684,8 @@ O512 與 T 的服務、prefill pacing、經過 gateway 的開放迴路宣稱仍�
     留下的問題：兩平台數值差異的成因、9B Q4_K_M 的 KLD / PPL 對比、2K / 8K 的 KLD 比 512 大是否為一般規律及其原因、downstream 重測；
     W4A16 的長 context / downstream、其他 checkpoint，以及超出 2% 的原因。
 - **產品與容量的後續**（043、044）：
-  - V-GW、V1、V2、V4（Stage V，044；各自的問題見「Phase 3 結果」的 Stage V 段）：使用者 2026-10-24 決定都做；正式 session 進行中，還沒有結果。
+  - V-GW、V1、V2、V4（Stage V，044）：使用者 2026-10-24 決定都做；已完成，結果見 051 與「Phase 3 結果」的 Stage V 段。
+    是否改正式釘選（uniform-32k、mixed-8k-t、`uniform-*-o1-512`）、是否開啟 PACE-8K（等於改釘選）由使用者決定；改了之後跑 IT-0–6。
   - V3（經過 gateway 的開放迴路）延後：要先另寫 decision 修正 D-B 的 client 連線重用缺陷，不能補跑 D-B。
-  - T 的部署與 V5 要使用者決定；較長輸出的服務要靠包絡規則或 V1；mixed 的各項延伸都沒有量。
+  - T 的部署與 V5 要使用者決定；較長輸出：V1 的兩個 class（輸出 ≤ 512，5 條均勻序列）有 verified profile，V1-8K 取代 043 的包絡規則，超過 512 的輸出沒有量；mixed 的各項延伸都沒有量。
   - 常駐要等研究的 GPU 工作結束，並取得使用者同意。

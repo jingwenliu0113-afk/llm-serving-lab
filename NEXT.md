@@ -16,7 +16,7 @@
 - **不變**：Phase 1、Phase 2 的結果與凍結；正式設定仍釘住 `verified-formal-20261017-c1b.json`，改變釘選需要使用者決定。
 - **使用者端**：正式 session 之前，建議使用者停用 BingWallpaper 的自動啟動（Windows 系統設定，我不修改）。
 
-### 目前進度（2026-10-31，使用者 10-31 要求繼續；有需要決定的事或全部做完才回報）
+### 目前進度（2026-11-01，使用者 10-31 要求繼續；有需要決定的事或全部做完才回報）
 
 - **2026-10-31 完成**（細節見各 decision）：
   - README 的 Phase 3 結果段（`89b7773`；Stage V 段待結果後更新）。
@@ -41,10 +41,15 @@
      c. [x] commit mini（`e5e1600`）→ **凍結**（2026-10-31，`[freeze] stage_v = true`、mini `smoke-v-20261031`、`gateway_path_sha256` `679a7c66…`、`tests/test_stage_v_frozen.py`；044 實作補記十三）→ 部署凍結 commit。
      d. [x] 部署凍結 commit `c7ad0b4`（研究副本）→ V-ADM `formal-20261031-v-adm`（06:28:13–08:14:41Z，25 boot / 25 run 全部有效，gateway_faults 無，env 有效，沒有 cap_stop）
         → 取回（`db05c73`）→ `stage_v_report.py`（Mac，重跑逐位元相同 `cd2aa428…`，`c37ff96`）：PACE-8K 成立；PACE-2K 被 var 讀法否決（P-U2K-var FAIL、F-U2K-var PASS；P-U2K 本身 PASS）；W1 不成立（W-90、W-50 FAIL）；
-        所有預測都命中。獨立驗證 workflow 進行中（重算、稽核、機制、反駁、批評者）。
-     e. **進行中**：V-CLS `formal-20261031-v-cls`：背景鏈在 10:16Z（V-ADM 結束 + 2 h）後檢查 `gpu_status.sh`，FREE 才在 `flock -n` 下啟動（預估 5.26 h，上限 7.0 h）；
-        遠端指令 `stage_v_plan.py --session V-CLS --formal`，dataset 為 mixed-8192 與 v1-{2048,8192}-r1..r5。
-        之後：取回（`fetch_all_sessions.sh stage_v`）→ `stage_v_report.py` → 驗證 → 結果 decision 051 → 產生器（`profile_gen --validation-session`，只為通過的單位寫 profile）→ README 的 Stage V 段；是否改釘選由使用者決定。
+        六個 H-* 都如預測，但不是 hypothesis 的對照組 F-U2K-var 沒有如預測（預測 FAIL，實測 PASS；否決由它觸發）。此處舊版寫「所有預測都命中」是錯的，以 051 為準。
+        獨立驗證：重算 3,141 項 0 不符，稽核、機制、反駁、批評者都一致。
+     e. [x] V-CLS `formal-20261031-v-cls`（10:16:22–15:34:22Z，5.30 h；GPU 為 FREE 才在 `flock -n` 下啟動；和 V-ADM 間隔 2.03 h，最早可開始的時刻是 10:14:41Z，10:16Z 是背景鏈保守的設定）：
+        32 boot / 32 run 全部有效，沒有跳過、gateway_faults、cap_stop → 取回（`f8e75b1`）→ `stage_v_report.py`（重跑逐位元相同 `0a76ae7f…`，`5b43df8`）：
+        VG-32K、VG-M8K-T、V1-2K、V1-8K 都成立；H-GW4 沒有如預測（預測 MARGINAL 或 FAIL，實測 PASS，worst R 0.796）。獨立驗證：重算 2,876 項 0 不符。
+     f. [x] 結果 decision **051**（`c1c55c8`；四位審查者加批評者，30 項更正已套用，都不改判定）、044 狀態與結果後註記、PREREGISTRATION §12 註記。
+        → 產生器（乾淨的 `c1c55c8`）：`verified-formal-20261031-v-adm-b0`（PACE-8K）、`verified-formal-20261031-v-cls-b0`（`uniform-2k-o1-512`、`uniform-8k-o1-512`），只 commit、不釘選；
+        測試 `test_profile_gen_stage_v` 的三項 → README 的 Stage V 段與相關段落。全期研究時數 7.44 h（上限 12 h）。
+     g. 要使用者決定（見下方「Blocked / 需要使用者」）：是否改正式釘選、是否開啟 PACE-8K（等於改釘選）；之後跑 IT-0–6。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
 
 ### 下一步
@@ -342,7 +347,13 @@
 
 ## Blocked / 需要使用者
 
-目前沒有。研究的閒置判定已滿足（使用者結束了背景程式）。若之後閒置 VRAM 又超過 1,018 MiB，研究會依 031 自動不開始。
+- **Stage V 結束後（051，2026-11-01）**，研究的 GPU 工作已全部完成。以下要使用者決定，我不自行改任何設定：
+  1. 是否改正式釘選（目前 `rtx-verified.toml` 釘住 c1b 的 uniform-2k（32））：候選為 uniform-32k（2）、mixed-8k-t（4，另需 T 部署 1–6 與 V5）、
+     `uniform-2k-o1-512`（32，ABOVE_CKV）、`uniform-8k-o1-512`（8）。改了之後跑 IT-0–6。
+  2. 是否開啟 PACE-8K：只附在 `verified-formal-20261031-v-adm-b0` 的 uniform-8k（8）上，開啟等於改釘選（active class uniform-8k、佇列 120 s / 600 s）。
+  3. 常駐（研究的 GPU 工作已結束，依 037 要使用者同意）、V3、T 的部署與 V5：維持待決。
+  4. GitHub 公開（`docs/PUBLIC_RELEASE_AUDIT.md`「結案時的待辦」）：直接公開這個 repo 或改用新 repo（squash 匯出）、選 LICENSE、使用者自己用 secret scanner 掃完整 history；公開那一步要使用者同意。
+- 研究的閒置判定已滿足（使用者結束了背景程式）。若之後閒置 VRAM 又超過 1,018 MiB，研究會依 031 自動不開始。
 
 ## 建議（非 blocker）
 
