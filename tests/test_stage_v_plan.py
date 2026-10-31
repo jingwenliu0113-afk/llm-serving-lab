@@ -10,6 +10,7 @@ import difflib
 import hashlib
 import json
 import math
+import re
 import sys
 import tomllib
 from fractions import Fraction
@@ -159,7 +160,9 @@ def test_the_datasets_are_pinned_where_stage_d_and_pins_pinned_them():
                                                                           for r in range(1, 6)]
     assert set(d) == set(tiers) | {"v1-mini-8192", "v4-mini", "var-2048", "mixed-8192"}
     assert len(svp.DATASETS) == 22 and set(svp.DATASETS) == set(d) - {"var-2048", "mixed-8192"}
-    assert all(d[k] == "" for k in svp.DATASETS)                    # generated on WSL and pinned before the mini
+    assert all(re.fullmatch("[0-9a-f]{64}", d[k]) for k in svp.DATASETS)  # generated on WSL and pinned before the mini
+    assert d["v1-2048-r1"].startswith("52e9ee8e") and d["v4-mini"].startswith("ab01687c")    # 044 實作補記十二
+    assert len(set(d.values())) == len(d)
     assert d["var-2048"] == SD_CFG["stage_d"]["var_dataset_sha256"]["2048"]          # D-C's var-2048, the same file
     assert d["var-2048"].startswith("358ae8da")
     assert d["mixed-8192"] == PINS["core_b"]["mix_dataset_sha256"]["8192"] and d["mixed-8192"].startswith("ab548bed")
@@ -243,7 +246,9 @@ def test_the_freeze_needs_the_mini_the_request_path_sha_and_every_dataset():
     c["freeze"]["stage_v"] = True
     problems = svp.stage_v_problems(c, PINS, SD_CFG)
     assert any("freeze.mini" in p for p in problems) and any("freeze.gateway_path_sha256" in p for p in problems)
-    assert any("dataset" in p and "pinned" in p for p in problems)
+    assert not any("dataset" in p for p in problems)            # the repo's datasets are pinned (044 實作補記十二)
+    c["stage_v"]["datasets"]["v1-8192-r3"] = ""                  # an explicitly unpinned one
+    assert any("dataset" in p and "pinned" in p for p in svp.stage_v_problems(c, PINS, SD_CFG))
     assert svp.stage_v_problems(frozen_cfg(), PINS, SD_CFG) == []
     for key, value in (("mini", "smoke-d-x"), ("gateway_path_sha256", "abc")):
         c = frozen_cfg()

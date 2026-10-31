@@ -1,7 +1,7 @@
 # 044 — Stage V 事先登記（DRAFT）：Stage D 產品化的驗證研究（V-GW、V1、V2、V4）
 
 - 狀態：**DRAFT**（設計；待決事項已依建議定案，見文末）。harness、產品程式、一次 mini smoke 與兩輪審查都完成後凍結（見「凍結」）。凍結前不收任何 V 的正式數據。
-  - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）；產生器的 `--validation-session` 路徑已完成並經審查（`feat/044-generator`，實作補記九、十；合成 session，沒有 Stage V 數據）。尚待：WSL 唯讀複核、dataset pin、GPU 視窗 0（產品 IT 與 mini），之後才凍結。
+  - 2026-10-24：產品程式與 harness 已實作並合併到 main（`f12255f`）；兩輪凍結前審查與修正後的獨立檢查都已處理（實作補記六、七、八）；產生器的 `--validation-session` 路徑已完成並經審查（`feat/044-generator`，實作補記九、十；合成 session，沒有 Stage V 數據）。WSL 唯讀複核已完成（2026-10-25，實作補記十一），22 個 dataset 已產生並 pin（2026-10-31，實作補記十二）。尚待：GPU 視窗 0（產品 IT 與 mini），之後才凍結。
 - 日期：2026-10-24
 - 對應：
   - 043：7.3 的候選設計、7.4 的驗證研究、「使用者決定」；
@@ -1400,3 +1400,39 @@
 - aiohttp 為 3.14.3（2026-10-25 在 WSL 以 `import aiohttp` 讀出，042 D-B 的取證）。
 - 只讀檔案，沒有啟動任何程序；沒有改 harness，`harness_sha256` 與 `gateway_path_sha256` 不變。
 
+## 實作補記十二（2026-10-31，datasets 的產生與 pin；沒有任何 Stage V 數據）
+
+「前置與時序」第 5 步。GPU 為 FREE、沒有任何 session 時（E2 正式 session 05:21Z 結束之後），在 WSL 的研究副本（部署 `3eafb5f`；`stage_v_datasets.py`、`stage_v_plan.py`、`stage_d_datasets.py` 的 sha256 和 Mac 的 HEAD 相同）以
+`HF_HUB_OFFLINE=1 flock -n /tmp/ai-portfolio-gpu.lock .venv/bin/python benchmarks/stage_v_datasets.py --out-dir data/stage_v` 產生全部 22 個 dataset（2026-10-31 05:23:08–05:27:57Z，只用 CPU，exit 0）。
+每個檔都由 `build` 寫出：每個 prompt 以 vLLM 的 RandomDataset 產生、以 custom dataset 的算法重新 tokenize 後恰好是目標長度（否則不寫檔，013），output 序列取自種子決定的 `spec(key)`。
+
+| dataset | 列數 | prompt（token × 列） | output 範圍 | sha256 |
+|---|---|---|---|---|
+| `v1-2048-r1` | 320 | 1,920 × 320 | 1–511 | `52e9ee8eda1019f3564aa0c99377e080700cae2c929f131c4f1cf98d121db179` |
+| `v1-2048-r2` | 320 | 1,920 × 320 | 1–510 | `200e9b67ee987a6ab645746042d52e20c467204c516a68899efde3a7abc7347d` |
+| `v1-2048-r3` | 320 | 1,920 × 320 | 2–510 | `e13f57042de83dfbd3d0c1ef5a65e18c171f74c24dccd16faf4184d367adf30c` |
+| `v1-2048-r4` | 320 | 1,920 × 320 | 1–511 | `53faf76e533aada822d6fb62fde4d14a07a4c3dfa247bea8ff82c0436606cab1` |
+| `v1-2048-r5` | 320 | 1,920 × 320 | 2–511 | `0126906c2249f3cb7b31c7e792d3add8ad7621ac626dee976dcae3f6f25d3160` |
+| `v1-8192-r1` | 200 | 8,064 × 200 | 13–512 | `8f7ba0b23d6b9e4e92365bff24aa8e1c75b84f6c227941e5983e916341021ab1` |
+| `v1-8192-r2` | 200 | 8,064 × 200 | 1–506 | `d7fcaf685d53dc0c28d5941d6fccea6e63ec10fef96740d365a4739b486706ce` |
+| `v1-8192-r3` | 200 | 8,064 × 200 | 2–510 | `09e1ae52480f4507a8c0e562feb0790b0586e62fea01e065880909241ccbc674` |
+| `v1-8192-r4` | 200 | 8,064 × 200 | 4–510 | `6f006fda174a1488d430d71505ec4b8d469dec8f70d40f511beb727f3a6ffc38` |
+| `v1-8192-r5` | 200 | 8,064 × 200 | 11–512 | `e77fae9082fad259d6ab736ec94284c2f231e95695730f7a41f8ac05355ff612` |
+| `v4-90-r1` | 320 | 1,920 × 288、8,064 × 32 | 128–128 | `46e6513b43d2a939f5a480a24b011f3a622370d899fc80a59d312da4c098567c` |
+| `v4-90-r2` | 320 | 1,920 × 288、8,064 × 32 | 128–128 | `c70e3bc7751a353c3dcdd345c0af75e0866729b62ff8901d83edd30ecf5e9f98` |
+| `v4-90-r3` | 320 | 1,920 × 288、8,064 × 32 | 128–128 | `566c0e62fb7f3c4b16be2f609736a3b7e86366f060f28dbb4999f58179492e1a` |
+| `v4-90-r4` | 320 | 1,920 × 288、8,064 × 32 | 128–128 | `7093457c889c6abc0392fa820c3eda43a3f48a3a24c5796bcbd289409fd449a6` |
+| `v4-90-r5` | 320 | 1,920 × 288、8,064 × 32 | 128–128 | `6bf5153985f2e20da80599c949817ba7f64382f6cd1d7e47be5ee0a8cfc7b91e` |
+| `v4-50-r1` | 320 | 1,920 × 160、8,064 × 160 | 128–128 | `31250189530f1738359531eb58e23847b882731984a19db1f1e3bfe65e8514f2` |
+| `v4-50-r2` | 320 | 1,920 × 160、8,064 × 160 | 128–128 | `c64a3f22f63297f5926c1cc016c0ac7c1698af463dfb598fccf0b4e42bfae49e` |
+| `v4-50-r3` | 320 | 1,920 × 160、8,064 × 160 | 128–128 | `ddd34cbf7ee3983a601152cc67f1f90ba3400c93efe9db8a7a335c74de2b87b6` |
+| `v4-50-r4` | 320 | 1,920 × 160、8,064 × 160 | 128–128 | `02491fef7e2216daab844e583d01c72852db5f6fd97444bd5ae20cf93183b493` |
+| `v4-50-r5` | 320 | 1,920 × 160、8,064 × 160 | 128–128 | `3093478ed8ffaa85533fd153b13c3c77d5016dacabb418007eb7e74ea0de66f3` |
+| `v1-mini-8192` | 20 | 8,064 × 20 | 1–512 | `d035fd01ba2ded503a665f106e4d109baf97bbbe386444841d83690761085069` |
+| `v4-mini` | 20 | 1,920 × 7、8,064 × 13 | 128–128 | `ab01687cee5d5ad5121c4a7094f16ee9b20c76bfaa01b3c0afe0a4bcbafafb88` |
+
+- 列數與組成都符合本文：V1 為 L-U2K 320 列 / L-U8K 200 列；V4 的 90/10 為 288 × 2K、32 × 8K，50/50 為 160 / 160；v1-mini-8192 的 output 含 1 與 512；v4-mini 為 7 × 2K、13 × 8K（第 0 列 2K、第 1–8 列 8K、其餘 6 × 2K、5 × 8K）。
+- `configs/stage_v.toml` 的 `[stage_v.datasets]` 照實 pin 這 22 個 sha256（`var-2048`、`mixed-8192` 不變）。`tests/test_stage_v_plan.py` 改為檢查 22 個 pin 都是 64 位十六進位、彼此不同；「未 pin 時拒絕凍結」的測試改用明確設為空白的 dataset。
+- 檔案留在 WSL 的 `data/stage_v/`（不 commit，和其他 dataset 相同）；mini 與正式 session 依 pin 核對 sha256。
+- 只改了設定檔的 pin、它上方的註解與測試；harness（`stage_v_plan.HARNESS_FILES` 的五個檔）與 `gateway_path_sha256` 都不變。設計、門檻與讀法沒有改。
+- 下一步：GPU 視窗 0（部署 HEAD、產品 IT-0–6、mini）。
