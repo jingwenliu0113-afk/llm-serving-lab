@@ -4,7 +4,7 @@
   - 「實作步驟」第 1–10 步已以 TDD 在分支 `feat/043-stage-d-profiles` 上實作，經獨立審查（3 個角度、每項由第二個 agent 複核；確認 3 項、7 項 nit，全部修正）後合併到 main（2026-10-24）。
   - 驗證研究：待決事項第 8、9 項已由使用者決定（見文末「使用者決定（2026-10-24）」：V4、V-GW、V1、V2 都做，V3 延後，排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後）；
     事先登記與 harness 見 044（DRAFT）。驗證通過之前，這些功能都不上線，正式釘選也不變。
-  - 還沒做的：043 第 8 步要求的 RTX 產品測試（`rtx-verified.toml` 的 IT-0 至 IT-6，因為 keep-alive 改變了 `capserve_sha256`），等 GPU 空閒。
+  - 043 第 8 步要求的 RTX 產品測試（`rtx-verified.toml` 的 IT-0 至 IT-6，因為 keep-alive 改變了 `capserve_sha256`）：**通過**（2026-10-31 05:42:24–05:44:19Z，GPU lock，release `b792196`，產品 run `pt-20261031T054225Z-itest`，IT-0 至 IT-6 全部 ok；輸出只在 WSL 的 `~/llm-serving-service/runs/`，`research_valid` false）。和 Stage V 的 mini 在同一個 lock 下（044 GPU 視窗 0）。
 - 日期：2026-10-24
 - 對應：021（R1 不提供覆寫參數，R3 逐位元重現）、027 §4、029（產生器、loader、准入、M2 補記、036 的釘選補記）、030 8.7–8.9、035、036、037（§1 Engineering、§2、§5 第 2 步）、038、039（「產品上的使用」）、042（Stage D 的全部數字）
 - 時點：042 之後，任何 Stage D 的產品程式之前。本文不產生數據，也不使用 GPU。

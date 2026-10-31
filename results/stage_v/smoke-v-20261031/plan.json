@@ -1,0 +1,562 @@
+{
+ "schema_version": 1,
+ "stage": "V-mini",
+ "session": "mini",
+ "kind": "verify",
+ "mini": {
+  "n": 2,
+  "N": 20,
+  "sentinel_C": 2,
+  "C": {
+   "GW-U8K-O512": 4,
+   "L-U8K": 4,
+   "GW-M8K-T": 2,
+   "P-U2K": 8,
+   "F-U2K-var": 4,
+   "W-mini": 9
+  },
+  "datasets": {
+   "L-U8K": "v1-mini-8192"
+  },
+  "forced_timeout": {
+   "GW-U8K-O512": [
+    1
+   ]
+  },
+  "bench_est_s": {
+   "GW-U8K-O512": 90,
+   "L-U8K": 60,
+   "GW-M8K-T": 60,
+   "P-U2K": 20,
+   "F-U2K-var": 15,
+   "W-mini": 30,
+   "sentinel": 20
+  }
+ },
+ "seed": 20261008,
+ "n": 2,
+ "guard_band": 0.05,
+ "slo": {
+  "id": "MINI",
+  "ttft_p95_ms": {
+   "2048": 1000000000,
+   "8192": 1000000000,
+   "32768": 1000000000
+  },
+  "tpot_p95_ms": 1000000000,
+  "mixed_long": "budget"
+ },
+ "secondary_slo": {
+  "S1": {
+   "id": "S1",
+   "ttft_p95_ms": {
+    "2048": 1000,
+    "8192": 3000,
+    "32768": 10000
+   },
+   "tpot_p95_ms": 50,
+   "mixed_long": "budget"
+  },
+  "S3": {
+   "id": "S3",
+   "ttft_p95_ms": {
+    "2048": 2000,
+    "8192": 6000,
+    "32768": 20000
+   },
+   "tpot_p95_ms": 200,
+   "mixed_long": "budget"
+  }
+ },
+ "window": "steady",
+ "nontrivial": {
+  "u_w": 0.9,
+  "n1": 0.9
+ },
+ "join_tolerance_ms": 50,
+ "points": {
+  "GW-U8K-O512": {
+   "study": "V-GW",
+   "server_base": "U8K-O512",
+   "client_base": "U8K-O512",
+   "tau_base": "U8K-O512",
+   "C": 4,
+   "profile": "service/profiles/provisional-stage-v.json",
+   "profile_sha256": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+   "classes": [
+    "v-uniform-8k-o512"
+   ],
+   "provisional": true,
+   "queue": "product",
+   "admission": false,
+   "pacing": "",
+   "dataset": "",
+   "per_block": false,
+   "out_pinned": false,
+   "view": "client",
+   "unit": "V1-8K",
+   "bench_est_s": 90,
+   "limits": {
+    "max_concurrency": 12,
+    "max_queue": 12,
+    "max_prompt_tokens": 8064,
+    "max_output_tokens": 512
+   },
+   "N": 20,
+   "n": 2,
+   "server": "B0",
+   "timeout_s": 540,
+   "run_overhead_s": 95,
+   "est_s": 185,
+   "judged_views": [
+    "client"
+   ],
+   "queue_settings": {
+    "max_queue_wait_s": 2.0,
+    "request_deadline_s": 300.0
+   },
+   "admission_params": null,
+   "pacing_params": null,
+   "datasets": null,
+   "forced_timeout_blocks": [
+    1
+   ],
+   "gateway": {
+    "active_class": "v-uniform-8k-o512",
+    "backend_url": "http://127.0.0.1:8000",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "drain_timeout_s": 5,
+    "tokenizer": "local",
+    "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "max_queue_wait_s": 2.0,
+    "request_deadline_s": 300.0
+   },
+   "gateway_toml_sha256": "442c7db25ebc26cf2782eb67a7a1a153dfddd8fe94f5870b314137acf7dda792"
+  },
+  "L-U8K": {
+   "study": "V1",
+   "server_base": "U8K-O512",
+   "client_base": "U8K-var",
+   "tau_base": "U8K-O512",
+   "C": 4,
+   "profile": "service/profiles/provisional-stage-v.json",
+   "profile_sha256": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+   "classes": [
+    "v-uniform-8k-o512-c8"
+   ],
+   "provisional": true,
+   "queue": "product",
+   "admission": false,
+   "pacing": "",
+   "dataset": "v1-mini-8192",
+   "per_block": false,
+   "out_pinned": true,
+   "view": "client",
+   "unit": "V1-8K",
+   "bench_est_s": 60,
+   "limits": {
+    "max_concurrency": 8,
+    "max_queue": 8,
+    "max_prompt_tokens": 8064,
+    "max_output_tokens": 512
+   },
+   "N": 20,
+   "n": 2,
+   "server": "B0",
+   "timeout_s": 540,
+   "run_overhead_s": 95,
+   "est_s": 155,
+   "judged_views": [
+    "client"
+   ],
+   "queue_settings": {
+    "max_queue_wait_s": 2.0,
+    "request_deadline_s": 300.0
+   },
+   "admission_params": null,
+   "pacing_params": null,
+   "datasets": {
+    "1": "v1-mini-8192",
+    "2": "v1-mini-8192"
+   },
+   "forced_timeout_blocks": [],
+   "gateway": {
+    "active_class": "v-uniform-8k-o512-c8",
+    "backend_url": "http://127.0.0.1:8000",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "drain_timeout_s": 5,
+    "tokenizer": "local",
+    "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "max_queue_wait_s": 2.0,
+    "request_deadline_s": 300.0
+   },
+   "gateway_toml_sha256": "8f77636c84c9da2b543431890571079ab5536ba4bfd3ca5395295da9787d07d4"
+  },
+  "GW-M8K-T": {
+   "study": "V-GW",
+   "server_base": "M8K-T",
+   "client_base": "M8K-T",
+   "tau_base": "M8K-T",
+   "C": 2,
+   "profile": "service/profiles/verified-formal-20261023-d-a1b-t.json",
+   "profile_sha256": "8c8d013a05e2344b777c0f3c40a90f084372a06c4b150246801769e2f1cffdea",
+   "classes": [
+    "mixed-8k-t"
+   ],
+   "provisional": false,
+   "queue": "product",
+   "admission": false,
+   "pacing": "",
+   "dataset": "mixed-8192",
+   "per_block": false,
+   "out_pinned": false,
+   "view": "client",
+   "unit": "VG-M8K-T",
+   "bench_est_s": 60,
+   "limits": {
+    "max_concurrency": 4,
+    "max_queue": 4,
+    "max_prompt_tokens": 32640,
+    "max_output_tokens": 128
+   },
+   "N": 20,
+   "n": 2,
+   "server": "T",
+   "timeout_s": 360,
+   "run_overhead_s": 110,
+   "est_s": 170,
+   "judged_views": [
+    "client"
+   ],
+   "queue_settings": {
+    "max_queue_wait_s": 2.0,
+    "request_deadline_s": 300.0
+   },
+   "admission_params": null,
+   "pacing_params": null,
+   "datasets": {
+    "1": "mixed-8192",
+    "2": "mixed-8192"
+   },
+   "forced_timeout_blocks": [],
+   "gateway": {
+    "active_class": "mixed-8k-t",
+    "backend_url": "http://127.0.0.1:8000",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "drain_timeout_s": 5,
+    "tokenizer": "local",
+    "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "max_queue_wait_s": 2.0,
+    "request_deadline_s": 300.0
+   },
+   "gateway_toml_sha256": "4d1d98b41ce99e6872ce6569ed847b307e9660cf487dc0c6e9425f195e730a3b"
+  },
+  "P-U2K": {
+   "study": "V2",
+   "server_base": "U2K-gw",
+   "client_base": "U2K-gw",
+   "tau_base": "U2K-gw",
+   "C": 8,
+   "profile": "service/profiles/provisional-stage-v.json",
+   "profile_sha256": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+   "classes": [
+    "v-uniform-2k"
+   ],
+   "provisional": true,
+   "queue": "slow",
+   "admission": false,
+   "pacing": "2048",
+   "dataset": "",
+   "per_block": false,
+   "out_pinned": false,
+   "view": "worse",
+   "unit": "PACE-2K",
+   "bench_est_s": 20,
+   "limits": {
+    "max_concurrency": 32,
+    "max_queue": 32,
+    "max_prompt_tokens": 1920,
+    "max_output_tokens": 128
+   },
+   "N": 20,
+   "n": 2,
+   "server": "B0",
+   "timeout_s": 180,
+   "run_overhead_s": 95,
+   "est_s": 115,
+   "judged_views": [
+    "upstream",
+    "client"
+   ],
+   "queue_settings": {
+    "max_queue_wait_s": 120.0,
+    "request_deadline_s": 600.0
+   },
+   "admission_params": null,
+   "pacing_params": {
+    "burst_tokens": 9600,
+    "rate_tokens_per_s": 5920
+   },
+   "datasets": null,
+   "forced_timeout_blocks": [],
+   "gateway": {
+    "active_class": "v-uniform-2k",
+    "backend_url": "http://127.0.0.1:8000",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "drain_timeout_s": 5,
+    "tokenizer": "local",
+    "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "max_queue_wait_s": 120.0,
+    "request_deadline_s": 600.0,
+    "prefill_pacing": {
+     "burst_tokens": 9600,
+     "rate_tokens_per_s": 5920
+    }
+   },
+   "gateway_toml_sha256": "56fe92bbabf18df49d4dac307149953ae72478d5a899d562ecf29cd7e205de59"
+  },
+  "F-U2K-var": {
+   "study": "V2",
+   "server_base": "U2K-var",
+   "client_base": "U2K-var",
+   "tau_base": "U2K-var",
+   "C": 4,
+   "profile": "service/profiles/provisional-stage-v.json",
+   "profile_sha256": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+   "classes": [
+    "v-uniform-2k"
+   ],
+   "provisional": true,
+   "queue": "slow",
+   "admission": false,
+   "pacing": "",
+   "dataset": "var-2048",
+   "per_block": false,
+   "out_pinned": false,
+   "view": "worse",
+   "unit": "",
+   "bench_est_s": 15,
+   "limits": {
+    "max_concurrency": 32,
+    "max_queue": 32,
+    "max_prompt_tokens": 1920,
+    "max_output_tokens": 128
+   },
+   "N": 20,
+   "n": 2,
+   "server": "B0",
+   "timeout_s": 180,
+   "run_overhead_s": 95,
+   "est_s": 110,
+   "judged_views": [
+    "upstream",
+    "client"
+   ],
+   "queue_settings": {
+    "max_queue_wait_s": 120.0,
+    "request_deadline_s": 600.0
+   },
+   "admission_params": null,
+   "pacing_params": null,
+   "datasets": {
+    "1": "var-2048",
+    "2": "var-2048"
+   },
+   "forced_timeout_blocks": [],
+   "gateway": {
+    "active_class": "v-uniform-2k",
+    "backend_url": "http://127.0.0.1:8000",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "drain_timeout_s": 5,
+    "tokenizer": "local",
+    "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "max_queue_wait_s": 120.0,
+    "request_deadline_s": 600.0
+   },
+   "gateway_toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b"
+  },
+  "W-mini": {
+   "study": "V4",
+   "server_base": "U2K-var",
+   "client_base": "U2K-var",
+   "tau_base": "U8K-gw",
+   "C": 9,
+   "profile": "service/profiles/provisional-stage-v.json",
+   "profile_sha256": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+   "classes": [
+    "v-uniform-2k",
+    "v-uniform-8k"
+   ],
+   "provisional": true,
+   "queue": "slow",
+   "admission": true,
+   "pacing": "",
+   "dataset": "v4-mini",
+   "per_block": false,
+   "out_pinned": false,
+   "view": "upstream",
+   "unit": "",
+   "bench_est_s": 30,
+   "limits": {
+    "max_concurrency": 32,
+    "max_queue": 32,
+    "max_prompt_tokens": 8064,
+    "max_output_tokens": 128
+   },
+   "N": 20,
+   "n": 2,
+   "server": "B0",
+   "timeout_s": 180,
+   "run_overhead_s": 95,
+   "est_s": 125,
+   "judged_views": [
+    "upstream"
+   ],
+   "queue_settings": {
+    "max_queue_wait_s": 120.0,
+    "request_deadline_s": 600.0
+   },
+   "admission_params": {
+    "policy": "weighted-v1",
+    "budget": 32,
+    "max_queue": 32,
+    "classes": [
+     {
+      "name": "v-uniform-2k",
+      "units": 1,
+      "max_concurrency": 32
+     },
+     {
+      "name": "v-uniform-8k",
+      "units": 4,
+      "max_concurrency": 8
+     }
+    ]
+   },
+   "pacing_params": null,
+   "datasets": {
+    "1": "v4-mini",
+    "2": "v4-mini"
+   },
+   "forced_timeout_blocks": [],
+   "gateway": {
+    "backend_url": "http://127.0.0.1:8000",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "drain_timeout_s": 5,
+    "tokenizer": "local",
+    "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "max_queue_wait_s": 120.0,
+    "request_deadline_s": 600.0,
+    "admission": {
+     "policy": "weighted-v1",
+     "budget": 32,
+     "max_queue": 32,
+     "classes": [
+      {
+       "name": "v-uniform-2k",
+       "units": 1,
+       "max_concurrency": 32
+      },
+      {
+       "name": "v-uniform-8k",
+       "units": 4,
+       "max_concurrency": 8
+      }
+     ]
+    }
+   },
+   "gateway_toml_sha256": "01f18580becf72994bd1949151c0980ae33b21fac31acdfb66f0c53dca064e18"
+  }
+ },
+ "block_orders": {
+  "1": [
+   "W-mini",
+   "P-U2K",
+   "GW-U8K-O512",
+   "L-U8K",
+   "GW-M8K-T",
+   "F-U2K-var"
+  ],
+  "2": [
+   "P-U2K",
+   "F-U2K-var",
+   "W-mini",
+   "L-U8K",
+   "GW-U8K-O512",
+   "GW-M8K-T"
+  ]
+ },
+ "units": {
+  "VG-M8K-T": [
+   "GW-M8K-T"
+  ],
+  "V1-8K": [
+   "L-U8K",
+   "GW-U8K-O512"
+  ],
+  "PACE-2K": [
+   "P-U2K"
+  ]
+ },
+ "vetoes": {},
+ "sentinel": {
+  "workload": "U2K",
+  "L": 2048,
+  "mix": "uniform",
+  "C": 2,
+  "N": 20,
+  "tolerance": 0.03,
+  "timeout_s": 180,
+  "server": "B0",
+  "bench_est_s": 20,
+  "run_overhead_s": 95,
+  "est_s": 115
+ },
+ "hour_cap_h": 1.0,
+ "total_cap_h": 12,
+ "min_gap_h": 2,
+ "end_reserve_h": 0.06,
+ "estimate_s": 1950,
+ "gateway_port": 8080,
+ "gateway_drain_s": 5,
+ "gateway_path_files": [
+  "service/capserve/__init__.py",
+  "service/capserve/__main__.py",
+  "service/capserve/admission.py",
+  "service/capserve/app.py",
+  "service/capserve/config.py",
+  "service/capserve/gateway_path.py",
+  "service/capserve/guard.py",
+  "service/capserve/keys.py",
+  "service/capserve/metrics.py",
+  "service/capserve/openai_api.py",
+  "service/capserve/profile.py",
+  "service/capserve/proxy.py",
+  "service/capserve/retry.py",
+  "service/capserve/server.py",
+  "service/capserve/tokens.py",
+  "service/capserve/upstream.py"
+ ],
+ "gateway_path_sha256": "",
+ "datasets": {
+  "mixed-8192": "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2",
+  "v1-mini-8192": "d035fd01ba2ded503a665f106e4d109baf97bbbe386444841d83690761085069",
+  "v4-mini": "ab01687cee5d5ad5121c4a7094f16ee9b20c76bfaa01b3c0afe0a4bcbafafb88",
+  "var-2048": "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1"
+ },
+ "server_ready_timeout_s": 1800,
+ "expected_blocks": 248,
+ "block_size": 528,
+ "gpu_memory_utilization": "0.91",
+ "kv_cache_memory_bytes": 4294967296,
+ "long_prefill_token_threshold": 512,
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "stage_v_sha256": "3e54c1b7ecdbad5b103807bed839f80d8e8e1c0cb05c7b94a475f2e1e2585114",
+ "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5"
+}

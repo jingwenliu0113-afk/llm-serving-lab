@@ -36,7 +36,7 @@
      b. GPU 視窗 0：部署 HEAD（研究副本 `deploy_bundle`；產品 release `tools/rtx/deploy_service.sh`）→ 產品 IT-0–6（043 第 8 步，約 0.3 h；itest 不自己取得 lock，而是檢查呼叫者已持有，所以要在 `flock -n /tmp/ai-portfolio-gpu.lock` 下執行）：
         `cd ~/llm-serving-service/releases/<sha> && flock -n /tmp/ai-portfolio-gpu.lock env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=service:benchmarks ~/llm-serving-lab/.venv/bin/python -m capserve.itest IT-0 IT-1 IT-2 IT-3 IT-4 IT-5 IT-6 --config service/deploy/rtx-verified.toml`
         → mini：`stage_v_plan.py --session mini --out /tmp/stage-v-plans/mini.json` 與 `run_stage_v.py --plan … --out results/stage_v/smoke-v-<date> --dataset v1-mini-8192=data/stage_v/v1-mini-8192.jsonl --dataset v4-mini=data/stage_v/v4-mini.jsonl --dataset var-2048=data/stage_d/var-2048.jsonl --dataset mixed-8192=data/core_b/mixed-8192.jsonl --gpu-lock-held --mini`。
-        **進行中**：部署 `b792196`（研究副本與產品 release），IT-0–6 與 mini `smoke-v-20261031` 在同一個 lock 下（IT 通過才跑 mini），約 06:0xZ 開始。
+        [x] 部署 `b792196`；IT-0–6 全部通過（05:42–05:44Z）；mini `smoke-v-20261031`（05:44:20–06:06:30Z）通過，13 項檢查都 true，凍結證據檢查沒有問題。
      c. commit mini → 凍結（`[freeze] stage_v`、mini id、`gateway_path_sha256`、`test_stage_v_frozen`）→ 部署凍結 commit。
      d. V-ADM（約 2.75 h）→ ≥ 2 h → V-CLS（約 5.25 h）→ 取回、report、結果 decision、產生器、README；是否改釘選由使用者決定。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
@@ -72,7 +72,7 @@
         輸出上限 > 128 的 class 不能作為 active class、T 只服務 mixed-8k-t 而且現在不部署、正式釘選與 active class 不變、開場湧入維持現況。
   - [x] 043 實作（0 GPU，TDD）：loader 與 §9、產生器接受 D-A session、三份不釘選的 verified profile（`-d-a1b-b0`、`-d-a1b-t`、`-d-a2-b0`）、
         輸出 > 128 與 T 的拒絕、B0 拒絕 T workload、`/readyz` 揭露、gateway keep-alive 75 s、README；獨立審查後合併（`abca173`）。
-  - [ ] RTX 產品測試（**等 GPU 空閒**，GPU lock 下）：`rtx-verified.toml` 的 IT-0 至 IT-6（keep-alive 改變了 `capserve_sha256`；輸出只進 `runs/`）。
+  - [x] RTX 產品測試：`rtx-verified.toml` 的 IT-0 至 IT-6 全部通過（2026-10-31 05:42–05:44Z，release `b792196`，run `pt-20261031T054225Z-itest`；043 狀態列）。
   - [x] **使用者決定**（2026-10-24，043 待決事項 8、9）：V4、V-GW、V1、V2 都做，V3 延後；排在 E1-P、E1-D 取回與 Stage Q 的 RTX pilot 之後，session 之間留空檔。合計約 10–11 GPU h。
   - [x] **044**（DRAFT）：Stage V 的事先登記設計（三份設計經三位評審比較），PREREGISTRATION §12（DRAFT）。待決事項 1–8 依建議定案。
         共用一套 harness、一次 mini、兩個正式 session（V-ADM 約 2.75 h：V2 + V4 + F-U2K 對照；V-CLS 約 5.25 h：V-GW + V1），之間 ≥ 2 h；全期上限 12 h。

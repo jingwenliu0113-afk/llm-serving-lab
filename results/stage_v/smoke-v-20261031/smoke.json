@@ -1,0 +1,32 @@
+{
+ "ok": true,
+ "checks": {
+  "replay_clean": true,
+  "other_runs_valid": true,
+  "forced_timeouts_hit": true,
+  "derived_schema": true,
+  "boots_passed_checks": true,
+  "gateway_ok": true,
+  "forced_cap_stop": true,
+  "prefill_waited": true,
+  "queued": true,
+  "nontrivial_computable": true,
+  "recorded_hashes": true,
+  "clean_teardowns": true,
+  "skip_walked": true
+ },
+ "replay_problems": [],
+ "invalid_runs": [],
+ "timeouts": [
+  [
+   "GW-U8K-O512",
+   1
+  ]
+ ],
+ "skipped": [
+  [
+   2,
+   "GW-U8K-O512"
+  ]
+ ]
+}
