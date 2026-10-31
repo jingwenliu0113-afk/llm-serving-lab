@@ -1,0 +1,5383 @@
+{
+ "schema_version": 1,
+ "stage": "V",
+ "session": "V-CLS",
+ "kind": "verify",
+ "slo": {
+  "id": "S2",
+  "ttft_p95_ms": {
+   "2048": 2000,
+   "8192": 6000,
+   "32768": 20000
+  },
+  "tpot_p95_ms": 100,
+  "mixed_long": "budget"
+ },
+ "protocol": {
+  "seed": 20261008,
+  "n": 5,
+  "window": "steady",
+  "guard_band": 0.05,
+  "nontrivial": {
+   "u_w": 0.9,
+   "n1": 0.9
+  },
+  "join_tolerance_ms": 50,
+  "hour_cap_h": 7.0,
+  "end_reserve_h": 0.06
+ },
+ "replay": {
+  "ok": true,
+  "problems": []
+ },
+ "schedule": {
+  "skipped": [],
+  "not_run_cap": [],
+  "cap_stop": null
+ },
+ "sentinel": {
+  "start": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 316.23087307045347,
+   "w_mean_ttft_ms": 965.6579481449995,
+   "steady_p95_ttft_ms": 1003.5055176999778,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "end": {
+   "valid": true,
+   "reasons": [],
+   "output_throughput": 315.9429594785573,
+   "w_mean_ttft_ms": 966.3815070649616,
+   "steady_p95_ttft_ms": 992.6389518484939,
+   "inflight_peak": 25.0,
+   "inflight_le_c": true
+  },
+  "gate": {
+   "ok": true,
+   "drift": {
+    "output_throughput": 0.0009104537741702334,
+    "w_mean_ttft_ms": 0.000749291114262599
+   },
+   "tolerance": 0.03,
+   "reasons": []
+  },
+  "cross_session_shift": {
+   "shift": false,
+   "limit": 0.05,
+   "values": [
+    {
+     "output_throughput": 0.004112883505404508,
+     "steady_p95_ttft_ms": 0.007512545272283067
+    },
+    {
+     "output_throughput": 0.003198685140924029,
+     "steady_p95_ttft_ms": -0.0033974111019385855
+    }
+   ],
+   "references": {
+    "core_output_throughput": 314.9355797193607,
+    "advanced_steady_p95_ttft_ms": 996.0228509400622
+   }
+  }
+ },
+ "points": {
+  "GW-U32K": {
+   "study": "V-GW",
+   "unit": "VG-32K",
+   "C": 2,
+   "N": 200,
+   "n": 5,
+   "classes": [
+    "uniform-32k"
+   ],
+   "view": "client",
+   "judged_views": [
+    "client"
+   ],
+   "class": "PASS",
+   "n_valid": 5,
+   "n_ok": 5,
+   "views": {
+    "client": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "worst_R": {
+      "short": 0.6211279869999771,
+      "tpot": 0.6246887655511971,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 12397.448070699465,
+      "Y_tpot": 62.37307174527676,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    },
+    "upstream": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "worst_R": {
+      "short": 0.6175879389625152,
+      "tpot": 0.6246887655511971,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 12325.143766450128,
+      "Y_tpot": 62.37307174527676,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    }
+   },
+   "window_sensitive": false,
+   "skipped": [],
+   "not_run_cap": [],
+   "runs": [
+    {
+     "tag": "V-GW-U32K-c2-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 2.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.534412955465587,
+     "preemptions": 0.0,
+     "waiting_peak": 1.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 12415.950882999936,
+        "tpot": 62.468876555119714,
+        "long": null
+       },
+       "R": {
+        "short": 0.6207975441499968,
+        "tpot": 0.6246887655511971,
+        "long": null
+       },
+       "max_r": 0.6246887655511971,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12594.072390000065,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12415.951540999935,
+        "tpot": 62.46990611574942,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12416.578283599916,
+        "tpot": 62.47450309842396,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 12346.935927749939,
+        "tpot": 62.468876555119714,
+        "long": null
+       },
+       "R": {
+        "short": 0.6173467963874969,
+        "tpot": 0.6246887655511971,
+        "long": null
+       },
+       "max_r": 0.6246887655511971,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12500.50975299996,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12347.277522849925,
+        "tpot": 62.46990611574942,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12349.558097949854,
+        "tpot": 62.47450309842396,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       14.274114,
+       1419.911164
+      ],
+      "u_w": 1.989723809570898,
+      "n_w": 1.989723809570898,
+      "peak_requests": 2,
+      "peak_units": 2,
+      "peak_by_units": {
+       "1": 2
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 12594.072390000065,
+       "second_max_ms": 11680.691768000088,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 12500.50975299996,
+       "second_max_ms": 11617.257211000151,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.7359224999609069,
+       "p95": 2.0405709999522514
+      },
+      "gateway_ms": {
+       "p50": 70.9126204999393,
+       "p95": 90.20442975008791
+      },
+      "vllm_ms": {
+       "p50": 8293.962393500009,
+       "p95": 12346.935927749939
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U32K-c2-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 2.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.534412955465587,
+     "preemptions": 0.0,
+     "waiting_peak": 1.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 12422.559739999542,
+        "tpot": 62.44330623031587,
+        "long": null
+       },
+       "R": {
+        "short": 0.6211279869999771,
+        "tpot": 0.6244330623031586,
+        "long": null
+       },
+       "max_r": 0.6244330623031586,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12562.575793000178,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12422.648095999557,
+        "tpot": 62.44356258385908,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12423.278749149677,
+        "tpot": 62.44279352322946,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 12351.758779250304,
+        "tpot": 62.44330623031587,
+        "long": null
+       },
+       "R": {
+        "short": 0.6175879389625152,
+        "tpot": 0.6244330623031586,
+        "long": null
+       },
+       "max_r": 0.6244330623031586,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12469.107384999916,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12352.114904950213,
+        "tpot": 62.44356258385908,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12354.600176299664,
+        "tpot": 62.44279352322946,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       14.238525,
+       1420.463099
+      ],
+      "u_w": 1.9894675407656468,
+      "n_w": 1.9894675407656468,
+      "peak_requests": 2,
+      "peak_units": 2,
+      "peak_by_units": {
+       "1": 2
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 12562.575793000178,
+       "second_max_ms": 11781.904142999338,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 12469.107384999916,
+       "second_max_ms": 11711.454811999829,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.7371959993397468,
+       "p95": 2.023047749844409
+      },
+      "gateway_ms": {
+       "p50": 72.38334199973906,
+       "p95": 92.18760850012586
+      },
+      "vllm_ms": {
+       "p50": 8352.296314500109,
+       "p95": 12351.758779250304
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U32K-c2-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 2.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.534412955465587,
+     "preemptions": 0.0,
+     "waiting_peak": 1.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 12110.005315000762,
+        "tpot": 62.30577782676259,
+        "long": null
+       },
+       "R": {
+        "short": 0.6055002657500381,
+        "tpot": 0.623057778267626,
+        "long": null
+       },
+       "max_r": 0.623057778267626,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12565.057235000495,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12110.008981800547,
+        "tpot": 62.30588238739389,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12110.048775299128,
+        "tpot": 62.305568705499994,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 12045.605206250002,
+        "tpot": 62.30577782676259,
+        "long": null
+       },
+       "R": {
+        "short": 0.6022802603125001,
+        "tpot": 0.623057778267626,
+        "long": null
+       },
+       "max_r": 0.623057778267626,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12475.411659999736,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12045.757876349853,
+        "tpot": 62.30588238739389,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12046.864620198903,
+        "tpot": 62.305568705499994,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       14.240186,
+       1421.050946
+      ],
+      "u_w": 1.990043370865318,
+      "n_w": 1.990043370865318,
+      "peak_requests": 2,
+      "peak_units": 2,
+      "peak_by_units": {
+       "1": 2
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 12565.057235000495,
+       "second_max_ms": 11393.61572999951,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 12475.411659999736,
+       "second_max_ms": 11326.584794000155,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.737051999043615,
+       "p95": 2.067006500055868
+      },
+      "gateway_ms": {
+       "p50": 67.13034800031892,
+       "p95": 88.34820325091641
+      },
+      "vllm_ms": {
+       "p50": 8319.631282000046,
+       "p95": 12045.605206250002
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U32K-c2-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 2.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.534412955465587,
+     "preemptions": 0.0,
+     "waiting_peak": 1.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 12418.384967999373,
+        "tpot": 62.325468153544996,
+        "long": null
+       },
+       "R": {
+        "short": 0.6209192483999686,
+        "tpot": 0.6232546815354499,
+        "long": null
+       },
+       "max_r": 0.6232546815354499,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12558.385144999193,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12419.309917999271,
+        "tpot": 62.32566130472659,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12425.367405998713,
+        "tpot": 62.32697752992626,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 12339.100781250181,
+        "tpot": 62.325468153544996,
+        "long": null
+       },
+       "R": {
+        "short": 0.616955039062509,
+        "tpot": 0.6232546815354499,
+        "long": null
+       },
+       "max_r": 0.6232546815354499,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12466.085836000275,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12339.604025750214,
+        "tpot": 62.32566130472659,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12343.26847620041,
+        "tpot": 62.32697752992626,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       14.235214,
+       1421.089065
+      ],
+      "u_w": 1.9896976860889302,
+      "n_w": 1.9896976860889302,
+      "peak_requests": 2,
+      "peak_units": 2,
+      "peak_by_units": {
+       "1": 2
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 12558.385144999193,
+       "second_max_ms": 11391.135657000632,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 12466.085836000275,
+       "second_max_ms": 11321.70631199915,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.7512179983896203,
+       "p95": 2.019456000198261
+      },
+      "gateway_ms": {
+       "p50": 70.22362399948179,
+       "p95": 90.6414007499734
+      },
+      "vllm_ms": {
+       "p50": 8315.68425649857,
+       "p95": 12339.100781250181
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U32K-c2-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 2.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.534412955465587,
+     "preemptions": 0.0,
+     "waiting_peak": 1.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 12111.682808251317,
+        "tpot": 62.32869376967791,
+        "long": null
+       },
+       "R": {
+        "short": 0.6055841404125658,
+        "tpot": 0.6232869376967791,
+        "long": null
+       },
+       "max_r": 0.6232869376967791,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12573.778619000223,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12111.718034351543,
+        "tpot": 62.328832972041454,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12111.96477200283,
+        "tpot": 62.32841536495084,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 12048.065952748402,
+        "tpot": 62.32869376967791,
+        "long": null
+       },
+       "R": {
+        "short": 0.6024032976374201,
+        "tpot": 0.6232869376967791,
+        "long": null
+       },
+       "max_r": 0.6232869376967791,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 12482.646415999625,
+       "n": {
+        "short": 196,
+        "long": 0,
+        "all": 196
+       },
+       "Y_late": {
+        "short": 12048.315921448557,
+        "tpot": 62.328832972041454,
+        "long": null
+       },
+       "Y_full": {
+        "short": 12049.946645799537,
+        "tpot": 62.32841536495084,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       14.249705,
+       1421.31438
+      ],
+      "u_w": 1.99004191260789,
+      "n_w": 1.99004191260789,
+      "peak_requests": 2,
+      "peak_units": 2,
+      "peak_by_units": {
+       "1": 2
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 12573.778619000223,
+       "second_max_ms": 11388.130398998328,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 12482.646415999625,
+       "second_max_ms": 11326.83014199938,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.7343460003758082,
+       "p95": 2.064073748442752
+      },
+      "gateway_ms": {
+       "p50": 68.90736749846837,
+       "p95": 88.75182075189514
+      },
+      "vllm_ms": {
+       "p50": 8322.475849001421,
+       "p95": 12048.065952748402
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    }
+   ],
+   "descriptive": {
+    "decomposition": {
+     "transport_ms": {
+      "p50": 1.739223999720707,
+      "p95": 2.0450376500775747
+     },
+     "gateway_ms": {
+      "p50": 69.87183500029914,
+      "p95": 90.4278866997629
+     },
+     "vllm_ms": {
+      "p50": 8304.022456500094,
+      "p95": 12325.143766450128
+     },
+     "queue_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     },
+     "prefill_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     }
+    },
+    "in_vllm": {
+     "n_w": [
+      1.989723809570898,
+      1.9894675407656468,
+      1.990043370865318,
+      1.9896976860889302,
+      1.99004191260789
+     ],
+     "u_w": [
+      1.989723809570898,
+      1.9894675407656468,
+      1.990043370865318,
+      1.9896976860889302,
+      1.99004191260789
+     ],
+     "peak_requests": 2,
+     "peak_units": 2
+    }
+   }
+  },
+  "GW-U2K-O512": {
+   "study": "V-GW",
+   "unit": "V1-2K",
+   "C": 32,
+   "N": 320,
+   "n": 5,
+   "classes": [
+    "v-uniform-2k-o512"
+   ],
+   "view": "client",
+   "judged_views": [
+    "client"
+   ],
+   "class": "PASS",
+   "n_valid": 5,
+   "n_ok": 5,
+   "views": {
+    "client": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "FAIL",
+     "worst_R": {
+      "short": 0.7024676917499164,
+      "tpot": 0.4358272248043059,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1396.9844077501875,
+      "Y_tpot": 43.59257295636015,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    },
+    "upstream": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "FAIL",
+     "worst_R": {
+      "short": 0.698377104125143,
+      "tpot": 0.4358272248043059,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 1390.0653100000454,
+      "Y_tpot": 43.59257295636015,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    }
+   },
+   "window_sensitive": false,
+   "skipped": [],
+   "not_run_cap": [],
+   "runs": [
+    {
+     "tag": "V-GW-U2K-O512-c32-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 1.0,
+     "preemptions": 30.0,
+     "waiting_peak": 28.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 1404.9353834998328,
+        "tpot": 43.49344708708369,
+        "long": null
+       },
+       "R": {
+        "short": 0.7024676917499164,
+        "tpot": 0.43493447087083686,
+        "long": null
+       },
+       "max_r": 0.7024676917499164,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10349.874351999915,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1390.4594027499343,
+        "tpot": 43.626886496869005,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5468.407772650202,
+        "tpot": 42.902025126027226,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 1396.754208250286,
+        "tpot": 43.49344708708369,
+        "long": null
+       },
+       "R": {
+        "short": 0.698377104125143,
+        "tpot": 0.43493447087083686,
+        "long": null
+       },
+       "max_r": 0.698377104125143,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10305.900819000271,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1383.9517564496873,
+        "tpot": 43.626886496869005,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5422.976207000333,
+        "tpot": 42.902025126027226,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       19.559415,
+       185.727803
+      ],
+      "u_w": 31.98990851978416,
+      "n_w": 31.98990851978416,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10349.874351999915,
+       "second_max_ms": 4282.030818999829,
+       "second_over": 1
+      },
+      "upstream": {
+       "first_max_ms": 10305.900819000271,
+       "second_max_ms": 4275.148828000056,
+       "second_over": 1
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.046867500008375,
+       "p95": 2.494490749882061
+      },
+      "gateway_ms": {
+       "p50": 5.709126499823469,
+       "p95": 7.1521079997864945
+      },
+      "vllm_ms": {
+       "p50": 1378.2389815000897,
+       "p95": 1396.754208250286
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U2K-O512-c32-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 1.0,
+     "preemptions": 30.0,
+     "waiting_peak": 28.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 1397.7305627497572,
+        "tpot": 43.58272248043059,
+        "long": null
+       },
+       "R": {
+        "short": 0.6988652813748786,
+        "tpot": 0.4358272248043059,
+        "long": null
+       },
+       "max_r": 0.6988652813748786,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10360.151546999987,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1396.4850686504633,
+        "tpot": 43.65328859080213,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5485.701467549783,
+        "tpot": 42.9956626198623,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 1390.9922142502182,
+        "tpot": 43.58272248043059,
+        "long": null
+       },
+       "R": {
+        "short": 0.6954961071251091,
+        "tpot": 0.4358272248043059,
+        "long": null
+       },
+       "max_r": 0.6954961071251091,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10321.618090999436,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1389.377952249606,
+        "tpot": 43.65328859080213,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5438.4278616005795,
+        "tpot": 42.9956626198623,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       19.510747,
+       185.795506
+      ],
+      "u_w": 31.989976387433078,
+      "n_w": 31.989976387433078,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10360.151546999987,
+       "second_max_ms": 4299.007921999873,
+       "second_over": 1
+      },
+      "upstream": {
+       "first_max_ms": 10321.618090999436,
+       "second_max_ms": 4292.220282000017,
+       "second_over": 1
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.0622644995237351,
+       "p95": 2.5176125002417393
+      },
+      "gateway_ms": {
+       "p50": 5.736742499721004,
+       "p95": 7.081749999997555
+      },
+      "vllm_ms": {
+       "p50": 1376.2330485001257,
+       "p95": 1390.9922142502182
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U2K-O512-c32-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 1.0,
+     "preemptions": 30.0,
+     "waiting_peak": 28.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 1401.8885062487243,
+        "tpot": 43.541602599804975,
+        "long": null
+       },
+       "R": {
+        "short": 0.7009442531243621,
+        "tpot": 0.43541602599804974,
+        "long": null
+       },
+       "max_r": 0.7009442531243621,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10361.475082001562,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1389.8300626989112,
+        "tpot": 43.78082542925536,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5488.208165648943,
+        "tpot": 42.91176497524503,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 1393.0149762495603,
+        "tpot": 43.541602599804975,
+        "long": null
+       },
+       "R": {
+        "short": 0.6965074881247801,
+        "tpot": 0.43541602599804974,
+        "long": null
+       },
+       "max_r": 0.6965074881247801,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10318.28108099944,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1382.2598982006639,
+        "tpot": 43.78082542925536,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5442.41804849917,
+        "tpot": 42.91176497524503,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       19.532685,
+       185.805308
+      ],
+      "u_w": 31.990032628522375,
+      "n_w": 31.990032628522375,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10361.475082001562,
+       "second_max_ms": 4284.95728100097,
+       "second_over": 1
+      },
+      "upstream": {
+       "first_max_ms": 10318.28108099944,
+       "second_max_ms": 4277.642712999295,
+       "second_over": 1
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.0006914999394212,
+       "p95": 2.497687000413862
+      },
+      "gateway_ms": {
+       "p50": 5.639639000037278,
+       "p95": 7.013399500010564
+      },
+      "vllm_ms": {
+       "p50": 1377.3861430008765,
+       "p95": 1393.0149762495603
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U2K-O512-c32-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 1.0,
+     "preemptions": 30.0,
+     "waiting_peak": 28.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 1390.4232937493362,
+        "tpot": 43.55318997358138,
+        "long": null
+       },
+       "R": {
+        "short": 0.6952116468746681,
+        "tpot": 0.4355318997358138,
+        "long": null
+       },
+       "max_r": 0.6952116468746681,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10363.271431999237,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1389.6921342014139,
+        "tpot": 43.79109341027534,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5486.5204418485555,
+        "tpot": 42.92274451732122,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 1384.1415169995344,
+        "tpot": 43.55318997358138,
+        "long": null
+       },
+       "R": {
+        "short": 0.6920707584997672,
+        "tpot": 0.4355318997358138,
+        "long": null
+       },
+       "max_r": 0.6920707584997672,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10319.907221999529,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1383.0387044491545,
+        "tpot": 43.79109341027534,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5441.8236160499,
+        "tpot": 42.92274451732122,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       19.529407,
+       185.834162
+      ],
+      "u_w": 31.98991720952296,
+      "n_w": 31.98991720952296,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10363.271431999237,
+       "second_max_ms": 4287.544853001236,
+       "second_over": 1
+      },
+      "upstream": {
+       "first_max_ms": 10319.907221999529,
+       "second_max_ms": 4280.69670900004,
+       "second_over": 1
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.041259000885475,
+       "p95": 2.529741749185632
+      },
+      "gateway_ms": {
+       "p50": 5.7256240006609005,
+       "p95": 7.078516498950194
+      },
+      "vllm_ms": {
+       "p50": 1377.061276000859,
+       "p95": 1384.1415169995344
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U2K-O512-c32-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 1.0,
+     "preemptions": 30.0,
+     "waiting_peak": 28.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 1389.446764249442,
+        "tpot": 43.54089764530367,
+        "long": null
+       },
+       "R": {
+        "short": 0.694723382124721,
+        "tpot": 0.4354089764530367,
+        "long": null
+       },
+       "max_r": 0.694723382124721,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10360.579035999763,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1388.843033849571,
+        "tpot": 43.78471562377621,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5489.481310449541,
+        "tpot": 42.90989626771167,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 1383.765784499701,
+        "tpot": 43.54089764530367,
+        "long": null
+       },
+       "R": {
+        "short": 0.6918828922498506,
+        "tpot": 0.4354089764530367,
+        "long": null
+       },
+       "max_r": 0.6918828922498506,
+       "fail": false,
+       "attainment": 0.96875,
+       "burst_max_ttft_ms": 10321.554201000254,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1383.0234468513481,
+        "tpot": 43.78471562377621,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5448.887976451264,
+        "tpot": 42.90989626771167,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       19.527809,
+       185.808524
+      ],
+      "u_w": 31.990043000476632,
+      "n_w": 31.990043000476632,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10360.579035999763,
+       "second_max_ms": 4284.948806000102,
+       "second_over": 1
+      },
+      "upstream": {
+       "first_max_ms": 10321.554201000254,
+       "second_max_ms": 4277.972899000815,
+       "second_over": 1
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.0202250005022506,
+       "p95": 2.379119999204704
+      },
+      "gateway_ms": {
+       "p50": 5.722838999645319,
+       "p95": 6.917611749486241
+      },
+      "vllm_ms": {
+       "p50": 1377.3952034998729,
+       "p95": 1383.765784499701
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    }
+   ],
+   "descriptive": {
+    "decomposition": {
+     "transport_ms": {
+      "p50": 1.030822499160422,
+      "p95": 2.4957297505807214
+     },
+     "gateway_ms": {
+      "p50": 5.699969000033889,
+      "p95": 7.074647399940659
+     },
+     "vllm_ms": {
+      "p50": 1377.3595255006512,
+      "p95": 1390.0653100000454
+     },
+     "queue_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     },
+     "prefill_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     }
+    },
+    "in_vllm": {
+     "n_w": [
+      31.98990851978416,
+      31.989976387433078,
+      31.990032628522375,
+      31.98991720952296,
+      31.990043000476632
+     ],
+     "u_w": [
+      31.98990851978416,
+      31.989976387433078,
+      31.990032628522375,
+      31.98991720952296,
+      31.990043000476632
+     ],
+     "peak_requests": 32,
+     "peak_units": 32
+    }
+   }
+  },
+  "GW-U8K-O512": {
+   "study": "V-GW",
+   "unit": "V1-8K",
+   "C": 12,
+   "N": 200,
+   "n": 5,
+   "classes": [
+    "v-uniform-8k-o512"
+   ],
+   "view": "client",
+   "judged_views": [
+    "client"
+   ],
+   "class": "PASS",
+   "n_valid": 5,
+   "n_ok": 5,
+   "views": {
+    "client": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "worst_R": {
+      "short": 0.5347856857916895,
+      "tpot": 0.46516952165850706,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 3203.3682846491956,
+      "Y_tpot": 46.50893719706235,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    },
+    "upstream": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "worst_R": {
+      "short": 0.5316130278333352,
+      "tpot": 0.46516952165850706,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 3183.65384585029,
+      "Y_tpot": 46.50893719706235,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    }
+   },
+   "window_sensitive": false,
+   "skipped": [],
+   "not_run_cap": [],
+   "runs": [
+    {
+     "tag": "V-GW-U8K-O512-c12-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 12.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.97165991902834,
+     "preemptions": 0.0,
+     "waiting_peak": 11.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 3204.077305249939,
+        "tpot": 46.41243983806326,
+        "long": null
+       },
+       "R": {
+        "short": 0.5340128842083232,
+        "tpot": 0.4641243983806326,
+        "long": null
+       },
+       "max_r": 0.5340128842083232,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16639.23188300032,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 3204.2460810497687,
+        "tpot": 46.4253690384544,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3269.535267299841,
+        "tpot": 46.40349734735774,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 3183.680157250251,
+        "tpot": 46.41243983806326,
+        "long": null
+       },
+       "R": {
+        "short": 0.5306133595417085,
+        "tpot": 0.4641243983806326,
+        "long": null
+       },
+       "max_r": 0.5306133595417085,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16585.62844199969,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 3183.7456010501,
+        "tpot": 46.4253690384544,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3248.7587719998032,
+        "tpot": 46.40349734735774,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       25.023078,
+       389.321547
+      ],
+      "u_w": 11.990479987441287,
+      "n_w": 11.990479987441287,
+      "peak_requests": 12,
+      "peak_units": 12,
+      "peak_by_units": {
+       "1": 12
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 16639.23188300032,
+       "second_max_ms": 2858.5644069999034,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 16585.62844199969,
+       "second_max_ms": 2836.290450999968,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2934525000218855,
+       "p95": 1.8139659996450064
+      },
+      "gateway_ms": {
+       "p50": 18.45223949976571,
+       "p95": 23.359358000107022
+      },
+      "vllm_ms": {
+       "p50": 2819.120514999895,
+       "p95": 3183.680157250251
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U8K-O512-c12-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 12.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.97165991902834,
+     "preemptions": 0.0,
+     "waiting_peak": 11.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 3208.714114750137,
+        "tpot": 46.47337157436476,
+        "long": null
+       },
+       "R": {
+        "short": 0.5347856857916895,
+        "tpot": 0.46473371574364764,
+        "long": null
+       },
+       "max_r": 0.5347856857916895,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16627.34872100009,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 3209.0243693500724,
+        "tpot": 46.48610635714211,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3270.3336079506357,
+        "tpot": 46.46319256183984,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 3189.678167000011,
+        "tpot": 46.47337157436476,
+        "long": null
+       },
+       "R": {
+        "short": 0.5316130278333352,
+        "tpot": 0.46473371574364764,
+        "long": null
+       },
+       "max_r": 0.5316130278333352,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16574.063492000278,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 3190.2605245995346,
+        "tpot": 46.48610635714211,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3251.042747900021,
+        "tpot": 46.46319256183984,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       24.954021,
+       389.449383
+      ],
+      "u_w": 11.990440923635127,
+      "n_w": 11.990440923635127,
+      "peak_requests": 12,
+      "peak_units": 12,
+      "peak_by_units": {
+       "1": 12
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 16627.34872100009,
+       "second_max_ms": 2855.741205999948,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 16574.063492000278,
+       "second_max_ms": 2834.5716040003026,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.3313784993442823,
+       "p95": 1.741453250133418
+      },
+      "gateway_ms": {
+       "p50": 18.725753000126133,
+       "p95": 23.601133499823845
+      },
+      "vllm_ms": {
+       "p50": 2822.6102065000305,
+       "p95": 3189.678167000011
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U8K-O512-c12-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 12.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.97165991902834,
+     "preemptions": 0.0,
+     "waiting_peak": 11.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 3203.580647749277,
+        "tpot": 46.516952165850704,
+        "long": null
+       },
+       "R": {
+        "short": 0.5339301079582128,
+        "tpot": 0.46516952165850706,
+        "long": null
+       },
+       "max_r": 0.5339301079582128,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16654.472768999767,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 3204.094124749554,
+        "tpot": 46.52159280185996,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3261.6759444503373,
+        "tpot": 46.51279522544243,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 3184.0328090002004,
+        "tpot": 46.516952165850704,
+        "long": null
+       },
+       "R": {
+        "short": 0.5306721348333667,
+        "tpot": 0.46516952165850706,
+        "long": null
+       },
+       "max_r": 0.5306721348333667,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16599.58152299987,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 3184.288891399774,
+        "tpot": 46.52159280185996,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3241.221468699416,
+        "tpot": 46.51279522544243,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       24.966949,
+       389.510439
+      ],
+      "u_w": 11.990461620916614,
+      "n_w": 11.990461620916614,
+      "peak_requests": 12,
+      "peak_units": 12,
+      "peak_by_units": {
+       "1": 12
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 16654.472768999767,
+       "second_max_ms": 2843.146911000076,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 16599.58152299987,
+       "second_max_ms": 2821.5771060004045,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2889179997728206,
+       "p95": 1.7663922508290852
+      },
+      "gateway_ms": {
+       "p50": 18.622907499775465,
+       "p95": 23.523177000697615
+      },
+      "vllm_ms": {
+       "p50": 2822.921804499856,
+       "p95": 3184.0328090002004
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U8K-O512-c12-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 12.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.97165991902834,
+     "preemptions": 0.0,
+     "waiting_peak": 10.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 3057.7883229998406,
+        "tpot": 46.50973378864777,
+        "long": null
+       },
+       "R": {
+        "short": 0.5096313871666401,
+        "tpot": 0.4650973378864777,
+        "long": null
+       },
+       "max_r": 0.5096313871666401,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16650.341151000248,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 3172.7392750006393,
+        "tpot": 46.51176742465659,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3261.316012200325,
+        "tpot": 46.5005055458897,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 3039.518124749975,
+        "tpot": 46.50973378864777,
+        "long": null
+       },
+       "R": {
+        "short": 0.5065863541249959,
+        "tpot": 0.4650973378864777,
+        "long": null
+       },
+       "max_r": 0.5065863541249959,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16596.417127000677,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 3153.258304949576,
+        "tpot": 46.51176742465659,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3240.0922060008384,
+        "tpot": 46.5005055458897,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       24.965585,
+       389.453375
+      ],
+      "u_w": 11.990571212275725,
+      "n_w": 11.990571212275725,
+      "peak_requests": 12,
+      "peak_units": 12,
+      "peak_by_units": {
+       "1": 12
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 16650.341151000248,
+       "second_max_ms": 2842.018225001084,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 16596.417127000677,
+       "second_max_ms": 2820.910651000304,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2819100002161576,
+       "p95": 1.8491897508283728
+      },
+      "gateway_ms": {
+       "p50": 18.3429585003978,
+       "p95": 23.23885725081709
+      },
+      "vllm_ms": {
+       "p50": 2821.563031000551,
+       "p95": 3039.518124749975
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-U8K-O512-c12-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 12.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.97165991902834,
+     "preemptions": 0.0,
+     "waiting_peak": 10.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 2846.3008637495477,
+        "tpot": 46.507098481899106,
+        "long": null
+       },
+       "R": {
+        "short": 0.4743834772915913,
+        "tpot": 0.46507098481899106,
+        "long": null
+       },
+       "max_r": 0.4743834772915913,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16652.865579999343,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 2846.338317549362,
+        "tpot": 46.50934095665374,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2916.9486701501382,
+        "tpot": 46.50461765684689,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 2829.110847499578,
+        "tpot": 46.507098481899106,
+        "long": null
+       },
+       "R": {
+        "short": 0.471518474583263,
+        "tpot": 0.46507098481899106,
+        "long": null
+       },
+       "max_r": 0.471518474583263,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 16593.60179400028,
+       "n": {
+        "short": 176,
+        "long": 0,
+        "all": 176
+       },
+       "Y_late": {
+        "short": 2829.188361500019,
+        "tpot": 46.50934095665374,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2900.000670748629,
+        "tpot": 46.50461765684689,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       24.96276,
+       389.443416
+      ],
+      "u_w": 11.990563768081014,
+      "n_w": 11.990563768081014,
+      "peak_requests": 12,
+      "peak_units": 12,
+      "peak_by_units": {
+       "1": 12
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 16652.865579999343,
+       "second_max_ms": 2843.2349619997694,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 16593.60179400028,
+       "second_max_ms": 2821.7517520006368,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.296647498747916,
+       "p95": 1.7231872484444466
+      },
+      "gateway_ms": {
+       "p50": 18.452371000421408,
+       "p95": 23.13862475057249
+      },
+      "vllm_ms": {
+       "p50": 2821.662458499304,
+       "p95": 2829.110847499578
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    }
+   ],
+   "descriptive": {
+    "decomposition": {
+     "transport_ms": {
+      "p50": 1.2990209997951752,
+      "p95": 1.7769685501662025
+     },
+     "gateway_ms": {
+      "p50": 18.547487999967416,
+      "p95": 23.369999149872456
+     },
+     "vllm_ms": {
+      "p50": 2821.676888998809,
+      "p95": 3183.65384585029
+     },
+     "queue_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     },
+     "prefill_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     }
+    },
+    "in_vllm": {
+     "n_w": [
+      11.990479987441287,
+      11.990440923635127,
+      11.990461620916614,
+      11.990571212275725,
+      11.990563768081014
+     ],
+     "u_w": [
+      11.990479987441287,
+      11.990440923635127,
+      11.990461620916614,
+      11.990571212275725,
+      11.990563768081014
+     ],
+     "peak_requests": 12,
+     "peak_units": 12
+    }
+   }
+  },
+  "GW-M8K-T": {
+   "study": "V-GW",
+   "unit": "VG-M8K-T",
+   "C": 4,
+   "N": 200,
+   "n": 5,
+   "classes": [
+    "mixed-8k-t"
+   ],
+   "view": "client",
+   "judged_views": [
+    "client"
+   ],
+   "class": "PASS",
+   "n_valid": 5,
+   "n_ok": 5,
+   "views": {
+    "client": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "worst_R": {
+      "short": 0.796114242466759,
+      "tpot": 0.7759193968740586,
+      "long": 0.5654603051176101
+     },
+     "pooled": {
+      "Y_short": 4767.5346091509255,
+      "Y_tpot": 77.47818529527609,
+      "Y_long": 11309.206102352202,
+      "R_long": 0.5654603051176101
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    },
+    "upstream": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "worst_R": {
+      "short": 0.793548579108301,
+      "tpot": 0.7759193968740586,
+      "long": 0.5610206867275235
+     },
+     "pooled": {
+      "Y_short": 4750.96028459966,
+      "Y_tpot": 77.47818529527609,
+      "Y_long": 11220.41373455047,
+      "R_long": 0.5610206867275235
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    }
+   },
+   "window_sensitive": false,
+   "skipped": [],
+   "not_run_cap": [],
+   "runs": [
+    {
+     "tag": "V-GW-M8K-T-c4-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 4.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6842105263157895,
+     "preemptions": 0.0,
+     "waiting_peak": 0.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 4753.130225649977,
+        "tpot": 77.32495356141717,
+        "long": 11260.487203900004
+       },
+       "R": {
+        "short": 0.7921883709416627,
+        "tpot": 0.7732495356141718,
+        "long": 0.5630243601950002
+       },
+       "max_r": 0.7921883709416627,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5554.879970999991,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4589.812520800069,
+        "tpot": 77.38048854409443,
+        "long": 11278.50421180001
+       },
+       "Y_full": {
+        "short": 5021.220136749959,
+        "tpot": 77.2138835960627,
+        "long": 11260.487203900004
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 4734.387219450036,
+        "tpot": 77.32495356141717,
+        "long": 11186.507341550043
+       },
+       "R": {
+        "short": 0.7890645365750061,
+        "tpot": 0.7732495356141718,
+        "long": 0.5593253670775021
+       },
+       "max_r": 0.7890645365750061,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5528.121583000029,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4567.039771999907,
+        "tpot": 77.38048854409443,
+        "long": 11203.89118110004
+       },
+       "Y_full": {
+        "short": 4999.167681200029,
+        "tpot": 77.2138835960627,
+        "long": 11186.507341550043
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       7.313051,
+       474.082073
+      ],
+      "u_w": 3.989269949881121,
+      "n_w": 3.989269949881121,
+      "peak_requests": 4,
+      "peak_units": 4,
+      "peak_by_units": {
+       "1": 4
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 5554.879970999991,
+       "second_max_ms": 11081.949242000064,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 5528.121583000029,
+       "second_max_ms": 10979.255995000018,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.240631500024847,
+       "p95": 1.7546496500419375
+      },
+      "gateway_ms": {
+       "p50": 19.210453000027883,
+       "p95": 73.90069880004124
+      },
+      "vllm_ms": {
+       "p50": 2960.0136139999904,
+       "p95": 9892.158647150023
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-M8K-T-c4-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 4.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6639676113360324,
+     "preemptions": 0.0,
+     "waiting_peak": 0.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 4733.247491700013,
+        "tpot": 77.36054800669325,
+        "long": 11270.597236600634
+       },
+       "R": {
+        "short": 0.7888745819500022,
+        "tpot": 0.7736054800669325,
+        "long": 0.5635298618300317
+       },
+       "max_r": 0.7888745819500022,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5536.6821090001395,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4580.0535184002,
+        "tpot": 77.36724138149502,
+        "long": 11292.022209200604
+       },
+       "Y_full": {
+        "short": 5066.160996750365,
+        "tpot": 77.34716125708968,
+        "long": 11270.597236600634
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 4715.717224700074,
+        "tpot": 77.36054800669325,
+        "long": 11197.65702014995
+       },
+       "R": {
+        "short": 0.7859528707833457,
+        "tpot": 0.7736054800669325,
+        "long": 0.5598828510074976
+       },
+       "max_r": 0.7859528707833457,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5509.763891000148,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4556.142778600406,
+        "tpot": 77.36724138149502,
+        "long": 11218.53048729995
+       },
+       "Y_full": {
+        "short": 5044.407272800027,
+        "tpot": 77.34716125708968,
+        "long": 11197.65702014995
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       7.294798,
+       474.450464
+      ],
+      "u_w": 3.989237388378374,
+      "n_w": 3.989237388378374,
+      "peak_requests": 4,
+      "peak_units": 4,
+      "peak_by_units": {
+       "1": 4
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 5536.6821090001395,
+       "second_max_ms": 11161.08521499973,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 5509.763891000148,
+       "second_max_ms": 11059.106967999924,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2289814999348891,
+       "p95": 1.8315987504593068
+      },
+      "gateway_ms": {
+       "p50": 19.43526649984051,
+       "p95": 72.93848559984326
+      },
+      "vllm_ms": {
+       "p50": 2959.846227500293,
+       "p95": 9847.82949570017
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-M8K-T-c4-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 4.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6761133603238867,
+     "preemptions": 0.0,
+     "waiting_peak": 0.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 4748.095997249811,
+        "tpot": 77.59193968740587,
+        "long": 11278.86108060029
+       },
+       "R": {
+        "short": 0.7913493328749686,
+        "tpot": 0.7759193968740586,
+        "long": 0.5639430540300145
+       },
+       "max_r": 0.7913493328749686,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5536.351337999804,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4647.476737400211,
+        "tpot": 77.6381860401599,
+        "long": 11300.011042200276
+       },
+       "Y_full": {
+        "short": 5052.419556799988,
+        "tpot": 77.49944698189785,
+        "long": 11278.86108060029
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 4729.412493750306,
+        "tpot": 77.59193968740587,
+        "long": 11190.611950800212
+       },
+       "R": {
+        "short": 0.788235415625051,
+        "tpot": 0.7759193968740586,
+        "long": 0.5595305975400106
+       },
+       "max_r": 0.788235415625051,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5510.431738000079,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4623.747204800202,
+        "tpot": 77.6381860401599,
+        "long": 11211.839554600192
+       },
+       "Y_full": {
+        "short": 5030.268252999715,
+        "tpot": 77.49944698189785,
+        "long": 11190.611950800212
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       7.290556,
+       474.140912
+      ],
+      "u_w": 3.9893093387723577,
+      "n_w": 3.9893093387723577,
+      "peak_requests": 4,
+      "peak_units": 4,
+      "peak_by_units": {
+       "1": 4
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 5536.351337999804,
+       "second_max_ms": 11138.626336000016,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 5510.431738000079,
+       "second_max_ms": 11037.974433999807,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2306299995543668,
+       "p95": 1.9072718501774943
+      },
+      "gateway_ms": {
+       "p50": 19.27009300015925,
+       "p95": 71.82318689965541
+      },
+      "vllm_ms": {
+       "p50": 2958.13366450011,
+       "p95": 9871.3273540503
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-M8K-T-c4-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 4.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6639676113360324,
+     "preemptions": 0.0,
+     "waiting_peak": 0.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 4776.685454800554,
+        "tpot": 77.24205008386107,
+        "long": 11297.03029690063
+       },
+       "R": {
+        "short": 0.796114242466759,
+        "tpot": 0.7724205008386107,
+        "long": 0.5648515148450315
+       },
+       "max_r": 0.796114242466759,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5530.761557000005,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4550.768789199718,
+        "tpot": 77.33921552795852,
+        "long": 11316.295626800638
+       },
+       "Y_full": {
+        "short": 5047.655637950175,
+        "tpot": 77.04771919566622,
+        "long": 11297.03029690063
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 4761.291474649806,
+        "tpot": 77.24205008386107,
+        "long": 11221.900032749636
+       },
+       "R": {
+        "short": 0.793548579108301,
+        "tpot": 0.7724205008386107,
+        "long": 0.5610950016374818
+       },
+       "max_r": 0.793548579108301,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5503.983896000136,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4527.051311200193,
+        "tpot": 77.33921552795852,
+        "long": 11240.68531249959
+       },
+       "Y_full": {
+        "short": 5026.447572201052,
+        "tpot": 77.04771919566622,
+        "long": 11221.900032749636
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       7.288823,
+       474.534734
+      ],
+      "u_w": 3.9893141044523763,
+      "n_w": 3.9893141044523763,
+      "peak_requests": 4,
+      "peak_units": 4,
+      "peak_by_units": {
+       "1": 4
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 5530.761557000005,
+       "second_max_ms": 11130.734186999689,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 5503.983896000136,
+       "second_max_ms": 11028.57511000002,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2348740010565962,
+       "p95": 2.0026164009323097
+      },
+      "gateway_ms": {
+       "p50": 19.243662499320635,
+       "p95": 73.12227804995926
+      },
+      "vllm_ms": {
+       "p50": 2961.9048570002633,
+       "p95": 9875.205994849784
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-GW-M8K-T-c4-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 4.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6639676113360324,
+     "preemptions": 0.0,
+     "waiting_peak": 0.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 4776.085363151651,
+        "tpot": 77.01003266417007,
+        "long": 11312.318222702197
+       },
+       "R": {
+        "short": 0.7960142271919418,
+        "tpot": 0.7701003266417007,
+        "long": 0.5656159111351099
+       },
+       "max_r": 0.7960142271919418,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5537.848874999327,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4733.539694400679,
+        "tpot": 77.0267153145564,
+        "long": 11330.88319840208
+       },
+       "Y_full": {
+        "short": 5051.645209347772,
+        "tpot": 76.97666736339741,
+        "long": 11312.318222702197
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 4755.594726199524,
+        "tpot": 77.01003266417007,
+        "long": 11223.69162355044
+       },
+       "R": {
+        "short": 0.792599121033254,
+        "tpot": 0.7701003266417007,
+        "long": 0.561184581177522
+       },
+       "max_r": 0.792599121033254,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 5510.653235000063,
+       "n": {
+        "short": 172,
+        "long": 20,
+        "all": 192
+       },
+       "Y_late": {
+        "short": 4710.572620999301,
+        "tpot": 77.0267153145564,
+        "long": 11242.568805100382
+       },
+       "Y_full": {
+        "short": 5029.928047049909,
+        "tpot": 76.97666736339741,
+        "long": 11223.69162355044
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       7.297476,
+       474.502207
+      ],
+      "u_w": 3.989278850003769,
+      "n_w": 3.989278850003769,
+      "peak_requests": 4,
+      "peak_units": 4,
+      "peak_by_units": {
+       "1": 4
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 5537.848874999327,
+       "second_max_ms": 11132.391946001007,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 5510.653235000063,
+       "second_max_ms": 11022.26395300022,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2467835022107465,
+       "p95": 1.8703110505157383
+      },
+      "gateway_ms": {
+       "p50": 19.44682599969383,
+       "p95": 72.41406890116195
+      },
+      "vllm_ms": {
+       "p50": 2970.6713930008846,
+       "p95": 9865.379248951467
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    }
+   ],
+   "descriptive": {
+    "decomposition": {
+     "transport_ms": {
+      "p50": 1.2353044996871176,
+      "p95": 1.866918899833081
+     },
+     "gateway_ms": {
+      "p50": 19.3142624993925,
+      "p95": 72.78832384954511
+     },
+     "vllm_ms": {
+      "p50": 2961.79562150013,
+      "p95": 9881.89516910079
+     },
+     "queue_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     },
+     "prefill_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     }
+    },
+    "in_vllm": {
+     "n_w": [
+      3.989269949881121,
+      3.989237388378374,
+      3.9893093387723577,
+      3.9893141044523763,
+      3.989278850003769
+     ],
+     "u_w": [
+      3.989269949881121,
+      3.989237388378374,
+      3.9893093387723577,
+      3.9893141044523763,
+      3.989278850003769
+     ],
+     "peak_requests": 4,
+     "peak_units": 4
+    }
+   }
+  },
+  "L-U2K": {
+   "study": "V1",
+   "unit": "V1-2K",
+   "C": 32,
+   "N": 320,
+   "n": 5,
+   "classes": [
+    "v-uniform-2k-o512"
+   ],
+   "view": "client",
+   "judged_views": [
+    "client"
+   ],
+   "class": "PASS",
+   "n_valid": 5,
+   "n_ok": 5,
+   "views": {
+    "client": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "FAIL",
+     "worst_R": {
+      "short": 0.5057109252499004,
+      "tpot": 0.6966897495140038,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 973.4924246488845,
+      "Y_tpot": 68.88169654339839,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    },
+    "upstream": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "FAIL",
+     "worst_R": {
+      "short": 0.5016031270002941,
+      "tpot": 0.6966897495140038,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 966.9771013492664,
+      "Y_tpot": 68.88169654339839,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    }
+   },
+   "window_sensitive": false,
+   "skipped": [],
+   "not_run_cap": [],
+   "runs": [
+    {
+     "tag": "V-L-U2K-c32-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.9919028340080972,
+     "preemptions": 0.0,
+     "waiting_peak": 27.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 826.3320502502438,
+        "tpot": 66.90478645850995,
+        "long": null
+       },
+       "R": {
+        "short": 0.4131660251251219,
+        "tpot": 0.6690478645850995,
+        "long": null
+       },
+       "max_r": 0.6690478645850995,
+       "fail": false,
+       "attainment": 0.99609375,
+       "burst_max_ttft_ms": 10391.466835000301,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 938.6660428503309,
+        "tpot": 68.47887011739263,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5507.564460300026,
+        "tpot": 71.92733097554273,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 818.4939629998098,
+        "tpot": 66.90478645850995,
+        "long": null
+       },
+       "R": {
+        "short": 0.4092469814999049,
+        "tpot": 0.6690478645850995,
+        "long": null
+       },
+       "max_r": 0.6690478645850995,
+       "fail": false,
+       "attainment": 0.99609375,
+       "burst_max_ttft_ms": 10345.679291000124,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 930.96283259997,
+        "tpot": 68.47887011739263,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5454.275891300203,
+        "tpot": 71.92733097554273,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       10.53631,
+       130.505446
+      ],
+      "u_w": 31.985572522586143,
+      "n_w": 31.985572522586143,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10391.466835000301,
+       "second_max_ms": 975.2911529999437,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 10345.679291000124,
+       "second_max_ms": 967.275508000057,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.0625195000102394,
+       "p95": 2.5003192498616045
+      },
+      "gateway_ms": {
+       "p50": 5.965669500028525,
+       "p95": 7.424303249990771
+      },
+      "vllm_ms": {
+       "p50": 396.1925295000128,
+       "p95": 818.4939629998098
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-L-U2K-c32-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 1.0,
+     "preemptions": 0.0,
+     "waiting_peak": 28.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 1011.4218504998007,
+        "tpot": 67.67792364566166,
+        "long": null
+       },
+       "R": {
+        "short": 0.5057109252499004,
+        "tpot": 0.6767792364566166,
+        "long": null
+       },
+       "max_r": 0.6767792364566166,
+       "fail": false,
+       "attainment": 0.984375,
+       "burst_max_ttft_ms": 10625.044176999836,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1007.4205814496962,
+        "tpot": 67.54452172281071,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5494.029696900319,
+        "tpot": 77.91494114438326,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 1003.2062540005882,
+        "tpot": 67.67792364566166,
+        "long": null
+       },
+       "R": {
+        "short": 0.5016031270002941,
+        "tpot": 0.6767792364566166,
+        "long": null
+       },
+       "max_r": 0.6767792364566166,
+       "fail": false,
+       "attainment": 0.984375,
+       "burst_max_ttft_ms": 10578.301303000444,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 1001.1213546504222,
+        "tpot": 67.54452172281071,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5439.140004550249,
+        "tpot": 77.91494114438326,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       7.526744,
+       132.7585
+      ],
+      "u_w": 31.98647688051264,
+      "n_w": 31.98647688051264,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10625.044176999836,
+       "second_max_ms": 3162.8379710000445,
+       "second_over": 1
+      },
+      "upstream": {
+       "first_max_ms": 10578.301303000444,
+       "second_max_ms": 3156.070813999577,
+       "second_over": 1
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.0817409997798677,
+       "p95": 2.582718500207193
+      },
+      "gateway_ms": {
+       "p50": 5.85834449975664,
+       "p95": 7.467574250313191
+      },
+      "vllm_ms": {
+       "p50": 385.9828700001344,
+       "p95": 1003.2062540005882
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-L-U2K-c32-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.9757085020242915,
+     "preemptions": 0.0,
+     "waiting_peak": 28.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 973.2575160010128,
+        "tpot": 69.66897495140037,
+        "long": null
+       },
+       "R": {
+        "short": 0.4866287580005064,
+        "tpot": 0.6966897495140038,
+        "long": null
+       },
+       "max_r": 0.6966897495140038,
+       "fail": false,
+       "attainment": 0.9921875,
+       "burst_max_ttft_ms": 10618.895292000161,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 974.0287752006225,
+        "tpot": 69.93330507120511,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5492.737998699344,
+        "tpot": 77.6455500217577,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 966.0589920003986,
+        "tpot": 69.66897495140037,
+        "long": null
+       },
+       "R": {
+        "short": 0.4830294960001993,
+        "tpot": 0.6966897495140038,
+        "long": null
+       },
+       "max_r": 0.6966897495140038,
+       "fail": false,
+       "attainment": 0.9921875,
+       "burst_max_ttft_ms": 10563.329225000416,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 966.0899975988286,
+        "tpot": 69.93330507120511,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5445.839524400621,
+        "tpot": 77.6455500217577,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       7.174851,
+       131.702697
+      ],
+      "u_w": 31.986531542511383,
+      "n_w": 31.986531542511383,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10618.895292000161,
+       "second_max_ms": 3507.296881000002,
+       "second_over": 1
+      },
+      "upstream": {
+       "first_max_ms": 10563.329225000416,
+       "second_max_ms": 3499.927037000816,
+       "second_over": 1
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.098627500141447,
+       "p95": 2.328613749341457
+      },
+      "gateway_ms": {
+       "p50": 5.814388499857159,
+       "p95": 7.120138500340545
+      },
+      "vllm_ms": {
+       "p50": 391.0200235004595,
+       "p95": 966.0589920003986
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-L-U2K-c32-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.9919028340080972,
+     "preemptions": 0.0,
+     "waiting_peak": 27.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 976.66151149906,
+        "tpot": 69.01878787495235,
+        "long": null
+       },
+       "R": {
+        "short": 0.48833075574953,
+        "tpot": 0.6901878787495235,
+        "long": null
+       },
+       "max_r": 0.6901878787495235,
+       "fail": false,
+       "attainment": 0.99609375,
+       "burst_max_ttft_ms": 10357.657156000641,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 986.4615866984423,
+        "tpot": 69.87073774835665,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5485.456103601249,
+        "tpot": 81.89076129240071,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 970.1783692489698,
+        "tpot": 69.01878787495235,
+        "long": null
+       },
+       "R": {
+        "short": 0.4850891846244849,
+        "tpot": 0.6901878787495235,
+        "long": null
+       },
+       "max_r": 0.6901878787495235,
+       "fail": false,
+       "attainment": 0.99609375,
+       "burst_max_ttft_ms": 10307.567710000512,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 979.5239772000969,
+        "tpot": 69.87073774835665,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5434.887800698565,
+        "tpot": 81.89076129240071,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       10.543566,
+       130.95526
+      ],
+      "u_w": 31.986010154462242,
+      "n_w": 31.986010154462242,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10357.657156000641,
+       "second_max_ms": 718.6599340002431,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 10307.567710000512,
+       "second_max_ms": 710.0107480000588,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.0444645004099584,
+       "p95": 2.632011499372311
+      },
+      "gateway_ms": {
+       "p50": 5.6665310003154445,
+       "p95": 7.124827999177796
+      },
+      "vllm_ms": {
+       "p50": 394.1124850007327,
+       "p95": 970.1783692489698
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-L-U2K-c32-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 32.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.9878542510121457,
+     "preemptions": 0.0,
+     "waiting_peak": 28.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 964.902101000007,
+        "tpot": 67.46058868131118,
+        "long": null
+       },
+       "R": {
+        "short": 0.4824510505000035,
+        "tpot": 0.6746058868131118,
+        "long": null
+       },
+       "max_r": 0.6746058868131118,
+       "fail": false,
+       "attainment": 0.9921875,
+       "burst_max_ttft_ms": 10615.053165000063,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 728.7922764512587,
+        "tpot": 68.38185223662896,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5836.484327949805,
+        "tpot": 79.76960312399233,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 958.473005500764,
+        "tpot": 67.46058868131118,
+        "long": null
+       },
+       "R": {
+        "short": 0.479236502750382,
+        "tpot": 0.6746058868131118,
+        "long": null
+       },
+       "max_r": 0.6746058868131118,
+       "fail": false,
+       "attainment": 0.9921875,
+       "burst_max_ttft_ms": 10564.844622000237,
+       "n": {
+        "short": 256,
+        "long": 0,
+        "all": 256
+       },
+       "Y_late": {
+        "short": 722.9403593993993,
+        "tpot": 68.38185223662896,
+        "long": null
+       },
+       "Y_full": {
+        "short": 5787.353293550226,
+        "tpot": 79.76960312399233,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       4.113449,
+       131.049974
+      ],
+      "u_w": 31.986584405079626,
+      "n_w": 31.986584405079626,
+      "peak_requests": 32,
+      "peak_units": 32,
+      "peak_by_units": {
+       "1": 32
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 10615.053165000063,
+       "second_max_ms": 6839.807798000038,
+       "second_over": 2
+      },
+      "upstream": {
+       "first_max_ms": 10564.844622000237,
+       "second_max_ms": 6832.5946040004055,
+       "second_over": 2
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.1008484989361023,
+       "p95": 2.587467000921606
+      },
+      "gateway_ms": {
+       "p50": 5.904061499677482,
+       "p95": 7.3032580003200565
+      },
+      "vllm_ms": {
+       "p50": 385.1422375000766,
+       "p95": 958.473005500764
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    }
+   ],
+   "descriptive": {
+    "decomposition": {
+     "transport_ms": {
+      "p50": 1.08116949968462,
+      "p95": 2.571919050296856
+     },
+     "gateway_ms": {
+      "p50": 5.836338500557758,
+      "p95": 7.329165549344907
+     },
+     "vllm_ms": {
+      "p50": 386.48863950038503,
+      "p95": 966.9771013492664
+     },
+     "queue_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     },
+     "prefill_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     }
+    },
+    "in_vllm": {
+     "n_w": [
+      31.985572522586143,
+      31.98647688051264,
+      31.986531542511383,
+      31.986010154462242,
+      31.986584405079626
+     ],
+     "u_w": [
+      31.985572522586143,
+      31.98647688051264,
+      31.986531542511383,
+      31.986010154462242,
+      31.986584405079626
+     ],
+     "peak_requests": 32,
+     "peak_units": 32
+    },
+    "out_bins": [
+     {
+      "bin": [
+       1,
+       16
+      ],
+      "n": 46,
+      "ttft_p95_ms": 749.4170834993383,
+      "tpot_p95_ms": 303.07409135029997,
+      "ttft_over": 0.0,
+      "tpot_over": 0.09523809523809523
+     },
+     {
+      "bin": [
+       17,
+       64
+      ],
+      "n": 122,
+      "ttft_p95_ms": 747.0619070004432,
+      "tpot_p95_ms": 81.87255028699929,
+      "ttft_over": 0.0,
+      "tpot_over": 0.01639344262295082
+     },
+     {
+      "bin": [
+       65,
+       128
+      ],
+      "n": 173,
+      "ttft_p95_ms": 744.3625804015028,
+      "tpot_p95_ms": 75.55793862388579,
+      "ttft_over": 0.0,
+      "tpot_over": 0.0
+     },
+     {
+      "bin": [
+       129,
+       256
+      ],
+      "n": 308,
+      "ttft_p95_ms": 973.4191190987076,
+      "tpot_p95_ms": 67.09681793731792,
+      "ttft_over": 0.003246753246753247,
+      "tpot_over": 0.0
+     },
+     {
+      "bin": [
+       257,
+       512
+      ],
+      "n": 631,
+      "ttft_p95_ms": 1011.5924339997946,
+      "tpot_p95_ms": 62.80101726579792,
+      "ttft_over": 0.004754358161648178,
+      "tpot_over": 0.0
+     }
+    ]
+   }
+  },
+  "L-U8K": {
+   "study": "V1",
+   "unit": "V1-8K",
+   "C": 8,
+   "N": 200,
+   "n": 5,
+   "classes": [
+    "v-uniform-8k-o512-c8"
+   ],
+   "view": "client",
+   "judged_views": [
+    "client"
+   ],
+   "class": "PASS",
+   "n_valid": 5,
+   "n_ok": 5,
+   "views": {
+    "client": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "worst_R": {
+      "short": 0.47791321355005795,
+      "tpot": 0.7308196574026377,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2842.3114111002633,
+      "Y_tpot": 72.81984751602985,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    },
+    "upstream": {
+     "class": "PASS",
+     "class_late": "PASS",
+     "class_full": "PASS",
+     "worst_R": {
+      "short": 0.4744976956416243,
+      "tpot": 0.7308196574026377,
+      "long": null
+     },
+     "pooled": {
+      "Y_short": 2820.9410212484727,
+      "Y_tpot": 72.81984751602985,
+      "Y_long": null,
+      "R_long": null
+     },
+     "met": 5,
+     "conclusions": [
+      "pass"
+     ]
+    }
+   },
+   "window_sensitive": false,
+   "skipped": [],
+   "not_run_cap": [],
+   "runs": [
+    {
+     "tag": "V-L-U8K-c8-r1",
+     "block": 1,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6275303643724697,
+     "preemptions": 0.0,
+     "waiting_peak": 6.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 2811.4701892500107,
+        "tpot": 73.08196574026377,
+        "long": null
+       },
+       "R": {
+        "short": 0.46857836487500176,
+        "tpot": 0.7308196574026377,
+        "long": null
+       },
+       "max_r": 0.7308196574026377,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 11009.858753000004,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2808.0958702499997,
+        "tpot": 73.08008236555088,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2843.4815629999775,
+        "tpot": 74.97687832640365,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 2793.4071043999807,
+        "tpot": 73.08196574026377,
+        "long": null
+       },
+       "R": {
+        "short": 0.4655678507333301,
+        "tpot": 0.7308196574026377,
+        "long": null
+       },
+       "max_r": 0.7308196574026377,
+       "fail": false,
+       "attainment": 1.0,
+       "burst_max_ttft_ms": 10969.637451000039,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2789.683309999944,
+        "tpot": 73.08008236555088,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2825.908780200024,
+        "tpot": 74.97687832640365,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       12.094146,
+       347.130046
+      ],
+      "u_w": 7.989080501522375,
+      "n_w": 7.989080501522375,
+      "peak_requests": 8,
+      "peak_units": 8,
+      "peak_by_units": {
+       "1": 8
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 11009.858753000004,
+       "second_max_ms": 2828.046176999976,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 10969.637451000039,
+       "second_max_ms": 2803.6530919999905,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.208533999943029,
+       "p95": 1.6574290999557204
+      },
+      "gateway_ms": {
+       "p50": 18.82368700000825,
+       "p95": 23.936671950019672
+      },
+      "vllm_ms": {
+       "p50": 1444.1292925000369,
+       "p95": 2793.4071043999807
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-L-U8K-c8-r2",
+     "block": 2,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6275303643724697,
+     "preemptions": 0.0,
+     "waiting_peak": 6.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 2846.1928783999156,
+        "tpot": 66.68169344156104,
+        "long": null
+       },
+       "R": {
+        "short": 0.4743654797333193,
+        "tpot": 0.6668169344156104,
+        "long": null
+       },
+       "max_r": 0.6668169344156104,
+       "fail": false,
+       "attainment": 0.9945652173913043,
+       "burst_max_ttft_ms": 11039.719645999867,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2847.2237072498956,
+        "tpot": 67.01168627909492,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2968.935639500443,
+        "tpot": 67.62746118107354,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 2821.456388899651,
+        "tpot": 66.68169344156104,
+        "long": null
+       },
+       "R": {
+        "short": 0.47024273148327517,
+        "tpot": 0.6668169344156104,
+        "long": null
+       },
+       "max_r": 0.6668169344156104,
+       "fail": false,
+       "attainment": 0.9945652173913043,
+       "burst_max_ttft_ms": 10996.23007899936,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2823.431540999536,
+        "tpot": 67.01168627909492,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2950.346284549561,
+        "tpot": 67.62746118107354,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       11.972508,
+       352.672132
+      ],
+      "u_w": 7.989176301527118,
+      "n_w": 7.989176301527118,
+      "peak_requests": 8,
+      "peak_units": 8,
+      "peak_by_units": {
+       "1": 8
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 11039.719645999867,
+       "second_max_ms": 1497.6768249998713,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 10996.23007899936,
+       "second_max_ms": 1477.7231469997787,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.21161450033469,
+       "p95": 1.58692355016683
+      },
+      "gateway_ms": {
+       "p50": 19.06961099939508,
+       "p95": 24.00743500011231
+      },
+      "vllm_ms": {
+       "p50": 1452.6239544998134,
+       "p95": 2821.456388899651
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-L-U8K-c8-r3",
+     "block": 3,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6275303643724697,
+     "preemptions": 0.0,
+     "waiting_peak": 6.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 2867.479281300348,
+        "tpot": 73.06766541631235,
+        "long": null
+       },
+       "R": {
+        "short": 0.47791321355005795,
+        "tpot": 0.7306766541631236,
+        "long": null
+       },
+       "max_r": 0.7306766541631236,
+       "fail": false,
+       "attainment": 0.9836956521739131,
+       "burst_max_ttft_ms": 11023.704910998276,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2869.11093325034,
+        "tpot": 73.3379389807749,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3493.44868165036,
+        "tpot": 78.68536273705452,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 2846.9861738497457,
+        "tpot": 73.06766541631235,
+        "long": null
+       },
+       "R": {
+        "short": 0.4744976956416243,
+        "tpot": 0.7306766541631236,
+        "long": null
+       },
+       "max_r": 0.7306766541631236,
+       "fail": false,
+       "attainment": 0.9836956521739131,
+       "burst_max_ttft_ms": 10977.112839998881,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2848.1153082498167,
+        "tpot": 73.3379389807749,
+        "long": null
+       },
+       "Y_full": {
+        "short": 3476.3577431001145,
+        "tpot": 78.68536273705452,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       11.370496,
+       352.086297
+      ],
+      "u_w": 7.989305250917904,
+      "n_w": 7.989305250917904,
+      "peak_requests": 8,
+      "peak_units": 8,
+      "peak_by_units": {
+       "1": 8
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 11023.704910998276,
+       "second_max_ms": 2413.084693000201,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 10977.112839998881,
+       "second_max_ms": 2388.6552849999134,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2193430002298555,
+       "p95": 1.5873371002271597
+      },
+      "gateway_ms": {
+       "p50": 18.646491000254173,
+       "p95": 23.704563700721337
+      },
+      "vllm_ms": {
+       "p50": 1449.9142555005164,
+       "p95": 2846.9861738497457
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-L-U8K-c8-r4",
+     "block": 4,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6275303643724697,
+     "preemptions": 0.0,
+     "waiting_peak": 6.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 2829.6224587501456,
+        "tpot": 72.90243155250579,
+        "long": null
+       },
+       "R": {
+        "short": 0.4716037431250243,
+        "tpot": 0.7290243155250579,
+        "long": null
+       },
+       "max_r": 0.7290243155250579,
+       "fail": false,
+       "attainment": 0.9836956521739131,
+       "burst_max_ttft_ms": 11035.689305999767,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2829.2059177506417,
+        "tpot": 73.12663849328341,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2845.436023700404,
+        "tpot": 73.53103456385708,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 2808.495708350074,
+        "tpot": 72.90243155250579,
+        "long": null
+       },
+       "R": {
+        "short": 0.46808261805834567,
+        "tpot": 0.7290243155250579,
+        "long": null
+       },
+       "max_r": 0.7290243155250579,
+       "fail": false,
+       "attainment": 0.9836956521739131,
+       "burst_max_ttft_ms": 10994.271612000375,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2807.291849750527,
+        "tpot": 73.12663849328341,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2826.7201684012434,
+        "tpot": 73.53103456385708,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       12.549596,
+       356.988505
+      ],
+      "u_w": 7.989277338002485,
+      "n_w": 7.989277338002485,
+      "peak_requests": 8,
+      "peak_units": 8,
+      "peak_by_units": {
+       "1": 8
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 11035.689305999767,
+       "second_max_ms": 2845.12597200046,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 10994.271612000375,
+       "second_max_ms": 2825.772710999445,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.2143119993197615,
+       "p95": 1.601887999822793
+      },
+      "gateway_ms": {
+       "p50": 19.035990500015032,
+       "p95": 23.896483300086402
+      },
+      "vllm_ms": {
+       "p50": 1449.4912204991124,
+       "p95": 2808.495708350074
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    },
+    {
+     "tag": "V-L-U8K-c8-r5",
+     "block": 5,
+     "valid": true,
+     "reasons": [],
+     "inflight_peak": 8.0,
+     "inflight_le_c": true,
+     "kv_cache_usage_peak": 0.6275303643724697,
+     "preemptions": 0.0,
+     "waiting_peak": 6.0,
+     "outcome": "ok",
+     "views": {
+      "client": {
+       "Y": {
+        "short": 2850.3344264478073,
+        "tpot": 72.63310286870775,
+        "long": null
+       },
+       "R": {
+        "short": 0.4750557377413012,
+        "tpot": 0.7263310286870776,
+        "long": null
+       },
+       "max_r": 0.7263310286870776,
+       "fail": false,
+       "attainment": 0.9891304347826086,
+       "burst_max_ttft_ms": 11041.037094000785,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2850.787430247692,
+        "tpot": 69.89484423906282,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2904.2609225991396,
+        "tpot": 74.23388285523166,
+        "long": null
+       }
+      },
+      "upstream": {
+       "Y": {
+        "short": 2830.0246011493073,
+        "tpot": 72.63310286870775,
+        "long": null
+       },
+       "R": {
+        "short": 0.4716707668582179,
+        "tpot": 0.7263310286870776,
+        "long": null
+       },
+       "max_r": 0.7263310286870776,
+       "fail": false,
+       "attainment": 0.9891304347826086,
+       "burst_max_ttft_ms": 10996.478973997,
+       "n": {
+        "short": 184,
+        "long": 0,
+        "all": 184
+       },
+       "Y_late": {
+        "short": 2830.420831999618,
+        "tpot": 69.89484423906282,
+        "long": null
+       },
+       "Y_full": {
+        "short": 2890.203876050698,
+        "tpot": 74.23388285523166,
+        "long": null
+       }
+      }
+     },
+     "in_vllm": {
+      "t_w_s": [
+       12.416759,
+       355.73635
+      ],
+      "u_w": 7.989141310027951,
+      "n_w": 7.989141310027951,
+      "peak_requests": 8,
+      "peak_units": 8,
+      "peak_by_units": {
+       "1": 8
+      }
+     },
+     "nontrivial": null,
+     "e": null,
+     "waves": {
+      "client": {
+       "first_max_ms": 11041.037094000785,
+       "second_max_ms": 2071.588704999158,
+       "second_over": 0
+      },
+      "upstream": {
+       "first_max_ms": 10996.478973997,
+       "second_max_ms": 2048.0472780000127,
+       "second_over": 0
+      }
+     },
+     "decomposition": {
+      "transport_ms": {
+       "p50": 1.214223999340902,
+       "p95": 1.560862948463182
+      },
+      "gateway_ms": {
+       "p50": 18.735952500719577,
+       "p95": 24.9447260002853
+      },
+      "vllm_ms": {
+       "p50": 1451.5343999992183,
+       "p95": 2830.0246011493073
+      },
+      "queue_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      },
+      "prefill_wait_ms": {
+       "p50": 0.0,
+       "p95": 0.0
+      }
+     }
+    }
+   ],
+   "descriptive": {
+    "decomposition": {
+     "transport_ms": {
+      "p50": 1.214223999340902,
+      "p95": 1.5983014992343667
+     },
+     "gateway_ms": {
+      "p50": 18.8947280000491,
+      "p95": 24.113743650121933
+     },
+     "vllm_ms": {
+      "p50": 1449.854629499896,
+      "p95": 2820.9410212484727
+     },
+     "queue_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     },
+     "prefill_wait_ms": {
+      "p50": 0.0,
+      "p95": 0.0
+     }
+    },
+    "in_vllm": {
+     "n_w": [
+      7.989080501522375,
+      7.989176301527118,
+      7.989305250917904,
+      7.989277338002485,
+      7.989141310027951
+     ],
+     "u_w": [
+      7.989080501522375,
+      7.989176301527118,
+      7.989305250917904,
+      7.989277338002485,
+      7.989141310027951
+     ],
+     "peak_requests": 8,
+     "peak_units": 8
+    },
+    "out_bins": [
+     {
+      "bin": [
+       1,
+       16
+      ],
+      "n": 22,
+      "ttft_p95_ms": 1719.2343497003092,
+      "tpot_p95_ms": 15.176234133347558,
+      "ttft_over": 0.0,
+      "tpot_over": 0.047619047619047616
+     },
+     {
+      "bin": [
+       17,
+       64
+      ],
+      "n": 81,
+      "ttft_p95_ms": 2821.464302000095,
+      "tpot_p95_ms": 110.94203248565984,
+      "ttft_over": 0.0,
+      "tpot_over": 0.06172839506172839
+     },
+     {
+      "bin": [
+       65,
+       128
+      ],
+      "n": 109,
+      "ttft_p95_ms": 2847.6432415995077,
+      "tpot_p95_ms": 81.37734644588016,
+      "ttft_over": 0.0,
+      "tpot_over": 0.027522935779816515
+     },
+     {
+      "bin": [
+       129,
+       256
+      ],
+      "n": 231,
+      "ttft_p95_ms": 2833.11950749885,
+      "tpot_p95_ms": 72.02660900925517,
+      "ttft_over": 0.0,
+      "tpot_over": 0.0
+     },
+     {
+      "bin": [
+       257,
+       512
+      ],
+      "n": 477,
+      "ttft_p95_ms": 2840.439187600168,
+      "tpot_p95_ms": 63.03339318902546,
+      "ttft_over": 0.0,
+      "tpot_over": 0.0
+     }
+    ]
+   }
+  }
+ },
+ "secondary_slo": {
+  "S1": {
+   "slo": {
+    "id": "S1",
+    "ttft_p95_ms": {
+     "2048": 1000,
+     "8192": 3000,
+     "32768": 10000
+    },
+    "tpot_p95_ms": 50,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "points": {
+    "GW-U32K": {
+     "class": "FAIL",
+     "views": {
+      "client": "FAIL",
+      "upstream": "FAIL"
+     }
+    },
+    "GW-U2K-O512": {
+     "class": "FAIL",
+     "views": {
+      "client": "FAIL",
+      "upstream": "FAIL"
+     }
+    },
+    "GW-U8K-O512": {
+     "class": "FAIL",
+     "views": {
+      "client": "FAIL",
+      "upstream": "FAIL"
+     }
+    },
+    "GW-M8K-T": {
+     "class": "FAIL",
+     "views": {
+      "client": "FAIL",
+      "upstream": "FAIL"
+     }
+    },
+    "L-U2K": {
+     "class": "FAIL",
+     "views": {
+      "client": "FAIL",
+      "upstream": "FAIL"
+     }
+    },
+    "L-U8K": {
+     "class": "FAIL",
+     "views": {
+      "client": "FAIL",
+      "upstream": "FAIL"
+     }
+    }
+   }
+  },
+  "S3": {
+   "slo": {
+    "id": "S3",
+    "ttft_p95_ms": {
+     "2048": 2000,
+     "8192": 6000,
+     "32768": 20000
+    },
+    "tpot_p95_ms": 200,
+    "mixed_long": "budget"
+   },
+   "descriptive": true,
+   "points": {
+    "GW-U32K": {
+     "class": "PASS",
+     "views": {
+      "client": "PASS",
+      "upstream": "PASS"
+     }
+    },
+    "GW-U2K-O512": {
+     "class": "PASS",
+     "views": {
+      "client": "PASS",
+      "upstream": "PASS"
+     }
+    },
+    "GW-U8K-O512": {
+     "class": "PASS",
+     "views": {
+      "client": "PASS",
+      "upstream": "PASS"
+     }
+    },
+    "GW-M8K-T": {
+     "class": "PASS",
+     "views": {
+      "client": "PASS",
+      "upstream": "PASS"
+     }
+    },
+    "L-U2K": {
+     "class": "PASS",
+     "views": {
+      "client": "PASS",
+      "upstream": "PASS"
+     }
+    },
+    "L-U8K": {
+     "class": "PASS",
+     "views": {
+      "client": "PASS",
+      "upstream": "PASS"
+     }
+    }
+   }
+  }
+ },
+ "hypotheses": {
+  "H-GW1": {
+   "point": "GW-U32K",
+   "class": "PASS",
+   "verdict": "supported",
+   "predicted_classes": [
+    "PASS"
+   ],
+   "prediction_met": true
+  },
+  "H-GW2": {
+   "point": "GW-U2K-O512",
+   "class": "PASS",
+   "verdict": "supported",
+   "predicted_classes": [
+    "PASS"
+   ],
+   "prediction_met": true
+  },
+  "H-GW3": {
+   "point": "GW-U8K-O512",
+   "class": "PASS",
+   "verdict": "supported",
+   "predicted_classes": [
+    "PASS"
+   ],
+   "prediction_met": true
+  },
+  "H-GW4": {
+   "point": "GW-M8K-T",
+   "class": "PASS",
+   "verdict": "supported",
+   "predicted_classes": [
+    "FAIL",
+    "MARGINAL"
+   ],
+   "prediction_met": false
+  },
+  "H-L1": {
+   "point": "L-U2K",
+   "class": "PASS",
+   "verdict": "supported",
+   "predicted_classes": [
+    "PASS"
+   ],
+   "prediction_met": true
+  },
+  "H-L2": {
+   "point": "L-U8K",
+   "class": "PASS",
+   "verdict": "supported",
+   "predicted_classes": [
+    "PASS"
+   ],
+   "prediction_met": true
+  }
+ },
+ "units": {
+  "VG-32K": {
+   "points": [
+    "GW-U32K"
+   ],
+   "classes": {
+    "GW-U32K": "PASS"
+   },
+   "vetoed": null,
+   "holds": true,
+   "validation": {
+    "study": "V-GW",
+    "unit": "VG-32K",
+    "points": [
+     "GW-U32K"
+    ],
+    "measured_classes": [
+     "uniform-32k"
+    ],
+    "worst_r": {
+     "GW-U32K": {
+      "client": 0.6246887655511971,
+      "upstream": 0.6246887655511971
+     }
+    },
+    "n": 5,
+    "queue": {
+     "max_queue_wait_s": 2.0,
+     "request_deadline_s": 300.0
+    },
+    "pacing": null,
+    "admission": null
+   }
+  },
+  "VG-M8K-T": {
+   "points": [
+    "GW-M8K-T"
+   ],
+   "classes": {
+    "GW-M8K-T": "PASS"
+   },
+   "vetoed": null,
+   "holds": true,
+   "validation": {
+    "study": "V-GW",
+    "unit": "VG-M8K-T",
+    "points": [
+     "GW-M8K-T"
+    ],
+    "measured_classes": [
+     "mixed-8k-t"
+    ],
+    "worst_r": {
+     "GW-M8K-T": {
+      "client": 0.796114242466759,
+      "upstream": 0.793548579108301
+     }
+    },
+    "n": 5,
+    "queue": {
+     "max_queue_wait_s": 2.0,
+     "request_deadline_s": 300.0
+    },
+    "pacing": null,
+    "admission": null
+   }
+  },
+  "V1-2K": {
+   "points": [
+    "L-U2K",
+    "GW-U2K-O512"
+   ],
+   "classes": {
+    "L-U2K": "PASS",
+    "GW-U2K-O512": "PASS"
+   },
+   "vetoed": null,
+   "holds": true,
+   "validation": {
+    "study": "V1",
+    "unit": "V1-2K",
+    "points": [
+     "L-U2K",
+     "GW-U2K-O512"
+    ],
+    "measured_classes": [
+     "v-uniform-2k-o512"
+    ],
+    "worst_r": {
+     "L-U2K": {
+      "client": 0.6966897495140038,
+      "upstream": 0.6966897495140038
+     },
+     "GW-U2K-O512": {
+      "client": 0.7024676917499164,
+      "upstream": 0.698377104125143
+     }
+    },
+    "n": 5,
+    "queue": {
+     "max_queue_wait_s": 2.0,
+     "request_deadline_s": 300.0
+    },
+    "pacing": null,
+    "admission": null,
+    "datasets": {
+     "L-U2K": [
+      "v1-2048-r1",
+      "v1-2048-r2",
+      "v1-2048-r3",
+      "v1-2048-r4",
+      "v1-2048-r5"
+     ]
+    },
+    "datasets_sha256": {
+     "L-U2K": [
+      "52e9ee8eda1019f3564aa0c99377e080700cae2c929f131c4f1cf98d121db179",
+      "200e9b67ee987a6ab645746042d52e20c467204c516a68899efde3a7abc7347d",
+      "e13f57042de83dfbd3d0c1ef5a65e18c171f74c24dccd16faf4184d367adf30c",
+      "53faf76e533aada822d6fb62fde4d14a07a4c3dfa247bea8ff82c0436606cab1",
+      "0126906c2249f3cb7b31c7e792d3add8ad7621ac626dee976dcae3f6f25d3160"
+     ]
+    }
+   }
+  },
+  "V1-8K": {
+   "points": [
+    "L-U8K",
+    "GW-U8K-O512"
+   ],
+   "classes": {
+    "L-U8K": "PASS",
+    "GW-U8K-O512": "PASS"
+   },
+   "vetoed": null,
+   "holds": true,
+   "validation": {
+    "study": "V1",
+    "unit": "V1-8K",
+    "points": [
+     "L-U8K",
+     "GW-U8K-O512"
+    ],
+    "measured_classes": [
+     "v-uniform-8k-o512-c8",
+     "v-uniform-8k-o512"
+    ],
+    "worst_r": {
+     "L-U8K": {
+      "client": 0.7308196574026377,
+      "upstream": 0.7308196574026377
+     },
+     "GW-U8K-O512": {
+      "client": 0.5347856857916895,
+      "upstream": 0.5316130278333352
+     }
+    },
+    "n": 5,
+    "queue": {
+     "max_queue_wait_s": 2.0,
+     "request_deadline_s": 300.0
+    },
+    "pacing": null,
+    "admission": null,
+    "datasets": {
+     "L-U8K": [
+      "v1-8192-r1",
+      "v1-8192-r2",
+      "v1-8192-r3",
+      "v1-8192-r4",
+      "v1-8192-r5"
+     ]
+    },
+    "datasets_sha256": {
+     "L-U8K": [
+      "8f7ba0b23d6b9e4e92365bff24aa8e1c75b84f6c227941e5983e916341021ab1",
+      "d7fcaf685d53dc0c28d5941d6fccea6e63ec10fef96740d365a4739b486706ce",
+      "09e1ae52480f4507a8c0e562feb0790b0586e62fea01e065880909241ccbc674",
+      "6f006fda174a1488d430d71505ec4b8d469dec8f70d40f511beb727f3a6ffc38",
+      "e77fae9082fad259d6ab736ec94284c2f231e95695730f7a41f8ac05355ff612"
+     ]
+    }
+   }
+  }
+ },
+ "readings": {},
+ "not_supported": [
+  "Stage V measures one machine, one model and the frozen request path of one gateway version, closed loop, /v1/completions with ignore_eos; V-GW covers C_PROD only and outputs of 128 or 512; V1 five pinned sequences of outputs uniform on [1, 512]; V2 the slow queue settings (120 s / 600 s), no first-wave claim, no fast 429, only D-C's var sequence; V4 mixes 0.9 and 0.5 of v-uniform-2k / v-uniform-8k with pacing off, judged from admission (upstream), not from arrival; none covers prompt lengths that vary within a class, open loop, 32K or T under a policy, or pacing and weighted-v1 together."
+ ],
+ "runs": [
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "start",
+   "tag": "sentinel-start-U2K-c25",
+   "outcome": null,
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U8K",
+   "C": 8,
+   "block": 1,
+   "position": null,
+   "tag": "V-L-U8K-c8-r1",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-M8K-T",
+   "C": 4,
+   "block": 1,
+   "position": null,
+   "tag": "V-GW-M8K-T-c4-r1",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U32K",
+   "C": 2,
+   "block": 1,
+   "position": null,
+   "tag": "V-GW-U32K-c2-r1",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U2K-O512",
+   "C": 32,
+   "block": 1,
+   "position": null,
+   "tag": "V-GW-U2K-O512-c32-r1",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U8K-O512",
+   "C": 12,
+   "block": 1,
+   "position": null,
+   "tag": "V-GW-U8K-O512-c12-r1",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U2K",
+   "C": 32,
+   "block": 1,
+   "position": null,
+   "tag": "V-L-U2K-c32-r1",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-M8K-T",
+   "C": 4,
+   "block": 2,
+   "position": null,
+   "tag": "V-GW-M8K-T-c4-r2",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U2K",
+   "C": 32,
+   "block": 2,
+   "position": null,
+   "tag": "V-L-U2K-c32-r2",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U8K",
+   "C": 8,
+   "block": 2,
+   "position": null,
+   "tag": "V-L-U8K-c8-r2",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U2K-O512",
+   "C": 32,
+   "block": 2,
+   "position": null,
+   "tag": "V-GW-U2K-O512-c32-r2",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U32K",
+   "C": 2,
+   "block": 2,
+   "position": null,
+   "tag": "V-GW-U32K-c2-r2",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U8K-O512",
+   "C": 12,
+   "block": 2,
+   "position": null,
+   "tag": "V-GW-U8K-O512-c12-r2",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-M8K-T",
+   "C": 4,
+   "block": 3,
+   "position": null,
+   "tag": "V-GW-M8K-T-c4-r3",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U8K",
+   "C": 8,
+   "block": 3,
+   "position": null,
+   "tag": "V-L-U8K-c8-r3",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U2K-O512",
+   "C": 32,
+   "block": 3,
+   "position": null,
+   "tag": "V-GW-U2K-O512-c32-r3",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U32K",
+   "C": 2,
+   "block": 3,
+   "position": null,
+   "tag": "V-GW-U32K-c2-r3",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U8K-O512",
+   "C": 12,
+   "block": 3,
+   "position": null,
+   "tag": "V-GW-U8K-O512-c12-r3",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U2K",
+   "C": 32,
+   "block": 3,
+   "position": null,
+   "tag": "V-L-U2K-c32-r3",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U8K",
+   "C": 8,
+   "block": 4,
+   "position": null,
+   "tag": "V-L-U8K-c8-r4",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U2K",
+   "C": 32,
+   "block": 4,
+   "position": null,
+   "tag": "V-L-U2K-c32-r4",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U8K-O512",
+   "C": 12,
+   "block": 4,
+   "position": null,
+   "tag": "V-GW-U8K-O512-c12-r4",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U2K-O512",
+   "C": 32,
+   "block": 4,
+   "position": null,
+   "tag": "V-GW-U2K-O512-c32-r4",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U32K",
+   "C": 2,
+   "block": 4,
+   "position": null,
+   "tag": "V-GW-U32K-c2-r4",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-M8K-T",
+   "C": 4,
+   "block": 4,
+   "position": null,
+   "tag": "V-GW-M8K-T-c4-r4",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U2K",
+   "C": 32,
+   "block": 5,
+   "position": null,
+   "tag": "V-L-U2K-c32-r5",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U8K-O512",
+   "C": 12,
+   "block": 5,
+   "position": null,
+   "tag": "V-GW-U8K-O512-c12-r5",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U2K-O512",
+   "C": 32,
+   "block": 5,
+   "position": null,
+   "tag": "V-GW-U2K-O512-c32-r5",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-U32K",
+   "C": 2,
+   "block": 5,
+   "position": null,
+   "tag": "V-GW-U32K-c2-r5",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "GW-M8K-T",
+   "C": 4,
+   "block": 5,
+   "position": null,
+   "tag": "V-GW-M8K-T-c4-r5",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "V",
+   "workload": "L-U8K",
+   "C": 8,
+   "block": 5,
+   "position": null,
+   "tag": "V-L-U8K-c8-r5",
+   "outcome": "ok",
+   "valid": true,
+   "reasons": []
+  },
+  {
+   "phase": "sentinel",
+   "workload": "U2K",
+   "C": 25,
+   "block": null,
+   "position": "end",
+   "tag": "sentinel-end-U2K-c25",
+   "outcome": null,
+   "valid": true,
+   "reasons": []
+  }
+ ],
+ "provenance": {
+  "session_id": "formal-20261031-v-cls",
+  "session": "V-CLS",
+  "kind": "verify",
+  "deployed_commit": "c7ad0b4de3ebc2b08f03678bff40e19fcde2e2e1",
+  "stage_v_sha256": "fe1fb09415bc3ee56a5fa5187f52db5733cded86b87aca0dda54452fd060f02d",
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+  "plan_sha256": "e8d81160ec654d2c3f6f18435e56d3100c4aafe2a256edba7bfc3bddb90c4189",
+  "rows_sha256": "dca2ea7bec89ea0543f68f39e3a9494c18040ca44eda22538d49dde81f7b18f9",
+  "dataset_sha256": {
+   "mixed-8192": "ab548bed27570845e58c92888939bc4cf9872e35f51b774ba34d63a6405829b2",
+   "v1-2048-r1": "52e9ee8eda1019f3564aa0c99377e080700cae2c929f131c4f1cf98d121db179",
+   "v1-2048-r2": "200e9b67ee987a6ab645746042d52e20c467204c516a68899efde3a7abc7347d",
+   "v1-2048-r3": "e13f57042de83dfbd3d0c1ef5a65e18c171f74c24dccd16faf4184d367adf30c",
+   "v1-2048-r4": "53faf76e533aada822d6fb62fde4d14a07a4c3dfa247bea8ff82c0436606cab1",
+   "v1-2048-r5": "0126906c2249f3cb7b31c7e792d3add8ad7621ac626dee976dcae3f6f25d3160",
+   "v1-8192-r1": "8f7ba0b23d6b9e4e92365bff24aa8e1c75b84f6c227941e5983e916341021ab1",
+   "v1-8192-r2": "d7fcaf685d53dc0c28d5941d6fccea6e63ec10fef96740d365a4739b486706ce",
+   "v1-8192-r3": "09e1ae52480f4507a8c0e562feb0790b0586e62fea01e065880909241ccbc674",
+   "v1-8192-r4": "6f006fda174a1488d430d71505ec4b8d469dec8f70d40f511beb727f3a6ffc38",
+   "v1-8192-r5": "e77fae9082fad259d6ab736ec94284c2f231e95695730f7a41f8ac05355ff612"
+  },
+  "harness_sha256": "a1e4a564e2abd1fd524365388f14bd4b7fcd58875de61a56c9791e282190e76e",
+  "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259",
+  "capserve_sha256": "1113302ce74acfbcba40c5a90cd4db8696ccae2d97a260b078be886aaaa2ff87",
+  "profile_sha256": {
+   "GW-U32K": "5ff99c5981109a6c6d6c861f6937c6059a18dc33b992c53c015cff7ba4231c97",
+   "GW-U2K-O512": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+   "GW-U8K-O512": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+   "GW-M8K-T": "8c8d013a05e2344b777c0f3c40a90f084372a06c4b150246801769e2f1cffdea",
+   "L-U2K": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+   "L-U8K": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+  },
+  "freeze_mini": "smoke-v-20261031",
+  "started_at": "2026-10-31T10:16:22.801538+00:00",
+  "finished_at": "2026-10-31T15:34:22.550451+00:00"
+ },
+ "platform": {
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "driver": "617.42",
+  "vllm": "0.30.0",
+  "torch": "2.13.0+cu130",
+  "model": "RedHatAI/Qwen3.5-9B-quantized.w4a16@a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+  "server_argv_sha256": {
+   "U2K": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "L-U8K": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "GW-M8K-T": "56fcc2960d9f4186b83a343b2193ec8105ebcc0a45a8129c7fb4f55bd186a915",
+   "GW-U32K": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "GW-U2K-O512": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "GW-U8K-O512": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d",
+   "L-U2K": "54614663c11ad0a8805227c2e0e1b12fdc010209c85e143cf723c868e7640c7d"
+  },
+  "env": {
+   "HF_HOME": "/home/wenn0113/.cache/huggingface",
+   "HF_HUB_OFFLINE": "1",
+   "VLLM_GDN_DECODE_KERNEL": "triton",
+   "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+   "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+   "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+   "OTEL": {},
+   "engine_vars": [
+    "CUDA_HOME",
+    "VLLM_GDN_DECODE_KERNEL",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY"
+   ]
+  },
+  "K": 4294967296,
+  "U": "0.91",
+  "num_gpu_blocks": 248,
+  "block_size": 528
+ },
+ "report": {
+  "session_id": "formal-20261031-v-cls",
+  "uniform_session": "formal-20261009-coreb-uniform",
+  "advanced_references": true,
+  "stage_v_sha256": "fe1fb09415bc3ee56a5fa5187f52db5733cded86b87aca0dda54452fd060f02d",
+  "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+  "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b"
+ }
+}
