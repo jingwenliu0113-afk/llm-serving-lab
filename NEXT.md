@@ -19,6 +19,7 @@
 ### 目前進度（2026-10-31，使用者 10-31 要求繼續；有需要決定的事或全部做完才回報）
 
 - **2026-10-31 完成**（細節見各 decision）：
+  - README 的 Phase 3 結果段（`89b7773`；Stage V 段待結果後更新）。
   - 公開前唯讀預查 `docs/PUBLIC_RELEASE_AUDIT.md`（沒有 blocker；結案時的待辦與要使用者決定的事都在文件裡）。
   - Stage Q：q1-metal 第 2 次（最後一次）有效、q1-cuda 有效（040）；q2 正式 `formal-20261031-q2` 於 2026-10-30 23:37Z 起在 GPU lock 下執行。
   - E3：RTX pilot → 凍結（`cd615d0`）→ RTX 與 Mac 正式 → 分析 → 結果文件 **047**。
@@ -38,7 +39,9 @@
         → mini：`stage_v_plan.py --session mini --out /tmp/stage-v-plans/mini.json` 與 `run_stage_v.py --plan … --out results/stage_v/smoke-v-<date> --dataset v1-mini-8192=data/stage_v/v1-mini-8192.jsonl --dataset v4-mini=data/stage_v/v4-mini.jsonl --dataset var-2048=data/stage_d/var-2048.jsonl --dataset mixed-8192=data/core_b/mixed-8192.jsonl --gpu-lock-held --mini`。
         [x] 部署 `b792196`；IT-0–6 全部通過（05:42–05:44Z）；mini `smoke-v-20261031`（05:44:20–06:06:30Z）通過，13 項檢查都 true，凍結證據檢查沒有問題。
      c. [x] commit mini（`e5e1600`）→ **凍結**（2026-10-31，`[freeze] stage_v = true`、mini `smoke-v-20261031`、`gateway_path_sha256` `679a7c66…`、`tests/test_stage_v_frozen.py`；044 實作補記十三）→ 部署凍結 commit。
-     d. V-ADM（約 2.75 h）→ ≥ 2 h → V-CLS（約 5.25 h）→ 取回、report、結果 decision、產生器、README；是否改釘選由使用者決定。
+     d. **進行中**：部署凍結 commit `c7ad0b4`（研究副本）→ V-ADM `formal-20261031-v-adm`（約 06:35Z 起，預估 2.75 h，上限 3.5 h）→ ≥ 2 h（runner 強制）→ V-CLS `formal-20261031-v-cls`（預估 5.26 h，上限 7.0 h）
+        → 取回（`fetch_all_sessions.sh stage_v`）→ `stage_v_report.py` → 結果 decision → 產生器（`profile_gen --validation-session`，只為通過的單位寫 profile）→ README 的 Stage V 段；是否改釘選由使用者決定。
+        V-ADM 有 gateway 造成的無效 run 時停在空檔，先寫 decision log（044）。V-CLS 的遠端指令：`stage_v_plan.py --session V-CLS --formal`，dataset 為 mixed-8192 與 v1-{2048,8192}-r1..r5。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
 
 ### 下一步
