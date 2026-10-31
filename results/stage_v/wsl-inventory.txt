@@ -1,3 +1,4 @@
-# listed_at_utc 2026-10-31T08:15:04Z (tools/rtx/fetch_all_sessions.sh; every session directory on WSL)
+# listed_at_utc 2026-10-31T15:34:37Z (tools/rtx/fetch_all_sessions.sh; every session directory on WSL)
 formal-20261031-v-adm
+formal-20261031-v-cls
 smoke-v-20261031
