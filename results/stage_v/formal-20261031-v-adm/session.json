@@ -1,0 +1,6278 @@
+{
+ "schema_version": 1,
+ "session_id": "formal-20261031-v-adm",
+ "stage": "V",
+ "session": "V-ADM",
+ "kind": "verify",
+ "mode": "formal",
+ "formal": true,
+ "started_at": "2026-10-31T06:28:13.591830+00:00",
+ "finished_at": "2026-10-31T08:14:41.066094+00:00",
+ "in_progress": false,
+ "boots": [
+  {
+   "boot": 0,
+   "phase": "sentinel",
+   "workload": "U2K",
+   "block": null,
+   "attempt": null,
+   "position": "start",
+   "elapsed_s": 4.687,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b000-sentinel-start-U2K"
+  },
+  {
+   "boot": 1,
+   "phase": "V",
+   "workload": "P-U2K",
+   "block": 1,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 206.25,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b001-V-P-U2K-r1"
+  },
+  {
+   "boot": 2,
+   "phase": "V",
+   "workload": "F-U2K-var",
+   "block": 1,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 429.127,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b002-V-F-U2K-var-r1"
+  },
+  {
+   "boot": 3,
+   "phase": "V",
+   "workload": "W-90",
+   "block": 1,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 591.188,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b003-V-W-90-r1"
+  },
+  {
+   "boot": 4,
+   "phase": "V",
+   "workload": "W-50",
+   "block": 1,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 854.956,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b004-V-W-50-r1"
+  },
+  {
+   "boot": 5,
+   "phase": "V",
+   "workload": "P-U8K",
+   "block": 1,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 1272.686,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b005-V-P-U8K-r1"
+  },
+  {
+   "boot": 6,
+   "phase": "V",
+   "workload": "P-U2K-var",
+   "block": 1,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 1693.814,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b006-V-P-U2K-var-r1"
+  },
+  {
+   "boot": 7,
+   "phase": "V",
+   "workload": "F-U2K",
+   "block": 1,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 1856.214,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b007-V-F-U2K-r1"
+  },
+  {
+   "boot": 8,
+   "phase": "V",
+   "workload": "F-U2K-var",
+   "block": 2,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 2079.357,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b008-V-F-U2K-var-r2"
+  },
+  {
+   "boot": 9,
+   "phase": "V",
+   "workload": "F-U2K",
+   "block": 2,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 2241.333,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b009-V-F-U2K-r2"
+  },
+  {
+   "boot": 10,
+   "phase": "V",
+   "workload": "P-U8K",
+   "block": 2,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 2464.496,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b010-V-P-U8K-r2"
+  },
+  {
+   "boot": 11,
+   "phase": "V",
+   "workload": "P-U2K",
+   "block": 2,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 2885.404,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b011-V-P-U2K-r2"
+  },
+  {
+   "boot": 12,
+   "phase": "V",
+   "workload": "P-U8K",
+   "block": 3,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 3108.468,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b012-V-P-U8K-r3"
+  },
+  {
+   "boot": 13,
+   "phase": "V",
+   "workload": "F-U2K-var",
+   "block": 3,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 3529.553,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b013-V-F-U2K-var-r3"
+  },
+  {
+   "boot": 14,
+   "phase": "V",
+   "workload": "P-U2K",
+   "block": 3,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 3691.737,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b014-V-P-U2K-r3"
+  },
+  {
+   "boot": 15,
+   "phase": "V",
+   "workload": "F-U2K",
+   "block": 3,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 3914.582,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b015-V-F-U2K-r3"
+  },
+  {
+   "boot": 16,
+   "phase": "V",
+   "workload": "F-U2K",
+   "block": 4,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 4137.602,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b016-V-F-U2K-r4"
+  },
+  {
+   "boot": 17,
+   "phase": "V",
+   "workload": "P-U8K",
+   "block": 4,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 4360.605,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b017-V-P-U8K-r4"
+  },
+  {
+   "boot": 18,
+   "phase": "V",
+   "workload": "P-U2K",
+   "block": 4,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 4781.543,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b018-V-P-U2K-r4"
+  },
+  {
+   "boot": 19,
+   "phase": "V",
+   "workload": "F-U2K-var",
+   "block": 4,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 5004.499,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b019-V-F-U2K-var-r4"
+  },
+  {
+   "boot": 20,
+   "phase": "V",
+   "workload": "F-U2K",
+   "block": 5,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 5166.713,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b020-V-F-U2K-r5"
+  },
+  {
+   "boot": 21,
+   "phase": "V",
+   "workload": "P-U8K",
+   "block": 5,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 5389.842,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b021-V-P-U8K-r5"
+  },
+  {
+   "boot": 22,
+   "phase": "V",
+   "workload": "P-U2K",
+   "block": 5,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 5810.882,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b022-V-P-U2K-r5"
+  },
+  {
+   "boot": 23,
+   "phase": "V",
+   "workload": "F-U2K-var",
+   "block": 5,
+   "attempt": null,
+   "position": null,
+   "elapsed_s": 6033.86,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b023-V-F-U2K-var-r5"
+  },
+  {
+   "boot": 24,
+   "phase": "sentinel",
+   "workload": "U2K",
+   "block": null,
+   "attempt": null,
+   "position": "end",
+   "elapsed_s": 6196.151,
+   "reached_first_bench": true,
+   "problems": [],
+   "tag": "b024-sentinel-end-U2K"
+  }
+ ],
+ "runs": {
+  "b000-sentinel-start-U2K": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K",
+   "startup_s": 40.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "sentinel-start-U2K-c25",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b001-V-P-U2K-r1": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "56fe92bbabf18df49d4dac307149953ae72478d5a899d562ecf29cd7e205de59",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b001-V-P-U2K-r1.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U2K-c32-r1",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b002-V-F-U2K-var-r1": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-var",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b002-V-F-U2K-var-r1.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-var-c32-r1",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15328.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b003-V-W-90-r1": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-var",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "admission": {
+      "policy": "weighted-v1",
+      "budget": 32,
+      "max_queue": 32,
+      "classes": [
+       {
+        "name": "v-uniform-2k",
+        "units": 1,
+        "max_concurrency": 32
+       },
+       {
+        "name": "v-uniform-8k",
+        "units": 4,
+        "max_concurrency": 8
+       }
+      ]
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "01f18580becf72994bd1949151c0980ae33b21fac31acdfb66f0c53dca064e18",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b003-V-W-90-r1.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": null,
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 8064,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": {
+      "policy": "weighted-v1",
+      "budget": 32,
+      "max_queue": 32,
+      "classes": [
+       {
+        "name": "v-uniform-2k",
+        "units": 1,
+        "max_concurrency": 32
+       },
+       {
+        "name": "v-uniform-8k",
+        "units": 4,
+        "max_concurrency": 8
+       }
+      ]
+     },
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-W-90-c32-r1",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15414.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b004-V-W-50-r1": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-var",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "admission": {
+      "policy": "weighted-v1",
+      "budget": 32,
+      "max_queue": 32,
+      "classes": [
+       {
+        "name": "v-uniform-2k",
+        "units": 1,
+        "max_concurrency": 32
+       },
+       {
+        "name": "v-uniform-8k",
+        "units": 4,
+        "max_concurrency": 8
+       }
+      ]
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "01f18580becf72994bd1949151c0980ae33b21fac31acdfb66f0c53dca064e18",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b004-V-W-50-r1.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": null,
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 8064,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": {
+      "policy": "weighted-v1",
+      "budget": 32,
+      "max_queue": 32,
+      "classes": [
+       {
+        "name": "v-uniform-2k",
+        "units": 1,
+        "max_concurrency": 32
+       },
+       {
+        "name": "v-uniform-8k",
+        "units": 4,
+        "max_concurrency": 8
+       }
+      ]
+     },
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-W-50-c32-r1",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b005-V-P-U8K-r1": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U8K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-8k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "e7d3c23c8d1afea02ff0b3b60b2330c9912ff758b5b88b218c8e2b577fe931a3",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b005-V-P-U8K-r1.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-8k",
+     "limits": {
+      "max_concurrency": 8,
+      "max_queue": 8,
+      "max_prompt_tokens": 8064,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U8K-c8-r1",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15278.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b006-V-P-U2K-var-r1": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-var",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "56fe92bbabf18df49d4dac307149953ae72478d5a899d562ecf29cd7e205de59",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b006-V-P-U2K-var-r1.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U2K-var-c32-r1",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15328.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b007-V-F-U2K-r1": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b007-V-F-U2K-r1.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-c32-r1",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b008-V-F-U2K-var-r2": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-var",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b008-V-F-U2K-var-r2.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-var-c32-r2",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15330.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b009-V-F-U2K-r2": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b009-V-F-U2K-r2.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-c32-r2",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b010-V-P-U8K-r2": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U8K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-8k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "e7d3c23c8d1afea02ff0b3b60b2330c9912ff758b5b88b218c8e2b577fe931a3",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b010-V-P-U8K-r2.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-8k",
+     "limits": {
+      "max_concurrency": 8,
+      "max_queue": 8,
+      "max_prompt_tokens": 8064,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U8K-c8-r2",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15278.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b011-V-P-U2K-r2": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P3",
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "56fe92bbabf18df49d4dac307149953ae72478d5a899d562ecf29cd7e205de59",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b011-V-P-U2K-r2.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14888.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U2K-c32-r2",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b012-V-P-U8K-r3": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U8K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-8k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "e7d3c23c8d1afea02ff0b3b60b2330c9912ff758b5b88b218c8e2b577fe931a3",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b012-V-P-U8K-r3.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-8k",
+     "limits": {
+      "max_concurrency": 8,
+      "max_queue": 8,
+      "max_prompt_tokens": 8064,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U8K-c8-r3",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15278.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b013-V-F-U2K-var-r3": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-var",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b013-V-F-U2K-var-r3.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-var-c32-r3",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15330.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b014-V-P-U2K-r3": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "56fe92bbabf18df49d4dac307149953ae72478d5a899d562ecf29cd7e205de59",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b014-V-P-U2K-r3.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U2K-c32-r3",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b015-V-F-U2K-r3": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b015-V-F-U2K-r3.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-c32-r3",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b016-V-F-U2K-r4": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P3",
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b016-V-F-U2K-r4.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-c32-r4",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b017-V-P-U8K-r4": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U8K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-8k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "e7d3c23c8d1afea02ff0b3b60b2330c9912ff758b5b88b218c8e2b577fe931a3",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b017-V-P-U8K-r4.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-8k",
+     "limits": {
+      "max_concurrency": 8,
+      "max_queue": 8,
+      "max_prompt_tokens": 8064,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14888.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U8K-c8-r4",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15278.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b018-V-P-U2K-r4": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "56fe92bbabf18df49d4dac307149953ae72478d5a899d562ecf29cd7e205de59",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b018-V-P-U2K-r4.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14888.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U2K-c32-r4",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b019-V-F-U2K-var-r4": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-var",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b019-V-F-U2K-var-r4.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-var-c32-r4",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15328.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b020-V-F-U2K-r5": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b020-V-F-U2K-r5.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-c32-r5",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b021-V-P-U8K-r5": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P3",
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U8K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-8k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "e7d3c23c8d1afea02ff0b3b60b2330c9912ff758b5b88b218c8e2b577fe931a3",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b021-V-P-U8K-r5.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-8k",
+     "limits": {
+      "max_concurrency": 8,
+      "max_queue": 8,
+      "max_prompt_tokens": 8064,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 32256,
+      "rate_tokens_per_s": 5800
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U8K-c8-r5",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15278.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b022-V-P-U2K-r5": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-gw",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     }
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "56fe92bbabf18df49d4dac307149953ae72478d5a899d562ecf29cd7e205de59",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b022-V-P-U2K-r5.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": {
+      "burst_tokens": 9600,
+      "rate_tokens_per_s": 5920
+     },
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-P-U2K-c32-r5",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b023-V-F-U2K-var-r5": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K-var",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "gateway": {
+    "settings": {
+     "active_class": "v-uniform-2k",
+     "backend_url": "http://127.0.0.1:8000",
+     "host": "127.0.0.1",
+     "port": 8080,
+     "drain_timeout_s": 5,
+     "tokenizer": "local",
+     "tokenizer_path": "/home/wenn0113/.cache/huggingface/hub/models--RedHatAI--Qwen3.5-9B-quantized.w4a16/snapshots/a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+     "max_queue_wait_s": 120.0,
+     "request_deadline_s": 600.0
+    },
+    "profile": "service/profiles/provisional-stage-v.json",
+    "toml_sha256": "4ec861e2afb7f2dbc97d09d1cf5277e0f6046b2bdcbd613ee33a4f73e3d8d33b",
+    "argv": [
+     "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+     "-m",
+     "capserve",
+     "serve",
+     "--config",
+     "results/stage_v/formal-20261031-v-adm/raw/b023-V-F-U2K-var-r5.gateway.toml",
+     "--profile",
+     "/home/wenn0113/llm-serving-lab/service/profiles/provisional-stage-v.json",
+     "--allow-provisional"
+    ],
+    "readyz": {
+     "profile": {
+      "id": "provisional-stage-v",
+      "status": "provisional"
+     },
+     "serving_status": "provisional",
+     "active_class": "v-uniform-2k",
+     "limits": {
+      "max_concurrency": 32,
+      "max_queue": 32,
+      "max_prompt_tokens": 1920,
+      "max_output_tokens": 128
+     },
+     "queue": {
+      "max_queue_wait_s": 120.0,
+      "request_deadline_s": 600.0
+     },
+     "admission": null,
+     "prefill_pacing": null,
+     "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259"
+    },
+    "stop_problems": []
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "V-F-U2K-var-c32-r5",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15330.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  },
+  "b024-sentinel-end-U2K": {
+   "argv": [
+    ".venv/bin/vllm",
+    "serve",
+    "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "--revision",
+    "a398088c4228b0ae0c8c78df88fd1e4bf445f068",
+    "--language-model-only",
+    "--dtype",
+    "bfloat16",
+    "--max-model-len",
+    "32768",
+    "--max-num-seqs",
+    "128",
+    "--max-num-batched-tokens",
+    "2048",
+    "--performance-mode",
+    "balanced",
+    "--async-scheduling",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gpu-memory-utilization",
+    "0.91",
+    "--no-enable-prefix-caching",
+    "--gdn-prefill-backend",
+    "triton",
+    "--generation-config",
+    "vllm",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+    "--kv-cache-memory-bytes",
+    "4294967296"
+   ],
+   "env": {
+    "HF_HOME": "/home/wenn0113/.cache/huggingface",
+    "HF_HUB_OFFLINE": "1",
+    "VLLM_GDN_DECODE_KERNEL": "triton",
+    "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+    "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+    "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+    "OTEL": {},
+    "engine_vars": [
+     "CUDA_HOME",
+     "VLLM_GDN_DECODE_KERNEL",
+     "VLLM_WSL2_ENABLE_PIN_MEMORY"
+    ]
+   },
+   "idle": {
+    "attempt": 1,
+    "ok": true,
+    "problems": [],
+    "n": 30,
+    "bound_mib": 1018,
+    "idle_mib": 245,
+    "mem_min_mib": 245,
+    "mem_max_mib": 245,
+    "mem_range_mib": 0,
+    "util_max_pct": 0,
+    "pstates": [
+     "P5",
+     "P8"
+    ],
+    "compute_apps": [],
+    "mem_used_mib": [
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245,
+     245
+    ],
+    "util_pct": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "earlier": []
+   },
+   "server_base": "U2K",
+   "startup_s": 30.0,
+   "log_facts": {
+    "attention_backend": "FLASH_ATTN",
+    "attn_block_size": 528,
+    "text_only": true,
+    "gdn_prefill_kernel": "Triton/FLA",
+    "gdn_prefill_requested": "triton",
+    "gdn_decode_kernel": "triton",
+    "gdn_warmup_failed": null,
+    "kv_cache_tokens": 123128,
+    "max_concurrency": 3.76,
+    "max_model_len_logged": 32768
+   },
+   "nondefault": {
+    "max_num_batched_tokens": 2048,
+    "kv_cache_memory_bytes": 4294967296
+   },
+   "cache_config": {
+    "num_gpu_blocks": 248,
+    "block_size": 528
+   },
+   "spill": {
+    "tol_mib": 64,
+    "ready_tol_mib": 160,
+    "pre": {
+     "luid": "luid_0x00000000_0x00010334_phys_0",
+     "dedicated_mib": 254.3,
+     "shared_mib": 34.8
+    },
+    "readings": [
+     {
+      "when": "ready",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 14890.1,
+      "shared_mib": 114.8,
+      "delta_mib": 80.0,
+      "spilled": false
+     },
+     {
+      "when": "sentinel-end-U2K-c25",
+      "luid": "luid_0x00000000_0x00010334_phys_0",
+      "dedicated_mib": 15408.2,
+      "shared_mib": 116.8,
+      "delta_mib": 82.0,
+      "delta_ready_mib": 2.0,
+      "spilled": false
+     }
+    ],
+    "spilled": null,
+    "error": null
+   }
+  }
+ },
+ "out": "results/stage_v/formal-20261031-v-adm",
+ "gpu_lock_held": true,
+ "plan_sha256": "e20cc269632a8b9cb23db4e3f74243b1d0591a97d5516603051de3979bf423ed",
+ "pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "stage_v_sha256": "fe1fb09415bc3ee56a5fa5187f52db5733cded86b87aca0dda54452fd060f02d",
+ "stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+ "plan_pins_sha256": "232f0de96319bc8b54acb08b278df49fa0bccd3365ab5c03a0dc902eaf1b078b",
+ "plan_stage_v_sha256": "fe1fb09415bc3ee56a5fa5187f52db5733cded86b87aca0dda54452fd060f02d",
+ "plan_stage_d_sha256": "be7909b1e98183c337182f9559953e2613cad96f06d03899815fc0af88cba2a5",
+ "hours_used_h": 0.36941799722222224,
+ "previous_formal": null,
+ "preflight": "env/preflight.json",
+ "repo_commit": "c7ad0b4de3ebc2b08f03678bff40e19fcde2e2e1",
+ "repo_source": "DEPLOYED_COMMIT",
+ "vllm": "0.30.0",
+ "server": {
+  "gdn_prefill_backend": "triton",
+  "gpu_memory_utilization": "0.91",
+  "port": 8000,
+  "vllm_bin": ".venv/bin/vllm"
+ },
+ "datasets": {
+  "v4-50-r1": "data/stage_v/v4-50-r1.jsonl",
+  "v4-50-r2": "data/stage_v/v4-50-r2.jsonl",
+  "v4-50-r3": "data/stage_v/v4-50-r3.jsonl",
+  "v4-50-r4": "data/stage_v/v4-50-r4.jsonl",
+  "v4-50-r5": "data/stage_v/v4-50-r5.jsonl",
+  "v4-90-r1": "data/stage_v/v4-90-r1.jsonl",
+  "v4-90-r2": "data/stage_v/v4-90-r2.jsonl",
+  "v4-90-r3": "data/stage_v/v4-90-r3.jsonl",
+  "v4-90-r4": "data/stage_v/v4-90-r4.jsonl",
+  "v4-90-r5": "data/stage_v/v4-90-r5.jsonl",
+  "var-2048": "data/stage_d/var-2048.jsonl"
+ },
+ "dataset_sha256": {
+  "v4-50-r1": "31250189530f1738359531eb58e23847b882731984a19db1f1e3bfe65e8514f2",
+  "v4-50-r2": "c64a3f22f63297f5926c1cc016c0ac7c1698af463dfb598fccf0b4e42bfae49e",
+  "v4-50-r3": "ddd34cbf7ee3983a601152cc67f1f90ba3400c93efe9db8a7a335c74de2b87b6",
+  "v4-50-r4": "02491fef7e2216daab844e583d01c72852db5f6fd97444bd5ae20cf93183b493",
+  "v4-50-r5": "3093478ed8ffaa85533fd153b13c3c77d5016dacabb418007eb7e74ea0de66f3",
+  "v4-90-r1": "46e6513b43d2a939f5a480a24b011f3a622370d899fc80a59d312da4c098567c",
+  "v4-90-r2": "c70e3bc7751a353c3dcdd345c0af75e0866729b62ff8901d83edd30ecf5e9f98",
+  "v4-90-r3": "566c0e62fb7f3c4b16be2f609736a3b7e86366f060f28dbb4999f58179492e1a",
+  "v4-90-r4": "7093457c889c6abc0392fa820c3eda43a3f48a3a24c5796bcbd289409fd449a6",
+  "v4-90-r5": "6bf5153985f2e20da80599c949817ba7f64382f6cd1d7e47be5ee0a8cfc7b91e",
+  "var-2048": "358ae8da6c9e0ba190883ab2d71bf9c281fc42dcf318e0ec3e35fce19c5f3ea1"
+ },
+ "server_env": {
+  "HF_HOME": "/home/wenn0113/.cache/huggingface",
+  "HF_HUB_OFFLINE": "1",
+  "VLLM_GDN_DECODE_KERNEL": "triton",
+  "CUDA_HOME": "/home/wenn0113/llm-serving-lab/.cuda-home-cu13",
+  "VLLM_WSL2_ENABLE_PIN_MEMORY": "0",
+  "PATH_PREFIX": "/home/wenn0113/llm-serving-lab/.venv/bin",
+  "OTEL": {},
+  "engine_vars": [
+   "CUDA_HOME",
+   "VLLM_GDN_DECODE_KERNEL",
+   "VLLM_WSL2_ENABLE_PIN_MEMORY"
+  ]
+ },
+ "inherited_unlisted": [],
+ "gpu_idle": {
+  "decision": "031",
+  "v_total_mib": 16303,
+  "f_peak_mib": 15157,
+  "margin_mib": 128,
+  "bound_mib": 1018,
+  "util_max_pct": 5,
+  "range_max_mib": 64,
+  "windows": 3,
+  "window_samples": 30,
+  "interval_s": 1.0,
+  "spill_tol_mib": 64
+ },
+ "derived_sha256": {
+  "sentinel-start-U2K-c25": "d8d4abaa857c0584c5f34cead459c070f89d3ee57174cd629b5c8d9412367d41",
+  "V-P-U2K-c32-r1": "44c65b0656d09a59ab416fd9673bc08a010c48f5ed7a4e7702616beb203c4599",
+  "V-F-U2K-var-c32-r1": "0719dd80f3565f36fc1f284af937b4a8169a1205bc2b7fa71a612626353e18ed",
+  "V-W-90-c32-r1": "ef2743f07efa016a4699aeae77886be126ffbfdcbf05d1bbaf6bc5d829fd194b",
+  "V-W-50-c32-r1": "b200f03330e4f7f1bbfaca622e82b09dee101ae568b6b7df95e29eba50466c81",
+  "V-P-U8K-c8-r1": "4f61fb7cc10dc5b7310f6306c8454d51760af18c873d51bdac6cf1f34748fa15",
+  "V-P-U2K-var-c32-r1": "176137d7a0e9e8854c8e62d3b2dd50e1214e82486bedb0cd56b8ae068d6716ff",
+  "V-F-U2K-c32-r1": "71c2c28d7fb314a6c4d879665d019c53a96288e50088f86a4ffe874398f675d5",
+  "V-F-U2K-var-c32-r2": "d860468633e35207b92b74a4ecff614e9c20878b5cbd58c762547363d0920cbf",
+  "V-F-U2K-c32-r2": "1dfe2c91c2ce547fcb7396f185f71f54e74909a8bf61520d9871416c144dc567",
+  "V-P-U8K-c8-r2": "7a823d66a7bf912088ba4372a751970e12555715f4c48b220588de1221b43e22",
+  "V-P-U2K-c32-r2": "46700965ffd675d5fadc62a754b9087cf68d266f2063920cc0ad266349da2934",
+  "V-P-U8K-c8-r3": "51994853ace69217bd08e1b0b9a43e15367807a156b4001152ebcd95ddb4e845",
+  "V-F-U2K-var-c32-r3": "f8dcf175322a0f3a72fb3f37dca27173af4acb244962a9cdea83cd97cca109fa",
+  "V-P-U2K-c32-r3": "f45a2fb1bf8420eeb9abcf070faf56a99ed7eb9a6d032402ca54a8cafbceb781",
+  "V-F-U2K-c32-r3": "1a9e4c11f5b535634878817ef19cf1e8b7089cdf1a457cccaab6a280a1f1173d",
+  "V-F-U2K-c32-r4": "754f22cb5ee2acf8920c400cd2d02fd8315d924b90d8be55719ccd5730e4b180",
+  "V-P-U8K-c8-r4": "a8797e0db189c87d23d8642d680c90e4206a4bb6899f029e70ed8f1ea5a53e80",
+  "V-P-U2K-c32-r4": "95d6c55ed6c2c989a282e5301d314fb888d194b9fb5752fa8181ce83be83016e",
+  "V-F-U2K-var-c32-r4": "dfee11d85ea1ba7d96831006bddfe6fff7ef4a7d01fcb1e700fabe2ffad7702f",
+  "V-F-U2K-c32-r5": "d85700cc626d7a9e5059bc5f8b125b4715879c6f46a7c1048b83b2a7bdca453b",
+  "V-P-U8K-c8-r5": "e5d48a2557666f88f564f6a27d03e3578e5ef08464614c508b0bbc12aa379f05",
+  "V-P-U2K-c32-r5": "860f7938ac8bfd1feeb1937bdb8d4e4b1a540f0f70d2937e1a8d03ea96582acf",
+  "V-F-U2K-var-c32-r5": "2be7abc6dcaa3a6487f87ef5c07bf79614b5ad1fc49e84dae1127d2f7391b779",
+  "sentinel-end-U2K-c25": "ec5536a66e31b9a8ac48917df7c520a0e5f063407b4a63e916a61d34a8fc736b"
+ },
+ "cap_stop": null,
+ "gateway_faults": [],
+ "result_dir": "results/stage_v/formal-20261031-v-adm/raw",
+ "root": "/home/wenn0113/llm-serving-lab",
+ "gateway_python": "/home/wenn0113/llm-serving-lab/.venv/bin/python",
+ "harness_sha256": "a1e4a564e2abd1fd524365388f14bd4b7fcd58875de61a56c9791e282190e76e",
+ "gateway_path_sha256": "679a7c661ec36cbca1e472ddcad80f590981ad6fdebb49ef8ef58e69fee5a259",
+ "capserve_sha256": "1113302ce74acfbcba40c5a90cd4db8696ccae2d97a260b078be886aaaa2ff87",
+ "profile_sha256": {
+  "P-U2K": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+  "P-U8K": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+  "P-U2K-var": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+  "F-U2K-var": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+  "F-U2K": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+  "W-90": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040",
+  "W-50": "d09ba18fcd0cc33e714db68be963d1b6b0fa94cd3e8fff4936c4699cee6dc040"
+ },
+ "outcomes": {
+  "boots": 25,
+  "runs": 25,
+  "valid": 25,
+  "invalid": 0,
+  "timeout": 0
+ },
+ "env_flags": [],
+ "env_valid": true,
+ "rows_sha256": "e429beee1d29555e20584498d4bd95642e967213fa7fd24e452b2f0432b4a8a8"
+}
