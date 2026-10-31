@@ -28,8 +28,8 @@
 - **GPU 佇列（依序；每個 session 之間留空檔；開始前 `tools/rtx/gpu_status.sh` 為 FREE、GPU 閒置 ≤ 1,018 MiB；請使用者不要用 Windows 桌面 / 遠端桌面）**：
   1. [x] q2 → 取回 → `analysis-20261031.json` → 結果文件 **048**（H-Q1a、H-Q2a supported；H-Q1b、H-Q1c、H-Q2b not supported；獨立重算與兩位審查）。
   2. [x] E2 dataset 已產生並 pin（2026-10-31 00:59Z，sha256 `ca148974…`、共同前綴 1,599）；WSL 沒有 `PROMETHEUS_MULTIPROC_DIR`。
-  3. Q3 正式 `formal-20261031-q3`（2026-10-31 約 01:01Z 起，GPU lock，約 5 h）→ 取回 raw（`fetch_raw`）→ `stage_q3.py analyze`。
-  4. E2：部署（含 dataset 的 pin）→ smoke（12 次 boot）→ 凍結 → 正式（約 4.2 h）。
+  3. [x] Q3 正式 `formal-20261031-q3`（2026-10-31 00:59:41–01:26:09Z，2 / 2 ok）→ raw 取回 → `q3-analysis-20261031.json` → 結果文件 **049**（H-Q3 not supported，+4.82%）。
+  4. E2：部署 `173cb8f` → smoke `smoke-e2-20261031`（01:3xZ 起，GPU lock）→ 凍結 → 正式（約 4.2 h）。
   5. 043 的 RTX 產品測試 IT-0–6（`rtx-verified.toml`）。
   6. Stage V（044）：WSL 上產生 dataset 並 pin → GPU 視窗 0（產品 IT + mini）→ 凍結 → V-ADM → ≥ 2 h → V-CLS。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
