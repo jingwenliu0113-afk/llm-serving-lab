@@ -29,7 +29,7 @@
    - 26 / 26 ok，`env_valid` true，`env_flags` []，沒有充電暫停。
    - Apple 140W USB-C Power Adapter，協商 94 W；powermode 2。
    - sentinel：59.524 → 59.387 tok/s，漂移 0.23%。
-   - 53 份 env 擷取都記錄 repo commit `b9088a3`、dirty false。
+   - 53 份 env 擷取都記錄 repo commit `b9088a3`、dirty false，`load.mac_heavy_lock_owner` 都記錄 runner 的 cwd 為 `.worktrees/e3-metal-20261031`（從 worktree 執行有直接紀錄）。
 6. **分析**（Mac，`99f3327`）：E3 的 harness、設定與程式在 `b9088a3` 之後都沒有改（`git diff b9088a3..99f3327` 在 benchmarks/、scripts/、configs/、tools/ 為空）。
 
 ### 偏離：Mac 正式 session 從 worktree 執行
