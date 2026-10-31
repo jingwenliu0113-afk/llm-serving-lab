@@ -110,7 +110,7 @@
   - [x] E3 的兩個 Q4_0 已產生並 pin（2026-10-23，Mac lock 下；4B `ee05b023…` 2,543,899,584 B，9B `2dfcbfd3…` 5,313,356,768 B）。
   - [x] E3 Mac pilot（Mac lock 下，2026-10-23 06:2xZ）：`results/stage_e/pilot-e3-metal-20261023`，5 個 job ok、sentinel 正常、env 有效（140W adapter，協商 94 W），`pilot_problems` 通過，harness `85b9842c…` 等於目前的版本。結果已遮蔽。
   - [x] E3：兩個 Q4_0 在 WSL 上 VERIFIED（2026-10-25）；RTX pilot `pilot-e3-cuda-20261031`（2026-10-30 22:37–22:49Z，部署 `2c5fddf`，5 / 5 ok，結果遮蔽）；**兩個旗標一起凍結（2026-10-31，041 §3.7）**。
-  - [ ] E3 正式：`tools/rtx/push_session.sh stage_e pilot-e3-metal-20261023` → 部署凍結 commit → RTX 正式（GPU lock，上限 1.0 h）；Mac 正式在 q1-metal 結束之後（Mac lock，上限 1.5 h，從固定 commit 的工作樹執行）；每個平台最多兩次嘗試 → 取回 → `stage_e3_analysis.py`。
+  - [x] E3 正式：RTX `formal-20261031-e3-cuda`（26 / 26，env 有效）、Mac `formal-20261031-e3-metal`（26 / 26，env 有效，從固定 commit 的 worktree 執行：偏離 041 §3.6，047 揭露）；分析 `e3-analysis-20261031`；結果文件 **047**（Mac 第 3 列：非比例成分與格式成本並存；RTX 第 6 列：格式效應不一致；原因依平台而異；獨立重算與兩位審查）。
   - 注意：Stage Q 與 E3 的 Mac pilot 已綁定目前的 `stage_q.py` / `stage_e3.py`；若之後必須修改，pilot 要重跑。
   - [x] E2 harness 審查：確認 18 項，全部修正（smoke 綁定設計並改為 12 次 boot、通過條件補齊、停止規則、重跑上限、R / Λ / L̄q、incomplete 的代換規則等；041 修訂紀錄「E2 harness 審查」）。
   - [ ] 分析 WSL 上的 session 之前一律先 `tools/rtx/fetch_all_sessions.sh stage_e`（或 `stage_q`），commit `wsl-inventory.txt`。
