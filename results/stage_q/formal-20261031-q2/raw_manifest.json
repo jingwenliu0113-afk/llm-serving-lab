@@ -1,0 +1,165 @@
+{
+ "note": "raw/ is not in git (docs/STORAGE_PLAN.md); sha256 of every raw file",
+ "files": {
+  "raw/kld-4B-c2048-Q4_K_M.stderr.txt": {
+   "sha256": "e413f2fb64c5edd04d3804837db2e35c18f2772dda8ff125150b1c7a1378266a",
+   "size_bytes": 607
+  },
+  "raw/kld-4B-c2048-Q4_K_M.stdout.txt": {
+   "sha256": "0ed295b72cd5ee35d21474ec21f6d077afaf8d7a398f8d8acf020e205c919949",
+   "size_bytes": 20249
+  },
+  "raw/kld-4B-c2048-Q6_K.stderr.txt": {
+   "sha256": "5c19d662798789797c8487952453ed7ab0d4173b46093d3fb438f2cd7059f041",
+   "size_bytes": 607
+  },
+  "raw/kld-4B-c2048-Q6_K.stdout.txt": {
+   "sha256": "c32d6244157924a2b311a04409e2f4fcc059dee4ffaeae12fa99003f2cb1490d",
+   "size_bytes": 20248
+  },
+  "raw/kld-4B-c2048-Q8_0.stderr.txt": {
+   "sha256": "a39e348fce7e643b8ce0f110ab719bb2835e0599101e7cca31a7110be7bf20d8",
+   "size_bytes": 607
+  },
+  "raw/kld-4B-c2048-Q8_0.stdout.txt": {
+   "sha256": "8d4bb6212baa02ddc3078482e2992581d824c0c936333029f9edd168aceb020f",
+   "size_bytes": 20247
+  },
+  "raw/kld-4B-c8192-Q4_K_M.stderr.txt": {
+   "sha256": "69cd075f6a673d04b4fba6fe3c33993b1c247e7f05768a886368b683904ebba4",
+   "size_bytes": 606
+  },
+  "raw/kld-4B-c8192-Q4_K_M.stdout.txt": {
+   "sha256": "0682cfd0fdf0ed8fc5f3a1eda0bcc46e4d6691544e791afb0a5af6a6ecf2e58f",
+   "size_bytes": 5970
+  },
+  "raw/kld-4B-c8192-Q6_K.stderr.txt": {
+   "sha256": "ac499d21f42bdaf48aeddd405583c6a2ab792eaf89439c4938c35d378b74f9a5",
+   "size_bytes": 606
+  },
+  "raw/kld-4B-c8192-Q6_K.stdout.txt": {
+   "sha256": "f0fd345aed6dc13c2a3545eaff48ebd47bd61d971df81afaceaaa666f1f81708",
+   "size_bytes": 5969
+  },
+  "raw/kld-4B-c8192-Q8_0.stderr.txt": {
+   "sha256": "119da649820d7fcaf8dc419a134f2fa718ba90b886ab93bc8c9ebd77e4980cad",
+   "size_bytes": 606
+  },
+  "raw/kld-4B-c8192-Q8_0.stdout.txt": {
+   "sha256": "92fce91c444a41538e8db6e22e26f4e0e8ef3681c8862c13527f09cc51ab8578",
+   "size_bytes": 5969
+  },
+  "raw/kld-9B-c2048-Q4_K_M.stderr.txt": {
+   "sha256": "ddd656ea448aa80afad42e27b6ad21830d5b0e06e7ef11e3430dff50f74b3a45",
+   "size_bytes": 607
+  },
+  "raw/kld-9B-c2048-Q4_K_M.stdout.txt": {
+   "sha256": "1114cb70cf2efe257a8ba226be0d97a6a94f3a7622250c927572cbbdc45066ad",
+   "size_bytes": 20250
+  },
+  "raw/kld-9B-c2048-Q6_K.stderr.txt": {
+   "sha256": "05835e42aa56b117ebda200d6928f36626fb9ca5fc870e7d41910d42a12d7377",
+   "size_bytes": 607
+  },
+  "raw/kld-9B-c2048-Q6_K.stdout.txt": {
+   "sha256": "3da4260e898dbc76a93181c9ad0312d9e9f7de01861caba81968093dba6a4134",
+   "size_bytes": 20249
+  },
+  "raw/kld-9B-c2048-Q8_0.stderr.txt": {
+   "sha256": "6ebf0544911dbc57c217c790cdf328bb106850fce1c207dfed42ba7f1cbba6bd",
+   "size_bytes": 607
+  },
+  "raw/kld-9B-c2048-Q8_0.stdout.txt": {
+   "sha256": "570d97a72df95ed183a9e4c96b06a80b061c1c4c7ab176059dae100ba4087a11",
+   "size_bytes": 20248
+  },
+  "raw/kld-9B-c8192-Q4_K_M.stderr.txt": {
+   "sha256": "cc3548c7ecbe149f6b7fc3543803d77f655e81f51e7124b3fe9f2b2cb7f79227",
+   "size_bytes": 607
+  },
+  "raw/kld-9B-c8192-Q4_K_M.stdout.txt": {
+   "sha256": "dd1ee2f4186c634997fc49f9e0a2cab7f8a2087063132c63184b20838791ec6d",
+   "size_bytes": 5971
+  },
+  "raw/kld-9B-c8192-Q6_K.stderr.txt": {
+   "sha256": "ae8ba1dc2733616803cd14a41592ca517483420baf68bc1f40005b9aa0c6ae70",
+   "size_bytes": 607
+  },
+  "raw/kld-9B-c8192-Q6_K.stdout.txt": {
+   "sha256": "a0dba1af20d93f3be49ebe5d13f5494af2be389fbe39f309ab11de41f059a751",
+   "size_bytes": 5969
+  },
+  "raw/kld-9B-c8192-Q8_0.stderr.txt": {
+   "sha256": "4acef12c7ce4271a422ea9a118653944577e3c565a66662f38a093e45624150a",
+   "size_bytes": 607
+  },
+  "raw/kld-9B-c8192-Q8_0.stdout.txt": {
+   "sha256": "323ca6dcadd9f114d9703e58f6cecd2fd102d570de804a8daec1cf1ddc6940cc",
+   "size_bytes": 5969
+  },
+  "raw/kld_base-4B-c2048.stderr.txt": {
+   "sha256": "dbfba3c3bd6bb87406f7f793ab04394ca1c31be86a7afdb639e794f89eb4fb02",
+   "size_bytes": 905
+  },
+  "raw/kld_base-4B-c2048.stdout.txt": {
+   "sha256": "ed0e6d6e8540537da84b93060bde043466096efb108cc650b89db2951c1888d5",
+   "size_bytes": 1648
+  },
+  "raw/kld_base-4B-c8192.stderr.txt": {
+   "sha256": "0dd0e33560a1fb945c9cb44141c48a7ea6ac9fda550b58cd011ef9e4983dc6af",
+   "size_bytes": 905
+  },
+  "raw/kld_base-4B-c8192.stdout.txt": {
+   "sha256": "8488752d370d1d491e548f0fa1f59adfad32b577e41f4a51826720b6e1b596ac",
+   "size_bytes": 403
+  },
+  "raw/kld_base-9B-c2048.stderr.txt": {
+   "sha256": "de59e9def756785a91dfed383a396e9d119f23ec08410f20980efc708438a479",
+   "size_bytes": 905
+  },
+  "raw/kld_base-9B-c2048.stdout.txt": {
+   "sha256": "036f620d614ad14451c853400194a4e77f12ad5ed8f87741754238fa99bfdde0",
+   "size_bytes": 1648
+  },
+  "raw/kld_base-9B-c8192.stderr.txt": {
+   "sha256": "9350a115bd41930ccb79a21dbae652f0a29df6daeefded016d480b47b2ec17bb",
+   "size_bytes": 906
+  },
+  "raw/kld_base-9B-c8192.stdout.txt": {
+   "sha256": "dbba5015d691822a866d208469a7a68a27f26b1d2767f9324fbe3fd8de987c2a",
+   "size_bytes": 403
+  },
+  "raw/kld_self-4B-c2048.stderr.txt": {
+   "sha256": "c3bfb44ab60513b6fc8316c651ec6d96e3bf86fe0ee25ad72a41d75275796376",
+   "size_bytes": 607
+  },
+  "raw/kld_self-4B-c2048.stdout.txt": {
+   "sha256": "4a2f9cdb68019fe6c9655b09bc883e56ef2217effea3cfd0dc278ed2f3843d9c",
+   "size_bytes": 20248
+  },
+  "raw/kld_self-4B-c8192.stderr.txt": {
+   "sha256": "8a56154f6c9730a55b861040785d00b9fd2c9f07ba78879c6938362daa307388",
+   "size_bytes": 606
+  },
+  "raw/kld_self-4B-c8192.stdout.txt": {
+   "sha256": "229319388433ef3e0bbb0e3b0af9fc95d471dfd90a0e330e0716740d1c7a644b",
+   "size_bytes": 5974
+  },
+  "raw/kld_self-9B-c2048.stderr.txt": {
+   "sha256": "be4b389f84f4f594427e4f849ba2fbe542abb71dde6d8601d38f4dd0a87d13c2",
+   "size_bytes": 607
+  },
+  "raw/kld_self-9B-c2048.stdout.txt": {
+   "sha256": "b537014825481bb25296b5125f22383759f051a99597d6acf5b8cacd3542d6cf",
+   "size_bytes": 20250
+  },
+  "raw/kld_self-9B-c8192.stderr.txt": {
+   "sha256": "93ad074362bc7414abdb76ab4ac3b1f05569c2b67db41a5066f677b881edf972",
+   "size_bytes": 607
+  },
+  "raw/kld_self-9B-c8192.stdout.txt": {
+   "sha256": "e0e3906767f34b8fc6968a7732347c15aea3da295cd3ba7a37b288885d62dce3",
+   "size_bytes": 5982
+  }
+ }
+}

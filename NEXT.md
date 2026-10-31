@@ -25,7 +25,6 @@
   - E2：WSL 原始碼核對（vLLM 0.30.0 的 2,681 個 .py 以 sha256 驗證後在 Mac 上核對；041 修訂紀錄「E2 的 WSL 原始碼核對」）；修正 PC-on 計數器下界（`534be5b`）。
 - **Mac 正式 session 的做法**：從固定 commit 的 git worktree（`.worktrees/`，git-ignored）執行，`--models`、`--data`、`--bin` 用主 checkout 的絕對路徑；結束後把 session 目錄搬回主 checkout 再移除 worktree。
   E3 的 041 §3.6 寫「在主 checkout 執行」，這次的偏離在 047 揭露；之後若再有 Mac 正式 session，要先檢查該部分的規則（或留在主 checkout、期間不 commit）。
-- **揭露待寫**：q2 執行中（2026-10-31 約 00:29Z）我在 Mac 上跑了一次 `fetch_all_sessions.sh stage_e`（WSL 唯讀列目錄），違反「GPU session 期間不讀 WSL」；q2 只量 PPL / KLD，不受影響。q2 結果寫進 040 時一併記錄。
 - **GPU 佇列（依序；每個 session 之間留空檔；開始前 `tools/rtx/gpu_status.sh` 為 FREE、GPU 閒置 ≤ 1,018 MiB；請使用者不要用 Windows 桌面 / 遠端桌面）**：
   1. q2 跑完 → 取回（`tools/rtx/fetch_all_sessions.sh stage_q`）→ `quality/stage_q_analysis.py --out results/stage_q/analysis-<date>.json` → Stage Q 結果文件（獨立重算）。
   2. 空檔中（不需要 GPU lock，但不能有 GPU session）：E2 dataset 產生並 pin（`benchmarks/stage_e2_datasets.py`，WSL）；確認 WSL 沒有設定 `PROMETHEUS_MULTIPROC_DIR`。
@@ -90,7 +89,7 @@
   - [x] pilot（2026-10-25，WSL）：q1-cuda `pilot-q1-cuda-20261025` 12 / 12 ok；q2 第一次 `pilot-q2-20261025` 22 / 24（一次性的 CUDA unknown error，040「pilot 紀錄」），第二次 `pilot-q2-20261025b` 24 / 24 ok。
   - [x] **Stage Q（Q1 / Q2）凍結**（2026-10-25）：`freeze.stage_q = true` 與三個 pilot id，harness `34256f12…`；040、PREREGISTRATION §10 已更新。
   - [ ] Stage Q 正式 session（每個部分最多 2 次嘗試）→ `stage_q_analysis.py`：
-        [x] q1-metal 第 2 次 `formal-20261031-q1-metal` 有效（20 / 20，env 有效；從固定 commit 的 worktree 執行）；[x] q1-cuda `formal-20261031-q1-cuda` 有效（12 / 12）；[ ] q2（2026-10-30 23:37Z 起在 GPU lock 下執行）。
+        [x] q1-metal 第 2 次 `formal-20261031-q1-metal` 有效（20 / 20，env 有效；從固定 commit 的 worktree 執行）；[x] q1-cuda `formal-20261031-q1-cuda` 有效（12 / 12）；[x] q2 `formal-20261031-q2` 有效（24 / 24，2026-10-30 23:36–10-31 00:58Z）。
   - [x] Q3 準備與凍結：下載 `Qwen/Qwen3.5-9B@c2022362` 的 BF16 safetensors（19.33 GB）到 WSL，**使用者 2026-10-23 同意**；已下載（2026-10-24 23:51Z–10-25 00:18Z，GPU 為 FREE 時開始，`snapshot_download`，16 個檔）；
         4 個 shard 的 sha256 都等於 pins（2026-10-25 04:2xZ，FREE 時在 `flock -n` 下讀）。chunk 檔已在 WSL 產生並 pin（`ff66e6d`：297,194 token、580 chunk、sha256 `7174626e…`，
         tokenizer.json 為 005 交叉驗證的 `5f9e4d49…`），部署 `ff66e6d`；

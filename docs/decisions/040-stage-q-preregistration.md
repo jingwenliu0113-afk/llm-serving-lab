@@ -316,4 +316,6 @@ harness 依本文以 TDD 實作：`quality/stage_q.py`（plan 與 runner）、`q
   - 從固定在 `09e2776` 的 git worktree（`.worktrees/`，git-ignored）執行，`--models`、`--data`、`--bin` 指向主 checkout 的絕對路徑；主 checkout 在這段期間的 commit 不影響 session 的 env capture。結束後把 session 目錄搬回主 checkout 的 `results/stage_q/`，再移除 worktree。
   - 分析看到的 q1-metal 嘗試：`formal-20261025-q1-metal`（作廢）→ `formal-20261031-q1-metal`（有效），符合「之前最多一次作廢嘗試的第一個有效 session」。
 - **q1-cuda 正式**：`formal-20261031-q1-cuda`（GPU lock 下，2026-10-30 23:21–23:36Z，部署 `cd615d0`）：12 / 12 ok、env 有效，第一次嘗試即有效。
+- **q2 正式**：`formal-20261031-q2`（GPU lock 下，2026-10-30 23:36–10-31 00:58Z，部署 `cd615d0`）：24 / 24 ok、env 有效，第一次嘗試即有效。
+  - 揭露：session 執行中（約 00:29Z），我在 Mac 上執行了一次 `tools/rtx/fetch_all_sessions.sh stage_e`（以 ssh 唯讀列出 WSL 上 `results/stage_e` 的目錄），違反「GPU session 期間不讀寫 WSL」的操作規則。q2 只量 PPL 與 KLD（數值結果，不量時間），env 擷取沒有 flag，判定不受影響。
 
