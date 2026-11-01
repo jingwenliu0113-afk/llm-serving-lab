@@ -354,6 +354,7 @@
   1. [x] 使用者的 secret scan（2026-11-01，gitleaks，312 個 commit）：5 筆都是公開 tokenizer 檔 SHA-256 的誤報，寫進 `.gitleaksignore`。
   2. [x] 使用者同意後改為 public（2026-11-01）：https://github.com/jingwenliu0113-afk/llm-serving-lab（只有 main，MIT）。
   3. [x] 和 inspection-robot 專案對齊（使用者 2026-11-01 選擇）：之後的 commit 用 noreply email、repo 說明、GitHub Actions CI。
+     CI 第一次因 1 個測試讀本機 raw/ 檔而失敗，改為檔案不在時跳過（`0a2bec0`）後通過（3,652 passed、8 skipped）；README 加 CI 與授權等 badge。
 - 研究的閒置判定已滿足（使用者結束了背景程式）。若之後閒置 VRAM 又超過 1,018 MiB，研究會依 031 自動不開始。
 
 ## 建議（非 blocker）

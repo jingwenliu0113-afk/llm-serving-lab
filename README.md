@@ -1,5 +1,11 @@
 # Local LLM Serving Lab
 
+[![CI](https://github.com/jingwenliu0113-afk/llm-serving-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/jingwenliu0113-afk/llm-serving-lab/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
+![vLLM 0.30.0](https://img.shields.io/badge/vLLM-0.30.0-orange.svg)
+![llama.cpp b11146](https://img.shields.io/badge/llama.cpp-b11146-lightgrey.svg)
+
 在一台 Apple M4 Pro 與一張 RTX 5070 Ti 上，用事先登記的實驗回答：模型大小、量化、context 長度與並發，如何改變本地 LLM 的**品質、延遲、吞吐量與記憶體**？
 再把量到的容量做成一個會強制執行上限的 serving gateway。
 
