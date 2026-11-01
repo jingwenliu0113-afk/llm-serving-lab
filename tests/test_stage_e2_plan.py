@@ -93,6 +93,8 @@ def test_inherited_pytorch_variables_never_reach_a_server():
 
 
 def test_the_manipulation_check_on_a_real_b0_log_and_its_edits():
+    if not B0_LOG.exists():   # raw/ is not in git: present on the lab Mac (fetch_raw.sh), absent in CI
+        pytest.skip(f"{B0_LOG.name} (raw/) not present in this checkout")
     log = B0_LOG.read_text()
     facts, got, problems = e2.manipulation_problems(log, "B0", PINS, CFG)
     assert problems == [] and got["enable_prefix_caching"] is False and facts["attention_backend"] == "FLASH_ATTN"

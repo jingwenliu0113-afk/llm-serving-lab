@@ -50,4 +50,9 @@
   被標記的值是 Qwen3.5-4B / 9B 公開 tokenizer 檔（`tokenizer.json`、`tokenizer_config.json`）的 SHA-256，記錄在模型來源的 checksum 清單中（只有 2 個不同的值）；
   規則是因為欄位名稱含「token」而觸發。5 個 fingerprint 寫進 `.gitleaksignore` 並註明原因。
 - **公開**（2026-11-01，使用者同意後）：`jingwenliu0113-afk/llm-serving-lab` 改為 public；公開前確認工作樹乾淨，origin 只有 `main`（`57e0434`），沒有 tag。GitHub 辨識授權為 MIT。
+- **公開後與 inspection-robot 專案對齊**（使用者 2026-11-01 決定）：
+  - 之後的 commit 改用 GitHub noreply email（只改本 repo 的 `git config user.email`；舊 commit 不變，第 1 項）；
+  - GitHub 的 repo 說明填上一句英文描述；
+  - 加上 GitHub Actions CI（`.github/workflows/ci.yml`：ubuntu-24.04、uv、Python 3.12，抓完整 history，每次 push 跑全套測試；沒有 GPU、模型與資料）。
+  - 沒有改：授權維持 MIT（robot 為 BSD-3-Clause）；README 維持一份（不拆成英文為主加 `README.zh-TW.md`）。
 
