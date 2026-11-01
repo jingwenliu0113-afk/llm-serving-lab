@@ -1,0 +1,36 @@
+# Lightweight CI: no GPU, no models, no datasets (raw/, data/ and models/ are not in git).
+# Formal sessions run on the lab machines under their locks (README「重現」). CI runs the test suite, which
+# re-checks the frozen analysis code and configs and regenerates every committed verified profile from its session.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # the freeze and regeneration tests read files at their freeze commits (git show)
+
+      - uses: astral-sh/setup-uv@v10.2.0  # this action publishes exact tags only
+        with:
+          enable-cache: true
+
+      - name: Install (Python 3.12; dev and service groups)
+        run: uv sync --locked
+
+      - name: Tests
+        run: uv run pytest -q -rs
