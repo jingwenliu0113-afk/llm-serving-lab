@@ -3,6 +3,7 @@ name = "llm-serving-lab"
 version = "0.1.0"
 description = "Local LLM Serving Lab: quality / latency / throughput / memory frontier under model size, quantization, context, concurrency"
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = []
 
 [dependency-groups]

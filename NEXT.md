@@ -2,7 +2,8 @@
 
 ## 目前位置
 
-**Phase 3 進行中（使用者 2026-10-22 決定，decision 037）**：執行 036 列出的後續，SPEC 的 Optional 除外。
+**Phase 3 已完成（2026-11-01，decision 052）**：037 的範圍都已完成；正式設定維持現狀，V3、T 的部署與 V5、常駐留在 Future Work。剩下的只有公開（見「Blocked / 需要使用者」）。
+（以下是 Phase 3 期間的紀錄。）Phase 3（使用者 2026-10-22 決定，decision 037）：執行 036 列出的後續，SPEC 的 Optional 除外。
 - **使用者的子決定（2026-10-23）**：
   - 服務常駐：先做功能，研究期間不常駐；研究的 GPU 工作結束後，等使用者同意才常駐。
   - thinking：gateway 預設關閉，client 可以開啟。
@@ -49,7 +50,9 @@
      f. [x] 結果 decision **051**（`c1c55c8`；四位審查者加批評者，30 項更正已套用，都不改判定）、044 狀態與結果後註記、PREREGISTRATION §12 註記。
         → 產生器（乾淨的 `c1c55c8`）：`verified-formal-20261031-v-adm-b0`（PACE-8K）、`verified-formal-20261031-v-cls-b0`（`uniform-2k-o1-512`、`uniform-8k-o1-512`），只 commit、不釘選；
         測試 `test_profile_gen_stage_v` 的三項 → README 的 Stage V 段與相關段落。全期研究時數 7.44 h（上限 12 h）。
-     g. 要使用者決定（見下方「Blocked / 需要使用者」）：是否改正式釘選、是否開啟 PACE-8K（等於改釘選）；之後跑 IT-0–6。
+     g. [x] 使用者 2026-11-01 決定（decision 052）：維持現狀（不改釘選、不開 PACE-8K、不常駐），Phase 3 結案；直接公開這個 repo（保留 history）、MIT、README 中英對照摘要。
+     h. [x] 結案：`LICENSE`、`pyproject.toml` 的 license、README 首頁的中英摘要與授權段（審查：事實、中英一致、重查新 commit；1 項 must-fix〔Starlette，不是 FastAPI〕與限定條件已修正）、
+        `service/README.md` 的 Stage V 段、decision **052**、`docs/PUBLIC_RELEASE_AUDIT.md` 的結案處理（重查 2c5fddf 之後的 688 個檔，沒有會擋公開的項目）。
 - **注意**：取回 raw 時用 bash（zsh 不拆 `$args`，`fetch_raw.sh` 的 ssh 會吃掉 while 迴圈的 stdin）；`fetch_raw.sh` 把 raw 放在 `results/capacity/c0-step0/raw/<sid>/`。部署：`.venv/bin/python scripts/deploy_bundle.py --out <scratch>/bundle.tar`，再 `ssh gpu-server 'wsl.exe -d Ubuntu-22.04 -- bash -lc "tar -x -C ~/llm-serving-lab"' < <scratch>/bundle.tar`（記得 `<` 輸入）。
 
 ### 下一步
@@ -347,12 +350,9 @@
 
 ## Blocked / 需要使用者
 
-- **Stage V 結束後（051，2026-11-01）**，研究的 GPU 工作已全部完成。以下要使用者決定，我不自行改任何設定：
-  1. 是否改正式釘選（目前 `rtx-verified.toml` 釘住 c1b 的 uniform-2k（32））：候選為 uniform-32k（2）、mixed-8k-t（4，另需 T 部署 1–6 與 V5）、
-     `uniform-2k-o1-512`（32，ABOVE_CKV）、`uniform-8k-o1-512`（8）。改了之後跑 IT-0–6。
-  2. 是否開啟 PACE-8K：只附在 `verified-formal-20261031-v-adm-b0` 的 uniform-8k（8）上，開啟等於改釘選（active class uniform-8k、佇列 120 s / 600 s）。
-  3. 常駐（研究的 GPU 工作已結束，依 037 要使用者同意）、V3、T 的部署與 V5：維持待決。
-  4. GitHub 公開（`docs/PUBLIC_RELEASE_AUDIT.md`「結案時的待辦」）：直接公開這個 repo 或改用新 repo（squash 匯出）、選 LICENSE、使用者自己用 secret scanner 掃完整 history；公開那一步要使用者同意。
+- **公開 GitHub repo**（decision 052；其餘都已完成）：
+  1. 使用者自己用 secret scanner 掃完整 history（依 MACHINE_POLICY，我不搜尋 credential）：`brew install gitleaks`，再在 repo 目錄執行 `gitleaks git -v`。
+  2. 使用者看過結果、同意之後，才把 repo 改為 public（只有 main 在 origin）。
 - 研究的閒置判定已滿足（使用者結束了背景程式）。若之後閒置 VRAM 又超過 1,018 MiB，研究會依 031 自動不開始。
 
 ## 建議（非 blocker）

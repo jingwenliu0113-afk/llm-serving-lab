@@ -36,3 +36,15 @@
 3. 使用者選 LICENSE。
 4. 我更新 README（結果、資料集與模型的來源與授權、重現步驟），並依使用者的決定整理第 2–4、7 項在 HEAD 的部分。
 5. 公開那一步由使用者同意後才執行。
+
+## 結案時的處理（2026-11-01，decision 052）
+
+- 使用者的決定：直接公開這個 repo、保留完整 history（接受第 1–4、7 項留在 history，HEAD 也不另外改寫）；授權為 MIT（`LICENSE`、`pyproject.toml`）；
+  README 首頁加中英對照的摘要，並寫入模型與資料集的來源與授權（第 6 項；HellaSwag 照 005 的原文寫）；第 8 項因此處理完。
+- **重查 `2c5fddf` 之後新增的內容**（35 個 commit 加上結案的未 commit 變更，共 688 個檔；同樣的方向，依 MACHINE_POLICY 不搜尋 credential）：沒有會擋公開的項目。
+  - 沒有題目原文（新增的 results/ 檔中含 5 個以上英文單字的字串只有 21 種，都是 harness 的說明文字）、模型檔或 tokenizer、`.gitignore` 類別的檔、> 1 MB 的 blob（最大 352,104 B）、刪除或改名。
+  - 沒有新的 IP（只有 127.0.0.1）、MAC、序號、UUID（唯一的 UUID 是暫存目錄路徑的一段，屬於已接受的路徑類別）、主機名稱、他人姓名或 email，也沒有其他 private 專案的名稱。
+  - 已接受的類別只增加數量：`/Users/liujingwen` 出現在 787 個檔、`/home/wenn0113` 在 1,749 個檔，新增的都在 `results/`。
+  - origin 只有 `main`；本機另有兩個已併入 main 的 feat 分支，公開時不 push（第 9 項）。
+- 剩下的步驟：使用者自己用 secret scanner 掃完整 history；使用者同意後才把 repo 改為 public。
+

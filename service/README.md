@@ -134,12 +134,27 @@ capserve 是 vLLM 0.30.0 OpenAI server 前面的一層薄 gateway（decision 027
   - `/readyz` 另外列出 `server_variant`（B0 / T），以及 active class 的 `flags` 與 `not_covered`。
     c1b 的 class 沒有 `not_covered`（null），它的適用條件以本 README 為準；provisional profile 的兩者都是 null。
   - `capserve_profile_info` 多兩個 label：`flags`（以逗號連接，沒有時為空字串）與 `server_variant`。
-- **明確仍然不可用**（043 §7.5）：
+- **明確仍然不可用**（043 §7.5；Stage V 之後的更新見下一節）：
   - 多 class 准入、token 加權准入、prefill pacing：只有候選設計，要先通過驗證研究（V4、V2），驗證之前不上線；
   - O512 class 的服務；
   - T 的部署，以及服務 `uniform-8k-t`；
   - 經過 gateway 的開放迴路宣稱；
   - uniform-2k 在 prompt 長度不一時的 SLO 宣稱。
+
+## Stage V 的 verified profile（decision 051；都不是正式設定）
+
+- Stage V（044）經過 gateway 驗證 Stage D 的 class 與候選政策，兩個正式 session 都有效。產生器只為成立的單位寫出 §12 profile，只 commit、**不釘選**：
+
+  | profile | class | prompt 上限 / 輸出 | 上限 | 來源單位 | 能否作為 active class |
+  |---|---|---|---|---|---|
+  | `verified-formal-20261031-v-cls-b0` | `uniform-2k-o1-512` | 1,920 / 512 | 32（`validated`） | V1-2K | 可以（V1 驗證過輸出在 [1, 512] 不一；ABOVE_CKV、WINDOW_SENSITIVE 照舊） |
+  | 同上 | `uniform-8k-o1-512` | 8,064 / 512 | 8（`validated`） | V1-8K | 可以 |
+  | `verified-formal-20261031-v-adm-b0` | `uniform-8k`（c1b 的複本） | 8,064 / 128 | 8（exact） | PACE-8K | 可以；`pacing` {32,256, 5,800} 只在佇列 120 s / 600 s、相同 `gateway_path_sha256` 下可以開啟，預設關閉 |
+
+- V-GW：uniform-32k（2，`…-d-a1b-b0`）與 mixed-8k-t（4，`…-d-a1b-t`）經過 gateway 在 C_PROD 符合 S2，只成為正式釘選的候選，沒有新檔；mixed-8k-t 仍需 T 的部署（043 §6）。
+- 不成立：PACE-2K（被 var 那一對否決）、W1（`weighted-v1` 在 0.9 / 0.5 兩個 mix 下 2K 的 TTFT FAIL），所以沒有 `admission` 段，uniform-2k 也不能開 pacing。
+- 開啟 PACE-8K 或改用任何新 class 都等於改正式釘選，由使用者決定，改了之後跑 IT-0–6（037 §2）。正式設定仍是 c1b，`rtx-verified.toml` 不變。
+- 適用範圍、揭露與限制（V1 只有 5 條 [1, 512] 均勻序列、GW-U2K-O512 的 3.125% 停頓與「個數斷崖」、開場湧入不在估計量內、`capserve serve` 不是 `deploy up` 等）見 decision 051。
 
 ## 正式部署與保護
 

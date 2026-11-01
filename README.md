@@ -1,11 +1,138 @@
 # Local LLM Serving Lab
 
-模型大小、量化、context、並發如何改變**品質、延遲、吞吐量與記憶體**的 frontier？什麼條件下該用什麼配置？
+在一台 Apple M4 Pro 與一張 RTX 5070 Ti 上，用事先登記的實驗回答：模型大小、量化、context 長度與並發，如何改變本地 LLM 的**品質、延遲、吞吐量與記憶體**？
+再把量到的容量做成一個會強制執行上限的 serving gateway。
 
-這是一個事先登記（pre-registered）的實驗：hypothesis、門檻、metric 與 protocol 都在看到正式數據之前寫定並凍結，
-之後的任何變更都有 decision log。結論只來自有效的正式 session，失敗、OOM、not testable 的單位照實報告。
+A pre-registered benchmark study of local LLM inference and serving on an Apple M4 Pro and an RTX 5070 Ti: how model size, quantization,
+context length and concurrency change **quality, latency, throughput and memory** — and a serving gateway that enforces the capacity the study measured.
 
-> **狀態（2026-10-31）：Phase 3 進行中**（使用者決定，decision 037）：執行 036 列出的後續研究與產品 v1，SPEC 的 Optional 除外。
+## 一頁摘要 / At a glance
+
+### 做了什麼 / What was built
+
+- **Benchmark harness**（Python）：Core A（llama.cpp，單一使用者）、Core B（vLLM，多使用者）、quality（PPL / KLD / downstream）與後續各 stage 的
+  plan、runner、凍結的分析程式、報告與圖。每個 session 都記錄環境與 sha256；延遲類的 session 另記錄 GPU 閒置判定與（適用時的）sentinel 漂移。
+- **capserve**：架在 vLLM 前面的 OpenAI 相容 gateway（Starlette / uvicorn），依「SLO 驗證過的容量 profile」做准入控制
+  （並發上限、有界佇列、逾時、429 / 503 與 adaptive Retry-After），另有 local tokenizer、per-key quota、TLS、Prometheus metrics、
+  部署工具，以及在 RTX 上執行的整合測試 IT-0–6。
+- **Profile 產生器**：把凍結的分析結果轉成 verified capacity profile；測試會從來源 session 重新產生每一份已 commit 的 verified profile，
+  除 generator commit 與雜湊外逐欄比對。
+- 約 3,650 個自動化測試；52 份 decision log。
+
+<!-- -->
+
+- **Benchmark harness** (Python): plans, runners, frozen analysis code, reports and figures for Core A (llama.cpp, single user),
+  Core B (vLLM, multi-user), quality (PPL / KLD / downstream tasks) and the follow-up stages. Every session records its environment and
+  sha256 checksums; latency sessions also record a GPU-idle check and, where defined, sentinel drift.
+- **capserve**: an OpenAI-compatible gateway in front of vLLM (Starlette / uvicorn) that admits requests by an SLO-verified capacity profile
+  (concurrency limit, bounded queue, timeouts, 429 / 503 with adaptive Retry-After), with a local tokenizer, per-key quotas, TLS,
+  Prometheus metrics, deployment tooling and integration tests (IT-0–6) run on the RTX.
+- **Profile generator**: turns frozen analysis outputs into verified capacity profiles; a test regenerates every committed verified profile
+  from its source session and compares every field except the generator commit and content hash.
+- About 3,650 automated tests; 52 decision records.
+
+### 重要發現 / Key findings
+
+1. **單一使用者的 decode 速度不和權重 bytes 成比例**：bytes 較少的配置較快，但加速比多半小於頻寬模型的預測。
+   「±20% 內符合頻寬模型」在兩個平台都被推翻：每個平台 15 組中有 1 組超出（−25.8% / −25.1%），其餘 14 組在 ±20% 內；
+   原因（固定開銷或頻寬效率）沒有分開。
+2. **品質與記憶體的取捨**：9B-Q4_K_M 的 WikiText NLL 比 4B-Q8_0 低（配對 ΔNLL −0.194 nats / token，Holm 校正後顯著），
+   代價是權重檔多約 26%、decode 慢約 9–15%。WikiText 可能在預訓練資料中，跨 size 的差距可能部分反映記憶能力（005）。
+3. **多使用者 serving**（vLLM）：2K / 8K / 32K 的吞吐量 knee 在並發 25 / 8 / 2，落在事先預測的 KV cache 容量 C_KV（35 / 13 / 3）的
+   ½ 到 2 倍之間（H-B2；不是因果檢驗）。在 knee 的並發下混入 10% 的 32K request，短 request 的 P95 TTFT 增加 444%（2K）與 175%（8K）。
+   8K 的主因是長 request 的 chunked prefill 占滿每個 step 的 token budget；2K 的成因沒有確立。
+4. **SLO 下的最大並發寫成產品上限**：SLO 為短 request 的 P95 TTFT 2 s（2K）/ 6 s（8K）、mixed 中 32K request ≤ 20 s、P95 TPOT 100 ms，
+   以穩態時間窗判定並留 5% 的 guard band。在封閉迴路、輸出 128 token 下，uniform 2K 為 32、8K 為 8、混入長 request 時為 2（不含開場湧入）；
+   產生器把它寫成 profile，正式設定以 uniform-2k（32）准入。
+5. **經過 gateway 的驗證**：uniform-32k（並發 2）、mixed-8k-t（4），以及輸出長度在 1–512 token 不一的 2K（32）/ 8K（8）class，經過 gateway 都符合 SLO
+   （封閉迴路、只在該並發、穩態時間窗；不對開場第一波宣稱 SLO；輸出長度只用了 5 條序列；mixed-8k-t 需要尚未部署的 T server）。
+   在不排隊的穩態時間窗中，同一個 request 的 client TTFT 比 gateway 量到的 upstream TTFT 多約 7 / 20 / 72 ms
+   （2K / 8K / 32K，中位數，含傳輸；第一波較大），這不代表 gateway 對 SLO 沒有影響。
+   8K 開啟 prefill pacing 時穩態仍符合 SLO（不是改善：穩態中 pacing 沒有約束任何 request，也沒有關閉的對照），2K 被否決；多 class 加權准入沒有通過。
+6. **沒有如預測的結果也照實報告**：例如 H-A2 被推翻；W4A16 checkpoint 的 PPL 比 BF16 高 4.82%（超過事先寫定的 2%）；
+   Metal 與 CUDA 的 KLD / PPL 差異在部分設定超出事先界線；Stage V 的 12 個 hypothesis 中 1 個（H-GW4）沒有如預測，
+   對照組 F-U2K-var 也沒有如預測（2K 的 pacing 因此被否決），部分數值預測也落空。
+
+<!-- -->
+
+1. **Single-user decode speed does not scale in proportion to weight bytes**: configurations with fewer bytes are faster, but most speedups
+   fall short of the bandwidth model. The "within ±20% of the bandwidth model" hypothesis is refuted on both platforms: 1 of 15 pairs per
+   platform falls outside (−25.8% / −25.1%), the other 14 are within ±20%; fixed overhead vs. bandwidth efficiency was not separated.
+2. **Quality vs. memory**: 9B-Q4_K_M has lower WikiText NLL than 4B-Q8_0 (paired ΔNLL −0.194 nats/token, significant after Holm correction),
+   at the cost of a ~26% larger weight file and ~9–15% slower decode. WikiText is likely in the pretraining data, so the cross-size gap
+   may partly reflect memorization (005).
+3. **Multi-user serving** (vLLM): the throughput knee sits at concurrency 25 / 8 / 2 for 2K / 8K / 32K contexts, within the preregistered
+   ½× to 2× of KV-cache capacity C_KV (35 / 13 / 3) (H-B2; not a causal test). At the knee concurrency, adding 10% 32K requests raises
+   short-request P95 TTFT by 444% (2K) and 175% (8K). At 8K the cause is long requests' chunked prefill filling each step's token budget;
+   at 2K the cause was not established.
+4. **SLO-bound concurrency as a product limit**: the SLO is short-request P95 TTFT 2 s (2K) / 6 s (8K), ≤ 20 s for 32K requests in the
+   mixed workload, and P95 TPOT 100 ms, judged on the steady-state window with a 5% guard band. With a closed loop and 128-token outputs,
+   the maximum concurrency is 32 for uniform 2K, 8 for uniform 8K and 2 with long requests mixed in (start-up burst excluded);
+   the generator writes them into a profile, and the production config admits by uniform-2k (32).
+5. **Validated through the gateway**: uniform-32k (concurrency 2), mixed-8k-t (4), and 2K (32) / 8K (8) classes with outputs varying from
+   1 to 512 tokens all meet the SLO through the gateway (closed loop, at that concurrency, steady-state window; no SLO claim for the
+   start-up wave; output lengths from 5 sequences only; mixed-8k-t needs the T server, not deployed). In the steady-state window with no
+   queuing, client TTFT exceeds the gateway-measured upstream TTFT of the same request by a median ~7 / 20 / 72 ms (2K / 8K / 32K,
+   including transport; larger in the start-up wave); this does not show the gateway has no SLO impact. With prefill pacing on, 8K still
+   meets the SLO in steady state (not an improvement: pacing never throttled a steady-state request, and there is no pacing-off control);
+   2K was vetoed; weighted multi-class admission failed.
+6. **Results that went against predictions are reported too**: e.g. H-A2 refuted; the W4A16 checkpoint's PPL is 4.82% above BF16
+   (beyond the preregistered 2%); Metal-vs-CUDA KLD / PPL differences exceed the preregistered bounds in some settings; 1 of 12 Stage V
+   hypotheses (H-GW4) and the F-U2K-var control did not come out as predicted (the latter vetoed 2K pacing), and some numeric
+   predictions missed.
+
+### 方法 / Method
+
+- 每個階段都在看到該階段自己的正式數據之前，先寫定 hypothesis、門檻、metric、protocol 與分析程式並凍結（設定檔與程式的 sha256 由測試鎖定）；
+  後面的階段是在看過前面的結果之後設計的（已揭露）。之後的任何變更都有 decision log。判定由凍結的程式機械產生；
+  有效的 session 不因結果重跑（唯一的例外是 Stage C 的 c1：U8K 因環境干擾無法檢定，由使用者決定、在新數據之前寫定取捨規則後重跑為 c1b，
+  兩個 session 都保留並報告，034）；失敗、OOM、無效的 run 照實報告；重要結果另做獨立重算。
+  不做 Mac 與 PC 的排名：效能數字只在同一平台內比較；Stage Q 的 Metal ÷ CUDA 比值是事先登記的一致性檢查，不是排名。
+- Each stage freezes its hypotheses, thresholds, metrics, protocol and analysis code before that stage's own formal data (sha256 of configs
+  and code locked by tests); later stages were designed after earlier results (disclosed). Every later change has a decision record.
+  Verdicts come mechanically from the frozen code; valid sessions are not rerun because of their results (the one exception, Stage C's c1,
+  where U8K was not testable after environmental interference, was rerun as c1b by user decision under a selection rule written before any
+  new data; both sessions are kept and reported, 034); failed, OOM and invalid runs are reported; key results are independently recomputed.
+  No Mac-vs-PC ranking: performance numbers are compared only within a platform; Stage Q's Metal ÷ CUDA ratios are a preregistered
+  consistency check, not a ranking.
+
+### 技術 / Stack
+
+Python 3.12（requires-python ≥ 3.11）、uv、pytest；llama.cpp b11146（Metal、CUDA）；vLLM 0.30.0；Starlette、uvicorn、pydantic、httpx、Prometheus client；
+WSL2 Ubuntu 22.04、CUDA 13；Qwen3.5 4B / 9B（GGUF Q8_0 / Q6_K / Q4_K_M、W4A16）。
+
+### 怎麼看這個 repo / How to navigate
+
+- 下方「結果」是完整的結果與限制（繁體中文）；[docs/PREREGISTRATION.md](docs/PREREGISTRATION.md) 是事先登記；
+  [docs/decisions/](docs/decisions/) 是 decision log；[service/](service/) 是 capserve；「重現」一節是重現步驟。
+- The full results and limitations are below (in Traditional Chinese); [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md) is the
+  preregistration, [docs/decisions/](docs/decisions/) the decision records, [service/](service/) capserve, and "重現" the reproduction steps.
+
+### 授權 / License
+
+- 程式碼以 MIT 授權（[LICENSE](LICENSE)）。Code is MIT-licensed ([LICENSE](LICENSE)).
+- 模型與資料集不在 repo 內；repo 只有題號清單、sha256、彙總分數，以及每題對錯、每段 NLL 等不含原文的衍生數值，沒有任何題目文字。
+  各自的授權如下（不構成法律意見）：
+  - Qwen/Qwen3.5-4B、Qwen/Qwen3.5-9B：Apache-2.0；GGUF 由官方 BF16 在本機轉出（不散布）。
+  - RedHatAI/Qwen3.5-9B-quantized.w4a16：Apache-2.0（模型卡）。
+  - WikiText-2：CC BY-SA 3.0 與 GFDL。
+  - HellaSwag、MMLU、ARC、WinoGrande：取自 llama.cpp 評測用的 `ikawrakow/validation-datasets-for-llama.cpp` 與
+    `ikawrakow/winogrande-eval-for-llama.cpp`（revision 見 [configs/pins.toml](configs/pins.toml)）。
+    MMLU 為 MIT，ARC 為 CC BY-SA 4.0，WinoGrande 的資料為 CC BY；HellaSwag 在 llama.cpp 原始碼註記為 MIT
+    （decision 005 記錄官方 repo 自 2026-09-14 起因 DMCA 被封鎖）。
+- Models and datasets are not included; the repo holds only item-index lists, checksums, aggregate scores and derived per-item / per-chunk
+  values (0/1 correctness, NLL), never item text. Their licenses (not legal advice):
+  - Qwen/Qwen3.5-4B, Qwen/Qwen3.5-9B: Apache-2.0; GGUFs converted locally from the official BF16 (not redistributed).
+  - RedHatAI/Qwen3.5-9B-quantized.w4a16: Apache-2.0 (model card).
+  - WikiText-2: CC BY-SA 3.0 and GFDL.
+  - HellaSwag, MMLU, ARC, WinoGrande: from `ikawrakow/validation-datasets-for-llama.cpp` and `ikawrakow/winogrande-eval-for-llama.cpp`,
+    used for llama.cpp evaluation (revisions in [configs/pins.toml](configs/pins.toml)). MMLU is MIT, ARC CC BY-SA 4.0, WinoGrande data
+    CC BY; HellaSwag is marked MIT in the llama.cpp source (decision 005: the official repo has been DMCA-blocked since 2026-09-14).
+
+## 狀態 / Status
+
+> **狀態（2026-11-01）：Phase 3 已完成**（decision 052）：036 列出的後續研究與產品 v1（SPEC 的 Optional 除外）都已完成；
+> V3、T 的部署與 V5、常駐依 052 留在 Future Work，本專題不執行。
 > 下文 Phase 1、Phase 2 的結果都已定案，不因 Phase 3 而改變；正式產品 profile 的釘選也不變。
 > - **Phase 1 已完成**，結果保留、不重新分析：
 >   - Core：A（macos-metal、wsl2-cuda）、B（uniform、mixed）、quality、deployment decision table。
@@ -16,7 +143,7 @@
 >   - Engineering：建在 vLLM 之上的 Capacity-Aware Serving Service（`service/`），以正式設定 `service/deploy/rtx-verified.toml` 部署。
 >   - 只有 Stage C 驗證過的容量（`service/profiles/verified-formal-20261017-c1b.json`）是產品限制；Phase 2 結案時其他都標為 provisional。
 >     Phase 3 另產生三份 Stage D verified profile（043），只 commit、不釘選，不是正式設定。
-> - **Phase 3**（decision 037–050；結果見下方「Phase 3 結果」）：
+> - **Phase 3**（decision 037–052；結果見下方「Phase 3 結果」）：
 >   - 研究已完成的部分（判定或讀法都依各自凍結的規則）：
 >     - Stage D（042，四個 session 都有效；RTX、直連 vLLM、封閉迴路，除非另外註明）：U32K 的 C_SLO 2 ≤ C_KV 3（H-D1 supported）；
 >       T（chunk 上限 512）讓 mixed 8K 的 C_PROD 2 → 4、uniform 8K 8 → 4（H-D2a、H-D2b supported；B0 來自 c1b，跨 session）；
@@ -80,7 +207,7 @@
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
   分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
   之後的 addendum（§7 Advanced、§8–§12 Stage C / D / Q / E / V）各自在正式數據之前凍結；Stage E 的各部分分別凍結。
-- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–050）。
+- [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–052）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
   - 023 是 Gate 的決定，024 是 Advanced 的事先登記（凍結 commit `97a948c`），025 是 Advanced 的結果，026 是 Phase 1 收尾的決定，027 是 Phase 2 的兩條線與治理規則。
   - Phase 2：
@@ -93,6 +220,7 @@
       （041 用當地日期；047 以 UTC 記 E3 的凍結為 2026-10-30 22:50:55Z）。
     - 042 是 Stage D 的結果；043 是 Stage D 的產品化（實作完成：產生器、三份不釘選的 verified profile、拒絕規則、keep-alive 修正；驗證研究轉到 044）。
     - 044 是 Stage V（Stage D 產品化的驗證研究：V-GW、V1、V2、V4）的事先登記，2026-10-31 凍結（mini `smoke-v-20261031`）；051 是 Stage V 的結果。
+    - 052 是 Phase 3 的結案（正式設定不變、公開方式、授權）。
     - 045 / 046 是 Stage E1-D / E1-P 的結果（描述，不是檢定）；047 是 Stage E3 的結果；048 是 Stage Q（Q1、Q2）的結果；049 是 Stage Q3 的結果；050 是 Stage E2 的結果。
 - [docs/EXPERIMENT_RULES.md](docs/EXPERIMENT_RULES.md)、[docs/RESULTS_FORMAT.md](docs/RESULTS_FORMAT.md)、[docs/STORAGE_PLAN.md](docs/STORAGE_PLAN.md)。
 - [MACHINE_POLICY.md](MACHINE_POLICY.md)：兩台機器的分工與 lock。
@@ -408,7 +536,7 @@ Phase 3 的產品測試（038、043；只證明功能正常，不是容量量測
 - keep-alive 修正與之後的 gateway 變更對延遲的影響沒有量過；`b792196` 的 IT 只證明功能正常。
 - TLS 沒有在 RTX 上測（正式設定只綁 loopback，沒有 TLS）。
 
-### Phase 3 結果（decision 037–050）
+### Phase 3 結果（decision 037–052）
 
 - 每個 study 都在正式數據之前事先登記並凍結（037 §3）；判定或讀法由凍結的分析程式產生，執行上的偏離寫在各段。
 - supported / not supported 是套用事先寫定規則的結果：多數是逐點類別或點估計對照門檻，Stage Q 的順序是 Holm 校正的 z 檢定；NT 是 not testable。
