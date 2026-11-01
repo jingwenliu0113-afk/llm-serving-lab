@@ -46,5 +46,8 @@
   - 沒有新的 IP（只有 127.0.0.1）、MAC、序號、UUID（唯一的 UUID 是暫存目錄路徑的一段，屬於已接受的路徑類別）、主機名稱、他人姓名或 email，也沒有其他 private 專案的名稱。
   - 已接受的類別只增加數量：`/Users/liujingwen` 出現在 787 個檔、`/home/wenn0113` 在 1,749 個檔，新增的都在 `results/`。
   - origin 只有 `main`；本機另有兩個已併入 main 的 feat 分支，公開時不 push（第 9 項）。
-- 剩下的步驟：使用者自己用 secret scanner 掃完整 history；使用者同意後才把 repo 改為 public。
+- **使用者的 secret scan**（2026-11-01，`gitleaks git -v`，312 個 commit，也就是全部 315 個扣掉 3 個 merge）：5 筆 `generic-api-key`，都是誤報。
+  被標記的值是 Qwen3.5-4B / 9B 公開 tokenizer 檔（`tokenizer.json`、`tokenizer_config.json`）的 SHA-256，記錄在模型來源的 checksum 清單中（只有 2 個不同的值）；
+  規則是因為欄位名稱含「token」而觸發。5 個 fingerprint 寫進 `.gitleaksignore` 並註明原因。
+- 剩下的步驟：使用者同意後才把 repo 改為 public。
 

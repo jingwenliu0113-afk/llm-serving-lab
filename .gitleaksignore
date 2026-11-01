@@ -1,0 +1,9 @@
+# gitleaks false positives (generic-api-key), reviewed 2026-11-01 (decision 052, docs/PUBLIC_RELEASE_AUDIT.md):
+# each value is the SHA-256 checksum of a public Hugging Face tokenizer file (tokenizer.json /
+# tokenizer_config.json of Qwen/Qwen3.5-4B and -9B), recorded as model provenance next to the other
+# source files' checksums. The rule matched the key names, which contain "token". They are not secrets.
+e4c2a43ca748a6e03fc61d0a7eff72543b6299a2:results/artifacts/Qwen3.5-9B-BF16.gguf.json:generic-api-key:25
+e4c2a43ca748a6e03fc61d0a7eff72543b6299a2:results/artifacts/Qwen3.5-9B-BF16.gguf.json:generic-api-key:26
+7f71aef1a166f24541b61d23014623f887d782b5:quality/subsets/tokenizer-crosscheck.json:generic-api-key:10
+0353d7c11658b5c7353dce1f6a06f4bbc3592169:results/artifacts/Qwen3.5-4B-BF16.gguf.json:generic-api-key:23
+0353d7c11658b5c7353dce1f6a06f4bbc3592169:results/artifacts/Qwen3.5-4B-BF16.gguf.json:generic-api-key:24

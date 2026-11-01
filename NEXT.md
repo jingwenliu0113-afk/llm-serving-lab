@@ -351,7 +351,7 @@
 ## Blocked / 需要使用者
 
 - **公開 GitHub repo**（decision 052；其餘都已完成）：
-  1. 使用者自己用 secret scanner 掃完整 history（依 MACHINE_POLICY，我不搜尋 credential）：`brew install gitleaks`，再在 repo 目錄執行 `gitleaks git -v`。
+  1. [x] 使用者的 secret scan（2026-11-01，gitleaks，312 個 commit）：5 筆都是公開 tokenizer 檔 SHA-256 的誤報，寫進 `.gitleaksignore`。
   2. 使用者看過結果、同意之後，才把 repo 改為 public（只有 main 在 origin）。
 - 研究的閒置判定已滿足（使用者結束了背景程式）。若之後閒置 VRAM 又超過 1,018 MiB，研究會依 031 自動不開始。
 
