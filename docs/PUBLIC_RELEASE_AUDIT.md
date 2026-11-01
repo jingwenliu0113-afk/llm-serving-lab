@@ -49,5 +49,5 @@
 - **使用者的 secret scan**（2026-11-01，`gitleaks git -v`，312 個 commit，也就是全部 315 個扣掉 3 個 merge）：5 筆 `generic-api-key`，都是誤報。
   被標記的值是 Qwen3.5-4B / 9B 公開 tokenizer 檔（`tokenizer.json`、`tokenizer_config.json`）的 SHA-256，記錄在模型來源的 checksum 清單中（只有 2 個不同的值）；
   規則是因為欄位名稱含「token」而觸發。5 個 fingerprint 寫進 `.gitleaksignore` 並註明原因。
-- 剩下的步驟：使用者同意後才把 repo 改為 public。
+- **公開**（2026-11-01，使用者同意後）：`jingwenliu0113-afk/llm-serving-lab` 改為 public；公開前確認工作樹乾淨，origin 只有 `main`（`57e0434`），沒有 tag。GitHub 辨識授權為 MIT。
 

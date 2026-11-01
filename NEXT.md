@@ -350,9 +350,9 @@
 
 ## Blocked / 需要使用者
 
-- **公開 GitHub repo**（decision 052；其餘都已完成）：
+- **公開 GitHub repo**（decision 052）：已完成。目前沒有需要使用者決定的事。
   1. [x] 使用者的 secret scan（2026-11-01，gitleaks，312 個 commit）：5 筆都是公開 tokenizer 檔 SHA-256 的誤報，寫進 `.gitleaksignore`。
-  2. 使用者看過結果、同意之後，才把 repo 改為 public（只有 main 在 origin）。
+  2. [x] 使用者同意後改為 public（2026-11-01）：https://github.com/jingwenliu0113-afk/llm-serving-lab（只有 main，MIT）。
 - 研究的閒置判定已滿足（使用者結束了背景程式）。若之後閒置 VRAM 又超過 1,018 MiB，研究會依 031 自動不開始。
 
 ## 建議（非 blocker）
