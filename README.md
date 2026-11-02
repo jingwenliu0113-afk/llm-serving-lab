@@ -221,7 +221,8 @@ WSL2 Ubuntu 22.04、CUDA 13；Qwen3.5 4B / 9B（GGUF Q8_0 / Q6_K / Q4_K_M、W4A1
 
 - [SPEC.md](SPEC.md)：研究問題與範圍。
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
-  分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
+  分兩階段凍結：Stage A 的凍結 commit 是 `4d6e567`（`freeze.mac = true`），Stage B 的是 `b42614a`（`freeze.nvidia = true`）；
+  `eb6eef1`、`19446d7` 是 PREREGISTRATION 與 `configs/pins.toml` 記錄的 harness commit（凍結時的 harness 版本），分別是這兩個凍結 commit 的直接父 commit。
   之後的 addendum（§7 Advanced、§8–§12 Stage C / D / Q / E / V）各自在正式數據之前凍結；Stage E 的各部分分別凍結。
 - [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–052）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
