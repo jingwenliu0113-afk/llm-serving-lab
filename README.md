@@ -23,7 +23,6 @@ context length and concurrency change **quality, latency, throughput and memory*
   部署工具，以及在 RTX 上執行的整合測試 IT-0–6。
 - **Profile 產生器**：把凍結的分析結果轉成 verified capacity profile；測試會從來源 session 重新產生每一份已 commit 的 verified profile，
   除 generator commit 與雜湊外逐欄比對。
-- 約 3,650 個自動化測試；52 份 decision log。
 
 <!-- -->
 
@@ -35,7 +34,6 @@ context length and concurrency change **quality, latency, throughput and memory*
   Prometheus metrics, deployment tooling and integration tests (IT-0–6) run on the RTX.
 - **Profile generator**: turns frozen analysis outputs into verified capacity profiles; a test regenerates every committed verified profile
   from its source session and compares every field except the generator commit and content hash.
-- About 3,650 automated tests; 52 decision records.
 
 ### 重要發現 / Key findings
 
@@ -101,6 +99,18 @@ context length and concurrency change **quality, latency, throughput and memory*
   new data; both sessions are kept and reported, 034); failed, OOM and invalid runs are reported; key results are independently recomputed.
   No Mac-vs-PC ranking: performance numbers are compared only within a platform; Stage Q's Metal ÷ CUDA ratios are a preregistered
   consistency check, not a ranking.
+
+### 測試與流程 / Testing and process
+
+- 測試：GitHub Actions CI 在 `8ec2f4a`（2026-11-01）為 3,652 passed、8 skipped；
+  跳過的包括 E2 的 manipulation check，因為它讀的 raw/ server log 不在 git 裡。
+- 流程紀錄：[docs/decisions/](docs/decisions/) 有 52 份 decision log（001–052），索引見下方「文件」。
+
+<!-- -->
+
+- Tests: GitHub Actions CI on `8ec2f4a` (2026-11-01): 3,652 passed, 8 skipped; the skipped tests include the E2 manipulation check,
+  whose raw/ server log is not in git.
+- Process records: [docs/decisions/](docs/decisions/) holds 52 decision records (001–052); index under "文件" below.
 
 ### 技術 / Stack
 
