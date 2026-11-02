@@ -762,7 +762,9 @@ sessions：`formal-20261031-v-adm`（V2、V4；25 / 25 有效，1.77 h）、`for
   - GW-U2K-O512 的 PASS 是「個數斷崖」型：每個 run 8 個停頓，到 13 個 P95 就 FAIL；V 只量了 C 32。
   - GW-U2K-O512 與 L-U2K 的 full 視窗為 FAIL（開場第一波），只作描述；不對第一波宣稱 SLO。
   - V1 只涵蓋 5 條 [1, 512] 均勻序列；極短輸出的 TPOT（L-U2K 1–16 箱 P95 303 ms）不決定合併的 P95，不代表每一種輸出長度都符合。
-  - 在 C_PROD 時 gateway 不排隊（queue_wait 0，依構造）；同一個 request 的 client − upstream TTFT 約 7 ms（2K）到 72 ms（32K）。
+  - V-GW、V1 在 C_PROD 時 gateway 不排隊（queue_wait 0，依構造）；pacing 開啟的 P-U2K-var 在穩態時間窗中有排隊。
+    同一個 request 的 client − upstream TTFT（含 bench 到 gateway 的傳輸與 gateway 內部的處理）在穩態時間窗的中位數
+    約 7 ms（2K）、20 ms（8K）、72 ms（32K），第一波較大。這只量了 C_PROD 與封閉迴路，不代表 gateway 對 SLO 沒有影響（051）。
     和 042 直連的跨 session 差各點方向不一（−415 ms 到 +2.26 s），只作描述，不能歸因。
 - 範圍：一台機器、一個模型、一版凍結的 gateway（`capserve serve`，不是 `deploy up`）、封閉迴路、`/v1/completions` 加 `ignore_eos`；
   沒有量 prompt 長度不一、開放迴路、32K 或 T 在政策下、pacing 與 weighted-v1 同時開啟、快速 429。
