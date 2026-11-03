@@ -23,7 +23,6 @@ context length and concurrency change **quality, latency, throughput and memory*
   部署工具，以及在 RTX 上執行的整合測試 IT-0–6。
 - **Profile 產生器**：把凍結的分析結果轉成 verified capacity profile；測試會從來源 session 重新產生每一份已 commit 的 verified profile，
   除 generator commit 與雜湊外逐欄比對。
-- 約 3,650 個自動化測試；52 份 decision log。
 
 <!-- -->
 
@@ -35,7 +34,6 @@ context length and concurrency change **quality, latency, throughput and memory*
   Prometheus metrics, deployment tooling and integration tests (IT-0–6) run on the RTX.
 - **Profile generator**: turns frozen analysis outputs into verified capacity profiles; a test regenerates every committed verified profile
   from its source session and compares every field except the generator commit and content hash.
-- About 3,650 automated tests; 52 decision records.
 
 ### 重要發現 / Key findings
 
@@ -101,6 +99,18 @@ context length and concurrency change **quality, latency, throughput and memory*
   new data; both sessions are kept and reported, 034); failed, OOM and invalid runs are reported; key results are independently recomputed.
   No Mac-vs-PC ranking: performance numbers are compared only within a platform; Stage Q's Metal ÷ CUDA ratios are a preregistered
   consistency check, not a ranking.
+
+### 測試與流程 / Testing and process
+
+- 測試：GitHub Actions CI 在 `8ec2f4a`（2026-11-01）為 3,652 passed、8 skipped；
+  跳過的包括 E2 的 manipulation check，因為它讀的 raw/ server log 不在 git 裡。
+- 流程紀錄：[docs/decisions/](docs/decisions/) 有 52 份 decision log（001–052），主要的幾份在下方「文件」有說明。
+
+<!-- -->
+
+- Tests: GitHub Actions CI on `8ec2f4a` (2026-11-01): 3,652 passed, 8 skipped; the skipped tests include the E2 manipulation check,
+  whose raw/ server log is not in git.
+- Process records: [docs/decisions/](docs/decisions/) holds 52 decision records (001–052); the key ones are described under "文件" below.
 
 ### 技術 / Stack
 
@@ -211,7 +221,8 @@ WSL2 Ubuntu 22.04、CUDA 13；Qwen3.5 4B / 9B（GGUF Q8_0 / Q6_K / Q4_K_M、W4A1
 
 - [SPEC.md](SPEC.md)：研究問題與範圍。
 - [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md)：hypothesis、metric、protocol。
-  分兩階段凍結：Stage A `eb6eef1`，Stage B `19446d7`。
+  分兩階段凍結：Stage A 的凍結 commit 是 `4d6e567`（`freeze.mac = true`），Stage B 的是 `b42614a`（`freeze.nvidia = true`）；
+  `eb6eef1`、`19446d7` 是 PREREGISTRATION 與 `configs/pins.toml` 記錄的 harness commit（凍結時的 harness 版本），分別是這兩個凍結 commit 的直接父 commit。
   之後的 addendum（§7 Advanced、§8–§12 Stage C / D / Q / E / V）各自在正式數據之前凍結；Stage E 的各部分分別凍結。
 - [docs/decisions/](docs/decisions/)：每個設計決策的 decision log（001–052）。
   - 021 是 deployment decision table 的推導規則，在其餘正式分析之前寫定。
@@ -751,7 +762,9 @@ sessions：`formal-20261031-v-adm`（V2、V4；25 / 25 有效，1.77 h）、`for
   - GW-U2K-O512 的 PASS 是「個數斷崖」型：每個 run 8 個停頓，到 13 個 P95 就 FAIL；V 只量了 C 32。
   - GW-U2K-O512 與 L-U2K 的 full 視窗為 FAIL（開場第一波），只作描述；不對第一波宣稱 SLO。
   - V1 只涵蓋 5 條 [1, 512] 均勻序列；極短輸出的 TPOT（L-U2K 1–16 箱 P95 303 ms）不決定合併的 P95，不代表每一種輸出長度都符合。
-  - 在 C_PROD 時 gateway 不排隊（queue_wait 0，依構造）；同一個 request 的 client − upstream TTFT 約 7 ms（2K）到 72 ms（32K）。
+  - V-GW、V1 在 C_PROD 時 gateway 不排隊（queue_wait 0，依構造）；pacing 開啟的 P-U2K-var 在穩態時間窗中有排隊。
+    在不排隊的穩態時間窗中，同一個 request 的 client − upstream TTFT（含 bench 到 gateway 的傳輸與 gateway 內部的處理）
+    中位數約 7 ms（2K）、20 ms（8K）、72 ms（32K），第一波較大。這只量了 C_PROD 與封閉迴路，不代表 gateway 對 SLO 沒有影響（051）。
     和 042 直連的跨 session 差各點方向不一（−415 ms 到 +2.26 s），只作描述，不能歸因。
 - 範圍：一台機器、一個模型、一版凍結的 gateway（`capserve serve`，不是 `deploy up`）、封閉迴路、`/v1/completions` 加 `ignore_eos`；
   沒有量 prompt 長度不一、開放迴路、32K 或 T 在政策下、pacing 與 weighted-v1 同時開啟、快速 429。
